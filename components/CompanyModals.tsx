@@ -1,6 +1,4 @@
 
-
-
 import React from 'react';
 import { X, Mail, MapPin, Briefcase, Newspaper, Info } from 'lucide-react';
 import { CompanyInfo } from '../types';

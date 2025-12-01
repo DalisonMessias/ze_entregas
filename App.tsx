@@ -319,11 +319,12 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
   // --- TRANSACTION HANDLERS ---
   const handleStartDay = () => {
-    const val = parseCurrency(startDayValue);
-    const goal = parseCurrency(startDayGoal);
+    // Permite iniciar com 0 se não preenchido
+    const val = startDayValue ? parseCurrency(startDayValue) : 0;
+    const goal = startDayGoal ? parseCurrency(startDayGoal) : 0;
     
-    if (val > 0) setFixedValue(val);
-    if (goal > 0) setDailyGoal(goal);
+    setFixedValue(val);
+    setDailyGoal(goal);
     
     storage.setFixedValue(val);
     storage.setDailyGoal(goal);
@@ -337,7 +338,8 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
     let desc = '';
 
     if (type === 'standard') {
-        if (!fixedValue) {
+        // Verifica se é null (não iniciado), aceita 0 se foi configurado como 0
+        if (fixedValue === null) {
             setShowStartModal(true); 
             return;
         }
@@ -524,7 +526,14 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                   <span className="flex items-center gap-1"><Gauge className="w-3 h-3"/> {getDailySummary().km.toFixed(1)} km</span>
                               </div>
                               
-                              {dailyGoal && (
+                              {fixedValue === 0 && (
+                                  <div className="flex items-center justify-center gap-2 mt-4 px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-100 dark:border-yellow-800 text-xs text-yellow-700 dark:text-yellow-400 animate-in fade-in">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      <span>Dia iniciado sem registrar valores.</span>
+                                  </div>
+                              )}
+                              
+                              {dailyGoal && dailyGoal > 0 && (
                                   <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
                                       <div className="flex justify-between text-xs text-gray-500 mb-1">
                                           <span>Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dailyGoal)}</span>
@@ -543,7 +552,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                           {/* Quick Actions Grid */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               <Button onClick={() => setShowStartModal(true)} variant="outline" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                                  <Target className="w-4 h-4 mr-2 text-blue-500"/> {fixedValue ? 'Editar Meta' : 'Começar Dia'}
+                                  <Target className="w-4 h-4 mr-2 text-blue-500"/> {fixedValue !== null ? 'Editar Config' : 'Começar Dia'}
                               </Button>
                               <Button onClick={() => handleAddDelivery('standard')}>
                                   <Plus className="w-4 h-4 mr-2"/> Entrega Rápida
@@ -1191,12 +1200,12 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
                 <h3 className="font-bold text-lg dark:text-white">Configurar Dia</h3>
                 <div>
-                    <label className="text-xs font-bold text-gray-400">Valor Fixo da Entrega (R$)</label>
+                    <label className="text-xs font-bold text-gray-400">Valor Fixo da Entrega (R$) (Opcional)</label>
                     <input type="tel" value={startDayValue} onChange={e => handleCurrencyMask(e, setStartDayValue)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: 7,00" autoFocus/>
                     <p className="text-[10px] text-gray-400 mt-1">Isso agiliza o lançamento de entregas padrão.</p>
                 </div>
                 <div>
-                    <label className="text-xs font-bold text-gray-400">Meta de Lucro (R$)</label>
+                    <label className="text-xs font-bold text-gray-400">Meta de Lucro (R$) (Opcional)</label>
                     <input type="tel" value={startDayGoal} onChange={e => handleCurrencyMask(e, setStartDayGoal)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: 150,00"/>
                 </div>
                 <div className="flex gap-3 pt-2">

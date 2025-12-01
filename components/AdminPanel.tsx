@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Shield, Search, MoreVertical, Edit, UserX, Trash2, Loader2, UserCheck, UserCog, Send, ListOrdered, Settings, Package, Power, PowerOff, X, CheckCircle, AlertTriangle, CreditCard, QrCode, Barcode, Plus, Grid, Tag, Headphones, MessageSquare, Phone, Key, Bot, Wallet, Smartphone, Upload, RefreshCw, Banknote, MapPin, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star, Globe, Info, Briefcase, Newspaper, Mail, Save } from 'lucide-react';
+import { Shield, Search, MoreVertical, Edit, UserX, Trash2, Loader2, UserCheck, UserCog, Send, ListOrdered, Settings, Package, Power, PowerOff, X, CheckCircle, AlertTriangle, CreditCard, QrCode, Barcode, Plus, Grid, Tag, Headphones, MessageSquare, Phone, Key, Bot, Wallet, Smartphone, Upload, RefreshCw, Banknote, MapPin, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star, Globe, Info, Briefcase, Newspaper, Mail, Save, Ban } from 'lucide-react';
 import * as cloud from '../services/cloud';
-import { ManagedUser, UserRole, UserStatus, GlobalNotification, Product, AdminOrder, ShopSettings, Category, Claim, PartnerFeeSettings, PWASettings, PWAIcon, PayoutSettings, City, CityRequest, PartnerDocument, PartnerProfile, PartnerLevelBenefit, CompanyInfo } from '../types';
+import { ManagedUser, UserRole, UserStatus, GlobalNotification, Product, AdminOrder, ShopSettings, Category, Claim, PartnerFeeSettings, PWASettings, PWAIcon, PayoutSettings, City, CityRequest, PartnerDocument, PartnerProfile, PartnerLevelBenefit, CompanyInfo, AdminSubTab, BlacklistEntry, FraudAlert, IdentityVerification, PartnerRating, PlatformNews } from '../types';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
 import { AsaasWebhookManagement } from './AsaasWebhookManagement';
@@ -781,179 +781,6 @@ const PartnerLevelsManagement: React.FC = () => {
     );
 };
 
-// --- AI CONFIG ---
-const AIConfig: React.FC = () => {
-    const [apiKey, setApiKey] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            try {
-                const settings = await cloud.getShopSettings();
-                if (settings?.google_gemini_api_key) {
-                    setApiKey(settings.google_gemini_api_key);
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, []);
-
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await cloud.adminUpdateShopSettings({ google_gemini_api_key: apiKey });
-            alert("Configurações de IA salvas!");
-        } catch (e: any) {
-            alert("Erro: " + e.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
-            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Bot className="w-5 h-5 text-purple-500"/> Inteligência Artificial</h3>
-            
-            <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Google Gemini API Key</label>
-                <div className="relative">
-                    <input 
-                        type="password" 
-                        value={apiKey} 
-                        onChange={e => setApiKey(e.target.value)} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono"
-                        placeholder="sk-..."
-                    />
-                    <Key className="absolute right-3 top-2.5 w-4 h-4 text-gray-400"/>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Chave necessária para o funcionamento do Chat Assistente.</p>
-            </div>
-
-            <Button onClick={handleSave} disabled={saving} fullWidth>
-                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Chave'}
-            </Button>
-        </div>
-    );
-};
-
-// --- PWA SETTINGS ---
-const PWASettingsPanel: React.FC = () => {
-    const [settings, setSettings] = useState<PWASettings>({
-        display_name: 'Zé Entregas',
-        short_name: 'Zé',
-        theme_color: '#ed2b05',
-        background_color: '#f9fafb',
-        start_url: '/',
-        orientation: 'portrait',
-        language: 'pt-BR',
-        app_version: 1
-    });
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            try {
-                const data = await cloud.adminGetPWASettings();
-                if (data) setSettings(data);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, []);
-
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await cloud.adminUpdatePWASettings(settings);
-            alert("Configurações do PWA atualizadas! Usuários receberão a atualização em breve.");
-        } catch (e: any) {
-            alert("Erro: " + e.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
-            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-green-500"/> Configuração do App (PWA)</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Nome do App</label>
-                    <input 
-                        type="text" 
-                        value={settings.display_name} 
-                        onChange={e => setSettings({...settings, display_name: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Nome Curto (Ícone)</label>
-                    <input 
-                        type="text" 
-                        value={settings.short_name} 
-                        onChange={e => setSettings({...settings, short_name: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Cor do Tema (Hex)</label>
-                    <div className="flex gap-2">
-                        <input 
-                            type="color" 
-                            value={settings.theme_color} 
-                            onChange={e => setSettings({...settings, theme_color: e.target.value})} 
-                            className="h-10 w-10 p-0 border-0 rounded"
-                        />
-                        <input 
-                            type="text" 
-                            value={settings.theme_color} 
-                            onChange={e => setSettings({...settings, theme_color: e.target.value})} 
-                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
-                        />
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Cor de Fundo (Hex)</label>
-                    <div className="flex gap-2">
-                        <input 
-                            type="color" 
-                            value={settings.background_color} 
-                            onChange={e => setSettings({...settings, background_color: e.target.value})} 
-                            className="h-10 w-10 p-0 border-0 rounded"
-                        />
-                        <input 
-                            type="text" 
-                            value={settings.background_color} 
-                            onChange={e => setSettings({...settings, background_color: e.target.value})} 
-                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <Button onClick={handleSave} disabled={saving} fullWidth>
-                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Publicar Alterações'}
-            </Button>
-        </div>
-    );
-};
-
 // --- FEES MANAGEMENT ---
 const FeesManagement: React.FC = () => {
     const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
@@ -1490,6 +1317,179 @@ const SupportThreads: React.FC = () => {
                     <div className="flex items-center justify-center h-full text-gray-400">Selecione uma conversa</div>
                 )}
             </div>
+        </div>
+    );
+};
+
+// --- AI CONFIG ---
+const AIConfig: React.FC = () => {
+    const [apiKey, setApiKey] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            try {
+                const settings = await cloud.getShopSettings();
+                if (settings?.google_gemini_api_key) {
+                    setApiKey(settings.google_gemini_api_key);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, []);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await cloud.adminUpdateShopSettings({ google_gemini_api_key: apiKey });
+            alert("Configurações de IA salvas!");
+        } catch (e: any) {
+            alert("Erro: " + e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
+            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Bot className="w-5 h-5 text-purple-500"/> Inteligência Artificial</h3>
+            
+            <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">Google Gemini API Key</label>
+                <div className="relative">
+                    <input 
+                        type="password" 
+                        value={apiKey} 
+                        onChange={e => setApiKey(e.target.value)} 
+                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono"
+                        placeholder="sk-..."
+                    />
+                    <Key className="absolute right-3 top-2.5 w-4 h-4 text-gray-400"/>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Chave necessária para o funcionamento do Chat Assistente.</p>
+            </div>
+
+            <Button onClick={handleSave} disabled={saving} fullWidth>
+                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Chave'}
+            </Button>
+        </div>
+    );
+};
+
+// --- PWA SETTINGS ---
+const PWASettingsPanel: React.FC = () => {
+    const [settings, setSettings] = useState<PWASettings>({
+        display_name: 'Zé Entregas',
+        short_name: 'Zé',
+        theme_color: '#ed2b05',
+        background_color: '#f9fafb',
+        start_url: '/',
+        orientation: 'portrait',
+        language: 'pt-BR',
+        app_version: 1
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            try {
+                const data = await cloud.adminGetPWASettings();
+                if (data) setSettings(data);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, []);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await cloud.adminUpdatePWASettings(settings);
+            alert("Configurações do PWA atualizadas! Usuários receberão a atualização em breve.");
+        } catch (e: any) {
+            alert("Erro: " + e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
+            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-green-500"/> Configuração do App (PWA)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Nome do App</label>
+                    <input 
+                        type="text" 
+                        value={settings.display_name} 
+                        onChange={e => setSettings({...settings, display_name: e.target.value})} 
+                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Nome Curto (Ícone)</label>
+                    <input 
+                        type="text" 
+                        value={settings.short_name} 
+                        onChange={e => setSettings({...settings, short_name: e.target.value})} 
+                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Cor do Tema (Hex)</label>
+                    <div className="flex gap-2">
+                        <input 
+                            type="color" 
+                            value={settings.theme_color} 
+                            onChange={e => setSettings({...settings, theme_color: e.target.value})} 
+                            className="h-10 w-10 p-0 border-0 rounded"
+                        />
+                        <input 
+                            type="text" 
+                            value={settings.theme_color} 
+                            onChange={e => setSettings({...settings, theme_color: e.target.value})} 
+                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
+                        />
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Cor de Fundo (Hex)</label>
+                    <div className="flex gap-2">
+                        <input 
+                            type="color" 
+                            value={settings.background_color} 
+                            onChange={e => setSettings({...settings, background_color: e.target.value})} 
+                            className="h-10 w-10 p-0 border-0 rounded"
+                        />
+                        <input 
+                            type="text" 
+                            value={settings.background_color} 
+                            onChange={e => setSettings({...settings, background_color: e.target.value})} 
+                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <Button onClick={handleSave} disabled={saving} fullWidth>
+                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Publicar Alterações'}
+            </Button>
         </div>
     );
 };
