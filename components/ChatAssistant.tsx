@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { Send, Eraser, Loader2, Mic, AlertTriangle, ArrowLeft, ChevronLeft } from 'lucide-react';
+import { Send, Eraser, Loader2, Mic, AlertTriangle, ArrowLeft, ChevronLeft, Lock } from 'lucide-react';
 import { ChatMessage, DailySummary, DailyTransaction, UserRole, StoreWallet } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
@@ -188,6 +188,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
     const [isListening, setIsListening] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
     
+    // Config State
+    const [apiKey, setApiKey] = useState<string | null>(null);
+    const [isConfigLoading, setIsConfigLoading] = useState(true);
+
     const [userProfile, setUserProfile] = useState({ name: 'Usuário', email: '', city: 'Não definida' });
     const [wallet, setWallet] = useState<StoreWallet | null>(null);
 
@@ -195,22 +199,37 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const fetchUserData = async () => {
-            const client = cloud.getClient();
-            if (client) {
-                const { data: { user } } = await (client.auth as any).getUser();
-                setUserProfile({
-                    name: user?.user_metadata?.name || 'Usuário',
-                    email: user?.email || '',
-                    city: user?.user_metadata?.city || 'Não definida'
-                });
-            }
-            if (userRole === 'store_partner') {
-                const w = await cloud.getMyWallet();
-                setWallet(w);
+        const init = async () => {
+            setIsConfigLoading(true);
+            try {
+                // 1. Fetch User Data
+                const client = cloud.getClient();
+                if (client) {
+                    const { data: { user } } = await (client.auth as any).getUser();
+                    setUserProfile({
+                        name: user?.user_metadata?.name || 'Usuário',
+                        email: user?.email || '',
+                        city: user?.user_metadata?.city || 'Não definida'
+                    });
+                }
+                if (userRole === 'store_partner') {
+                    const w = await cloud.getMyWallet();
+                    setWallet(w);
+                }
+
+                // 2. Fetch API Key from DB (Critical)
+                const settings = await cloud.getShopSettings();
+                if (settings?.google_gemini_api_key) {
+                    setApiKey(settings.google_gemini_api_key);
+                }
+            } catch (e) {
+                console.error("Failed to init chat", e);
+                setError("Erro ao inicializar chat. Verifique sua conexão.");
+            } finally {
+                setIsConfigLoading(false);
             }
         };
-        fetchUserData();
+        init();
     }, [userRole]);
 
     useEffect(() => {
@@ -228,6 +247,11 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
     const handleSend = async () => {
         if (!input.trim() || isLoading) return;
         
+        if (!apiKey) {
+            setError("O assistente está indisponível no momento (Chave de API não configurada).");
+            return;
+        }
+        
         const userMessage: ChatMessage = { role: 'user', parts: [{ text: input }] };
         setMessages(prev => [...prev, userMessage]);
         setInput('');
@@ -238,12 +262,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
 
         try {
-            const settings = await cloud.getShopSettings();
-            if (!settings?.google_gemini_api_key) {
-                throw new Error("A chave da API do assistente não foi configurada pelo administrador.");
-            }
-            
-            const ai = new GoogleGenAI({ apiKey: settings.google_gemini_api_key });
+            const ai = new GoogleGenAI({ apiKey: apiKey });
 
             const fullContext = `
                 DADOS DO DIA ATUAL:
@@ -281,8 +300,8 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
         } catch (e: any) {
             console.error(e);
             let errorMessage = "Ocorreu um erro ao conectar com o assistente.";
-            if (e.message.includes('API key not valid')) {
-                errorMessage = "Chave da API inválida. Contate o suporte.";
+            if (e.message.includes('API key not valid') || e.message.includes('400')) {
+                errorMessage = "Chave da IA inválida. Contate o administrador.";
             } else if (e.message.includes('rate limit')) {
                 errorMessage = "Muitas perguntas! Aguarde um instante.";
             } else {
@@ -358,6 +377,14 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
 
     const suggestions = getSuggestions(userRole);
 
+    if (isConfigLoading) {
+        return (
+            <div className="fixed inset-0 z-[100] bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+                <Loader2 className="w-10 h-10 animate-spin text-brand-600" />
+            </div>
+        );
+    }
+
     return (
         <div className="fixed inset-0 z-[100] bg-gray-50 dark:bg-gray-900 flex flex-col h-[100dvh]">
             {/* Header Flutuante / Fixo */}
@@ -374,9 +401,15 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                         <SparklesIcon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                         <span className="font-black text-lg text-gray-900 dark:text-white tracking-tight">Assistente Zé</span>
                     </div>
-                    <span className="text-[10px] font-bold text-green-600 dark:text-green-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Online
-                    </span>
+                    {apiKey ? (
+                        <span className="text-[10px] font-bold text-green-600 dark:text-green-400 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Online
+                        </span>
+                    ) : (
+                        <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
+                            <Lock className="w-3 h-3"/> Configuração Pendente
+                        </span>
+                    )}
                 </div>
 
                 <button 
@@ -390,7 +423,17 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
             
             {/* Área de Mensagens */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50 dark:bg-gray-900 scroll-smooth">
-                {messages.length === 0 ? (
+                {!apiKey && (
+                    <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800 text-center">
+                        <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                        <p className="text-sm font-bold text-red-700 dark:text-red-300">Assistente Indisponível</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                            A chave de API não foi configurada pelo administrador.
+                        </p>
+                    </div>
+                )}
+
+                {messages.length === 0 && apiKey ? (
                     <div className="flex flex-col items-center justify-center h-full text-center px-6 opacity-60 mt-10">
                         <div className="w-20 h-20 bg-gradient-to-tr from-brand-100 to-purple-100 dark:from-brand-900/30 dark:to-purple-900/30 rounded-full flex items-center justify-center mb-6 animate-subtle-bounce-in">
                             <SparklesIcon className="w-10 h-10 text-brand-600 dark:text-brand-400"/>
@@ -477,6 +520,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                             ? 'bg-red-100 text-red-500 animate-pulse' 
                             : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
                         }`}
+                        disabled={!apiKey}
                     >
                         <Mic className="w-5 h-5" />
                     </button>
@@ -487,17 +531,18 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                         onChange={(e) => setInput(e.target.value)}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
-                        placeholder="Pergunte ao Zé..."
+                        placeholder={apiKey ? "Pergunte ao Zé..." : "Assistente Offline"}
                         rows={1}
-                        className="flex-1 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-white py-3 max-h-32 resize-none placeholder:text-gray-400"
+                        className="flex-1 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-white py-3 max-h-32 resize-none placeholder:text-gray-400 disabled:cursor-not-allowed"
                         style={{ minHeight: '44px' }}
+                        disabled={!apiKey}
                     />
 
                     <button
                         onClick={handleSend}
-                        disabled={isLoading || !input.trim()}
+                        disabled={isLoading || !input.trim() || !apiKey}
                         className={`p-3 rounded-full flex-shrink-0 flex items-center justify-center transition-all ${
-                            input.trim() 
+                            input.trim() && apiKey
                             ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 transform hover:scale-105 active:scale-95' 
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
                         }`}

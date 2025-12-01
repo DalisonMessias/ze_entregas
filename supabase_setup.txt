@@ -1,751 +1,1076 @@
 
--- =====================================================================================
--- ZÉ ENTREGAS - SCRIPT DE CONFIGURAÇÃO MESTRE (SCHEMA COMPLETO V2)
--- Este arquivo define TODA a estrutura necessária para o sistema funcionar.
--- Todas as operações são ADITIVAS (IF NOT EXISTS) para preservar dados.
--- Total de Tabelas Mapeadas: 34
--- =====================================================================================
+-- ==============================================================================
+-- SUPABASE SETUP - ZÉ ENTREGAS (FULL SCHEMA)
+-- ==============================================================================
+-- Este arquivo contém a definição completa do banco de dados.
+-- Executar este script no SQL Editor do Supabase irá criar/atualizar a estrutura
+-- sem deletar dados existentes.
 
--- ==================================================================
--- 1. TIPOS ENUM (Idempotente)
--- ==================================================================
+-- 1. EXTENSÕES
+create extension if not exists "uuid-ossp";
+create extension if not exists "pgcrypto"; -- Necessário para auth e criptografia se usado
 
+-- ==============================================================================
+-- 2. ENUMS
+-- ==============================================================================
+
+-- Tipos de Role para usuários
 DO $$ BEGIN
-    CREATE TYPE public.user_role_enum AS ENUM ('ADMIN', 'STORE_PARTNER', 'DELIVERY_PARTNER', 'USER');
-EXCEPTION WHEN duplicate_object THEN null; END $$;
+    CREATE TYPE public.user_role AS ENUM ('admin', 'store_partner', 'delivery_partner', 'user');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
+-- Status de Usuário
 DO $$ BEGIN
-    CREATE TYPE public.user_status_enum AS ENUM ('active', 'banned');
-EXCEPTION WHEN duplicate_object THEN null; END $$;
+    CREATE TYPE public.user_status AS ENUM ('active', 'banned', 'pending');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
+-- Status de Solicitação de Parceiro (Entregador)
 DO $$ BEGIN
-    CREATE TYPE public.verification_status_enum AS ENUM ('NOT_SUBMITTED', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'BLOCKED');
-EXCEPTION WHEN duplicate_object THEN null; END $$;
+    CREATE TYPE public.partner_request_status AS ENUM (
+        'PENDING', 'ACCEPTED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED', 'EXPIRED', 
+        'RETURNING', 'AWAITING_STORE_DECISION'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
+-- Métodos de Pagamento
 DO $$ BEGIN
-    CREATE TYPE public.vehicle_type_enum AS ENUM ('moto', 'car', 'bike', 'other');
-EXCEPTION WHEN duplicate_object THEN null; END $$;
+    CREATE TYPE public.payment_method AS ENUM ('PIX', 'CREDIT_CARD', 'BOLETO', 'CASH');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
+-- Tipos de Documento para Parceiros
 DO $$ BEGIN
-    CREATE TYPE public.document_type_enum AS ENUM ('CNH', 'CRLV', 'VEHICLE_PHOTO', 'ADDRESS_PROOF', 'SELFIE', 'PERSONAL_ID');
-EXCEPTION WHEN duplicate_object THEN null; END $$;
+    CREATE TYPE public.document_type AS ENUM (
+        'CNH', 'CRLV', 'VEHICLE_PHOTO', 'ADDRESS_PROOF', 'SELFIE', 'PERSONAL_ID'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
+-- Tipos de Veículo
 DO $$ BEGIN
-    CREATE TYPE public.partner_request_status_enum AS ENUM ('PENDING', 'ACCEPTED', 'IN_TRANSIT', 'AWAITING_STORE_DECISION', 'RETURNING', 'COMPLETED', 'CANCELLED', 'EXPIRED');
-EXCEPTION WHEN duplicate_object THEN null; END $$;
+    CREATE TYPE public.vehicle_type AS ENUM ('moto', 'car', 'bike', 'other');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
--- ==================================================================
--- 2. TABELAS DE USUÁRIOS E PERFIS (CORE)
--- ==================================================================
+-- Tipos de Punição (Blacklist)
+DO $$ BEGIN
+    CREATE TYPE public.punishment_type AS ENUM ('BAN', 'SUSPENSION', 'WARNING');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
--- 2.1 PERFIS DE USUÁRIO
-CREATE TABLE IF NOT EXISTS public.user_profiles (
-    id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-    email TEXT UNIQUE,
-    name TEXT,
-    phone_number TEXT,
-    cpf TEXT UNIQUE,
-    role public.user_role_enum DEFAULT 'USER' NOT NULL,
-    status public.user_status_enum DEFAULT 'active' NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    last_sign_in_at TIMESTAMPTZ,
-    city TEXT,
-    current_lat NUMERIC(10, 7),
-    current_lng NUMERIC(10, 7),
-    location_last_updated TIMESTAMPTZ,
-    verification_status public.verification_status_enum DEFAULT 'NOT_SUBMITTED',
-    is_available BOOLEAN DEFAULT FALSE,
-    vehicle_type public.vehicle_type_enum,
-    vehicle_plate TEXT,
-    vehicle_model TEXT,
-    vehicle_year INT,
-    average_rating NUMERIC(3, 2) DEFAULT 5.0,
-    rating_count INT DEFAULT 0,
-    completed_deliveries INT DEFAULT 0,
-    partner_level TEXT DEFAULT 'INICIANTE',
-    share_phone_offline BOOLEAN DEFAULT FALSE,
-    association_code TEXT UNIQUE,
-    is_super_store BOOLEAN DEFAULT FALSE,
-    asaas_customer_id TEXT,
-    asaas_wallet_id TEXT,
-    referral_code TEXT UNIQUE,
-    referred_by_code TEXT,
-    referral_reward_expires_at TIMESTAMPTZ,
-    profile_picture_url TEXT
+-- Direção da Avaliação
+DO $$ BEGIN
+    CREATE TYPE public.rating_direction AS ENUM ('STORE_TO_PARTNER', 'PARTNER_TO_STORE');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Tipos de regra de frete
+DO $$ BEGIN
+    CREATE TYPE public.shipping_rule_type AS ENUM ('free_above', 'fixed_rate');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Status de solicitação de cidade
+DO $$ BEGIN
+    CREATE TYPE public.city_request_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ==============================================================================
+-- 3. TABELAS (ESTRUTURA)
+-- ==============================================================================
+
+-- 3.1 PERFIS DE USUÁRIO
+create table if not exists public.user_profiles (
+  id uuid references auth.users on delete cascade primary key,
+  email text unique,
+  name text,
+  phone_number text unique,
+  cpf text unique,
+  role public.user_role default 'user'::public.user_role, -- 'admin', 'store_partner', 'delivery_partner', 'user'
+  status public.user_status default 'active'::public.user_status, -- 'active', 'banned', 'pending'
+  city text, -- Cidade de atuação principal do usuário/loja
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  is_online boolean default false,
+  current_lat float,
+  current_lng float,
+  avatar_url text,
+  is_super_store boolean default false, -- Para lojistas premium
+  bank_details jsonb, -- Detalhes bancários do usuário (PIX, conta)
+  address text -- Endereço principal do usuário/loja
 );
-ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
--- 2.2 LISTA NEGRA
-CREATE TABLE IF NOT EXISTS public.blacklisted_users (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    email TEXT,
-    phone_number TEXT,
-    reason TEXT NOT NULL,
-    punishment_type TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    expires_at TIMESTAMPTZ,
-    status TEXT DEFAULT 'active',
-    created_by UUID REFERENCES public.user_profiles(id)
+-- 3.2 PERFIL DE PARCEIRO (ENTREGADOR)
+create table if not exists public.partner_profiles (
+  user_id uuid references public.user_profiles(id) on delete cascade primary key,
+  vehicle_type public.vehicle_type, -- 'moto', 'car', 'bike', 'other'
+  vehicle_plate text,
+  vehicle_model text,
+  vehicle_year text,
+  verification_status text default 'PENDING_REVIEW', -- 'APPROVED', 'REJECTED', 'NOT_SUBMITTED', 'PENDING_REVIEW'
+  is_available boolean default false,
+  average_rating float default 5.0,
+  completed_deliveries int default 0,
+  association_code text default substring(md5(random()::text) from 0 for 7) unique,
+  share_phone_offline boolean default false
 );
-ALTER TABLE public.blacklisted_users ENABLE ROW LEVEL SECURITY;
 
--- 2.3 DOCUMENTOS DO PARCEIRO
-CREATE TABLE IF NOT EXISTS public.partner_documents (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES public.user_profiles(id),
-    document_type public.document_type_enum NOT NULL,
-    file_url TEXT NOT NULL,
-    status TEXT DEFAULT 'PENDING', -- PENDING, APPROVED, REJECTED
-    admin_notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.partner_documents (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.user_profiles(id) on delete cascade,
+  document_type public.document_type not null, -- 'CNH', 'CRLV', etc.
+  file_url text not null,
+  status text default 'PENDING',
+  admin_notes text,
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  unique(user_id, document_type) -- Garante apenas um doc por tipo por usuário
 );
-ALTER TABLE public.partner_documents ENABLE ROW LEVEL SECURITY;
 
--- 2.4 TURNOS DE TRABALHO
-CREATE TABLE IF NOT EXISTS public.work_shifts (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    partner_id UUID REFERENCES public.user_profiles(id),
-    start_time TIMESTAMPTZ NOT NULL,
-    end_time TIMESTAMPTZ,
-    status TEXT DEFAULT 'ACTIVE', -- ACTIVE, PAUSED, COMPLETED
-    breaks JSONB DEFAULT '[]'::jsonb, -- Array of objects {start, end}
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.partner_levels (
+    level text primary key, -- 'Bronze', 'Silver', 'Gold'
+    display_name text not null,
+    min_deliveries int not null,
+    min_rating float not null,
+    store_discount_percent float not null,
+    service_fee_reduction_percent float not null
 );
-ALTER TABLE public.work_shifts ENABLE ROW LEVEL SECURITY;
 
--- 2.5 NÍVEIS E BENEFÍCIOS
-CREATE TABLE IF NOT EXISTS public.partner_levels (
-    level TEXT PRIMARY KEY, -- INICIANTE, BRONZE, PRATA, OURO, DIAMANTE
-    display_name TEXT NOT NULL,
-    min_deliveries INT DEFAULT 0,
-    min_rating NUMERIC(3, 2) DEFAULT 0.0,
-    store_discount_percent NUMERIC(5, 2) DEFAULT 0.0,
-    service_fee_reduction_percent NUMERIC(5, 2) DEFAULT 0.0
+-- 3.3 LOJA & PEDIDOS
+create table if not exists public.categories (
+  id uuid default uuid_generate_v4() primary key,
+  name text not null unique,
+  created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.partner_levels ENABLE ROW LEVEL SECURITY;
 
--- 2.6 ASSOCIAÇÃO LOJA-ENTREGADOR
-CREATE TABLE IF NOT EXISTS public.store_delivery_partners (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    store_id UUID REFERENCES public.user_profiles(id),
-    partner_id UUID REFERENCES public.user_profiles(id),
-    fee_override NUMERIC(10, 2),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.products (
+  id uuid default uuid_generate_v4() primary key,
+  name text not null,
+  description text,
+  price float not null,
+  images text[], -- URLs de imagens
+  stock_quantity int,
+  is_active boolean default true,
+  category_id uuid references public.categories(id) on delete set null,
+  created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.store_delivery_partners ENABLE ROW LEVEL SECURITY;
 
--- ==================================================================
--- 3. FINANCEIRO E PAGAMENTOS
--- ==================================================================
-
--- 3.1 CARTEIRA DA LOJA
-CREATE TABLE IF NOT EXISTS public.store_wallets (
-    store_id UUID REFERENCES public.user_profiles(id) PRIMARY KEY,
-    balance_decimal NUMERIC(10, 2) DEFAULT 0.00,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.orders (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.user_profiles(id) on delete restrict, -- Usuário que fez o pedido
+  items jsonb not null, -- Array de itens snapshot: {product_id, name, quantity, price}
+  total_price float not null,
+  status text default 'pending_payment', -- pending_payment, paid, approved, shipped, delivered, cancelled
+  payment_method public.payment_method not null,
+  shipping_address jsonb, -- Endereço de entrega: {name, address}
+  payment_details jsonb, -- Detalhes específicos do pagamento (cartão, pix_copy_paste, etc)
+  asaas_payment_id text, -- ID da cobrança no Asaas
+  asaas_pix_copy_paste text,
+  asaas_bank_slip_url text,
+  created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.store_wallets ENABLE ROW LEVEL SECURITY;
 
--- 3.2 TRANSAÇÕES DA CARTEIRA DA LOJA
-CREATE TABLE IF NOT EXISTS public.store_wallet_transactions (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    store_id UUID REFERENCES public.user_profiles(id),
-    amount NUMERIC(10, 2) NOT NULL,
-    type TEXT NOT NULL, -- DEPOSIT, PAYMENT, WITHDRAWAL, REFUND, ADJUSTMENT
-    status TEXT DEFAULT 'COMPLETED',
-    description TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.store_shipping_rules (
+    id uuid default uuid_generate_v4() primary key,
+    store_id uuid references public.user_profiles(id) on delete cascade,
+    rule_type public.shipping_rule_type not null, -- 'free_above', 'fixed_rate'
+    threshold float, -- Para 'free_above', valor mínimo do pedido
+    value float not null, -- Valor do subsídio ou da taxa fixa
+    is_active boolean default true,
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.store_wallet_transactions ENABLE ROW LEVEL SECURITY;
 
--- 3.3 CARTEIRA DO PARCEIRO
-CREATE TABLE IF NOT EXISTS public.partner_wallets (
-    partner_id UUID REFERENCES public.user_profiles(id) PRIMARY KEY,
-    balance NUMERIC(10, 2) DEFAULT 0.00,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.store_partners (
+    id uuid default uuid_generate_v4() primary key,
+    store_id uuid references public.user_profiles(id) on delete cascade,
+    partner_id uuid references public.user_profiles(id) on delete cascade,
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    unique(store_id, partner_id) -- Uma loja só pode associar um parceiro uma vez
 );
-ALTER TABLE public.partner_wallets ENABLE ROW LEVEL SECURITY;
 
--- 3.4 PAGAMENTOS AO PARCEIRO
-CREATE TABLE IF NOT EXISTS public.partner_payments (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    partner_id UUID REFERENCES public.user_profiles(id),
-    amount NUMERIC(10, 2) NOT NULL,
-    is_emergency BOOLEAN DEFAULT FALSE,
-    status TEXT DEFAULT 'PENDING',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- 3.4 SOLICITAÇÕES DE ENTREGA (CORE)
+create table if not exists public.partner_requests (
+  id uuid default uuid_generate_v4() primary key,
+  store_id uuid references public.user_profiles(id) on delete restrict,
+  partner_id uuid references public.user_profiles(id) on delete set null, -- Pode ser null se ainda não aceito
+  pickup_address text not null,
+  delivery_address text not null,
+  distance_km float,
+  total_charged_store float not null, -- Valor total cobrado da loja
+  net_value_partner float not null, -- Valor líquido para o parceiro
+  fee_fixed float default 0,
+  fee_percent_value float default 0,
+  status public.partner_request_status default 'PENDING'::public.partner_request_status,
+  failure_reason text, -- Motivo de falha/problema na entrega
+  rated_by_store boolean default false,
+  rated_by_partner boolean default false,
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  updated_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.partner_payments ENABLE ROW LEVEL SECURITY;
 
--- 3.5 LOGS DE CARTEIRA ADMIN
-CREATE TABLE IF NOT EXISTS public.admin_wallet_logs (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    admin_id UUID REFERENCES public.user_profiles(id),
-    target_user_id UUID REFERENCES public.user_profiles(id),
-    amount NUMERIC(10,2) NOT NULL,
-    previous_balance NUMERIC(10,2),
-    new_balance NUMERIC(10,2),
-    reason TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- 3.5 CARTEIRAS & FINANCEIRO
+create table if not exists public.store_wallets (
+  store_id uuid references public.user_profiles(id) on delete cascade primary key,
+  balance float default 0,
+  balance_decimal float default 0, -- Para maior precisão, caso necessário
+  updated_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.admin_wallet_logs ENABLE ROW LEVEL SECURITY;
 
--- 3.6 CONFIGURAÇÃO GLOBAL DE TAXAS
-CREATE TABLE IF NOT EXISTS public.partner_fee_settings (
-    id BOOLEAN PRIMARY KEY DEFAULT TRUE,
-    global_tax_fixed NUMERIC(10, 2) DEFAULT 2.00,
-    global_tax_percent NUMERIC(5, 4) DEFAULT 0.10,
-    base_delivery_value NUMERIC(10, 2) DEFAULT 7.00,
-    base_delivery_km NUMERIC(10, 2) DEFAULT 3.00,
-    extra_km_value NUMERIC(10, 2) DEFAULT 1.50,
-    additional_stop_fee NUMERIC(10, 2) DEFAULT 2.00,
-    super_store_monthly_fee NUMERIC(10, 2) DEFAULT 49.90,
-    association_fee NUMERIC(10, 2) DEFAULT 10.00,
-    emergency_enabled BOOLEAN DEFAULT TRUE,
-    emergency_percentage NUMERIC(5, 4) DEFAULT 0.70,
-    emergency_cooldown_hours INT DEFAULT 24
+create table if not exists public.partner_wallets (
+  partner_id uuid references public.user_profiles(id) on delete cascade primary key,
+  balance float default 0,
+  updated_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.partner_fee_settings ENABLE ROW LEVEL SECURITY;
 
--- 3.7 CONFIGURAÇÃO DE REPASSES
-CREATE TABLE IF NOT EXISTS public.partner_payout_settings (
-    id BOOLEAN PRIMARY KEY DEFAULT TRUE,
-    weekday INT DEFAULT 5, -- 1=Segunda ... 5=Sexta
-    hour TEXT DEFAULT '10:00'
+create table if not exists public.wallet_transactions (
+  id uuid default uuid_generate_v4() primary key,
+  store_id uuid references public.user_profiles(id) on delete set null,
+  partner_id uuid references public.user_profiles(id) on delete set null,
+  amount float not null,
+  type text not null, -- 'CREDIT', 'DEBIT', 'EARNING', 'WITHDRAWAL', 'FEE', 'ADJUSTMENT', 'RECHARGE'
+  description text,
+  status text default 'COMPLETED', -- 'COMPLETED', 'PENDING', 'FAILED'
+  reference_id uuid, -- id do pedido ou payout ou outra transação
+  created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.partner_payout_settings ENABLE ROW LEVEL SECURITY;
 
--- 3.8 CONFIGURAÇÃO GERAL DE REPASSE (NOVA TABELA USADA EM PAYOUTS)
-CREATE TABLE IF NOT EXISTS public.payout_settings (
-    id BOOLEAN PRIMARY KEY DEFAULT TRUE,
-    weekday INT DEFAULT 5,
-    hour TEXT DEFAULT '10:00',
-    emergency_percentage INT DEFAULT 70,
-    emergency_cooldown_hours INT DEFAULT 24,
-    emergency_enabled BOOLEAN DEFAULT TRUE
+create table if not exists public.payouts (
+    id uuid default uuid_generate_v4() primary key,
+    partner_id uuid references public.user_profiles(id) on delete restrict,
+    amount float not null,
+    status text not null, -- 'PENDING', 'COMPLETED', 'FAILED'
+    is_emergency boolean default false,
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.payout_settings ENABLE ROW LEVEL SECURITY;
 
--- ==================================================================
--- 4. OPERAÇÕES, PEDIDOS E E-COMMERCE
--- ==================================================================
-
--- 4.1 SOLICITAÇÕES DE ENTREGA (CORRIDAS)
-CREATE TABLE IF NOT EXISTS public.partner_requests (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    store_id UUID REFERENCES public.user_profiles(id),
-    partner_id UUID REFERENCES public.user_profiles(id),
-    pickup_address TEXT NOT NULL,
-    delivery_address TEXT NOT NULL,
-    distance_km NUMERIC(10, 2) NOT NULL,
-    total_charged_store NUMERIC(10, 2) NOT NULL,
-    net_value_partner NUMERIC(10, 2) NOT NULL,
-    fee_fixed NUMERIC(10, 2) DEFAULT 0,
-    fee_percent_value NUMERIC(10, 2) DEFAULT 0,
-    status public.partner_request_status_enum DEFAULT 'PENDING',
-    failure_reason TEXT,
-    rated_by_store BOOLEAN DEFAULT FALSE,
-    rated_by_partner BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- 3.6 CONFIGURAÇÕES GERAIS (SINGLETONS)
+create table if not exists public.shop_settings (
+  id boolean primary key default true, -- Singleton (sempre 'true')
+  is_shop_enabled boolean default true,
+  asaas_active boolean default false,
+  payment_methods jsonb default '{"pix": false, "boleto": false, "credit_card": false}'::jsonb,
+  asaas_api_key text,
+  support_phone text,
+  support_hours_start text default '09:00',
+  support_hours_end text default '18:00',
+  support_status_override text default 'AUTO', -- 'AUTO', 'OPEN', 'CLOSED'
+  company_info jsonb default '{}'::jsonb, -- {about_text, careers_email, press_text, contact_address, etc.}
+  google_gemini_api_key text,
+  social_media jsonb default '{}'::jsonb, -- {instagram, facebook, twitter, linkedin}
+  shop_name text,
+  shop_city text
 );
-ALTER TABLE public.partner_requests ENABLE ROW LEVEL SECURITY;
 
--- 4.2 PEDIDOS DA LOJA (PRODUTOS)
-CREATE TABLE IF NOT EXISTS public.orders (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES public.user_profiles(id),
-    items JSONB NOT NULL, -- Array of {product_id, quantity, price}
-    total_price NUMERIC(10, 2) NOT NULL,
-    status TEXT DEFAULT 'pending_payment',
-    payment_method TEXT,
-    shipping_address JSONB,
-    asaas_id TEXT,
-    asaas_invoice_url TEXT,
-    asaas_pix_copy_paste TEXT,
-    asaas_bank_slip_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.fee_settings (
+  id boolean primary key default true, -- Singleton
+  global_tax_fixed float default 2.00,
+  global_tax_percent float default 0.10,
+  base_delivery_value float default 5.00,
+  base_delivery_km float default 3.0,
+  extra_km_value float default 1.50,
+  additional_stop_fee float default 3.00,
+  super_store_monthly_fee float default 99.00,
+  association_fee float default 10.00
 );
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
--- 4.3 CATEGORIAS DE PRODUTOS
-CREATE TABLE IF NOT EXISTS public.categories (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL
+create table if not exists public.payout_settings (
+    id boolean primary key default true, -- Singleton
+    weekday int default 5, -- Sexta-feira
+    hour text default '10:00',
+    emergency_percentage float default 70, -- % do saldo disponível para saque emergencial
+    emergency_cooldown_hours int default 24,
+    emergency_enabled boolean default true,
+    emergency_message text
 );
-ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 
--- 4.4 PRODUTOS
-CREATE TABLE IF NOT EXISTS public.products (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    price NUMERIC(10, 2) NOT NULL,
-    stock_quantity INT DEFAULT 0,
-    images TEXT[],
-    category_id UUID REFERENCES public.categories(id),
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.pwa_settings (
+    id boolean primary key default true, -- Singleton
+    display_name text default 'Zé Entregas',
+    short_name text default 'Zé Entregas',
+    theme_color text default '#ed2b05',
+    background_color text default '#f9fafb',
+    start_url text default '/',
+    orientation text default 'portrait',
+    language text default 'pt-BR',
+    app_version int default 1
 );
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
--- 4.5 CONFIGURAÇÕES DA LOJA ONLINE
-CREATE TABLE IF NOT EXISTS public.shop_settings (
-    id BOOLEAN PRIMARY KEY DEFAULT TRUE,
-    is_shop_enabled BOOLEAN DEFAULT FALSE,
-    shop_name TEXT,
-    shop_city TEXT,
-    asaas_api_key TEXT,
-    asaas_active BOOLEAN DEFAULT FALSE,
-    asaas_webhook_secret TEXT,
-    asaas_active_events TEXT[],
-    payment_methods JSONB DEFAULT '{"pix": true, "boleto": false, "credit_card": false}',
-    support_phone TEXT,
-    support_status_override TEXT, -- OPEN, CLOSED, AUTO
-    support_hours_start TEXT,
-    support_hours_end TEXT,
-    social_media JSONB,
-    company_info JSONB,
-    google_gemini_api_key TEXT
+-- 3.7 GEOLOCALIZAÇÃO
+create table if not exists public.cities (
+  id serial primary key,
+  name text not null,
+  state text not null,
+  is_active boolean default true,
+  unique(name, state)
 );
-ALTER TABLE public.shop_settings ENABLE ROW LEVEL SECURITY;
 
--- 4.6 REGRAS DE FRETE (SUPER STORE)
-CREATE TABLE IF NOT EXISTS public.store_shipping_rules (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    store_id UUID REFERENCES public.user_profiles(id),
-    rule_type TEXT NOT NULL, -- free_above, fixed_rate
-    threshold NUMERIC(10, 2),
-    value NUMERIC(10, 2) NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Adicionar dados iniciais se não existirem
+INSERT INTO public.cities (name, state, is_active) VALUES
+('São Paulo', 'SP', TRUE),
+('Rio de Janeiro', 'RJ', TRUE),
+('Belo Horizonte', 'MG', TRUE),
+('Brasília', 'DF', TRUE),
+('Porto Alegre', 'RS', TRUE),
+('Curitiba', 'PR', TRUE)
+ON CONFLICT (name, state) DO NOTHING;
+
+
+create table if not exists public.city_requests (
+  id uuid default uuid_generate_v4() primary key,
+  city_name text not null,
+  state text not null,
+  user_email text,
+  status public.city_request_status default 'PENDING'::public.city_request_status,
+  created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.store_shipping_rules ENABLE ROW LEVEL SECURITY;
 
--- ==================================================================
--- 5. COMUNICAÇÃO, SUPORTE E SEGURANÇA
--- ==================================================================
-
--- 5.1 CHAT
-CREATE TABLE IF NOT EXISTS public.chat_messages (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    order_id UUID REFERENCES public.partner_requests(id), -- Nullable for Support chats
-    sender_id UUID REFERENCES public.user_profiles(id),
-    receiver_id UUID REFERENCES public.user_profiles(id),
-    message TEXT NOT NULL,
-    type TEXT DEFAULT 'ORDER', -- ORDER or SUPPORT
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.live_locations (
+  user_id uuid references public.user_profiles(id) on delete cascade primary key,
+  lat float not null,
+  lng float not null,
+  heading float,
+  speed float,
+  status public.partner_request_status, -- Status da corrida associada ou 'online'
+  updated_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 
--- 5.2 NOTIFICAÇÕES PESSOAIS
-CREATE TABLE IF NOT EXISTS public.user_notifications (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES public.user_profiles(id),
-    title TEXT NOT NULL,
-    message TEXT NOT NULL,
-    type TEXT DEFAULT 'INFO',
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.blitz_alerts (
+    id uuid default uuid_generate_v4() primary key,
+    user_id uuid references public.user_profiles(id) on delete set null,
+    lat float not null,
+    lng float not null,
+    type text not null, -- 'BLITZ', 'ACCIDENT', 'TRAFFIC', 'DANGER'
+    address text,
+    city text, -- Para filtrar alertas por cidade
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.user_notifications ENABLE ROW LEVEL SECURITY;
 
--- 5.3 NOTIFICAÇÕES GLOBAIS (ADMIN)
-CREATE TABLE IF NOT EXISTS public.global_notifications (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    title TEXT NOT NULL,
-    message TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- 3.8 COMUNICAÇÃO & SOCIAL
+create table if not exists public.chat_messages (
+  id uuid default uuid_generate_v4() primary key,
+  sender_id uuid references public.user_profiles(id) on delete restrict,
+  receiver_id uuid references public.user_profiles(id) on delete restrict, -- Pode ser null para chats de suporte geral
+  order_id uuid references public.partner_requests(id) on delete set null, -- Opcional, se for chat de pedido
+  message text not null,
+  type text not null, -- 'ORDER', 'SUPPORT'
+  is_read boolean default false,
+  pending boolean default false, -- Para otimismo no UI
+  created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.global_notifications ENABLE ROW LEVEL SECURITY;
 
--- 5.4 PREFERÊNCIAS DE NOTIFICAÇÃO
-CREATE TABLE IF NOT EXISTS public.notification_settings (
-    user_id UUID REFERENCES public.user_profiles(id) PRIMARY KEY,
-    new_orders BOOLEAN DEFAULT TRUE,
-    order_updates BOOLEAN DEFAULT TRUE,
-    system_alerts BOOLEAN DEFAULT TRUE,
-    marketing BOOLEAN DEFAULT TRUE,
-    sound_enabled BOOLEAN DEFAULT TRUE
+create table if not exists public.ratings (
+    id uuid default uuid_generate_v4() primary key,
+    request_id uuid references public.partner_requests(id) on delete cascade,
+    rating float not null,
+    comment text,
+    direction public.rating_direction not null, -- 'STORE_TO_PARTNER', 'PARTNER_TO_STORE'
+    evaluator_name text, -- Nome do avaliador (snapshot)
+    evaluated_name text, -- Nome do avaliado (snapshot)
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.notification_settings ENABLE ROW LEVEL SECURITY;
 
--- 5.5 CHAMADOS DE SUPORTE
-CREATE TABLE IF NOT EXISTS public.support_claims (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES public.user_profiles(id),
-    user_email TEXT,
-    type TEXT NOT NULL,
-    description TEXT NOT NULL,
-    status TEXT DEFAULT 'open', -- open, resolved, closed
-    admin_response TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.platform_news (
+    id uuid default uuid_generate_v4() primary key,
+    title text not null,
+    description text,
+    icon_name text, -- Nome do ícone para Lucide React
+    is_active boolean default true,
+    sort_order int default 0,
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.support_claims ENABLE ROW LEVEL SECURITY;
 
--- 5.6 AVALIAÇÕES (RATINGS)
-CREATE TABLE IF NOT EXISTS public.partner_ratings (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    request_id UUID REFERENCES public.partner_requests(id),
-    evaluator_id UUID REFERENCES public.user_profiles(id),
-    evaluated_id UUID REFERENCES public.user_profiles(id),
-    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
-    comment TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.referrals (
+    id uuid default uuid_generate_v4() primary key,
+    referrer_id uuid references public.user_profiles(id) on delete restrict, -- Quem indicou
+    referred_user_id uuid references public.user_profiles(id) on delete set null, -- Quem foi indicado e se cadastrou
+    referred_email text, -- Email do indicado (para tracking antes do cadastro)
+    referred_user_name text,
+    status text default 'PENDING', -- 'PENDING', 'ACCEPTED', 'REWARDED'
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.partner_ratings ENABLE ROW LEVEL SECURITY;
 
--- 5.7 ALERTAS DE FRAUDE
-CREATE TABLE IF NOT EXISTS public.fraud_alerts (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES public.user_profiles(id),
-    type TEXT NOT NULL, -- FAKE_GPS, MULTIPLE_ACCOUNTS
-    description TEXT,
-    severity TEXT DEFAULT 'MEDIUM', -- LOW, MEDIUM, HIGH
-    status TEXT DEFAULT 'OPEN', -- OPEN, RESOLVED, FALSE_POSITIVE
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- 3.9 SEGURANÇA & ADMIN
+create table if not exists public.blacklist (
+    id uuid default uuid_generate_v4() primary key,
+    email text unique,
+    phone_number text unique,
+    reason text not null,
+    punishment_type public.punishment_type not null, -- 'BAN', 'SUSPENSION', 'WARNING'
+    status text default 'active', -- 'active', 'inactive'
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.fraud_alerts ENABLE ROW LEVEL SECURITY;
 
--- 5.8 VERIFICAÇÕES DE IDENTIDADE
-CREATE TABLE IF NOT EXISTS public.identity_verifications (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES public.user_profiles(id),
-    photo_url TEXT NOT NULL,
-    location_data JSONB,
-    confidence_score NUMERIC(5,4),
-    status TEXT DEFAULT 'PENDING',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.fraud_alerts (
+    id uuid default uuid_generate_v4() primary key,
+    user_id uuid references public.user_profiles(id) on delete cascade,
+    user_email text,
+    type text not null, -- 'ACCOUNT_TAKEOVER', 'MULTIPLE_ACCOUNTS'
+    description text,
+    severity text not null, -- 'LOW', 'MEDIUM', 'HIGH'
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.identity_verifications ENABLE ROW LEVEL SECURITY;
 
--- ==================================================================
--- 6. GESTÃO DE CONTEÚDO E UTILITÁRIOS
--- ==================================================================
-
--- 6.1 NOVIDADES DA PLATAFORMA
-CREATE TABLE IF NOT EXISTS public.platform_news (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    icon_name TEXT NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE NOT NULL,
-    sort_order INT DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.identity_verifications (
+    id uuid default uuid_generate_v4() primary key,
+    user_id uuid references public.user_profiles(id) on delete cascade,
+    user_email text,
+    photo_url text not null,
+    confidence_score float, -- Score de confiança da IA (se usado)
+    status text default 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.platform_news ENABLE ROW LEVEL SECURITY;
 
--- 6.2 CIDADES DISPONÍVEIS
-CREATE TABLE IF NOT EXISTS public.available_cities (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    state CHAR(2) NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    UNIQUE(name, state)
+create table if not exists public.claims (
+    id uuid default uuid_generate_v4() primary key,
+    user_id uuid references public.user_profiles(id) on delete cascade,
+    user_email text,
+    type text not null, -- 'app_bug', 'address_error', 'client_issue', 'suggestion', 'other'
+    description text not null,
+    status text default 'open', -- 'open', 'resolved', 'closed'
+    admin_response text,
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.available_cities ENABLE ROW LEVEL SECURITY;
 
--- 6.3 SOLICITAÇÕES DE CIDADE
-CREATE TABLE IF NOT EXISTS public.city_requests (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_email TEXT,
-    city_name TEXT NOT NULL,
-    state CHAR(2) NOT NULL,
-    status TEXT DEFAULT 'PENDING',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.notification_preferences (
+    user_id uuid references public.user_profiles(id) on delete cascade primary key,
+    new_orders boolean default true,
+    order_updates boolean default true,
+    system_alerts boolean default true,
+    marketing boolean default true,
+    sound_enabled boolean default true
 );
-ALTER TABLE public.city_requests ENABLE ROW LEVEL SECURITY;
 
--- 6.4 CONFIGURAÇÕES DO APP (PWA)
-CREATE TABLE IF NOT EXISTS public.pwa_settings (
-    id BOOLEAN PRIMARY KEY DEFAULT TRUE,
-    display_name TEXT,
-    short_name TEXT,
-    theme_color TEXT,
-    background_color TEXT,
-    start_url TEXT,
-    orientation TEXT,
-    language TEXT,
-    app_version INT
+-- 3.10 OPERAÇÕES
+create table if not exists public.work_shifts (
+    id uuid default uuid_generate_v4() primary key,
+    user_id uuid references public.user_profiles(id) on delete cascade,
+    start_time timestamp with time zone not null,
+    end_time timestamp with time zone,
+    status text not null, -- 'ACTIVE', 'PAUSED', 'COMPLETED'
+    breaks jsonb -- Array de {start: timestamp, end: timestamp}
 );
-ALTER TABLE public.pwa_settings ENABLE ROW LEVEL SECURITY;
 
--- 6.5 SISTEMA DE INDICAÇÃO (REFERRALS)
-CREATE TABLE IF NOT EXISTS public.referral_logs (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    referrer_id UUID REFERENCES public.user_profiles(id),
-    referred_id UUID REFERENCES public.user_profiles(id),
-    status TEXT DEFAULT 'PENDING', -- PENDING, REWARDED
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- 3.11 WEBHOOKS ASAAS
+create table if not exists public.webhook_settings (
+    id boolean primary key default true, -- Singleton
+    webhook_secret text,
+    active_events text[] -- Array de IDs de eventos do Asaas para processar
 );
-ALTER TABLE public.referral_logs ENABLE ROW LEVEL SECURITY;
 
--- 6.6 ALERTAS RELÂMPAGO (BLITZ)
-CREATE TABLE IF NOT EXISTS public.blitz_alerts (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES public.user_profiles(id),
-    lat NUMERIC(10, 7) NOT NULL,
-    lng NUMERIC(10, 7) NOT NULL,
-    type TEXT NOT NULL, -- BLITZ, ACCIDENT, TRAFFIC, DANGER
-    address TEXT,
-    city TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists public.webhook_logs (
+    id uuid default uuid_generate_v4() primary key,
+    event_type text not null,
+    payload jsonb not null,
+    status text not null, -- 'processed', 'ignored', 'failed_auth', 'error'
+    action_taken text,
+    created_at timestamp with time zone default timezone('utc'::text, now())
 );
-ALTER TABLE public.blitz_alerts ENABLE ROW LEVEL SECURITY;
 
--- ==================================================================
--- 7. GATEWAY DE PAGAMENTO (ASAAS - LOGS E CONFIG)
--- ==================================================================
+-- ==============================================================================
+-- 4. STORAGE (BUCKETS)
+-- ==============================================================================
+-- Criação de buckets para upload de arquivos
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
 
--- 7.1 CONFIGURAÇÃO WEBHOOK ASAAS
-CREATE TABLE IF NOT EXISTS public.asaas_webhook_settings (
-    id BOOLEAN PRIMARY KEY DEFAULT TRUE,
-    webhook_secret TEXT,
-    active_events TEXT[] DEFAULT ARRAY[]::TEXT[]
-);
-ALTER TABLE public.asaas_webhook_settings ENABLE ROW LEVEL SECURITY;
+insert into storage.buckets (id, name, public)
+values ('documents', 'documents', true)
+on conflict (id) do nothing;
 
--- 7.2 LOGS WEBHOOK ASAAS
-CREATE TABLE IF NOT EXISTS public.asaas_webhook_logs (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    event_type TEXT NOT NULL,
-    payload JSONB,
-    status TEXT, -- processed, ignored, error
-    action_taken TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE public.asaas_webhook_logs ENABLE ROW LEVEL SECURITY;
+insert into storage.buckets (id, name, public)
+values ('backups', 'backups', false) -- back-ups são privados
+on conflict (id) do nothing;
 
--- ==================================================================
--- 8. POLÍTICAS DE SEGURANÇA (RLS)
--- ==================================================================
+-- ==============================================================================
+-- 5. FUNÇÕES DO BANCO (RPC)
+-- ==============================================================================
 
--- Helper Function to check Admin (Avoids recursion)
+-- Helper: Verificar se o usuário autenticado é Admin
 CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $$
+RETURNS boolean AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.user_profiles 
-    WHERE id = auth.uid() AND role = 'ADMIN'
+    WHERE id = auth.uid() AND role = 'admin'::public.user_role
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Update Policies for user_profiles
-DO $$ BEGIN
-    -- 1. Users can read their own profile (Critical for role check)
-    DROP POLICY IF EXISTS "Users can read own profile" ON public.user_profiles;
-    CREATE POLICY "Users can read own profile" ON public.user_profiles FOR SELECT USING (auth.uid() = id);
-    
-    -- 2. Admins can read all profiles (Critical for Admin Panel)
-    DROP POLICY IF EXISTS "Admins can read all profiles" ON public.user_profiles;
-    CREATE POLICY "Admins can read all profiles" ON public.user_profiles FOR SELECT USING (public.is_admin());
-
-    -- 3. Admins can update all profiles (For banning/approval)
-    DROP POLICY IF EXISTS "Admins can update all profiles" ON public.user_profiles;
-    CREATE POLICY "Admins can update all profiles" ON public.user_profiles FOR UPDATE USING (public.is_admin());
-    
-    -- 4. Users can update own profile (For editing details)
-    DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
-    CREATE POLICY "Users can update own profile" ON public.user_profiles FOR UPDATE USING (auth.uid() = id);
-    
-EXCEPTION WHEN others THEN null; END $$;
-
--- Cidades (Necessário para Cadastro)
-DO $$ BEGIN
-    CREATE POLICY "Public read available_cities" ON public.available_cities FOR SELECT USING (true);
-EXCEPTION WHEN duplicate_object THEN null; END $$;
-
--- Configurações da Loja (Necessário para Landing Page)
-DO $$ BEGIN
-    CREATE POLICY "Public read shop_settings" ON public.shop_settings FOR SELECT USING (true);
-EXCEPTION WHEN duplicate_object THEN null; END $$;
-
--- Notícias da Plataforma (Necessário para Landing Page)
-DO $$ BEGIN
-    CREATE POLICY "Public read platform_news" ON public.platform_news FOR SELECT USING (true);
-EXCEPTION WHEN duplicate_object THEN null; END $$;
-
--- Configurações do PWA (Necessário para o App)
-DO $$ BEGIN
-    CREATE POLICY "Public read pwa_settings" ON public.pwa_settings FOR SELECT USING (true);
-EXCEPTION WHEN duplicate_object THEN null; END $$;
-
--- Blitz Alerts Policies
-DO $$ BEGIN
-    DROP POLICY IF EXISTS "Authenticated users can insert blitz alerts" ON public.blitz_alerts;
-    DROP POLICY IF EXISTS "Everyone can view blitz alerts" ON public.blitz_alerts;
-    CREATE POLICY "Authenticated users can insert blitz alerts" ON public.blitz_alerts FOR INSERT TO authenticated WITH CHECK (true);
-    CREATE POLICY "Everyone can view blitz alerts" ON public.blitz_alerts FOR SELECT USING (true);
-EXCEPTION WHEN others THEN null; END $$;
-
--- ==================================================================
--- 9. DADOS INICIAIS (SEED) - SEGURO
--- ==================================================================
-
--- Inserir cidades padrão apenas se a tabela estiver vazia
-INSERT INTO public.available_cities (name, state, is_active)
-SELECT 'São Paulo', 'SP', true
-WHERE NOT EXISTS (SELECT 1 FROM public.available_cities);
-
-INSERT INTO public.available_cities (name, state, is_active)
-SELECT 'Rio de Janeiro', 'RJ', true
-WHERE NOT EXISTS (SELECT 1 FROM public.available_cities WHERE name = 'Rio de Janeiro');
-
--- ==================================================================
--- 10. AUTOMATION & TRIGGERS (Criação de Perfil e Carteira)
--- ==================================================================
-
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+-- 5.1 Resolver Email no Login (User, CPF ou Phone)
+CREATE OR REPLACE FUNCTION public.resolve_login_email(identifier text)
+RETURNS text AS $$
+DECLARE
+    found_email text;
 BEGIN
-  -- Criar Perfil do Usuário
-  INSERT INTO public.user_profiles (
-    id,
-    email,
-    name,
-    phone_number,
-    cpf,
-    city,
-    role,
-    status,
-    verification_status
-  )
-  VALUES (
-    new.id,
-    new.email,
-    new.raw_user_meta_data->>'name',
-    new.raw_user_meta_data->>'phone',
-    new.raw_user_meta_data->>'cpf',
-    new.raw_user_meta_data->>'city',
-    -- Cast explícito para o enum e fallback seguro
-    COALESCE((new.raw_user_meta_data->>'role')::public.user_role_enum, 'USER'::public.user_role_enum),
-    'active',
-    CASE
-      WHEN (new.raw_user_meta_data->>'role') = 'DELIVERY_PARTNER' THEN 'NOT_SUBMITTED'::public.verification_status_enum
-      ELSE 'APPROVED'::public.verification_status_enum
-    END
-  );
+    SELECT email INTO found_email FROM public.user_profiles 
+    WHERE email = identifier 
+       OR phone_number = identifier 
+       OR cpf = identifier
+    LIMIT 1;
 
-  -- Criar Carteira se necessário
-  IF (new.raw_user_meta_data->>'role') = 'STORE_PARTNER' THEN
-      INSERT INTO public.store_wallets (store_id) VALUES (new.id);
-  ELSIF (new.raw_user_meta_data->>'role') = 'DELIVERY_PARTNER' THEN
-      INSERT INTO public.partner_wallets (partner_id) VALUES (new.id);
+    RETURN found_email;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5.2 Upgrade de Usuário para Parceiro Entregador
+CREATE OR REPLACE FUNCTION public.become_delivery_partner()
+RETURNS void AS $$
+DECLARE
+    v_user_id uuid := auth.uid();
+BEGIN
+    -- Verifica se já é parceiro
+    IF EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id AND role = 'delivery_partner'::public.user_role) THEN
+        RETURN;
+    END IF;
+
+    -- Atualiza o perfil para 'delivery_partner' e 'active'
+    UPDATE public.user_profiles
+    SET role = 'delivery_partner'::public.user_role,
+        status = 'active'::public.user_status
+    WHERE id = v_user_id;
+
+    -- Garante a criação do perfil de parceiro, se não existir
+    INSERT INTO public.partner_profiles (user_id, verification_status, is_available)
+    VALUES (v_user_id, 'PENDING_REVIEW', FALSE)
+    ON CONFLICT (user_id) DO NOTHING;
+
+    -- Garante a criação da carteira de parceiro, se não existir
+    INSERT INTO public.partner_wallets (partner_id)
+    VALUES (v_user_id)
+    ON CONFLICT (partner_id) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5.3 Ajuste Manual de Saldo (Admin)
+CREATE OR REPLACE FUNCTION public.adjust_wallet_balance(p_user_id uuid, p_amount float, p_reason text)
+RETURNS void AS $$
+DECLARE
+    v_role public.user_role;
+    v_current_user_role public.user_role;
+BEGIN
+    -- Obter a role do usuário atualmente autenticado
+    SELECT role INTO v_current_user_role FROM public.user_profiles WHERE id = auth.uid();
+
+    -- Verificar se quem chama é admin
+    IF v_current_user_role IS NULL OR v_current_user_role != 'admin'::public.user_role THEN
+        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem ajustar o saldo.';
+    END IF;
+
+    -- Pegar role do usuário alvo
+    SELECT role INTO v_role FROM public.user_profiles WHERE id = p_user_id;
+
+    IF v_role = 'store_partner'::public.user_role THEN
+        UPDATE public.store_wallets 
+        SET balance = balance + p_amount, 
+            balance_decimal = balance_decimal + p_amount 
+        WHERE store_id = p_user_id;
+        
+        INSERT INTO public.wallet_transactions (store_id, amount, type, description, status)
+        VALUES (p_user_id, p_amount, 'ADJUSTMENT', p_reason, 'COMPLETED');
+
+    ELSIF v_role = 'delivery_partner'::public.user_role THEN
+        UPDATE public.partner_wallets 
+        SET balance = balance + p_amount 
+        WHERE partner_id = p_user_id;
+
+        INSERT INTO public.wallet_transactions (partner_id, amount, type, description, status)
+        VALUES (p_user_id, p_amount, 'ADJUSTMENT', p_reason, 'COMPLETED');
+    
+    ELSE
+        RAISE EXCEPTION 'Usuário alvo não possui carteira ativa (não é loja nem parceiro).';
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ==============================================================================
+-- 6. GATILHOS (TRIGGERS)
+-- ==============================================================================
+
+-- 6.1 Trigger para novos usuários (Auth -> Profiles/Wallets/Notifications)
+CREATE OR REPLACE FUNCTION public.handle_new_user() 
+RETURNS trigger AS $$
+BEGIN
+  -- Insere na user_profiles
+  INSERT INTO public.user_profiles (id, email, name, role, phone_number, city)
+  VALUES (
+      new.id, 
+      new.email, 
+      new.raw_user_meta_data->>'name', 
+      coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'user'::public.user_role),
+      new.raw_user_meta_data->>'phone',
+      new.raw_user_meta_data->>'city'
+  )
+  ON CONFLICT (id) DO UPDATE SET -- Para idempotência em caso de re-insertions ou updates
+    email = new.email, 
+    name = coalesce(new.raw_user_meta_data->>'name', user_profiles.name),
+    role = coalesce((new.raw_user_meta_data->>'role')::public.user_role, user_profiles.role),
+    phone_number = coalesce(new.raw_user_meta_data->>'phone', user_profiles.phone_number),
+    city = coalesce(new.raw_user_meta_data->>'city', user_profiles.city);
+  
+  -- Cria carteiras e perfil de parceiro/loja com base na role
+  IF (new.raw_user_meta_data->>'role')::public.user_role = 'store_partner'::public.user_role THEN
+    INSERT INTO public.store_wallets (store_id) VALUES (new.id) ON CONFLICT (store_id) DO NOTHING;
+  ELSIF (new.raw_user_meta_data->>'role')::public.user_role = 'delivery_partner'::public.user_role THEN
+    INSERT INTO public.partner_wallets (partner_id) VALUES (new.id) ON CONFLICT (partner_id) DO NOTHING;
+    INSERT INTO public.partner_profiles (user_id, city, verification_status) 
+    VALUES (new.id, new.raw_user_meta_data->>'city', 'NOT_SUBMITTED') -- Status inicial
+    ON CONFLICT (user_id) DO NOTHING;
   END IF;
+  
+  -- Preferências de notificação padrão
+  INSERT INTO public.notification_preferences (user_id) 
+  VALUES (new.id) 
+  ON CONFLICT (user_id) DO NOTHING;
 
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger para executar a função após inserção em auth.users
+-- Remover o trigger existente antes de criar, caso a definição mude
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- ==================================================================
--- 11. CORREÇÕES DE CONSTRAINTS (ON DELETE CASCADE)
--- ==================================================================
 
--- Atualizar partner_wallets para cascata
-DO $$ BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'partner_wallets_partner_id_fkey') THEN
-        ALTER TABLE public.partner_wallets DROP CONSTRAINT partner_wallets_partner_id_fkey;
-    END IF;
-    ALTER TABLE public.partner_wallets 
-        ADD CONSTRAINT partner_wallets_partner_id_fkey 
-        FOREIGN KEY (partner_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
-EXCEPTION WHEN others THEN null; END $$;
+-- ==============================================================================
+-- 7. POLÍTICAS DE SEGURANÇA (RLS)
+-- ==============================================================================
 
--- Atualizar store_wallets para cascata
-DO $$ BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'store_wallets_store_id_fkey') THEN
-        ALTER TABLE public.store_wallets DROP CONSTRAINT store_wallets_store_id_fkey;
-    END IF;
-    ALTER TABLE public.store_wallets 
-        ADD CONSTRAINT store_wallets_store_id_fkey 
-        FOREIGN KEY (store_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
-EXCEPTION WHEN others THEN null; END $$;
+-- Habilitar RLS em tabelas críticas
+alter table public.user_profiles enable row level security;
+alter table public.partner_profiles enable row level security;
+alter table public.partner_documents enable row level security;
+alter table public.partner_levels enable row level security;
+alter table public.categories enable row level security;
+alter table public.products enable row level security;
+alter table public.orders enable row level security;
+alter table public.store_shipping_rules enable row level security;
+alter table public.store_partners enable row level security;
+alter table public.partner_requests enable row level security;
+alter table public.store_wallets enable row level security;
+alter table public.partner_wallets enable row level security;
+alter table public.wallet_transactions enable row level security;
+alter table public.payouts enable row level security;
+alter table public.shop_settings enable row level security;
+alter table public.fee_settings enable row level security;
+alter table public.payout_settings enable row level security;
+alter table public.pwa_settings enable row level security;
+alter table public.cities enable row level security;
+alter table public.city_requests enable row level security;
+alter table public.live_locations enable row level security;
+alter table public.blitz_alerts enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.ratings enable row level security;
+alter table public.platform_news enable row level security;
+alter table public.referrals enable row level security;
+alter table public.blacklist enable row level security;
+alter table public.fraud_alerts enable row level security;
+alter table public.identity_verifications enable row level security;
+alter table public.claims enable row level security;
+alter table public.notification_preferences enable row level security;
+alter table public.work_shifts enable row level security;
+alter table public.webhook_settings enable row level security;
+alter table public.webhook_logs enable row level security;
 
--- Atualizar notification_settings para cascata
-DO $$ BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'notification_settings_user_id_fkey') THEN
-        ALTER TABLE public.notification_settings DROP CONSTRAINT notification_settings_user_id_fkey;
-    END IF;
-    ALTER TABLE public.notification_settings 
-        ADD CONSTRAINT notification_settings_user_id_fkey 
-        FOREIGN KEY (user_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
-EXCEPTION WHEN others THEN null; END $$;
 
--- ==================================================================
--- 12. FUNÇÕES AUXILIARES DE LOGIN (RPC)
--- ==================================================================
+-- 7.1 Políticas user_profiles
+DROP POLICY IF EXISTS "Admins can view all profiles" ON public.user_profiles;
+CREATE POLICY "Admins can view all profiles" ON public.user_profiles
+FOR SELECT TO authenticated USING (public.is_admin());
 
-CREATE OR REPLACE FUNCTION public.resolve_login_email(identifier text)
-RETURNS text AS $$
-DECLARE
-  found_email text;
-BEGIN
-  -- Tenta encontrar por email (case insensitive)
-  SELECT email INTO found_email
-  FROM public.user_profiles
-  WHERE email ILIKE identifier
-  LIMIT 1;
+DROP POLICY IF EXISTS "Users can view and update their own profile" ON public.user_profiles;
+CREATE POLICY "Users can view and update their own profile" ON public.user_profiles
+FOR ALL TO authenticated USING (id = auth.uid());
 
-  IF found_email IS NOT NULL THEN
-    RETURN found_email;
-  END IF;
+DROP POLICY IF EXISTS "Public can view non-sensitive profile data (for lookups)" ON public.user_profiles;
+CREATE POLICY "Public can view non-sensitive profile data (for lookups)" ON public.user_profiles
+FOR SELECT TO anon, authenticated USING (true); -- email, phone_number, cpf, name only
 
-  -- Tenta encontrar por telefone (limpando caracteres não numéricos)
-  SELECT email INTO found_email
-  FROM public.user_profiles
-  WHERE REGEXP_REPLACE(phone_number, '\D', '', 'g') = REGEXP_REPLACE(identifier, '\D', '', 'g')
-  LIMIT 1;
 
-  IF found_email IS NOT NULL THEN
-    RETURN found_email;
-  END IF;
+-- 7.2 Políticas partner_profiles
+DROP POLICY IF EXISTS "Admins can manage all partner profiles" ON public.partner_profiles;
+CREATE POLICY "Admins can manage all partner profiles" ON public.partner_profiles
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
-  -- Tenta encontrar por CPF (limpando caracteres não numéricos)
-  SELECT email INTO found_email
-  FROM public.user_profiles
-  WHERE REGEXP_REPLACE(cpf, '\D', '', 'g') = REGEXP_REPLACE(identifier, '\D', '', 'g')
-  LIMIT 1;
+DROP POLICY IF EXISTS "Partners can view and update their own profile" ON public.partner_profiles;
+CREATE POLICY "Partners can view and update their own profile" ON public.partner_profiles
+FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
-  RETURN found_email;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+DROP POLICY IF EXISTS "Store partners can view all approved partner profiles" ON public.partner_profiles;
+CREATE POLICY "Store partners can view all approved partner profiles" ON public.partner_profiles
+FOR SELECT TO authenticated USING (
+    (SELECT role FROM public.user_profiles WHERE id = auth.uid()) = 'store_partner'::public.user_role 
+    AND verification_status = 'APPROVED'
+);
 
-CREATE OR REPLACE FUNCTION public.check_email_exists(email_input text)
-RETURNS boolean AS $$
-BEGIN
-  RETURN EXISTS (SELECT 1 FROM public.user_profiles WHERE email ILIKE email_input);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ==================================================================
--- 13. SCRIPT DE CORREÇÃO EM LOTE PARA ROLES
--- ==================================================================
-DO $$
-DECLARE
-    r RECORD;
-BEGIN
-    FOR r IN SELECT id, raw_user_meta_data FROM auth.users LOOP
-        IF (r.raw_user_meta_data->>'role') IS NOT NULL AND (r.raw_user_meta_data->>'role') != 'USER' THEN
-            -- Se a metadata for diferente de USER, atualiza o perfil (mesmo que já esteja correto, é idempotente)
-            -- Normaliza para o ENUM correto (ignora case se possível via cast, mas aqui assumimos consistência)
-            -- A conversão para user_role_enum deve ser exata, então garantimos maiúsculas.
-            BEGIN
-                UPDATE public.user_profiles
-                SET role = UPPER(r.raw_user_meta_data->>'role')::public.user_role_enum
-                WHERE id = r.id;
-            EXCEPTION WHEN OTHERS THEN
-                -- Ignora erros de cast se role inválida, mantém original
-                NULL;
-            END;
-        END IF;
-    END LOOP;
-END $$;
+-- 7.3 Políticas partner_documents
+DROP POLICY IF EXISTS "Admins can manage all partner documents" ON public.partner_documents;
+CREATE POLICY "Admins can manage all partner documents" ON public.partner_documents
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Partners can manage their own documents" ON public.partner_documents;
+CREATE POLICY "Partners can manage their own documents" ON public.partner_documents
+FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+
+-- 7.4 Políticas partner_levels (Admin gerencia, todos podem ler)
+DROP POLICY IF EXISTS "Admins can manage partner levels" ON public.partner_levels;
+CREATE POLICY "Admins can manage partner levels" ON public.partner_levels
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read partner levels" ON public.partner_levels;
+CREATE POLICY "All users can read partner levels" ON public.partner_levels
+FOR SELECT TO anon, authenticated USING (true);
+
+
+-- 7.5 Políticas categories (Admin gerencia, todos podem ler)
+DROP POLICY IF EXISTS "Admins can manage categories" ON public.categories;
+CREATE POLICY "Admins can manage categories" ON public.categories
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read categories" ON public.categories;
+CREATE POLICY "All users can read categories" ON public.categories
+FOR SELECT TO anon, authenticated USING (true);
+
+
+-- 7.6 Políticas products (Admin gerencia, todos podem ler ativos)
+DROP POLICY IF EXISTS "Admins can manage products" ON public.products;
+CREATE POLICY "Admins can manage products" ON public.products
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read active products" ON public.products;
+CREATE POLICY "All users can read active products" ON public.products
+FOR SELECT TO anon, authenticated USING (is_active = true);
+
+
+-- 7.7 Políticas orders (Usuário gerencia os seus, Admin tudo)
+DROP POLICY IF EXISTS "Admins can manage all orders" ON public.orders;
+CREATE POLICY "Admins can manage all orders" ON public.orders
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can manage their own orders" ON public.orders;
+CREATE POLICY "Users can manage their own orders" ON public.orders
+FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+
+-- 7.8 Políticas store_shipping_rules (Lojista gerencia os seus, Admin tudo)
+DROP POLICY IF EXISTS "Admins can manage all shipping rules" ON public.store_shipping_rules;
+CREATE POLICY "Admins can manage all shipping rules" ON public.store_shipping_rules
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Store partners can manage their own shipping rules" ON public.store_shipping_rules;
+CREATE POLICY "Store partners can manage their own shipping rules" ON public.store_shipping_rules
+FOR ALL TO authenticated USING (store_id = auth.uid()) WITH CHECK (store_id = auth.uid());
+
+
+-- 7.9 Políticas store_partners (Lojista gerencia os seus, Admin tudo)
+DROP POLICY IF EXISTS "Admins can manage all store partners associations" ON public.store_partners;
+CREATE POLICY "Admins can manage all store partners associations" ON public.store_partners
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Store partners can manage their associations" ON public.store_partners;
+CREATE POLICY "Store partners can manage their associations" ON public.store_partners
+FOR ALL TO authenticated USING (store_id = auth.uid()) WITH CHECK (store_id = auth.uid());
+
+DROP POLICY IF EXISTS "Delivery partners can read their own associations" ON public.store_partners;
+CREATE POLICY "Delivery partners can read their own associations" ON public.store_partners
+FOR SELECT TO authenticated USING (partner_id = auth.uid());
+
+
+-- 7.10 Políticas partner_requests (Lojistas, Entregadores envolvidos e Admins)
+DROP POLICY IF EXISTS "Admins can manage all partner requests" ON public.partner_requests;
+CREATE POLICY "Admins can manage all partner requests" ON public.partner_requests
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Involved parties can read and update requests" ON public.partner_requests;
+CREATE POLICY "Involved parties can read and update requests" ON public.partner_requests
+FOR ALL TO authenticated USING (store_id = auth.uid() OR partner_id = auth.uid()) WITH CHECK (store_id = auth.uid() OR partner_id = auth.uid());
+
+DROP POLICY IF EXISTS "Store partners can create requests" ON public.partner_requests;
+CREATE POLICY "Store partners can create requests" ON public.partner_requests
+FOR INSERT TO authenticated WITH CHECK (store_id = auth.uid());
+
+DROP POLICY IF EXISTS "Delivery partners can read pending requests" ON public.partner_requests;
+CREATE POLICY "Delivery partners can read pending requests" ON public.partner_requests
+FOR SELECT TO authenticated USING (
+    (SELECT role FROM public.user_profiles WHERE id = auth.uid()) = 'delivery_partner'::public.user_role
+    AND status = 'PENDING'
+);
+
+
+-- 7.11 Políticas store_wallets (Lojista e Admin)
+DROP POLICY IF EXISTS "Admins can manage all store wallets" ON public.store_wallets;
+CREATE POLICY "Admins can manage all store wallets" ON public.store_wallets
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Store partners can manage their own wallet" ON public.store_wallets;
+CREATE POLICY "Store partners can manage their own wallet" ON public.store_wallets
+FOR ALL TO authenticated USING (store_id = auth.uid()) WITH CHECK (store_id = auth.uid());
+
+
+-- 7.12 Políticas partner_wallets (Entregador e Admin)
+DROP POLICY IF EXISTS "Admins can manage all partner wallets" ON public.partner_wallets;
+CREATE POLICY "Admins can manage all partner wallets" ON public.partner_wallets
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Delivery partners can manage their own wallet" ON public.partner_wallets;
+CREATE POLICY "Delivery partners can manage their own wallet" ON public.partner_wallets
+FOR ALL TO authenticated USING (partner_id = auth.uid()) WITH CHECK (partner_id = auth.uid());
+
+
+-- 7.13 Políticas wallet_transactions (Involved parties and Admin)
+DROP POLICY IF EXISTS "Admins can manage all wallet transactions" ON public.wallet_transactions;
+CREATE POLICY "Admins can manage all wallet transactions" ON public.wallet_transactions
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Involved parties can read their own wallet transactions" ON public.wallet_transactions;
+CREATE POLICY "Involved parties can read their own wallet transactions" ON public.wallet_transactions
+FOR SELECT TO authenticated USING (store_id = auth.uid() OR partner_id = auth.uid());
+
+
+-- 7.14 Políticas payouts (Entregador e Admin)
+DROP POLICY IF EXISTS "Admins can manage all payouts" ON public.payouts;
+CREATE POLICY "Admins can manage all payouts" ON public.payouts
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Delivery partners can read their own payouts" ON public.payouts;
+CREATE POLICY "Delivery partners can read their own payouts" ON public.payouts
+FOR SELECT TO authenticated USING (partner_id = auth.uid());
+
+
+-- 7.15 Políticas shop_settings (Admin gerencia, todos podem ler)
+DROP POLICY IF EXISTS "Admins can manage shop settings" ON public.shop_settings;
+CREATE POLICY "Admins can manage shop settings" ON public.shop_settings
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read shop settings" ON public.shop_settings;
+CREATE POLICY "All users can read shop settings" ON public.shop_settings
+FOR SELECT TO anon, authenticated USING (true);
+
+
+-- 7.16 Políticas fee_settings (Admin gerencia, todos podem ler)
+DROP POLICY IF EXISTS "Admins can manage fee settings" ON public.fee_settings;
+CREATE POLICY "Admins can manage fee settings" ON public.fee_settings
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read fee settings" ON public.fee_settings;
+CREATE POLICY "All users can read fee settings" ON public.fee_settings
+FOR SELECT TO anon, authenticated USING (true);
+
+
+-- 7.17 Políticas payout_settings (Admin gerencia, todos podem ler)
+DROP POLICY IF EXISTS "Admins can manage payout settings" ON public.payout_settings;
+CREATE POLICY "Admins can manage payout settings" ON public.payout_settings
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read payout settings" ON public.payout_settings;
+CREATE POLICY "All users can read payout settings" ON public.payout_settings
+FOR SELECT TO anon, authenticated USING (true);
+
+
+-- 7.18 Políticas pwa_settings (Admin gerencia, todos podem ler)
+DROP POLICY IF EXISTS "Admins can manage PWA settings" ON public.pwa_settings;
+CREATE POLICY "Admins can manage PWA settings" ON public.pwa_settings
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read PWA settings" ON public.pwa_settings;
+CREATE POLICY "All users can read PWA settings" ON public.pwa_settings
+FOR SELECT TO anon, authenticated USING (true);
+
+
+-- 7.19 Políticas cities (Admin gerencia, todos podem ler)
+DROP POLICY IF EXISTS "Admins can manage cities" ON public.cities;
+CREATE POLICY "Admins can manage cities" ON public.cities
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read cities" ON public.cities;
+CREATE POLICY "All users can read cities" ON public.cities
+FOR SELECT TO anon, authenticated USING (true);
+
+
+-- 7.20 Políticas city_requests (Usuário cria, Admin gerencia)
+DROP POLICY IF EXISTS "Admins can manage city requests" ON public.city_requests;
+CREATE POLICY "Admins can manage city requests" ON public.city_requests
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can create city requests" ON public.city_requests;
+CREATE POLICY "Users can create city requests" ON public.city_requests
+FOR INSERT TO authenticated WITH CHECK (true); -- user_email é optional, então não precisa auth.uid()
+
+DROP POLICY IF EXISTS "Users can read their own city requests" ON public.city_requests;
+CREATE POLICY "Users can read their own city requests" ON public.city_requests
+FOR SELECT TO authenticated USING (user_email = (SELECT email FROM auth.users WHERE id = auth.uid()));
+
+
+-- 7.21 Políticas live_locations (Usuário atualiza, Admin e envolvidos podem ler)
+DROP POLICY IF EXISTS "Admins can manage all live locations" ON public.live_locations;
+CREATE POLICY "Admins can manage all live locations" ON public.live_locations
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can update their own live location" ON public.live_locations;
+CREATE POLICY "Users can update their own live location" ON public.live_locations
+FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Involved parties can read live locations for active requests" ON public.live_locations;
+CREATE POLICY "Involved parties can read live locations for active requests" ON public.live_locations
+FOR SELECT TO authenticated USING (
+  user_id = auth.uid() OR -- Pode ler a própria localização
+  EXISTS (
+    SELECT 1
+    FROM public.partner_requests
+    WHERE (
+            (store_id = auth.uid() AND partner_id = live_locations.user_id) OR
+            (partner_id = auth.uid() AND store_id = live_locations.user_id) -- Se o user é parceiro e a loja que ele busca
+          )
+      AND status IN ('ACCEPTED', 'IN_TRANSIT') -- Apenas para requests ativos
+  )
+);
+
+
+-- 7.22 Políticas blitz_alerts (Todos podem ler e criar, Admin tudo)
+DROP POLICY IF EXISTS "Admins can manage all blitz alerts" ON public.blitz_alerts;
+CREATE POLICY "Admins can manage all blitz alerts" ON public.blitz_alerts
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can create blitz alerts" ON public.blitz_alerts;
+CREATE POLICY "All users can create blitz alerts" ON public.blitz_alerts
+FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "All users can read blitz alerts in their city" ON public.blitz_alerts;
+CREATE POLICY "All users can read blitz alerts in their city" ON public.blitz_alerts
+FOR SELECT TO authenticated USING (
+    city = (SELECT city FROM public.user_profiles WHERE id = auth.uid()) OR public.is_admin()
+);
+
+
+-- 7.23 Políticas chat_messages (Involved parties and Admin)
+DROP POLICY IF EXISTS "Admins can manage all chat messages" ON public.chat_messages;
+CREATE POLICY "Admins can manage all chat messages" ON public.chat_messages
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Involved parties can manage their chat messages" ON public.chat_messages;
+CREATE POLICY "Involved parties can manage their chat messages" ON public.chat_messages
+FOR ALL TO authenticated USING (sender_id = auth.uid() OR receiver_id = auth.uid()) WITH CHECK (sender_id = auth.uid() OR receiver_id = auth.uid());
+
+
+-- 7.24 Políticas ratings (Involved parties and Admin)
+DROP POLICY IF EXISTS "Admins can manage all ratings" ON public.ratings;
+CREATE POLICY "Admins can manage all ratings" ON public.ratings
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Involved parties can read and create ratings" ON public.ratings;
+CREATE POLICY "Involved parties can read and create ratings" ON public.ratings
+FOR ALL TO authenticated USING (
+    EXISTS (SELECT 1 FROM public.partner_requests WHERE id = request_id AND (store_id = auth.uid() OR partner_id = auth.uid()))
+) WITH CHECK (
+    EXISTS (SELECT 1 FROM public.partner_requests WHERE id = request_id AND (store_id = auth.uid() OR partner_id = auth.uid()))
+);
+
+
+-- 7.25 Políticas platform_news (Admin gerencia, todos podem ler ativos)
+DROP POLICY IF EXISTS "Admins can manage platform news" ON public.platform_news;
+CREATE POLICY "Admins can manage platform news" ON public.platform_news
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "All users can read active platform news" ON public.platform_news;
+CREATE POLICY "All users can read active platform news" ON public.platform_news
+FOR SELECT TO anon, authenticated USING (is_active = true);
+
+
+-- 7.26 Políticas referrals (Owner gerencia, Admin tudo)
+DROP POLICY IF EXISTS "Admins can manage all referrals" ON public.referrals;
+CREATE POLICY "Admins can manage all referrals" ON public.referrals
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can manage their own referrals" ON public.referrals;
+CREATE POLICY "Users can manage their own referrals" ON public.referrals
+FOR ALL TO authenticated USING (referrer_id = auth.uid()) WITH CHECK (referrer_id = auth.uid());
+
+
+-- 7.27 Políticas blacklist (Admin apenas)
+DROP POLICY IF EXISTS "Admins can manage blacklist" ON public.blacklist;
+CREATE POLICY "Admins can manage blacklist" ON public.blacklist
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+
+-- 7.28 Políticas fraud_alerts (Admin apenas)
+DROP POLICY IF EXISTS "Admins can manage fraud alerts" ON public.fraud_alerts;
+CREATE POLICY "Admins can manage fraud alerts" ON public.fraud_alerts
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+
+-- 7.29 Políticas identity_verifications (Owner cria, Admin gerencia)
+DROP POLICY IF EXISTS "Admins can manage identity verifications" ON public.identity_verifications;
+CREATE POLICY "Admins can manage identity verifications" ON public.identity_verifications
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can create their own identity verifications" ON public.identity_verifications;
+CREATE POLICY "Users can create their own identity verifications" ON public.identity_verifications
+FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can read their own identity verifications" ON public.identity_verifications;
+CREATE POLICY "Users can read their own identity verifications" ON public.identity_verifications
+FOR SELECT TO authenticated USING (user_id = auth.uid());
+
+
+-- 7.30 Políticas claims (Owner cria/lê, Admin gerencia)
+DROP POLICY IF EXISTS "Admins can manage all claims" ON public.claims;
+CREATE POLICY "Admins can manage all claims" ON public.claims
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can create and read their own claims" ON public.claims;
+CREATE POLICY "Users can create and read their own claims" ON public.claims
+FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+
+-- 7.31 Políticas notification_preferences (Owner gerencia, Admin tudo)
+DROP POLICY IF EXISTS "Admins can manage all notification preferences" ON public.notification_preferences;
+CREATE POLICY "Admins can manage all notification preferences" ON public.notification_preferences
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can manage their own notification preferences" ON public.notification_preferences;
+CREATE POLICY "Users can manage their own notification preferences" ON public.notification_preferences
+FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+
+-- 7.32 Políticas work_shifts (Owner gerencia, Admin tudo)
+DROP POLICY IF EXISTS "Admins can manage all work shifts" ON public.work_shifts;
+CREATE POLICY "Admins can manage all work shifts" ON public.work_shifts
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can manage their own work shifts" ON public.work_shifts;
+CREATE POLICY "Users can manage their own work shifts" ON public.work_shifts
+FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+
+-- 7.33 Políticas webhook_settings (Admin apenas)
+DROP POLICY IF EXISTS "Admins can manage webhook settings" ON public.webhook_settings;
+CREATE POLICY "Admins can manage webhook settings" ON public.webhook_settings
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+
+-- 7.34 Políticas webhook_logs (Admin apenas)
+DROP POLICY IF EXISTS "Admins can manage webhook logs" ON public.webhook_logs;
+CREATE POLICY "Admins can manage webhook logs" ON public.webhook_logs
+FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+
+-- ==============================================================================
+-- FIM DO SETUP
+-- ==============================================================================

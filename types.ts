@@ -1,4 +1,5 @@
 
+
 export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'user';
 export type UserStatus = 'active' | 'banned' | 'pending';
@@ -248,6 +249,7 @@ export interface Order {
     shipping_address?: any;
     asaas_pix_copy_paste?: string;
     asaas_bank_slip_url?: string;
+    payment_details?: any;
 }
 
 export interface AdminOrder extends Order {

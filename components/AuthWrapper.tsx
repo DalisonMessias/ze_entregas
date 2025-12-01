@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { App } from '../App';
+import App from '../App';
 import * as cloud from '../services/cloud';
 import { UserRole } from '../types';
 import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin } from 'lucide-react';
@@ -434,6 +433,5 @@ export const AuthWrapper: React.FC = () => {
                 </div>
             )}
         </div>
-    </div>
-  );
+    );
 };

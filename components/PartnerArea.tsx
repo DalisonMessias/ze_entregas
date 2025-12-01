@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, Navigation, CheckCircle, DollarSign, ToggleLeft, ToggleRight, Wallet, AlertTriangle, History, MapPin, Store, Copy, Play, Pause, Square, Clock, MessageCircle, Map, Gift, UserX } from 'lucide-react';
+import { Loader2, Navigation, CheckCircle, DollarSign, ToggleLeft, ToggleRight, Wallet, AlertTriangle, History, MapPin, Store, Copy, Play, Pause, Square, Clock, MessageCircle, Map, Gift, UserX, UserCheck, Share2, Wrench, Calculator, Fuel, Share, Image as ImageIcon, ClipboardList } from 'lucide-react';
 import { Button } from './Button';
 import { PartnerDocumentation } from './PartnerDocumentation';
 import * as cloud from '../services/cloud';
@@ -13,6 +13,13 @@ import { ChatWindow } from './ChatWindow';
 import { openNavigation } from '../utils/mapHelpers';
 import { ReferralProgram } from './ReferralProgram';
 import { Skeleton } from './Skeleton';
+import { AssociateDriver } from './AssociateDriver';
+import { Maintenance } from './Maintenance';
+import { RouteCalculator } from './RouteCalculator';
+import { FuelCalculator } from './FuelCalculator';
+import { ShareCard } from './ShareCard';
+import { PromotionCardGenerator } from './PromotionCardGenerator';
+import { DailyDashboard } from './DailyDashboard';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -80,7 +87,7 @@ const PartnerAreaSkeleton = () => (
 );
 
 export const PartnerArea: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'requests' | 'finance' | 'history' | 'stores'>('requests');
+    const [activeTab, setActiveTab] = useState<'requests' | 'manual' | 'finance' | 'history' | 'stores' | 'tools'>('requests');
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [requests, setRequests] = useState<PartnerRequest[]>([]);
     const [activeDelivery, setActiveDelivery] = useState<PartnerRequest | null>(null);
@@ -91,9 +98,6 @@ export const PartnerArea: React.FC = () => {
     const [summary, setSummary] = useState<PayoutSummary | null>(null);
     const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
     const [processingWithdraw, setProcessingWithdraw] = useState(false);
-    
-    // Store Association
-    const [associatedStores, setAssociatedStores] = useState<any[]>([]);
     
     // Rating State
     const [ratingRequest, setRatingRequest] = useState<PartnerRequest | null>(null);
@@ -111,6 +115,9 @@ export const PartnerArea: React.FC = () => {
 
     // Referral
     const [showReferral, setShowReferral] = useState(false);
+
+    // Tool Modals
+    const [openTool, setOpenTool] = useState<'maintenance' | 'route_calc' | 'fuel_calc' | 'share_daily' | 'promo_card' | null>(null);
 
     // Live Tracking Ref
     const watchIdRef = useRef<number | null>(null);
@@ -171,8 +178,6 @@ export const PartnerArea: React.FC = () => {
             })(); 
         } 
     }, [activeTab]);
-
-    useEffect(() => { if (activeTab === 'stores') { (async () => { try { const s = await cloud.getPartnerAssociatedStores(); setAssociatedStores(s); } catch(e){ console.error(e); } })(); } }, [activeTab]);
     
     // Auto refresh requests ONLY if shift is ACTIVE
     useEffect(() => { 
@@ -235,7 +240,6 @@ export const PartnerArea: React.FC = () => {
     const handleConfirmReturn = async () => { if (!activeDelivery) return; setProcessingAction(true); try { await cloud.partnerConfirmReturn(activeDelivery.id); alert("Devolução confirmada. Corrida finalizada."); setActiveDelivery(null); loadRequests(); } catch (e: any) { alert("Erro: " + e.message); } finally { setProcessingAction(false); } };
     const handleCheckDecision = () => alert("Aguarde a notificação ou verifique novamente em instantes.");
     const handleRequestEmergency = async () => { setProcessingWithdraw(true); try { await cloud.requestEmergencyPayoutAsaas(); alert(`Sucesso!`); setShowWithdrawConfirm(false); } catch (e: any) { alert("Erro: " + e.message); } finally { setProcessingWithdraw(false); } };
-    const copyCode = () => { if (profile?.association_code) { navigator.clipboard.writeText(profile.association_code); alert("Código copiado!"); } };
 
     const handleRateStore = async (rating: number, comment: string) => {
         if (!ratingRequest) return;
@@ -363,10 +367,12 @@ export const PartnerArea: React.FC = () => {
     return (
         <div className="space-y-6 pb-24 animate-in fade-in">
             <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar">
-                <button onClick={() => setActiveTab('requests')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregas</button>
+                <button onClick={() => setActiveTab('requests')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Online</button>
+                <button onClick={() => setActiveTab('manual')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'manual' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Diário</button>
                 <button onClick={() => setActiveTab('finance')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'finance' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Financeiro</button>
                 <button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'history' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Histórico</button>
                 <button onClick={() => setActiveTab('stores')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'stores' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojas</button>
+                <button onClick={() => setActiveTab('tools')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'tools' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Tools</button>
             </div>
             
             {activeTab === 'requests' && (
@@ -441,6 +447,11 @@ export const PartnerArea: React.FC = () => {
                     )}
                 </>
             )}
+
+            {/* Manual Entry Tab */}
+            {activeTab === 'manual' && (
+                <DailyDashboard />
+            )}
             
             {activeTab === 'finance' && (
                 <div className="space-y-6">
@@ -463,42 +474,45 @@ export const PartnerArea: React.FC = () => {
             )}
 
             {activeTab === 'stores' && (
-                <div className="space-y-6">
-                    <div className="bg-blue-600 rounded-3xl p-6 text-white shadow-xl text-center">
-                        <p className="text-blue-200 text-sm font-bold uppercase mb-2">Seu Código de Parceiro</p>
-                        <div className="bg-white/20 p-4 rounded-2xl mb-4 backdrop-blur-sm border border-white/20">
-                            <h2 className="text-4xl font-black tracking-widest font-mono">{profile.association_code || '---'}</h2>
-                        </div>
-                        <p className="text-xs text-blue-100 mb-4">Compartilhe este código com lojas parceiras para receber pedidos exclusivos.</p>
-                        <button onClick={copyCode} className="bg-white text-blue-600 px-6 py-3 rounded-full font-bold text-sm shadow-lg flex items-center justify-center gap-2 mx-auto hover:bg-gray-100 transition-colors">
-                            <Copy className="w-4 h-4"/> Copiar Código
-                        </button>
-                    </div>
+                <AssociateDriver />
+            )}
 
-                    <div>
-                        <h3 className="font-bold text-gray-800 dark:text-white mb-4 px-2 flex items-center gap-2">
-                            <Store className="w-4 h-4" /> Lojas Vinculadas
-                        </h3>
-                        {associatedStores.length === 0 ? (
-                            <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
-                                <Store className="w-10 h-10 text-gray-300 mx-auto mb-2"/>
-                                <p className="text-sm text-gray-400">Você ainda não está vinculado a nenhuma loja.</p>
+            {activeTab === 'tools' && (
+                <div className="space-y-6">
+                    <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                        <Wrench className="w-5 h-5 text-gray-500" /> Ferramentas do Dia a Dia
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <button onClick={() => setOpenTool('maintenance')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform">
+                            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full">
+                                <Wrench className="w-6 h-6" />
                             </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {associatedStores.map(store => (
-                                    <div key={store.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-gray-900 dark:text-white">{store.store_name}</p>
-                                            <p className="text-xs text-gray-500">{store.city}</p>
-                                        </div>
-                                        <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
-                                            Ativo
-                                        </div>
-                                    </div>
-                                ))}
+                            <span className="font-bold text-gray-900 dark:text-white text-sm">Manutenção</span>
+                        </button>
+                        <button onClick={() => setOpenTool('route_calc')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform">
+                            <div className="p-3 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full">
+                                <Calculator className="w-6 h-6" />
                             </div>
-                        )}
+                            <span className="font-bold text-gray-900 dark:text-white text-sm">Calc. Rota</span>
+                        </button>
+                        <button onClick={() => setOpenTool('fuel_calc')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform">
+                            <div className="p-3 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-full">
+                                <Fuel className="w-6 h-6" />
+                            </div>
+                            <span className="font-bold text-gray-900 dark:text-white text-sm">Combustível</span>
+                        </button>
+                        <button onClick={() => setOpenTool('share_daily')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform">
+                            <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-full">
+                                <Share className="w-6 h-6" />
+                            </div>
+                            <span className="font-bold text-gray-900 dark:text-white text-sm">Resumo do Dia</span>
+                        </button>
+                        <button onClick={() => setOpenTool('promo_card')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform col-span-2">
+                            <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 rounded-full">
+                                <ImageIcon className="w-6 h-6" />
+                            </div>
+                            <span className="font-bold text-gray-900 dark:text-white text-sm">Criar Cartão Digital</span>
+                        </button>
                     </div>
                 </div>
             )}
@@ -539,6 +553,20 @@ export const PartnerArea: React.FC = () => {
                     userRole="delivery_partner" 
                     onClose={() => setShowReferral(false)} 
                 />
+            )}
+
+            {/* Tool Modals */}
+            {openTool === 'maintenance' && <Maintenance onClose={() => setOpenTool(null)} />}
+            {openTool === 'route_calc' && <RouteCalculator onClose={() => setOpenTool(null)} />}
+            {openTool === 'fuel_calc' && <FuelCalculator onClose={() => setOpenTool(null)} />}
+            {openTool === 'share_daily' && <ShareCard data={{ value: 0, count: 0, km: 0, date: new Date().toLocaleDateString() }} onClose={() => setOpenTool(null)} />} {/* Placeholder data, ideally from summary */}
+            {openTool === 'promo_card' && (
+                <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 overflow-y-auto">
+                    <div className="p-4">
+                        <button onClick={() => setOpenTool(null)} className="mb-4 text-blue-500 font-bold">Voltar</button>
+                        <PromotionCardGenerator />
+                    </div>
+                </div>
             )}
         </div>
     );
