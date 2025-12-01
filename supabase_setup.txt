@@ -607,5 +607,39 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- ==================================================================
+-- 11. CORREÇÕES DE CONSTRAINTS (ON DELETE CASCADE)
+-- ==================================================================
+
+-- Atualizar partner_wallets para cascata
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'partner_wallets_partner_id_fkey') THEN
+        ALTER TABLE public.partner_wallets DROP CONSTRAINT partner_wallets_partner_id_fkey;
+    END IF;
+    ALTER TABLE public.partner_wallets 
+        ADD CONSTRAINT partner_wallets_partner_id_fkey 
+        FOREIGN KEY (partner_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+EXCEPTION WHEN others THEN null; END $$;
+
+-- Atualizar store_wallets para cascata
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'store_wallets_store_id_fkey') THEN
+        ALTER TABLE public.store_wallets DROP CONSTRAINT store_wallets_store_id_fkey;
+    END IF;
+    ALTER TABLE public.store_wallets 
+        ADD CONSTRAINT store_wallets_store_id_fkey 
+        FOREIGN KEY (store_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+EXCEPTION WHEN others THEN null; END $$;
+
+-- Atualizar notification_settings para cascata
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'notification_settings_user_id_fkey') THEN
+        ALTER TABLE public.notification_settings DROP CONSTRAINT notification_settings_user_id_fkey;
+    END IF;
+    ALTER TABLE public.notification_settings 
+        ADD CONSTRAINT notification_settings_user_id_fkey 
+        FOREIGN KEY (user_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+EXCEPTION WHEN others THEN null; END $$;
+
+-- ==================================================================
 -- FIM DA DEFINIÇÃO DAS TABELAS E TRIGGERS
 -- ==================================================================

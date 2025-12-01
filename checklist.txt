@@ -40,3 +40,4 @@
 [2024-05-27 09:00] Added RLS policies for `available_cities`, `shop_settings`, `platform_news`, and `pwa_settings` in `supabase_setup.txt` to allow public read access, fixing the issue where cities were not loading on the registration page. Added initial seed data for cities.
 [2024-05-27 10:00] Added PostgreSQL Trigger `handle_new_user` to `supabase_setup.txt` to automatically populate `public.user_profiles` and create wallets (`store_wallets`/`partner_wallets`) upon user registration in `auth.users`.
 [2024-05-27 10:15] Fixed redirection issue after signup in `AuthWrapper.tsx` by manually handling session creation and state update, ensuring immediate access to the dashboard.
+[2024-05-27 10:30] Added ON DELETE CASCADE to `partner_wallets`, `store_wallets`, and `notification_settings` constraints in `supabase_setup.txt` to fix user deletion error.
