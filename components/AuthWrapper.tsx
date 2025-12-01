@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import App from '../App';
 import * as cloud from '../services/cloud';
 import { UserRole } from '../types';
-import { Ban, CheckCircle } from 'lucide-react';
+import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from './Button';
 import { LandingPage } from './LandingPage';
 import { CitySelector } from './CitySelector';
@@ -184,10 +184,12 @@ export const AuthWrapper: React.FC = () => {
     setAuthLoading(true);
     setAuthMessage(null);
     
-    const supabase = cloud.getClient();
-    if (!supabase) return;
-
     try {
+      const supabase = cloud.getClient();
+      if (!supabase) {
+          throw new Error("Erro de conexão (Cliente Supabase não inicializado).");
+      }
+
       // Step 1: Resolve identifier (Email, Phone, CPF) to Email
       const resolvedEmail = await cloud.resolveEmailFromIdentifier(emailOrPhone);
       
@@ -261,9 +263,21 @@ export const AuthWrapper: React.FC = () => {
 
     try {
       const type = signupType || 'USER';
-      await cloud.registerUserWithType(email, password, name, phone, cpf, type, selectedCity);
+      // Register returns data now
+      const result = await cloud.registerUserWithType(email, password, name, phone, cpf, type, selectedCity);
       
-      // Auto login happens via onAuthStateChange
+      // Force Login State Update if Session is Present (Auto-Login)
+      if (result && result.session && result.user) {
+          setSession(result.session);
+          setUserId(result.user.id);
+          setUserRole(type.toLowerCase() as UserRole);
+          // This state update will trigger re-render and switch to <App /> because of the check at start of component
+      } else {
+          // If no session returned (e.g. Email Confirm Required), guide user
+          setAuthMessage({ type: 'success', text: 'Conta criada! Se necessário, verifique seu e-mail para ativar.' });
+          if (!result?.session) setView('login');
+      }
+
     } catch (error: any) {
       setAuthMessage({ type: 'error', text: error.message || 'Erro ao criar conta.' });
     } finally {
@@ -342,7 +356,7 @@ export const AuthWrapper: React.FC = () => {
             }} 
             className="flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white mb-6 font-bold text-sm transition-colors"
         >
-            <Skeleton variant="text" className="w-4 h-4 mr-2" /> Voltar
+            <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </button>
 
         <div className="w-full bg-white dark:bg-gray-800 p-8 rounded-[32px] shadow-xl animate-in fade-in slide-in-from-bottom-8 border border-gray-100 dark:border-gray-700">
@@ -399,7 +413,7 @@ export const AuthWrapper: React.FC = () => {
                                 onClick={() => setShowPassword(!showPassword)} 
                                 className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                             >
-                                {/* Eye icons would be here */}
+                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                             </button>
                         </div>
                     </div>
@@ -411,7 +425,7 @@ export const AuthWrapper: React.FC = () => {
                     </div>
 
                     <Button onClick={handleLogin} disabled={authLoading} fullWidth className="py-4 text-lg mt-2 shadow-lg shadow-brand-500/20">
-                        {authLoading ? <Skeleton variant="circular" className="w-6 h-6 bg-white/20" /> : 'Entrar'}
+                        {authLoading ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : 'Entrar'}
                     </Button>
                     
                     <p className="text-center text-sm text-gray-500 mt-6">
@@ -439,7 +453,7 @@ export const AuthWrapper: React.FC = () => {
                     </div>
 
                     <Button onClick={handleForgotPassword} disabled={authLoading} fullWidth className="py-4 text-lg mt-4 shadow-lg shadow-brand-500/20">
-                        {authLoading ? <Skeleton variant="circular" className="w-6 h-6 bg-white/20" /> : 'Recuperar Senha'}
+                        {authLoading ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : 'Recuperar Senha'}
                     </Button>
                 </div>
             )}
@@ -536,15 +550,15 @@ export const AuthWrapper: React.FC = () => {
                              <button 
                                 type="button" 
                                 onClick={() => setShowPassword(!showPassword)} 
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                             >
-                                {/* Eye Icons */}
+                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                             </button>
                         </div>
                     </div>
 
                     <Button onClick={handleSignup} disabled={authLoading} fullWidth className="py-4 text-lg mt-2">
-                        {authLoading ? <Skeleton variant="circular" className="w-6 h-6 bg-white/20" /> : 'Finalizar Cadastro'}
+                        {authLoading ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : 'Finalizar Cadastro'}
                     </Button>
                 </div>
             )}

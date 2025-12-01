@@ -326,6 +326,38 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
         recognition.start();
     };
 
+    // --- Dynamic Suggestions Based on Role ---
+    const getSuggestions = (role: UserRole) => {
+        switch (role) {
+            case 'admin':
+                return [
+                    { label: "📊 Saúde do sistema", text: "Me dê um resumo geral da saúde do sistema hoje." },
+                    { label: "🛡️ Alertas de segurança", text: "Existem alertas de segurança pendentes?" },
+                    { label: "💡 Gestão de usuários", text: "Dicas para melhorar a gestão de usuários na plataforma." }
+                ];
+            case 'store_partner':
+                return [
+                    { label: "💰 Meu faturamento", text: "Como está meu faturamento hoje e quais as previsões?" },
+                    { label: "🚀 Atrair clientes", text: "Me dê dicas de marketing para atrair mais pedidos." },
+                    { label: "📦 Status dos pedidos", text: "Resuma o status dos meus pedidos atuais." }
+                ];
+            case 'delivery_partner':
+                return [
+                    { label: "🏍️ Lucro de hoje", text: "Quanto eu lucrei hoje e quantas entregas fiz?" },
+                    { label: "⛽ Economizar combustível", text: "Me dê dicas práticas para economizar combustível na moto." },
+                    { label: "⭐ Melhorar avaliação", text: "O que posso fazer para melhorar minha avaliação com as lojas?" }
+                ];
+            default: // User
+                return [
+                    { label: "💵 Balanço do dia", text: "Faça um balanço das minhas entregas e gastos de hoje." },
+                    { label: "📉 Registrar gasto", text: "Como faço para registrar um gasto novo?" },
+                    { label: "🎯 Bater a meta", text: "Dicas para me ajudar a bater minha meta diária." }
+                ];
+        }
+    };
+
+    const suggestions = getSuggestions(userRole);
+
     return (
         <div className="fixed inset-0 z-[100] bg-gray-50 dark:bg-gray-900 flex flex-col h-[100dvh]">
             {/* Header Flutuante / Fixo */}
@@ -368,12 +400,15 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                             Sou o Zé, sua inteligência artificial. Posso ajudar com rotas, finanças, dicas ou dúvidas sobre o app.
                         </p>
                         <div className="grid grid-cols-1 gap-2 mt-8 w-full max-w-xs">
-                            <button onClick={() => setInput("Como foi meu lucro hoje?")} className="p-3 bg-white dark:bg-gray-800 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 shadow-sm border border-gray-100 dark:border-gray-700 hover:border-brand-300 transition-colors text-left">
-                                💰 Como foi meu lucro hoje?
-                            </button>
-                            <button onClick={() => setInput("Me dê uma dica para economizar combustível.")} className="p-3 bg-white dark:bg-gray-800 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 shadow-sm border border-gray-100 dark:border-gray-700 hover:border-brand-300 transition-colors text-left">
-                                ⛽ Dica para economizar combustível
-                            </button>
+                            {suggestions.map((s, idx) => (
+                                <button 
+                                    key={idx}
+                                    onClick={() => setInput(s.text)} 
+                                    className="p-3 bg-white dark:bg-gray-800 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 shadow-sm border border-gray-100 dark:border-gray-700 hover:border-brand-300 transition-colors text-left"
+                                >
+                                    {s.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 ) : (

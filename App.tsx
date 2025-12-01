@@ -465,7 +465,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                           </div>
                           
                           {/* Quick Actions Grid */}
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               <Button onClick={() => setShowStartModal(true)} variant="outline" className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                                   <Target className="w-4 h-4 mr-2 text-blue-500"/> {fixedValue ? 'Editar Meta' : 'Começar Dia'}
                               </Button>
@@ -740,7 +740,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
               </div>
           </div>
       )}
-      <main className="flex-1 pb-20 p-4 max-w-xl mx-auto w-full">
+      <main className={`flex-1 pb-20 w-full mx-auto transition-all duration-300 ${activeTab === 'map' ? 'p-0' : 'px-4 pt-28 max-w-7xl'}`}>
           {renderContent()}
       </main>
 
@@ -800,6 +800,103 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
               }}
               onClose={() => setShowNotifications(false)}
           />
+      )}
+
+      {/* Extra Modal */}
+      {showExtraModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+                <h3 className="font-bold text-lg dark:text-white">Adicionar Entrega Extra</h3>
+                <div>
+                    <label className="text-xs font-bold text-gray-400">Valor (R$)</label>
+                    <input type="tel" value={extraValue} onChange={e => handleCurrencyMask(e, setExtraValue)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" autoFocus/>
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-gray-400">KM (Opcional)</label>
+                    <input type="number" value={extraKm} onChange={e => setExtraKm(e.target.value)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-gray-400">Descrição (Opcional)</label>
+                    <input type="text" value={extraDesc} onChange={e => setExtraDesc(e.target.value)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: Corrida particular" />
+                </div>
+                <div className="flex gap-3 pt-2">
+                    <Button variant="outline" fullWidth onClick={() => setShowExtraModal(false)}>Cancelar</Button>
+                    <Button fullWidth onClick={() => handleAddDelivery('extra')}>Adicionar</Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Expense Modal */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+                <h3 className="font-bold text-lg dark:text-white">Registrar Gasto</h3>
+                <div>
+                    <label className="text-xs font-bold text-gray-400">Valor (R$)</label>
+                    <input type="tel" value={expenseValue} onChange={e => handleCurrencyMask(e, setExpenseValue)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" autoFocus/>
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-gray-400">Categoria</label>
+                    <CustomSelect 
+                        options={[
+                            { label: 'Combustível', value: 'fuel' },
+                            { label: 'Alimentação', value: 'food' },
+                            { label: 'Manutenção', value: 'maintenance' },
+                            { label: 'Outros', value: 'other' }
+                        ]}
+                        value={expenseCategory}
+                        onChange={(val: any) => setExpenseCategory(val)}
+                        className="mt-1"
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-gray-400">Descrição (Opcional)</label>
+                    <input type="text" value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: Almoço" />
+                </div>
+                <div className="flex gap-3 pt-2">
+                    <Button variant="outline" fullWidth onClick={() => setShowExpenseModal(false)}>Cancelar</Button>
+                    <Button fullWidth onClick={handleAddExpense} variant="danger">Registrar</Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Start Day Modal */}
+      {showStartModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+                <h3 className="font-bold text-lg dark:text-white">Configurar Dia</h3>
+                <div>
+                    <label className="text-xs font-bold text-gray-400">Valor Fixo da Entrega (R$)</label>
+                    <input type="tel" value={startDayValue} onChange={e => handleCurrencyMask(e, setStartDayValue)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: 7,00" autoFocus/>
+                    <p className="text-[10px] text-gray-400 mt-1">Isso agiliza o lançamento de entregas padrão.</p>
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-gray-400">Meta de Lucro (R$)</label>
+                    <input type="tel" value={startDayGoal} onChange={e => handleCurrencyMask(e, setStartDayGoal)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: 150,00"/>
+                </div>
+                <div className="flex gap-3 pt-2">
+                    <Button variant="outline" fullWidth onClick={() => setShowStartModal(false)}>Cancelar</Button>
+                    <Button fullWidth onClick={handleStartDay}>Salvar e Começar</Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Delete Transaction Confirm */}
+      {transactionToDelete && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm text-center">
+                  <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4"/>
+                  <h3 className="font-bold text-lg dark:text-white">Excluir Item?</h3>
+                  <p className="text-sm text-gray-500 mt-2 mb-6">Essa ação não pode ser desfeita.</p>
+                  <div className="flex gap-3">
+                      <Button variant="outline" fullWidth onClick={() => setTransactionToDelete(null)}>Cancelar</Button>
+                      <Button variant="danger" fullWidth onClick={confirmDeleteTransaction}>Excluir</Button>
+                  </div>
+              </div>
+          </div>
       )}
 
     </div>

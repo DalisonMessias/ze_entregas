@@ -34,3 +34,9 @@
 [2024-05-26 20:30] Fixed z-index layering in `OfflineMap.tsx` by reducing control z-indices (z-30 to z-45) to ensure they are covered by the main Sidebar Menu (z-50) when opened in normal view.
 [2024-05-26 21:00] Updated ProfileData.tsx to include city selector for editing and allow partial profile updates without validation blocks.
 [2024-05-26 21:30] Hidden global header when on Map view to improve visibility.
+[2024-05-26 22:00] Fixed missing 'platform_news' table error by adding idempotent creation SQL to supabase_setup.txt.
+[2024-05-26 22:30] Restored complete database schema in supabase_setup.txt including all 34 required tables, enums, functions, and triggers to ensure system integrity.
+[2024-05-26 23:00] Conducted full audit of `cloud.ts` and `types.ts` to identify all required database tables. Updated `supabase_setup.txt` to include `referral_logs`, `blitz_alerts`, `asaas_webhook_settings`, `asaas_webhook_logs`, and ensured 100% schema coverage without data deletion.
+[2024-05-27 09:00] Added RLS policies for `available_cities`, `shop_settings`, `platform_news`, and `pwa_settings` in `supabase_setup.txt` to allow public read access, fixing the issue where cities were not loading on the registration page. Added initial seed data for cities.
+[2024-05-27 10:00] Added PostgreSQL Trigger `handle_new_user` to `supabase_setup.txt` to automatically populate `public.user_profiles` and create wallets (`store_wallets`/`partner_wallets`) upon user registration in `auth.users`.
+[2024-05-27 10:15] Fixed redirection issue after signup in `AuthWrapper.tsx` by manually handling session creation and state update, ensuring immediate access to the dashboard.

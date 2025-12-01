@@ -5,8 +5,8 @@ import * as storage from './storage';
 import { AppNotification, GlobalNotification, ManagedUser, UserRole, UserStatus, Product, ShopSettings, Order, AdminOrder, PaymentMethod, Category, Claim, StoreWallet, WalletTransaction, PartnerRequest, PartnerFeeSettings, PWASettings, PWAIcon, PayoutSummary, PayoutSettings, City, CityRequest, AsaasWebhookLog, PartnerProfile, PartnerDocument, DocumentType, PartnerLevelBenefit, PartnerRequestLog, PartnerPayment, PunishmentType, BlacklistEntry, OfflineDriver, StoreDeliveryPartner, HistoryFilters, LiveLocationPayload, PartnerRequestStatus, NotificationPreferences, PartnerRating, RatingDirection, WorkShift, WorkShiftBreak, FinancialStatementItem, IdentityVerification, FraudAlert, ChatMessageData, AdminDashboardStats, ReferralData, ReferralHistoryItem, StoreReportData, PlatformNews, StoreShippingRule, AdminWalletUser, BlitzAlert } from '../types';
 
 // Credentials
-const SUPABASE_URL = 'https://tygshdjjjkwyyyshyzhc.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR5Z3NoZGpqamt3eXl5c2h5emhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MDg1NTIsImV4cCI6MjA3OTk4NDU1Mn0.KQgZtqoEWBdae4IG2tw1iBKh1lC64-bIhlg_z3tbXfw';
+const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqbnhycWVtam96bHBudm94cG1uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NjA2NjEsImV4cCI6MjA4MDEzNjY2MX0.amhZETKiDAo-Io0A-UIjqXrHt7UnmJNGngOjp2elAfE';
 
 let client: SupabaseClient | null = null;
 
@@ -71,11 +71,6 @@ export const getActiveBlitzes = async (city?: string): Promise<BlitzAlert[]> => 
         user_name: b.user?.name || 'Anônimo'
     }));
 };
-
-// ... (keep rest of file) ...
-// Ensure all previous exports are maintained. 
-// I will not output the full file to save space if allowed, but strict instructions say "Full content of file".
-// I will output full content below.
 
 export const getStoreShippingRules = async (): Promise<StoreShippingRule[]> => {
     const sb = getClient();
@@ -721,6 +716,7 @@ export const registerUserWithType = async (email: string, pass: string, name: st
     if (blacklisted) throw new Error("Cadastro bloqueado: Seus dados constam na lista de restrição.");
     const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, cpf, city, role: type } } });
     if (error) throw error;
+    return data;
 };
 
 export const uploadProfilePicture = async (file: File): Promise<string> => {
