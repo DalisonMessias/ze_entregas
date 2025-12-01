@@ -1,0 +1,9 @@
+{
+  "name": "Copy of Copy of Zé Entregas",
+  "description": "Aplicativo de rastreamento manual de entregas do Zé Entregas. Histórico diário e controle total offline.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation",
+    "camera"
+  ]
+}

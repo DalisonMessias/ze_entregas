@@ -1,0 +1,36 @@
+
+[2024-05-24 16:00] Fixed AdminSubTab typing issue by centralizing type definition in types.ts and updating App.tsx and AdminPanel.tsx.
+[2024-05-24 17:00] Added Advanced Admin Dashboard (BI) with real-time stats and SVG charts. Updated types, cloud service, and AdminPanel.
+[2024-05-24 18:00] Implemented "Super Store" features: manager roles, custom shipping rules, exclusive reports, and priority dispatch. Updated database schema and multiple components.
+[2024-05-25 10:00] Added "Platform News" section to Landing Page with admin management panel. Updated DB, types, services, and components.
+[2024-05-25 11:00] Audit and restoration of missing tools and sidebar menu items for Normal User and Partner functionality. Re-implemented Utilities Grid in Dashboard and fixed Sidebar navigation structure in App.tsx.
+[2024-05-25 12:00] Expanded Admin Sidebar menu with dedicated links to all admin modules (Users, Validation, Shop, Finance, etc.) for easier navigation. Updated App.tsx.
+[2024-05-25 13:00] Updated database schema (supabase_setup.txt) to change Foreign Keys from auth.users(id) to public.user_profiles(id) to fix PostgREST relationship errors.
+[2024-05-25 13:30] Added StoreShippingRules.tsx component for Super Stores and restructured StoreWallet.tsx to include Team, Reports, and Settings tabs, fixing hidden features and improving UX.
+[2024-05-25 14:30] Completed revision of Store Partner menu in App.tsx, ensuring all modules (Operation, Management, Super Store, Settings) are visible and correctly routed. Restored Admin Sidebar links.
+[2024-05-25 15:00] Updated PromotionCardGenerator.tsx to include full-white logo variant on orange header for Delivery card, removed Cyber style, and added Minimal/Modern styles.
+[2024-05-25 15:30] Replaced Logo.tsx with new high-quality SVGs (Light/Dark variants) while maintaining component props and dynamic coloring for seamless integration.
+[2024-05-25 16:30] Expanded PromotionCardGenerator.tsx with new Vibrant, Logistic, and Tech templates, renaming existing ones for clarity and improving the selection UI.
+[2024-05-25 17:30] Updated card templates in PromotionCardGenerator.tsx to support dynamic height for unlimited services, redesigned default card for a sophisticated look, and removed Tech style.
+[2024-05-25 18:00] Completely redesigned Delivery (Standard), Store (Official), and Premium (Gold) cards in PromotionCardGenerator.tsx to include stylized headers, badges, icons, and gradients, moving away from plain minimalist styles.
+[2024-05-26 09:00] Comprehensive audit of navigation and menus. Restructured App.tsx Sidebar to include all missing Admin, Store, and Driver tools. Updated AdminPanel.tsx with placeholder components for missing tabs (Blacklist, AI Config, Institutional, PWA Settings).
+[2024-05-26 10:30] Completed Admin Sidebar Menu in App.tsx by adding buttons for all administrative modules (Fees, Payouts, Cities, Shop Categories, Partner Levels, Ratings, Security, Blacklist, Support, Referrals, Institutional, AI Config, App Config), organized by category.
+[2024-05-26 11:30] Explicitly defined foreign key constraints for fraud_alerts, identity_verifications, and chat_messages in supabase_setup.txt to resolve PostgREST relationship errors. Added RLS policy for Admin to read all user profiles.
+[2024-05-26 14:00] Implemented Admin Wallet Control feature with consolidated wallet view, manual balance adjustments (RPC), and transaction logging. Updated DB schema, types, services, and added AdminWalletControl component.
+[2024-05-26 14:30] Fixed PermissionModal closing issue by implementing conditional rendering and proper state management in App.tsx.
+[2024-05-26 15:00] Fixed SQL script error "relation does not exist" by removing explicit trigger drop on non-existent table in supabase_setup.txt.
+[2024-05-26 15:30] Fixed build error in `AddressBook.tsx` caused by truncated file and corrected CSS `@import` order in `index.html` to comply with standards.
+[2024-05-26 16:00] Fixed "White Screen" on Vercel production by replacing window.supabase global with direct createClient import in cloud.ts and removing conflicting importmap/CDN scripts from index.html.
+[2024-05-26 16:15] Fixed build error in `Maintenance.tsx` caused by missing closing tags. Restored file integrity and added a footer Save button.
+[2024-05-26 16:30] Implemented missing modals for "Começar Dia", "Entrega Extra", and "Registrar Gasto" in App.tsx, connecting them to existing state logic.
+[2024-05-26 17:00] Fixed 'Encerrar Dia' functionality in App.tsx by adding the missing confirmation and success modal JSX to the component render.
+[2024-05-26 17:30] Updated `components/PartnerArea.tsx`, `components/StoreWallet.tsx`, `components/OrderHistory.tsx`, `components/Shop.tsx`, `components/AdminDashboard.tsx`, `components/StoreTeam.tsx`, `components/PartnerDashboardWidgets.tsx`, and `components/Skeleton.tsx` to implement Skeleton Loading screens for improved UX and perceived performance.
+[2024-05-26 17:45] Unified `PartnerArea` dashboard in `App.tsx` to include normal user tools (financial goals, utilities, manual entry) below the opportunities widget, removing the visual block.
+[2024-05-26 18:00] Updated `AuthWrapper.tsx` to use an App Shell Skeleton instead of the generic "Conectando... Logística" splash screen for a smoother initial load experience.
+[2024-05-26 18:30] Updated `components/OfflineMap.tsx` to fix Full Screen mode (covering 100vw/100vh) and adjusted z-indexes of controls to ensure visibility over the map layer.
+[2024-05-26 19:00] Corrected full screen positioning in `OfflineMap.tsx` by conditionally removing 'relative' class and using 'h-[100dvh] w-screen fixed inset-0 z-[3000]' to prevent layout issues.
+[2024-05-26 19:30] Fixed address search error in `OfflineMap.tsx` by adding HTTP status check, preventing race conditions, and improving error messaging.
+[2024-05-26 20:00] Updated `OfflineMap.tsx` to use z-[9999] for fullscreen, restore Light/Dark/Satellite/OSM layer options, and enhance search robustness.
+[2024-05-26 20:30] Fixed z-index layering in `OfflineMap.tsx` by reducing control z-indices (z-30 to z-45) to ensure they are covered by the main Sidebar Menu (z-50) when opened in normal view.
+[2024-05-26 21:00] Updated ProfileData.tsx to include city selector for editing and allow partial profile updates without validation blocks.
+[2024-05-26 21:30] Hidden global header when on Map view to improve visibility.
