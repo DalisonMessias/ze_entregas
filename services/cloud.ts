@@ -245,8 +245,7 @@ export const createPartnerRequest = async (pickup: string, delivery: string, dis
 
     const { error } = await sb.rpc('create_partner_request', { p_pickup: pickup, p_delivery: delivery, p_distance: distance, p_final_cost_override: hasDiscount ? finalCost : null }); 
     
-    const { error: err } = await sb.rpc('create_partner_request', { p_pickup: pickup, p_delivery: delivery, p_distance: distance });
-    if (err) throw new Error(err.message); 
+    if (error) throw new Error(error.message); 
 };
 
 export const getOnlineDrivers = async (lat: number, lng: number, radiusKm: number = 10) => {
@@ -714,7 +713,17 @@ export const registerUserWithType = async (email: string, pass: string, name: st
     if (!sb) return;
     const { data: blacklisted } = await sb.from('blacklisted_users').select('*').or(`email.eq.${email},phone_number.eq.${phone}`).eq('status', 'active').single();
     if (blacklisted) throw new Error("Cadastro bloqueado: Seus dados constam na lista de restrição.");
-    const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, cpf, city, role: type } } });
+    
+    // Updated with emailRedirectTo
+    const { data, error } = await sb.auth.signUp({ 
+        email, 
+        password: pass, 
+        options: { 
+            data: { name, phone, cpf, city, role: type },
+            emailRedirectTo: window.location.origin
+        } 
+    });
+    
     if (error) throw error;
     return data;
 };

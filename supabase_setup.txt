@@ -641,5 +641,47 @@ DO $$ BEGIN
 EXCEPTION WHEN others THEN null; END $$;
 
 -- ==================================================================
--- FIM DA DEFINIÇÃO DAS TABELAS E TRIGGERS
+-- 12. FUNÇÕES AUXILIARES DE LOGIN (RPC)
 -- ==================================================================
+
+CREATE OR REPLACE FUNCTION public.resolve_login_email(identifier text)
+RETURNS text AS $$
+DECLARE
+  found_email text;
+BEGIN
+  -- Tenta encontrar por email (case insensitive)
+  SELECT email INTO found_email
+  FROM public.user_profiles
+  WHERE email ILIKE identifier
+  LIMIT 1;
+
+  IF found_email IS NOT NULL THEN
+    RETURN found_email;
+  END IF;
+
+  -- Tenta encontrar por telefone (limpando caracteres não numéricos)
+  SELECT email INTO found_email
+  FROM public.user_profiles
+  WHERE REGEXP_REPLACE(phone_number, '\D', '', 'g') = REGEXP_REPLACE(identifier, '\D', '', 'g')
+  LIMIT 1;
+
+  IF found_email IS NOT NULL THEN
+    RETURN found_email;
+  END IF;
+
+  -- Tenta encontrar por CPF (limpando caracteres não numéricos)
+  SELECT email INTO found_email
+  FROM public.user_profiles
+  WHERE REGEXP_REPLACE(cpf, '\D', '', 'g') = REGEXP_REPLACE(identifier, '\D', '', 'g')
+  LIMIT 1;
+
+  RETURN found_email;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.check_email_exists(email_input text)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (SELECT 1 FROM public.user_profiles WHERE email ILIKE email_input);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

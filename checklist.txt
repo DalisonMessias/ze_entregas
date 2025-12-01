@@ -41,3 +41,6 @@
 [2024-05-27 10:00] Added PostgreSQL Trigger `handle_new_user` to `supabase_setup.txt` to automatically populate `public.user_profiles` and create wallets (`store_wallets`/`partner_wallets`) upon user registration in `auth.users`.
 [2024-05-27 10:15] Fixed redirection issue after signup in `AuthWrapper.tsx` by manually handling session creation and state update, ensuring immediate access to the dashboard.
 [2024-05-27 10:30] Added ON DELETE CASCADE to `partner_wallets`, `store_wallets`, and `notification_settings` constraints in `supabase_setup.txt` to fix user deletion error.
+[2024-05-27 11:00] Added `resolve_login_email` and `check_email_exists` RPC functions to `supabase_setup.txt` to fix the "User not found" error during login by enabling lookups via Email, Phone, or CPF.
+[2024-05-27 11:15] Updated `components/AuthWrapper.tsx` to include a direct email login fallback if the RPC lookup fails, improving robustness against missing database functions or sync delays.
+[2024-05-27 11:30] Updated `components/AuthWrapper.tsx` to handle auto-login failure gracefully by redirecting to login screen with a success message instead of displaying an error, and updated `services/cloud.ts` to include `emailRedirectTo`.
