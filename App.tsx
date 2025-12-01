@@ -107,7 +107,7 @@ const generateUUID = () => {
     });
 };
 
-const App: React.FC<AppProps> = ({ userId, userRole }) => {
+export const App: React.FC<AppProps> = ({ userId, userRole }) => {
   // 1. Normalize Role immediately
   const safeRole = useMemo(() => (userRole || 'user').toLowerCase(), [userRole]);
   
@@ -671,7 +671,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 ${theme}`}>
       {/* Mobile Header */}
-      {activeTab !== 'map' && (
+      {(activeTab as string) !== 'map' && (
         <header className="fixed top-0 left-0 right-0 h-16 bg-brand-600 dark:bg-gray-900 border-b border-brand-700 dark:border-gray-800 z-40 flex items-center justify-between px-4 shadow-md">
             <div className="flex items-center gap-3">
                 <button onClick={() => setMenuOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-brand-700 dark:hover:bg-gray-800 transition-colors">
@@ -740,561 +740,731 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('wallet_control'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                       <Wallet className="w-5 h-5"/> Controle de Carteiras
                                   </button>
-                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('payouts'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Banknote className="w-5 h-5"/> Repasses & Saques
-                                  </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('fees'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                       <DollarSign className="w-5 h-5"/> Taxas e Preços
                                   </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('payouts'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Banknote className="w-5 h-5"/> Regras de Repasse
+                                  </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('asaas_webhook'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Landmark className="w-5 h-5"/> Integração Asaas
+                                      <Link2 className="w-5 h-5"/> Integração Asaas
                                   </button>
                               </div>
 
                               {/* OPERACIONAL */}
                               <div className="space-y-1">
                                   <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Operacional</p>
-                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('cities'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <MapPin className="w-5 h-5"/> Cidades
+                                  <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ShoppingBag className="w-5 h-5"/> Acessar Loja
                                   </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <ShoppingBag className="w-5 h-5"/> Gestão da Loja
+                                      <ShoppingBag className="w-5 h-5"/> Gestão de Produtos
                                   </button>
-                                  <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Store className="w-5 h-5"/> Acessar Loja (Visualização)
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('cities'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <MapPin className="w-5 h-5"/> Cidades
                                   </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('levels'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                       <Star className="w-5 h-5"/> Níveis de Parceiro
                                   </button>
                               </div>
 
+                              {/* SUPORTE & SEGURANÇA */}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Suporte & Segurança</p>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <MessageSquare className="w-5 h-5"/> Chat Suporte
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('claims'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Headphones className="w-5 h-5"/> Chamados
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('security'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ShieldCheck className="w-5 h-5"/> Monitor de Fraude
+                                  </button>
+                              </div>
+
                               {/* MARKETING & CONTEÚDO */}
                               <div className="space-y-1">
                                   <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Marketing</p>
-                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('referrals'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Gift className="w-5 h-5"/> Indicações
-                                  </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('platform_news'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Newspaper className="w-5 h-5"/> Novidades
+                                      <Megaphone className="w-5 h-5"/> Novidades (News)
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('referrals'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Gift className="w-5 h-5"/> Indique e Ganhe
                                   </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('institutional'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                       <Globe className="w-5 h-5"/> Institucional
                                   </button>
                               </div>
 
-                              {/* MONITORAMENTO */}
+                              {/* SISTEMA */}
                               <div className="space-y-1">
-                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monitoramento</p>
-                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('security'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <ShieldAlert className="w-5 h-5"/> Segurança & Fraude
-                                  </button>
-                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('claims'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <MessageSquare className="w-5 h-5"/> Chamados de Suporte
-                                  </button>
-                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('ratings'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Star className="w-5 h-5"/> Avaliações
-                                  </button>
-                              </div>
-
-                              {/* CONFIGURAÇÃO TÉCNICA */}
-                              <div className="space-y-1">
-                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Configurações</p>
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Sistema</p>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('ai_config'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Cpu className="w-5 h-5"/> Inteligência Artificial
+                                      <Bot className="w-5 h-5"/> Configuração IA
                                   </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('pwa'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Smartphone className="w-5 h-5"/> App PWA
+                                      <Smartphone className="w-5 h-5"/> Configuração App
                                   </button>
                               </div>
 
-                              {/* CONTA (Common) */}
-                              <div className="space-y-1 pt-4 border-t border-gray-100 dark:border-gray-800">
-                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Minha Conta</p>
-                                  <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <User className="w-5 h-5"/> Meu Perfil
+                              {/* VISUALIZAÇÃO DE MENUS (APENAS PARA ADMIN) */}
+                              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                  <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">--- VISÃO LOJISTA ---</p>
+                                  <button onClick={() => { setActiveTab('wallet'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Store className="w-5 h-5"/> Painel Lojista
                                   </button>
-                                  <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <Headphones className="w-5 h-5"/> Suporte
+                              </div>
+
+                              {/* Fixed comparison */}
+                              <div className="mt-2">
+                                  <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">--- VISÃO PARCEIRO ---</p>
+                                  <button onClick={() => { setActiveTab('partner'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Bike className="w-5 h-5"/> Painel Entregador
+                                  </button>
+                              </div>
+
+                              <div className="mt-2 mb-4">
+                                  <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">--- VISÃO USUÁRIO ---</p>
+                                  <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Package className="w-5 h-5"/> Painel Usuário (Manual)
                                   </button>
                               </div>
                           </div>
                       )}
 
-                      {/* === STORE PARTNER MENU (Visible for Admins too) === */}
-                      {(safeRole === 'store_partner' || safeRole === 'admin') && (
-                          <>
-                            {safeRole === 'admin' && <div className="border-t border-gray-200 dark:border-gray-700 my-4 pt-4 px-4 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase text-center">--- VISÃO LOJISTA ---</div>}
-                            
-                            <div className="space-y-1">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Operacional</p>
-                                {canAccess('wallet') && (
-                                    <button onClick={() => { setActiveTab('wallet'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <LayoutDashboard className="w-5 h-5"/> Painel Principal
-                                    </button>
-                                )}
-                                {canAccess('new_request') && (
-                                    <button onClick={() => { setActiveTab('new_request'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Plus className="w-5 h-5"/> Nova Entrega
-                                    </button>
-                                )}
-                                {canAccess('history') && (
-                                    <button onClick={() => { setActiveTab('history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <History className="w-5 h-5"/> Histórico
-                                    </button>
-                                )}
-                            </div>
+                      {/* === LOJISTA MENU === */}
+                      {safeRole === 'store_partner' && (
+                          <div className="space-y-6">
+                              <div className="space-y-1">
+                                  <button onClick={() => { setActiveTab('wallet'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Wallet className="w-5 h-5"/> Carteira e Pedidos
+                                  </button>
+                                  <button onClick={() => { setActiveTab('new_request'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Plus className="w-5 h-5"/> Nova Solicitação
+                                  </button>
+                                  <button onClick={() => { setActiveTab('store_finance_panel'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <DollarSign className="w-5 h-5"/> Controle Financeiro
+                                  </button>
+                              </div>
 
-                            <div className="space-y-1 mt-4">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Gestão da Loja</p>
-                                {canAccess('store_finance_panel') && (
-                                    <button onClick={() => { setActiveTab('store_finance_panel'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <DollarSign className="w-5 h-5"/> Financeiro
-                                    </button>
-                                )}
-                                {canAccess('store_team') && (
-                                    <button onClick={() => { setActiveTab('store_team'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Users className="w-5 h-5"/> Minha Equipe
-                                    </button>
-                                )}
-                                {canAccess('store_marketing') && (
-                                    <button onClick={() => { setActiveTab('store_marketing'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Megaphone className="w-5 h-5"/> Marketing
-                                    </button>
-                                )}
-                            </div>
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Gestão</p>
+                                  <button onClick={() => { setActiveTab('store_team'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Users className="w-5 h-5"/> Meus Entregadores
+                                  </button>
+                                  <button onClick={() => { setActiveTab('history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <History className="w-5 h-5"/> Histórico de Entregas
+                                  </button>
+                              </div>
 
-                            {/* Super Store Exclusive (Or Admin View) */}
-                            {(isSuperStore || safeRole === 'admin') && (
-                                <div className="space-y-1 mt-4">
-                                    <p className="px-4 text-xs font-bold text-yellow-600 dark:text-yellow-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Star className="w-3 h-3 fill-current"/> Super Loja</p>
-                                    {canAccess('store_reports') && (
-                                        <button onClick={() => { setActiveTab('store_reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                            <BarChart3 className="w-5 h-5"/> Relatórios Avançados
-                                        </button>
-                                    )}
-                                    {canAccess('store_integrations') && (
-                                        <button onClick={() => { setActiveTab('store_integrations'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                            <Link2 className="w-5 h-5"/> Integrações API
-                                        </button>
-                                    )}
-                                </div>
-                            )}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Super Loja</p>
+                                  <button onClick={() => { setActiveTab('store_reports'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${isSuperStore ? 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800' : 'text-gray-400 cursor-not-allowed opacity-50'}`} disabled={!isSuperStore}>
+                                      <BarChart3 className="w-5 h-5"/> Relatórios Avançados {!isSuperStore && <Lock className="w-3 h-3 ml-auto"/>}
+                                  </button>
+                                  <button onClick={() => { setActiveTab('store_marketing'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Megaphone className="w-5 h-5"/> Marketing
+                                  </button>
+                                  <button onClick={() => { setActiveTab('store_integrations'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Link2 className="w-5 h-5"/> Integrações
+                                  </button>
+                              </div>
 
-                            {/* Only show these common links if user is strictly a store_partner, otherwise Admin has them in main menu */}
-                            {safeRole === 'store_partner' && (
-                                <div className="space-y-1 mt-4">
-                                    <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta</p>
-                                    {canAccess('profile') && (
-                                        <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                            <User className="w-5 h-5"/> Meu Perfil
-                                        </button>
-                                    )}
-                                    {canAccess('store_settings') && (
-                                        <button onClick={() => { setActiveTab('store_settings'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                            <Settings className="w-5 h-5"/> Configurações
-                                        </button>
-                                    )}
-                                    {canAccess('support') && (
-                                        <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                            <Headphones className="w-5 h-5"/> Suporte
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                          </>
-                      )}
-                      
-                      {/* === DELIVERY PARTNER PLATFORM (Exclusive to Partners & Admin) === */}
-                      {(safeRole === 'delivery_partner' || safeRole === 'admin') && (
-                          <>
-                            {safeRole === 'admin' && <div className="border-t border-gray-200 dark:border-gray-700 my-4 pt-4 px-4 text-xs font-bold text-green-600 dark:text-green-400 uppercase text-center">--- VISÃO PARCEIRO ---</div>}
-
-                            <div className="space-y-1 bg-green-50 dark:bg-green-900/10 rounded-xl p-2 border border-green-100 dark:border-green-900/30 mb-4">
-                                <p className="px-2 text-xs font-bold text-green-600 dark:text-green-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Bike className="w-3 h-3 fill-current"/> Plataforma</p>
-                                {canAccess('partner') && (
-                                    <button onClick={() => { setActiveTab('partner'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'partner' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 font-bold' : 'text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30'}`}>
-                                        <Truck className="w-4 h-4"/> Painel do Parceiro
-                                    </button>
-                                )}
-                                {canAccess('history') && (
-                                    <button onClick={() => { setActiveTab('history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors">
-                                        <History className="w-4 h-4"/> Histórico de Pedidos (App)
-                                    </button>
-                                )}
-                            </div>
-                          </>
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta</p>
+                                  <button onClick={() => { setActiveTab('store_settings'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Settings className="w-5 h-5"/> Configurações da Loja
+                                  </button>
+                                  <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <User className="w-5 h-5"/> Perfil e Bancos
+                                  </button>
+                                  <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <LifeBuoy className="w-5 h-5"/> Suporte
+                                  </button>
+                              </div>
+                          </div>
                       )}
 
-                      {/* === GENERAL USER TOOLS (Visible to ALL roles except maybe Store who has their own flow, but Admin sees this as User view) === */}
-                      {(safeRole === 'user' || safeRole === 'delivery_partner' || safeRole === 'admin') && (
-                          <>
-                            {safeRole === 'admin' && <div className="border-t border-gray-200 dark:border-gray-700 my-4 pt-4 px-4 text-xs font-bold text-gray-400 uppercase text-center">--- VISÃO USUÁRIO ---</div>}
+                      {/* === DELIVERY PARTNER MENU === */}
+                      {safeRole === 'delivery_partner' && (
+                          <div className="space-y-6">
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Plataforma</p>
+                                  <button onClick={() => { setActiveTab('partner'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Bike className="w-5 h-5"/> Painel de Pedidos
+                                  </button>
+                                  <button onClick={() => { setActiveTab('history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <History className="w-5 h-5"/> Histórico da Plataforma
+                                  </button>
+                                  <button onClick={() => { setActiveTab('driver_marketing'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Gift className="w-5 h-5"/> Indique e Ganhe
+                                  </button>
+                              </div>
 
-                            <div className="space-y-1">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Meu Controle (Manual)</p>
-                                {canAccess('deliveries') && (
-                                    <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <LayoutDashboard className="w-5 h-5"/> Painel Diário
-                                    </button>
-                                )}
-                                {canAccess('local_history') && (
-                                    <button onClick={() => { setActiveTab('local_history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <History className="w-5 h-5"/> Histórico Pessoal
-                                    </button>
-                                )}
-                                {canAccess('reports') && (
-                                    <button onClick={() => { setActiveTab('reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <BarChart3 className="w-5 h-5"/> Relatórios Financeiros
-                                    </button>
-                                )}
-                                {canAccess('addresses') && (
-                                    <button onClick={() => { setActiveTab('addresses'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <MapPin className="w-5 h-5"/> Agenda de Endereços
-                                    </button>
-                                )}
-                                {canAccess('tasks') && (
-                                    <button onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <ListTodo className="w-5 h-5"/> Lista de Tarefas
-                                    </button>
-                                )}
-                            </div>
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Controle Pessoal</p>
+                                  <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <LayoutDashboard className="w-5 h-5"/> Painel Diário
+                                  </button>
+                                  <button onClick={() => { setActiveTab('local_history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ListOrdered className="w-5 h-5"/> Histórico Manual
+                                  </button>
+                                  <button onClick={() => { setActiveTab('reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <BarChart3 className="w-5 h-5"/> Meus Relatórios
+                                  </button>
+                                  <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Map className="w-5 h-5"/> Mapa Offline
+                                  </button>
+                              </div>
 
-                            <div className="space-y-1 mt-4">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Ferramentas</p>
-                                {canAccess('driver_marketing') && (
-                                    <button onClick={() => { setActiveTab('driver_marketing'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Megaphone className="w-5 h-5"/> Marketing Pessoal
-                                    </button>
-                                )}
-                                {canAccess('map') && (
-                                    <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Map className="w-5 h-5"/> Mapa Offline
-                                    </button>
-                                )}
-                                <button onClick={() => { setShowBlitzModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-bold">
-                                    <Siren className="w-5 h-5"/> Alerta Relâmpago
-                                </button>
-                            </div>
-                          </>
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta</p>
+                                  <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <User className="w-5 h-5"/> Meu Perfil
+                                  </button>
+                                  <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ShoppingBag className="w-5 h-5"/> Loja de Peças
+                                  </button>
+                                  <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <LifeBuoy className="w-5 h-5"/> Ajuda
+                                  </button>
+                              </div>
+                          </div>
                       )}
 
-                      {/* --- COMMON BOTTOM ACTIONS --- */}
-                      <div className="pt-4 mt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
-                          <button onClick={() => { setShowSettingsModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                              <Settings className="w-5 h-5"/> Ajustes do App
+                      {/* === USER MENU (NORMAL) === */}
+                      {safeRole === 'user' && (
+                          <div className="space-y-6">
+                              <div className="space-y-1">
+                                  <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <LayoutDashboard className="w-5 h-5"/> Painel Diário
+                                  </button>
+                                  <button onClick={() => { setActiveTab('local_history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ListOrdered className="w-5 h-5"/> Histórico
+                                  </button>
+                                  <button onClick={() => { setActiveTab('reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <BarChart3 className="w-5 h-5"/> Relatórios
+                                  </button>
+                                  <button onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ListTodo className="w-5 h-5"/> Tarefas
+                                  </button>
+                              </div>
+
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Ferramentas</p>
+                                  <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Map className="w-5 h-5"/> Mapa Offline
+                                  </button>
+                                  <button onClick={() => { setActiveTab('addresses'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <MapPin className="w-5 h-5"/> Agenda de Endereços
+                                  </button>
+                                  <button onClick={() => { setActiveTab('driver_marketing'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <IdCard className="w-5 h-5"/> Cartão Digital
+                                  </button>
+                              </div>
+
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta</p>
+                                  <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <User className="w-5 h-5"/> Meu Perfil
+                                  </button>
+                                  <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ShoppingBag className="w-5 h-5"/> Loja de Peças
+                                  </button>
+                                  <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <LifeBuoy className="w-5 h-5"/> Ajuda
+                                  </button>
+                              </div>
+                          </div>
+                      )}
+
+                      {/* --- GLOBAL FOOTER ACTIONS --- */}
+                      <div className="pt-6 border-t border-gray-100 dark:border-gray-800 mt-4 space-y-2">
+                          <button onClick={() => { setActiveTab('assistant'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-brand-600 to-purple-600 text-white shadow-lg shadow-brand-500/30 hover:shadow-brand-500/50 transition-all">
+                              <SparklesIcon className="w-5 h-5 text-white"/> Assistente Zé
                           </button>
-                          <button onClick={() => { setShowAboutModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                              <Info className="w-5 h-5"/> Sobre o Zé
-                          </button>
-                          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                              <LogOut className="w-5 h-5"/> Sair
-                          </button>
-                      </div>
-                      
-                      <div className="p-4 text-xs text-center text-gray-400">
-                          Versão 1.5.0 • <span className="font-mono">Offline-First</span>
+                          
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                              <button onClick={() => { setShowSettingsModal(true); setMenuOpen(false); }} className="flex items-center justify-center gap-2 p-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                  <Settings className="w-5 h-5"/> <span className="text-xs font-bold">Ajustes</span>
+                              </button>
+                              <button onClick={handleLogout} className="flex items-center justify-center gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
+                                  <LogOut className="w-5 h-5"/> <span className="text-xs font-bold">Sair</span>
+                              </button>
+                          </div>
+                          <div className="text-center mt-4">
+                              <p className="text-[10px] text-gray-400">Versão 3.5.0 (Beta)</p>
+                          </div>
                       </div>
                   </div>
               </div>
           </div>
       )}
 
-      {/* --- REMAINDER OF THE RENDER (Modals, Content) --- */}
-      <main className="pb-24 pt-20 px-4 max-w-2xl mx-auto">
-          {renderContent()}
+      {/* Main Content Area */}
+      <main className={`transition-all duration-300 ${(activeTab as string) === 'map' ? 'pt-0 h-screen' : 'pt-20 px-4 pb-24 md:pb-8 max-w-7xl mx-auto'}`}>
+        {renderContent()}
       </main>
 
-      {/* Footer Navigation (Mobile) */}
-      {!isNavigating && !isSmartRouteMode && activeTab !== 'map' && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 pb-safe z-30">
-            <div className="flex justify-around items-center h-16">
-                <button onClick={() => setActiveTab(getInitialTab())} className={`flex flex-col items-center justify-center w-full h-full ${activeTab === getInitialTab() ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-600'}`}>
-                    <LayoutDashboard className="w-6 h-6" />
-                    <span className="text-[10px] font-bold mt-1">Início</span>
-                </button>
-                
-                {canAccess('shop') && (
-                    <button onClick={() => setActiveTab('shop')} className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'shop' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-600'}`}>
-                        <ShoppingBag className="w-6 h-6" />
-                        <span className="text-[10px] font-bold mt-1">Loja</span>
+      {/* Mobile Footer Navigation - Only for User/Partner flows, hidden on Map/Admin */}
+      {(activeTab as string) !== 'map' && (activeTab as string) !== 'admin' && (activeTab as string) !== 'wallet' && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex justify-around items-center h-16 z-40 md:hidden pb-safe">
+            {/* Logic to show different footer based on role is handled in renderContent/activeTab, 
+                but here we show generic shortcuts for common tabs if applicable */}
+            
+            {safeRole === 'store_partner' ? (
+                <>
+                    <button onClick={() => setActiveTab('wallet')} className={`flex flex-col items-center justify-center w-full h-full ${(activeTab as string) === 'wallet' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400'}`}>
+                        <Wallet className="w-6 h-6 mb-0.5" />
+                        <span className="text-[10px] font-medium">Carteira</span>
                     </button>
-                )}
-
-                <div className="relative -top-6">
-                    <button 
-                        onClick={() => setActiveTab('assistant')}
-                        className="w-14 h-14 bg-gradient-to-tr from-brand-600 to-brand-500 rounded-full shadow-lg shadow-brand-500/40 flex items-center justify-center text-white border-4 border-gray-50 dark:border-gray-900 transform active:scale-95 transition-transform"
-                    >
-                        <SparklesIcon className="w-7 h-7 text-white" color="white" />
+                    <button onClick={() => setActiveTab('new_request')} className={`flex flex-col items-center justify-center w-full h-full ${(activeTab as string) === 'new_request' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400'}`}>
+                        <div className="bg-brand-600 text-white p-3 rounded-full -mt-6 shadow-lg border-4 border-gray-50 dark:border-gray-900">
+                            <Plus className="w-6 h-6" />
+                        </div>
+                        <span className="text-[10px] font-medium mt-1">Novo</span>
                     </button>
-                </div>
-
-                {canAccess('history') && (
-                    <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'history' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-600'}`}>
-                        <History className="w-6 h-6" />
-                        <span className="text-[10px] font-bold mt-1">Histórico</span>
+                    <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center justify-center w-full h-full ${(activeTab as string) === 'history' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400'}`}>
+                        <History className="w-6 h-6 mb-0.5" />
+                        <span className="text-[10px] font-medium">Histórico</span>
                     </button>
-                )}
-
-                {canAccess('profile') && (
-                    <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'profile' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-600'}`}>
-                        <User className="w-6 h-6" />
-                        <span className="text-[10px] font-bold mt-1">Perfil</span>
+                </>
+            ) : (
+                <>
+                    <button onClick={() => setActiveTab(getInitialTab())} className={`flex flex-col items-center justify-center w-full h-full ${(activeTab as string) === 'deliveries' || (activeTab as string) === 'partner' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400'}`}>
+                        {safeRole === 'delivery_partner' ? <Bike className="w-6 h-6 mb-0.5" /> : <LayoutDashboard className="w-6 h-6 mb-0.5" />}
+                        <span className="text-[10px] font-medium">Início</span>
                     </button>
-                )}
-            </div>
+                    <button onClick={() => setActiveTab('map')} className={`flex flex-col items-center justify-center w-full h-full ${(activeTab as string) === 'map' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400'}`}>
+                        <div className="bg-brand-600 text-white p-3 rounded-full -mt-6 shadow-lg border-4 border-gray-50 dark:border-gray-900">
+                            <Map className="w-6 h-6" />
+                        </div>
+                        <span className="text-[10px] font-medium mt-1">Mapa</span>
+                    </button>
+                    <button onClick={() => setActiveTab(safeRole === 'delivery_partner' ? 'history' : 'local_history')} className={`flex flex-col items-center justify-center w-full h-full ${(activeTab as string) === 'history' || (activeTab as string) === 'local_history' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400'}`}>
+                        <History className="w-6 h-6 mb-0.5" />
+                        <span className="text-[10px] font-medium">Histórico</span>
+                    </button>
+                </>
+            )}
         </nav>
       )}
 
-      {/* All Modals */}
+      {/* --- MODALS --- */}
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowSettingsModal(false)}>
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Settings className="w-6 h-6 text-gray-500" /> Ajustes
-                    </h3>
-                    <button onClick={() => setShowSettingsModal(false)}><X className="w-6 h-6 text-gray-400" /></button>
-                </div>
-                
-                {/* Theme Toggle */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                        {theme === 'dark' ? <Moon className="w-6 h-6 text-purple-400" /> : <Sun className="w-6 h-6 text-orange-400" />}
-                        <span className="font-bold text-gray-700 dark:text-white">Modo Escuro</span>
-                    </div>
-                    <Switch checked={theme === 'dark'} onChange={() => {
-                        const newTheme = theme === 'light' ? 'dark' : 'light';
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowSettingsModal(false)}>
+          <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-black text-gray-900 dark:text-white">Ajustes</h3>
+              <button onClick={() => setShowSettingsModal(false)} className="p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400"><X/></button>
+            </div>
+            
+            <div className="space-y-4">
+               {/* Theme Toggle */}
+               <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white dark:bg-gray-600 rounded-xl shadow-sm text-gray-700 dark:text-white">
+                          {theme === 'light' ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
+                      </div>
+                      <span className="font-bold text-gray-700 dark:text-gray-200">Tema Escuro</span>
+                  </div>
+                  <Switch 
+                    checked={theme === 'dark'} 
+                    onChange={(checked) => {
+                        const newTheme = checked ? 'dark' : 'light';
                         setThemeState(newTheme);
                         storage.setTheme(newTheme);
-                        document.documentElement.classList.toggle('dark');
-                    }} />
-                </div>
+                        document.documentElement.classList.toggle('dark', newTheme === 'dark');
+                    }}
+                  />
+               </div>
 
-                {/* Notifications */}
-                <button onClick={() => { setShowSettingsModal(false); setShowNotifications(true); }} className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                        <Bell className="w-6 h-6 text-blue-500" />
-                        <span className="font-bold text-gray-700 dark:text-white">Notificações</span>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                </button>
+               <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white dark:bg-gray-600 rounded-xl shadow-sm text-gray-700 dark:text-white">
+                          <Bell className="w-5 h-5"/>
+                      </div>
+                      <span className="font-bold text-gray-700 dark:text-gray-200">Notificações</span>
+                  </div>
+                  <button onClick={() => { setShowSettingsModal(false); setShowNotifications(true); }} className="text-xs font-bold text-blue-500 hover:underline">Configurar</button>
+               </div>
 
-                {/* Data Management */}
-                <div className="space-y-2">
-                    <p className="text-xs font-bold text-gray-400 uppercase ml-2">Dados</p>
-                    <button onClick={() => { setShowSettingsModal(false); setShowPermissionModal(true); }} className="w-full flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-left hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <Shield className="w-5 h-5 text-green-500" />
-                        <span className="text-sm font-bold text-gray-600 dark:text-gray-300">Permissões do App</span>
-                    </button>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => { 
-                            if(confirm('Tem certeza? Isso apagará todo o histórico local.')) {
-                                storage.clearAllData(); 
-                                window.location.reload(); 
-                            }
-                        }} className="p-3 border border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 text-red-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
-                            <Trash2 className="w-4 h-4" /> Limpar Dados
-                        </button>
-                        <button onClick={handleLogout} className="p-3 border border-gray-200 dark:border-gray-700 text-gray-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
-                            <LogOut className="w-4 h-4" /> Sair
-                        </button>
-                    </div>
-                </div>
+               <button 
+                 onClick={() => { setShowSettingsModal(false); setShowAboutModal(true); }}
+                 className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+               >
+                  <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white dark:bg-gray-600 rounded-xl shadow-sm text-gray-700 dark:text-white">
+                          <Info className="w-5 h-5"/>
+                      </div>
+                      <span className="font-bold text-gray-700 dark:text-gray-200">Sobre o App</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400"/>
+               </button>
             </div>
+
+            <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                <Button variant="danger" fullWidth onClick={() => { 
+                    if(confirm("Tem certeza? Isso apagará todos os dados locais.")) {
+                        storage.clearAllData(); 
+                        window.location.reload(); 
+                    }
+                }}>
+                    <Trash2 className="w-4 h-4 mr-2"/> Limpar Dados Locais
+                </Button>
+                <p className="text-center text-[10px] text-gray-400 mt-3">ID: {userId}</p>
+            </div>
+          </div>
         </div>
       )}
 
+      {/* Start Day Modal */}
       {showStartModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
-                <h3 className="text-xl font-bold dark:text-white mb-4">Configurar Dia</h3>
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase">Valor Fixo por Entrega</label>
-                        <input type="tel" value={startDayValue} onChange={e => handleCurrencyMask(e, setStartDayValue)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold text-lg outline-none dark:text-white" placeholder="0,00" autoFocus />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase">Meta de Lucro (Opcional)</label>
-                        <input type="tel" value={startDayGoal} onChange={e => handleCurrencyMask(e, setStartDayGoal)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold text-lg outline-none dark:text-white" placeholder="0,00" />
-                    </div>
-                    <Button onClick={handleStartDay} fullWidth>Começar</Button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowStartModal(false)}>
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
+                <div className="text-center">
+                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-1">Começar o Dia 🚀</h3>
+                    <p className="text-gray-500 text-sm">Defina seus valores para hoje.</p>
                 </div>
-            </div>
-        </div>
-      )}
-
-      {showExtraModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold dark:text-white">Entrega Extra</h3>
-                    <button onClick={() => setShowExtraModal(false)}><X className="text-gray-400"/></button>
-                </div>
-                <div className="space-y-4">
-                    <input type="tel" value={extraValue} onChange={e => handleCurrencyMask(e, setExtraValue)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold text-lg outline-none dark:text-white" placeholder="Valor (R$)" autoFocus />
-                    <div className="flex gap-2">
-                        <input type="number" value={extraKm} onChange={e => setExtraKm(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white" placeholder="KM (Opcional)" />
-                        <input type="text" value={extraDesc} onChange={e => setExtraDesc(e.target.value)} className="flex-[2] p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white" placeholder="Descrição (Ex: Ifood)" />
-                    </div>
-                    <Button onClick={() => handleAddDelivery('extra')} fullWidth disabled={!extraValue}>Adicionar</Button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {showExpenseModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold dark:text-white text-red-500">Registrar Gasto</h3>
-                    <button onClick={() => setShowExpenseModal(false)}><X className="text-gray-400"/></button>
-                </div>
-                <div className="space-y-4">
-                    <input type="tel" value={expenseValue} onChange={e => handleCurrencyMask(e, setExpenseValue)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold text-lg outline-none dark:text-white text-red-500" placeholder="Valor (R$)" autoFocus />
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => setExpenseCategory('fuel')} className={`p-2 rounded-lg text-xs font-bold border ${expenseCategory === 'fuel' ? 'bg-orange-100 border-orange-500 text-orange-700' : 'border-gray-200 dark:border-gray-600 text-gray-500'}`}>Combustível</button>
-                        <button onClick={() => setExpenseCategory('food')} className={`p-2 rounded-lg text-xs font-bold border ${expenseCategory === 'food' ? 'bg-blue-100 border-blue-500 text-blue-700' : 'border-gray-200 dark:border-gray-600 text-gray-500'}`}>Alimentação</button>
-                        <button onClick={() => setExpenseCategory('maintenance')} className={`p-2 rounded-lg text-xs font-bold border ${expenseCategory === 'maintenance' ? 'bg-gray-200 border-gray-500 text-gray-700' : 'border-gray-200 dark:border-gray-600 text-gray-500'}`}>Manutenção</button>
-                        <button onClick={() => setExpenseCategory('other')} className={`p-2 rounded-lg text-xs font-bold border ${expenseCategory === 'other' ? 'bg-purple-100 border-purple-500 text-purple-700' : 'border-gray-200 dark:border-gray-600 text-gray-500'}`}>Outros</button>
-                    </div>
-
-                    <input type="text" value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white" placeholder="Descrição (Opcional)" />
-                    
-                    <Button onClick={handleAddExpense} fullWidth disabled={!expenseValue} variant="danger">Registrar Saída</Button>
-                </div>
-            </div>
-        </div>
-    );
-      )}
-
-      {transactionToDelete && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl text-center">
-                <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                <h3 className="font-bold text-lg dark:text-white mb-2">Excluir Registro?</h3>
-                <p className="text-sm text-gray-500 mb-6">Essa ação não pode ser desfeita.</p>
-                <div className="flex gap-3">
-                    <Button variant="outline" fullWidth onClick={() => setTransactionToDelete(null)}>Cancelar</Button>
-                    <Button fullWidth variant="danger" onClick={confirmDeleteTransaction}>Excluir</Button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {showEndDayConfirm && daySummaryData && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl">
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-6 text-center">Resumo do Dia</h3>
                 
-                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl mb-6 space-y-3">
-                    <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-500">Entregas</span>
-                        <span className="font-bold dark:text-white">{daySummaryData.count}</span>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">Valor Fixo da Entrega</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
+                            <input 
+                                type="tel" 
+                                value={startDayValue} 
+                                onChange={e => handleCurrencyMask(e, setStartDayValue)} 
+                                className="w-full pl-10 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl text-xl font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                                placeholder="0,00"
+                                autoFocus
+                            />
+                        </div>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-500">KM Total</span>
-                        <span className="font-bold dark:text-white">{daySummaryData.km.toFixed(1)} km</span>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">Meta de Lucro (Opcional)</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
+                            <input 
+                                type="tel" 
+                                value={startDayGoal} 
+                                onChange={e => handleCurrencyMask(e, setStartDayGoal)} 
+                                className="w-full pl-10 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl text-xl font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                                placeholder="0,00"
+                            />
+                        </div>
                     </div>
-                    <div className="h-px bg-gray-200 dark:bg-gray-600 my-2"></div>
-                    <div className="flex justify-between items-center text-lg">
-                        <span className="font-bold text-gray-700 dark:text-gray-300">Lucro Líquido</span>
-                        <span className="font-black text-green-600 dark:text-green-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(daySummaryData.profit)}</span>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                    <Button variant="outline" fullWidth onClick={() => setShowStartModal(false)}>Cancelar</Button>
+                    <Button fullWidth onClick={handleStartDay}>Iniciar</Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Extra Delivery Modal */}
+      {showExtraModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowExtraModal(false)}>
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl space-y-5" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-black text-gray-900 dark:text-white">Entrega Extra</h3>
+                    <button onClick={() => setShowExtraModal(false)}><X className="w-6 h-6 text-gray-400"/></button>
+                </div>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">Valor Cobrado</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
+                            <input 
+                                type="tel" 
+                                value={extraValue} 
+                                onChange={e => handleCurrencyMask(e, setExtraValue)} 
+                                className="w-full pl-10 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl text-2xl font-black text-green-600 outline-none focus:ring-2 focus:ring-green-500"
+                                placeholder="0,00"
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">Distância (KM)</label>
+                            <input 
+                                type="number" 
+                                value={extraKm} 
+                                onChange={e => setExtraKm(e.target.value)} 
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-brand-500"
+                                placeholder="0"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">Descrição</label>
+                            <input 
+                                type="text" 
+                                value={extraDesc} 
+                                onChange={e => setExtraDesc(e.target.value)} 
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-medium dark:text-white outline-none focus:ring-2 focus:ring-brand-500"
+                                placeholder="Opcional"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <Button fullWidth onClick={() => handleAddDelivery('extra')} disabled={!extraValue}>
+                    Confirmar
+                </Button>
+            </div>
+        </div>
+      )}
+
+      {/* Expense Modal */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowExpenseModal(false)}>
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl space-y-5" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-black text-gray-900 dark:text-white text-red-500 flex items-center gap-2">
+                        <TrendingDown className="w-6 h-6"/> Nova Despesa
+                    </h3>
+                    <button onClick={() => setShowExpenseModal(false)}><X className="w-6 h-6 text-gray-400"/></button>
+                </div>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">Valor Gasto</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
+                            <input 
+                                type="tel" 
+                                value={expenseValue} 
+                                onChange={e => handleCurrencyMask(e, setExpenseValue)} 
+                                className="w-full pl-10 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl text-2xl font-black text-red-500 outline-none focus:ring-2 focus:ring-red-500"
+                                placeholder="0,00"
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">Categoria</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { id: 'fuel', label: 'Combustível', icon: Fuel },
+                                { id: 'food', label: 'Alimentação', icon: ShoppingBag },
+                                { id: 'maintenance', label: 'Manutenção', icon: Wrench },
+                                { id: 'other', label: 'Outros', icon: Tag }
+                            ].map(cat => (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => setExpenseCategory(cat.id as any)}
+                                    className={`p-3 rounded-xl flex items-center gap-2 text-sm font-bold transition-all ${expenseCategory === cat.id ? 'bg-red-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}
+                                >
+                                    <cat.icon className="w-4 h-4"/> {cat.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">Descrição</label>
+                        <input 
+                            type="text" 
+                            value={expenseDesc} 
+                            onChange={e => setExpenseDesc(e.target.value)} 
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-medium dark:text-white outline-none focus:ring-2 focus:ring-red-500"
+                            placeholder="Detalhes (Opcional)"
+                        />
+                    </div>
+                </div>
+
+                <Button fullWidth onClick={handleAddExpense} disabled={!expenseValue} className="bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20 border-none">
+                    Salvar Despesa
+                </Button>
+            </div>
+        </div>
+      )}
+
+      {/* Day Summary Modal */}
+      {showDaySummary && daySummaryData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowDaySummary(false)}>
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                <div className="text-center mb-6">
+                    <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-10 h-10 text-green-600" />
+                    </div>
+                    <h3 className="text-2xl font-black text-gray-900 dark:text-white">Dia Finalizado!</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Bom descanso, guerreiro.</p>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                    <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl">
+                        <span className="text-gray-500 font-bold">Lucro Total</span>
+                        <span className="text-xl font-black text-green-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(daySummaryData.profit)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-center">
+                            <p className="text-xs text-gray-400 font-bold uppercase">Entregas</p>
+                            <p className="text-lg font-black dark:text-white">{daySummaryData.count}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-center">
+                            <p className="text-xs text-gray-400 font-bold uppercase">KM Total</p>
+                            <p className="text-lg font-black dark:text-white">{daySummaryData.km.toFixed(1)}</p>
+                        </div>
                     </div>
                 </div>
 
                 <div className="flex gap-3">
-                    <Button variant="outline" fullWidth onClick={() => setShowEndDayConfirm(false)}>Voltar</Button>
-                    <Button fullWidth onClick={confirmEndDay} className="bg-green-600 hover:bg-green-700 text-white border-none shadow-lg shadow-green-500/30">
-                        Confirmar e Encerrar
+                    <Button variant="outline" fullWidth onClick={() => { setShowDaySummary(false); setShowShareCard(true); }}>
+                        <Share2 className="w-4 h-4 mr-2"/> Compartilhar
+                    </Button>
+                    <Button fullWidth onClick={() => setShowDaySummary(false)}>
+                        Fechar
                     </Button>
                 </div>
             </div>
         </div>
       )}
 
-      {showDaySummary && history.length > 0 && (
-          <ShareCard 
-            data={{ 
-                value: history[0].totalValue, 
-                count: history[0].count, 
-                km: history[0].totalKm, 
-                date: history[0].formattedDate 
-            }} 
-            onClose={() => setShowDaySummary(false)} 
-          />
+      {/* Confirmation Modal for End Day */}
+      {showEndDayConfirm && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl text-center">
+                  <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2">Encerrar o Dia?</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+                      Isso salvará seu histórico e limpará as entregas da tela inicial. Tem certeza?
+                  </p>
+                  <div className="flex gap-3">
+                      <Button variant="outline" fullWidth onClick={() => setShowEndDayConfirm(false)}>Cancelar</Button>
+                      <Button fullWidth onClick={confirmEndDay}>Sim, Encerrar</Button>
+                  </div>
+              </div>
+          </div>
       )}
 
+      {/* Delete Transaction Confirm */}
+      {transactionToDelete && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl text-center">
+                  <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2">Excluir Item?</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+                      Essa ação não pode ser desfeita.
+                  </p>
+                  <div className="flex gap-3">
+                      <Button variant="outline" fullWidth onClick={() => setTransactionToDelete(null)}>Cancelar</Button>
+                      <Button variant="danger" fullWidth onClick={confirmDeleteTransaction}>Excluir</Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Global Modals */}
       {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
       {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
       {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
-      {showAboutModal && <AboutApp />}
-      {showPermissionModal && <PermissionModal onClose={() => setShowPermissionModal(false)} />}
-      
-      {/* Notifications Panel */}
+      {showShareCard && daySummaryData && (
+        <ShareCard 
+            data={{ 
+                value: daySummaryData.profit, 
+                count: daySummaryData.count, 
+                km: daySummaryData.km, 
+                date: new Date().toLocaleDateString('pt-BR') 
+            }} 
+            onClose={() => setShowShareCard(false)} 
+        />
+      )}
       {showNotifications && (
-        <NotificationsPanel 
+          <NotificationsPanel 
             notifications={notifications} 
             onMarkAsRead={(id) => {
                 cloud.markNotificationAsRead(id);
                 setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
             }}
-            onClose={() => setShowNotifications(false)} 
-        />
+            onClose={() => setShowNotifications(false)}
+          />
       )}
+      <EmergencyModal isOpen={showEmergencyModal} onClose={() => setShowEmergencyModal(false)} />
+      {showAboutModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowAboutModal(false)}>
+              <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold dark:text-white">Sobre</h3>
+                      <button onClick={() => setShowAboutModal(false)}><X className="w-5 h-5 text-gray-400"/></button>
+                  </div>
+                  <AboutApp />
+              </div>
+          </div>
+      )}
+      <PermissionModal onClose={() => setShowPermissionModal(false)} />
 
-      {/* Global Blitz Alert Modal */}
+      {/* Global FABs (Floating Action Buttons) */}
+      <div className="fixed bottom-24 right-4 flex flex-col gap-3 z-30">
+          <button 
+            onClick={() => setShowEmergencyModal(true)}
+            className="w-12 h-12 bg-red-600 rounded-full shadow-lg shadow-red-600/40 flex items-center justify-center text-white hover:scale-110 transition-transform animate-pulse"
+          >
+              <Siren className="w-6 h-6" />
+          </button>
+      </div>
+
+      {/* Blitz Alert Modal */}
       {showBlitzModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-3xl p-6 shadow-2xl relative text-center">
-                  <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                      <Siren className="w-8 h-8 text-red-600"/>
+              <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-[32px] p-6 shadow-2xl relative">
+                  <div className="text-center mb-6">
+                      <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Siren className="w-8 h-8 text-red-600 animate-pulse" />
+                      </div>
+                      <h3 className="text-2xl font-black text-gray-900 dark:text-white">Alerta na Pista!</h3>
+                      <p className="text-gray-500 text-sm">O que está acontecendo?</p>
                   </div>
-                  <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2">Alerta Relâmpago</h3>
-                  <p className="text-sm text-gray-500 mb-6">Selecione o tipo de alerta para reportar na sua localização atual.</p>
-                  
+
                   <div className="grid grid-cols-2 gap-3 mb-6">
-                      <button onClick={() => setSelectedBlitzType('BLITZ')} className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedBlitzType === 'BLITZ' ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-600' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
-                          <Siren className="w-6 h-6"/> <span className="text-[10px] font-bold">Blitz</span>
+                      <button 
+                          onClick={() => setSelectedBlitzType('BLITZ')}
+                          className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${selectedBlitzType === 'BLITZ' ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-700'}`}
+                      >
+                          <span className="text-2xl">🚔</span>
+                          <span className="font-bold text-xs dark:text-white">Blitz</span>
                       </button>
-                      <button onClick={() => setSelectedBlitzType('ACCIDENT')} className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedBlitzType === 'ACCIDENT' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-600' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
-                          <AlertTriangle className="w-6 h-6"/> <span className="text-[10px] font-bold">Acidente</span>
+                      <button 
+                          onClick={() => setSelectedBlitzType('ACCIDENT')}
+                          className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${selectedBlitzType === 'ACCIDENT' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-gray-200 dark:border-gray-700'}`}
+                      >
+                          <span className="text-2xl">💥</span>
+                          <span className="font-bold text-xs dark:text-white">Acidente</span>
                       </button>
-                      <button onClick={() => setSelectedBlitzType('TRAFFIC')} className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedBlitzType === 'TRAFFIC' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
-                          <Gauge className="w-6 h-6"/> <span className="text-[10px] font-bold">Trânsito</span>
+                      <button 
+                          onClick={() => setSelectedBlitzType('TRAFFIC')}
+                          className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${selectedBlitzType === 'TRAFFIC' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : 'border-gray-200 dark:border-gray-700'}`}
+                      >
+                          <span className="text-2xl">🚦</span>
+                          <span className="font-bold text-xs dark:text-white">Trânsito</span>
                       </button>
-                      <button onClick={() => setSelectedBlitzType('DANGER')} className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedBlitzType === 'DANGER' ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
-                          <ShieldAlert className="w-6 h-6"/> <span className="text-[10px] font-bold">Perigo</span>
+                      <button 
+                          onClick={() => setSelectedBlitzType('DANGER')}
+                          className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${selectedBlitzType === 'DANGER' ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-gray-200 dark:border-gray-700'}`}
+                      >
+                          <span className="text-2xl">⚠️</span>
+                          <span className="font-bold text-xs dark:text-white">Perigo</span>
                       </button>
                   </div>
 
-                  <div className="flex gap-3">
-                      <Button variant="outline" fullWidth onClick={() => setShowBlitzModal(false)} disabled={blitzLocationLoading}>Cancelar</Button>
-                      <Button fullWidth onClick={handleGlobalReportBlitz} disabled={blitzLocationLoading} variant="danger">
-                          {blitzLocationLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Reportar Agora'}
+                  <div className="space-y-3">
+                      <Button fullWidth onClick={handleGlobalReportBlitz} disabled={blitzLocationLoading}>
+                          {blitzLocationLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Reportar Agora'}
+                      </Button>
+                      <Button variant="ghost" fullWidth onClick={() => setShowBlitzModal(false)}>
+                          Cancelar
                       </Button>
                   </div>
               </div>
           </div>
       )}
 
-      {/* Settings Modal (Called from footer/menu) */}
-      {/* Note: showSettingsModal logic is handled inside renderContent for 'profile' or directly via state if triggered from menu */}
-      
-      {/* Emergency Button */}
-      <div className="fixed bottom-24 right-4 z-40">
-        <button 
-            onClick={() => setShowEmergencyModal(true)}
-            className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-full shadow-lg shadow-red-600/30 transition-transform active:scale-95 flex items-center justify-center animate-pulse"
-        >
-            <ShieldAlert className="w-6 h-6" />
-        </button>
-      </div>
-      <EmergencyModal isOpen={showEmergencyModal} onClose={() => setShowEmergencyModal(false)} />
-
     </div>
   );
 };
-
-export default App;
