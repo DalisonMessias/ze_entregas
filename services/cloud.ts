@@ -29,7 +29,7 @@ export const getClient = () => {
   return client;
 };
 
-// ... (keep existing functions) ...
+// ... (keep existing functions until getUserRole) ...
 
 export const reportBlitz = async (lat: number, lng: number, type: 'BLITZ' | 'ACCIDENT' | 'TRAFFIC' | 'DANGER', address: string, city: string) => {
     const sb = getClient();
@@ -651,14 +651,40 @@ export const fetchPartnerRequestHistory = async (
     };
 };
 
+// --- REVISED USER ROLE IDENTIFICATION ---
 export const getUserRole = async (): Promise<UserRole> => {
     const sb = getClient();
     if (!sb) return 'user';
+    
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return 'user';
-    const { data: profile } = await sb.from('user_profiles').select('role').eq('id', user.id).single();
-    if (profile && profile.role) return profile.role.toLowerCase() as UserRole;
-    return user.user_metadata?.role || 'user';
+
+    // 1. Try to fetch strictly from user_profiles table (Source of Truth)
+    const { data: profile, error } = await sb
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    if (profile && profile.role) {
+        // Normalize role string to match application types
+        const normalizedRole = profile.role.toLowerCase();
+        
+        if (normalizedRole === 'admin') return 'admin';
+        if (normalizedRole === 'store_partner') return 'store_partner';
+        if (normalizedRole === 'delivery_partner') return 'delivery_partner';
+        return 'user';
+    }
+
+    // 2. Fallback: Check metadata if profile fetch failed or returned null (e.g. race condition on creation)
+    if (user.user_metadata?.role) {
+        const metaRole = user.user_metadata.role.toLowerCase();
+        if (metaRole === 'admin') return 'admin';
+        if (metaRole === 'store_partner') return 'store_partner';
+        if (metaRole === 'delivery_partner') return 'delivery_partner';
+    }
+
+    return 'user';
 };
 
 export const getUserStatus = async (): Promise<UserStatus> => {
@@ -728,6 +754,7 @@ export const registerUserWithType = async (email: string, pass: string, name: st
     return data;
 };
 
+// ... keep rest of exports ...
 export const uploadProfilePicture = async (file: File): Promise<string> => {
     const sb = getClient();
     if (!sb) throw new Error("Falha na conexão.");

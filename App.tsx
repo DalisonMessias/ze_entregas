@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Save, Minus, Sun, Moon, Bell, BellOff, Package, Map, Clock, X, Search, RotateCcw, Plus, DollarSign, Gauge, Play, Calculator, Settings, Download, Upload, Target, Trophy, User, BarChart3, TrendingDown, TrendingUp, Share2, Wrench, Fuel, CreditCard, Wallet, MapPin, ShieldAlert, Info, Shield, ShoppingCart, Menu, LogOut, FileText, Cloud, Megaphone, Siren, CheckCircle, History, Bot, AlertTriangle, Trash2, Tag, Headphones, ChevronRight, Bike, Power, Users, Banknote, ListOrdered, UserCheck, Smartphone, Link2, Star, Flame, Truck, Loader2, ShoppingBag, ChevronUp, ChevronDown, Rocket, Lock, LayoutDashboard, Newspaper, ShieldCheck, Gift, ListTodo, HelpCircle, UserCog, LifeBuoy, Wand2, IdCard, Globe, Cpu, Ban, Landmark, MessageSquare, Zap } from 'lucide-react';
+import { Save, Minus, Sun, Moon, Bell, BellOff, Package, Map, Clock, X, Search, RotateCcw, Plus, DollarSign, Gauge, Play, Calculator, Settings, Download, Upload, Target, Trophy, User, BarChart3, TrendingDown, TrendingUp, Share2, Wrench, Fuel, CreditCard, Wallet, MapPin, ShieldAlert, Info, Shield, ShoppingCart, Menu, LogOut, FileText, Cloud, Megaphone, Siren, CheckCircle, History, Bot, AlertTriangle, Trash2, Tag, Headphones, ChevronRight, Bike, Power, Users, Banknote, ListOrdered, UserCheck, Smartphone, Link2, Star, Flame, Truck, Loader2, ShoppingBag, ChevronUp, ChevronDown, Rocket, Lock, LayoutDashboard, Newspaper, ShieldCheck, Gift, ListTodo, HelpCircle, UserCog, LifeBuoy, Wand2, IdCard, Globe, Cpu, Ban, Landmark, MessageSquare, Zap, BookOpen } from 'lucide-react';
 import { Button } from './components/Button';
 import { HistoryTable } from './components/HistoryTable';
 import { AddressBook } from './components/AddressBook';
@@ -45,12 +45,35 @@ import * as cloud from './services/cloud';
 import { initNotificationService, stopNotificationService } from './services/notificationService';
 import { AppNotification, DeliveryRecord, Theme, DailyTransaction, UserRole, CartItem, DailySummary, Reminder, AdminSubTab } from './types';
 
-type ActiveTab = 'deliveries' | 'history' | 'addresses' | 'profile' | 'reports' | 'map' | 'admin' | 'shop' | 'assistant' | 'support' | 'wallet' | 'new_request' | 'partner' | 'heatmap' | 'store_team' | 'store_reports' | 'tasks' | 'store_marketing' | 'driver_marketing' | 'store_integrations' | 'store_settings' | 'store_finance_panel';
+type ActiveTab = 
+  | 'deliveries' | 'local_history' | 'history' | 'addresses' | 'profile' | 'reports' | 'map' 
+  | 'admin' | 'shop' | 'assistant' | 'support' 
+  | 'wallet' | 'new_request' | 'store_team' | 'store_reports' | 'store_marketing' | 'store_integrations' | 'store_settings' | 'store_finance_panel'
+  | 'partner' | 'heatmap' | 'tasks' | 'driver_marketing';
 
 interface AppProps {
   userId: string;
-  userRole: UserRole;
+  userRole: string; // Accepting string to sanitize later
 }
+
+// --- ACCESS CONTROL LIST (RBAC) ---
+// Define estritamente o que cada papel pode ver.
+const ROLE_ACCESS: Record<string, ActiveTab[]> = {
+    admin: [
+        'admin', 'profile', 'support'
+    ],
+    store_partner: [
+        'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 
+        'store_integrations', 'store_settings', 'store_finance_panel', 'support', 'assistant', 'profile', 'shop'
+    ],
+    delivery_partner: [
+        'partner', 'history', 'driver_marketing', 'map', 'shop', 'profile', 'assistant', 'support', 
+        'deliveries', 'local_history', 'reports', 'addresses', 'tasks', 'heatmap'
+    ],
+    user: [
+        'deliveries', 'local_history', 'reports', 'addresses', 'tasks', 'map', 'shop', 'profile', 'assistant', 'support'
+    ]
+};
 
 // Mask Utility for Currency
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -80,20 +103,35 @@ const generateUUID = () => {
 };
 
 const App: React.FC<AppProps> = ({ userId, userRole }) => {
-  const [isLoading, setIsLoading] = useState(true);
+  // 1. Normalize Role immediately
+  const safeRole = useMemo(() => (userRole || 'user').toLowerCase(), [userRole]);
   
-  // Set default active tab based on role immediately
-  const getInitialTab = (): ActiveTab => {
-      const role = userRole.toLowerCase();
-      if (role === 'admin') return 'admin';
-      if (role === 'store_partner') return 'wallet';
-      if (role === 'delivery_partner') return 'partner'; // Entregadores começam no painel de parceiro
-      return 'deliveries'; // Usuários normais no painel pessoal
-  };
+  // 2. Define Initial Tab based on Normalized Role
+  const getInitialTab = useCallback((): ActiveTab => {
+      if (safeRole === 'admin') return 'admin';
+      if (safeRole === 'store_partner') return 'wallet';
+      if (safeRole === 'delivery_partner') return 'partner'; 
+      return 'deliveries'; 
+  }, [safeRole]);
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab());
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<AdminSubTab>('dashboard');
   
+  // 3. Helper to check access
+  const canAccess = useCallback((tab: ActiveTab): boolean => {
+      const allowedTabs = ROLE_ACCESS[safeRole] || ROLE_ACCESS['user'];
+      return allowedTabs.includes(tab);
+  }, [safeRole]);
+
+  // 4. Security Effect: Redirect if on forbidden tab
+  useEffect(() => {
+      if (!canAccess(activeTab)) {
+          console.warn(`[Security] Redirecting from unauthorized tab: ${activeTab} for role: ${safeRole}`);
+          setActiveTab(getInitialTab());
+      }
+  }, [activeTab, safeRole, canAccess, getInitialTab]);
+
   // Data State
   const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
   const [history, setHistoryState] = useState<DeliveryRecord[]>([]);
@@ -105,7 +143,6 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
   
   // Modals
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showCloudModal, setShowCloudModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
@@ -139,6 +176,11 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
   const [expenseValue, setExpenseValue] = useState('');
   const [expenseCategory, setExpenseCategory] = useState<'fuel' | 'food' | 'maintenance' | 'other'>('fuel');
   const [expenseDesc, setExpenseDesc] = useState('');
+
+  // Global Blitz Modal
+  const [showBlitzModal, setShowBlitzModal] = useState(false);
+  const [selectedBlitzType, setSelectedBlitzType] = useState<'BLITZ' | 'ACCIDENT' | 'TRAFFIC' | 'DANGER'>('BLITZ');
+  const [blitzLocationLoading, setBlitzLocationLoading] = useState(false);
 
   // Delete Confirmation
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
@@ -180,7 +222,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
         cloud.getNotifications().then(setNotifications);
         
         // Check Super Store Status if Store Partner
-        if (userRole === 'store_partner') {
+        if (safeRole === 'store_partner') {
             const user = await cloud.getClient()?.auth.getUser();
             if (user?.data.user) {
                 const profile = await cloud.getClient()?.from('user_profiles').select('is_super_store').eq('id', user.data.user.id).single();
@@ -211,7 +253,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
     }
     
     // Init Notification Service
-    initNotificationService(userId, userRole);
+    initNotificationService(userId, safeRole as UserRole);
     
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -224,7 +266,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
         document.removeEventListener('mousedown', handleClickOutside);
         stopNotificationService();
     };
-  }, [userRole]);
+  }, [userId, safeRole]);
 
   const handleLogout = async () => {
       await cloud.signOut();
@@ -240,6 +282,39 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
       const location = null; 
       
       return { profit, deliveryCount: count, km, goal: dailyGoal, location };
+  };
+
+  // --- BLITZ / GLOBAL ALERT HANDLER ---
+  const handleGlobalReportBlitz = async () => {
+      setBlitzLocationLoading(true);
+      
+      if (!navigator.geolocation) {
+          alert("Geolocalização não suportada.");
+          setBlitzLocationLoading(false);
+          return;
+      }
+
+      navigator.geolocation.getCurrentPosition(async (position) => {
+          const { latitude, longitude } = position.coords;
+          
+          try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+              const data = await res.json();
+              const address = data.display_name.split(',')[0];
+              const city = data.address.city || data.address.town || data.address.village || 'Cidade Desconhecida';
+
+              await cloud.reportBlitz(latitude, longitude, selectedBlitzType, address, city);
+              alert("Alerta enviado com sucesso! Outros usuários na região serão notificados.");
+              setShowBlitzModal(false);
+          } catch(e: any) {
+              alert("Erro ao reportar: " + e.message);
+          } finally {
+              setBlitzLocationLoading(false);
+          }
+      }, (err) => {
+          alert("Erro ao obter localização: " + err.message);
+          setBlitzLocationLoading(false);
+      }, { enableHighAccuracy: true });
   };
 
   // --- TRANSACTION HANDLERS ---
@@ -263,7 +338,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
     if (type === 'standard') {
         if (!fixedValue) {
-            setShowStartModal(true); // Open StartDayModal if fixedValue is not set
+            setShowStartModal(true); 
             return;
         }
         val = fixedValue;
@@ -282,7 +357,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
         km,
         timestamp: Date.now(),
         description: desc,
-        paymentMethod: 'cash' // Default
+        paymentMethod: 'cash' 
     };
 
     const updated = [newTx, ...transactions];
@@ -305,7 +380,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
       const updated = [newTx, ...transactions];
       setTransactions(updated);
       storage.saveTodayTransactions(updated);
-      setActiveTab('deliveries'); // Return to dashboard
+      setActiveTab('deliveries'); 
   };
 
   const handleAddExpense = () => {
@@ -377,11 +452,10 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
       setHistoryState(updatedHistory);
       storage.saveHistory(updatedHistory);
       
-      // Clear today
       setTransactions([]);
       storage.saveTodayTransactions([]);
       setFixedValue(null);
-      storage.setFixedValue(0); // Set to 0 instead of null to properly clear and trigger input placeholder
+      storage.setFixedValue(0); 
       
       setShowEndDayConfirm(false);
       setShowDaySummary(true);
@@ -392,25 +466,27 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
       setActiveTab('map');
   };
 
+  // --- RENDER CONTENT WITH PROTECTION ---
   const renderContent = () => {
+      // If role doesn't have access to the tab, prevent rendering
+      if (!canAccess(activeTab)) return null;
+
       switch(activeTab) {
           case 'admin': return <AdminPanel activeSubTab={activeAdminSubTab as any} />;
           case 'shop': return <Shop cart={cart} setCart={setCart} userLoggedIn={!!userId} />;
-          case 'assistant': return <ChatAssistant dailySummary={getDailySummary()} transactions={transactions} userId={userId} userRole={userRole} onClose={() => setActiveTab(getInitialTab())} />;
+          case 'assistant': return <ChatAssistant dailySummary={getDailySummary()} transactions={transactions} userId={userId} userRole={safeRole as UserRole} onClose={() => setActiveTab(getInitialTab())} />;
           case 'support': return <SupportPage onBack={() => setActiveTab('deliveries')} onNavigateToChat={() => setActiveTab('assistant')} />;
           
-          // History View Logic: 
-          // If Store OR Delivery Partner, use Cloud OrderHistory. 
-          // If Normal User, use Local HistoryTable.
-          case 'history': 
-            return (userRole === 'store_partner' || userRole === 'delivery_partner') 
-                ? <OrderHistory userRole={userRole} /> 
-                : <HistoryTable history={history} onClear={() => {}} onExport={() => {}} dateFilter={dateFilter} setDateFilter={setDateFilter} expenseFilter={expenseFilter} setExpenseFilter={setExpenseFilter} onUpdateHistory={setHistoryState} />;
+          // History Views
+          case 'history': return <OrderHistory userRole={safeRole as 'store_partner' | 'delivery_partner'} />;
+          case 'local_history': return <HistoryTable history={history} onClear={() => {}} onExport={() => {}} dateFilter={dateFilter} setDateFilter={setDateFilter} expenseFilter={expenseFilter} setExpenseFilter={setExpenseFilter} onUpdateHistory={setHistoryState} />;
           
           case 'reports': return <Reports history={history} todayStats={{ value: getDailySummary().profit, count: getDailySummary().deliveryCount, km: getDailySummary().km }} />;
           case 'addresses': return <AddressBook onClose={() => setActiveTab('deliveries')} onNavigateInternal={handleNavigateFromAddressBook} />;
           case 'profile': return <ProfileData onBack={() => setActiveTab('deliveries')} />;
-          case 'map': return <OfflineMap initialDestination={mapDestination} onClearDestination={() => setMapDestination(null)} onBack={() => setActiveTab('deliveries')} onSaveRoute={handleSaveMapRun} />;
+          
+          case 'map': return <OfflineMap initialDestination={mapDestination} onClearDestination={() => setMapDestination(null)} onBack={() => setActiveTab('deliveries')} onSaveRoute={handleSaveMapRun} onOpenBlitzModal={() => setShowBlitzModal(true)} />;
+          
           case 'heatmap': return <Heatmap />;
           case 'tasks': return <TaskList />;
           
@@ -426,7 +502,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
           
           // Partner Specific
           case 'partner': return <PartnerArea />;
-          case 'driver_marketing': return <DriverMarketing userRole={userRole} />;
+          case 'driver_marketing': return <DriverMarketing userRole={safeRole as UserRole} />;
           
           case 'deliveries':
           default:
@@ -563,11 +639,11 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
               return (
                   <div className="animate-in fade-in pb-20">
-                      {userRole === 'delivery_partner' && (
-                          <PartnerDashboardWidgets onNavigate={setActiveTab} userRole={userRole} />
+                      {safeRole === 'delivery_partner' && (
+                          <PartnerDashboardWidgets onNavigate={setActiveTab} userRole={safeRole as UserRole} />
                       )}
                       
-                      <div className={userRole === 'delivery_partner' ? 'mt-6' : ''}>
+                      <div className={safeRole === 'delivery_partner' ? 'mt-6' : ''}>
                         {dashboardContent}
                       </div>
                   </div>
@@ -577,7 +653,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 ${theme}`}>
-      {/* Mobile Header - Updated to Brand Red background with White Text/Icons */}
+      {/* Mobile Header */}
       {activeTab !== 'map' && (
         <header className="fixed top-0 left-0 right-0 h-16 bg-brand-600 dark:bg-gray-900 border-b border-brand-700 dark:border-gray-800 z-40 flex items-center justify-between px-4 shadow-md">
             <div className="flex items-center gap-3">
@@ -596,57 +672,270 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
         </header>
       )}
 
-      {/* Sidebar Menu - REVISED STRUCTURE */}
+      {/* Sidebar Menu - REVISED STRUCTURE FOR RBAC */}
       {menuOpen && (
           <div className="fixed inset-0 z-50 flex">
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMenuOpen(false)}></div>
               <div ref={menuRef} className="relative w-72 bg-white dark:bg-gray-900 h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
                   <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                      <h2 className="font-black text-xl text-gray-900 dark:text-white flex items-center gap-2">
-                          <Logo className="h-6 w-auto" /> Menu
-                      </h2>
+                      <div className="flex flex-col">
+                          <h2 className="font-black text-xl text-gray-900 dark:text-white flex items-center gap-2">
+                              <Logo className="h-6 w-auto" /> Menu
+                          </h2>
+                          <div className="mt-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs font-bold text-brand-600 w-fit uppercase">
+                              {safeRole === 'admin' ? 'Administrador' : safeRole === 'store_partner' ? 'Lojista' : safeRole === 'delivery_partner' ? 'Parceiro' : 'Usuário'}
+                          </div>
+                      </div>
                       <button onClick={() => setMenuOpen(false)}><X className="w-6 h-6 text-gray-400"/></button>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
                       
+                      {/* === ADMIN MENU === */}
+                      {safeRole === 'admin' && (
+                          <div className="space-y-6">
+                              {/* GERAL */}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Geral</p>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('dashboard'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <LayoutDashboard className="w-5 h-5"/> Dashboard
+                                  </button>
+                              </div>
+
+                              {/* USUÁRIOS */}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Usuários</p>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('users'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Users className="w-5 h-5"/> Gerenciar Usuários
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('validation'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <UserCheck className="w-5 h-5"/> Validação de Parceiros
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('blacklist'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Ban className="w-5 h-5"/> Lista Negra
+                                  </button>
+                              </div>
+
+                              {/* FINANCEIRO */}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Financeiro</p>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('wallet_control'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Wallet className="w-5 h-5"/> Controle de Carteiras
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('payouts'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Banknote className="w-5 h-5"/> Repasses & Saques
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('fees'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <DollarSign className="w-5 h-5"/> Taxas e Preços
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('asaas_webhook'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Landmark className="w-5 h-5"/> Integração Asaas
+                                  </button>
+                              </div>
+
+                              {/* OPERACIONAL */}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Operacional</p>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('cities'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <MapPin className="w-5 h-5"/> Cidades
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ShoppingBag className="w-5 h-5"/> Categorias da Loja
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('levels'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Star className="w-5 h-5"/> Níveis de Parceiro
+                                  </button>
+                              </div>
+
+                              {/* MARKETING & CONTEÚDO */}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Marketing</p>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('referrals'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Gift className="w-5 h-5"/> Indicações
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('platform_news'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Newspaper className="w-5 h-5"/> Novidades
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('institutional'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Globe className="w-5 h-5"/> Institucional
+                                  </button>
+                              </div>
+
+                              {/* MONITORAMENTO */}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monitoramento</p>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('security'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <ShieldAlert className="w-5 h-5"/> Segurança & Fraude
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('claims'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <MessageSquare className="w-5 h-5"/> Chamados de Suporte
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('ratings'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Star className="w-5 h-5"/> Avaliações
+                                  </button>
+                              </div>
+
+                              {/* CONFIGURAÇÃO TÉCNICA */}
+                              <div className="space-y-1">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Configurações</p>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('ai_config'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Cpu className="w-5 h-5"/> Inteligência Artificial
+                                  </button>
+                                  <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('pwa'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Smartphone className="w-5 h-5"/> App PWA
+                                  </button>
+                              </div>
+
+                              {/* CONTA (Common) */}
+                              <div className="space-y-1 pt-4 border-t border-gray-100 dark:border-gray-800">
+                                  <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Minha Conta</p>
+                                  <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <User className="w-5 h-5"/> Meu Perfil
+                                  </button>
+                                  <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Headphones className="w-5 h-5"/> Suporte
+                                  </button>
+                              </div>
+                          </div>
+                      )}
+
+                      {/* === STORE PARTNER MENU === */}
+                      {safeRole === 'store_partner' && (
+                          <>
+                            <div className="space-y-1">
+                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Operacional</p>
+                                {canAccess('wallet') && (
+                                    <button onClick={() => { setActiveTab('wallet'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <LayoutDashboard className="w-5 h-5"/> Painel Principal
+                                    </button>
+                                )}
+                                {canAccess('new_request') && (
+                                    <button onClick={() => { setActiveTab('new_request'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Plus className="w-5 h-5"/> Nova Entrega
+                                    </button>
+                                )}
+                                {canAccess('history') && (
+                                    <button onClick={() => { setActiveTab('history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <History className="w-5 h-5"/> Histórico
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="space-y-1 mt-4">
+                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Gestão da Loja</p>
+                                {canAccess('store_finance_panel') && (
+                                    <button onClick={() => { setActiveTab('store_finance_panel'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <DollarSign className="w-5 h-5"/> Financeiro
+                                    </button>
+                                )}
+                                {canAccess('store_team') && (
+                                    <button onClick={() => { setActiveTab('store_team'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Users className="w-5 h-5"/> Minha Equipe
+                                    </button>
+                                )}
+                                {canAccess('store_marketing') && (
+                                    <button onClick={() => { setActiveTab('store_marketing'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Megaphone className="w-5 h-5"/> Marketing
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Super Store Exclusive */}
+                            {isSuperStore && (
+                                <div className="space-y-1 mt-4">
+                                    <p className="px-4 text-xs font-bold text-yellow-600 dark:text-yellow-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Star className="w-3 h-3 fill-current"/> Super Loja</p>
+                                    {canAccess('store_reports') && (
+                                        <button onClick={() => { setActiveTab('store_reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                            <BarChart3 className="w-5 h-5"/> Relatórios Avançados
+                                        </button>
+                                    )}
+                                    {canAccess('store_integrations') && (
+                                        <button onClick={() => { setActiveTab('store_integrations'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                            <Link2 className="w-5 h-5"/> Integrações API
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="space-y-1 mt-4">
+                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta</p>
+                                {canAccess('profile') && (
+                                    <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <User className="w-5 h-5"/> Meu Perfil
+                                    </button>
+                                )}
+                                {canAccess('store_settings') && (
+                                    <button onClick={() => { setActiveTab('store_settings'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Settings className="w-5 h-5"/> Configurações
+                                    </button>
+                                )}
+                                {canAccess('support') && (
+                                    <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Headphones className="w-5 h-5"/> Suporte
+                                    </button>
+                                )}
+                            </div>
+                          </>
+                      )}
+                      
                       {/* === DELIVERY PARTNER MENU === */}
-                      {userRole === 'delivery_partner' && (
+                      {safeRole === 'delivery_partner' && (
                           <>
                             <div className="space-y-1 bg-green-50 dark:bg-green-900/10 rounded-xl p-2 border border-green-100 dark:border-green-900/30 mb-4">
                                 <p className="px-2 text-xs font-bold text-green-600 dark:text-green-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Bike className="w-3 h-3 fill-current"/> Plataforma</p>
-                                <button onClick={() => { setActiveTab('partner'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'partner' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 font-bold' : 'text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30'}`}>
-                                    <Truck className="w-4 h-4"/> Painel do Parceiro
-                                </button>
-                                <button onClick={() => { setActiveTab('history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors">
-                                    <History className="w-4 h-4"/> Histórico de Pedidos
-                                </button>
+                                {canAccess('partner') && (
+                                    <button onClick={() => { setActiveTab('partner'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'partner' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 font-bold' : 'text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30'}`}>
+                                        <Truck className="w-4 h-4"/> Painel do Parceiro
+                                    </button>
+                                )}
+                                {canAccess('history') && (
+                                    <button onClick={() => { setActiveTab('history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors">
+                                        <History className="w-4 h-4"/> Histórico de Pedidos (App)
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-1">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Controle Pessoal (Manual)</p>
-                                <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <LayoutDashboard className="w-5 h-5"/> Painel Diário
-                                </button>
-                                <button onClick={() => { setActiveTab('reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <BarChart3 className="w-5 h-5"/> Relatórios Financeiros
-                                </button>
-                                <button onClick={() => { setActiveTab('addresses'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <MapPin className="w-5 h-5"/> Agenda de Endereços
-                                </button>
-                                <button onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <ListTodo className="w-5 h-5"/> Lista de Tarefas
-                                </button>
+                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Meu Controle (Manual)</p>
+                                {canAccess('deliveries') && (
+                                    <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <LayoutDashboard className="w-5 h-5"/> Painel Diário
+                                    </button>
+                                )}
+                                {canAccess('local_history') && (
+                                    <button onClick={() => { setActiveTab('local_history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <History className="w-5 h-5"/> Histórico Pessoal
+                                    </button>
+                                )}
+                                {canAccess('reports') && (
+                                    <button onClick={() => { setActiveTab('reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <BarChart3 className="w-5 h-5"/> Relatórios Financeiros
+                                    </button>
+                                )}
+                                {canAccess('addresses') && (
+                                    <button onClick={() => { setActiveTab('addresses'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <MapPin className="w-5 h-5"/> Agenda de Endereços
+                                    </button>
+                                )}
+                                {canAccess('tasks') && (
+                                    <button onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <ListTodo className="w-5 h-5"/> Lista de Tarefas
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-1 mt-4">
                                 <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Ferramentas</p>
-                                <button onClick={() => { setActiveTab('driver_marketing'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Megaphone className="w-5 h-5"/> Marketing Pessoal
-                                </button>
-                                <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Map className="w-5 h-5"/> Mapa Offline
-                                </button>
-                                <button onClick={() => { setActiveTab('map'); setMenuOpen(false); setTimeout(() => { const btn = document.querySelector('button.animate-pulse'); if(btn) (btn as HTMLButtonElement).click(); }, 300); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+                                {canAccess('driver_marketing') && (
+                                    <button onClick={() => { setActiveTab('driver_marketing'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Megaphone className="w-5 h-5"/> Marketing Pessoal
+                                    </button>
+                                )}
+                                {canAccess('map') && (
+                                    <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Map className="w-5 h-5"/> Mapa Offline
+                                    </button>
+                                )}
+                                <button onClick={() => { setShowBlitzModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
                                     <Zap className="w-5 h-5"/> Alerta Relâmpago
                                 </button>
                                 <button onClick={() => { setShowRouteCalc(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -658,54 +947,74 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                 <button onClick={() => { setShowMaintenance(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                     <Wrench className="w-5 h-5"/> Manutenção
                                 </button>
-                                <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <ShoppingBag className="w-5 h-5"/> Loja de Peças
-                                </button>
+                                {canAccess('shop') && (
+                                    <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <ShoppingBag className="w-5 h-5"/> Loja de Peças
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-1 mt-4">
                                 <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta & Ajuda</p>
-                                <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <User className="w-5 h-5"/> Meu Perfil
-                                </button>
-                                <button onClick={() => { setActiveTab('assistant'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Bot className="w-5 h-5"/> Assistente IA
-                                </button>
-                                <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Headphones className="w-5 h-5"/> Suporte
-                                </button>
+                                {canAccess('profile') && (
+                                    <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <User className="w-5 h-5"/> Meu Perfil
+                                    </button>
+                                )}
+                                {canAccess('assistant') && (
+                                    <button onClick={() => { setActiveTab('assistant'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Bot className="w-5 h-5"/> Assistente IA
+                                    </button>
+                                )}
+                                {canAccess('support') && (
+                                    <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Headphones className="w-5 h-5"/> Suporte
+                                    </button>
+                                )}
                             </div>
                           </>
                       )}
 
                       {/* === NORMAL USER MENU === */}
-                      {userRole === 'user' && (
+                      {safeRole === 'user' && (
                           <>
                             <div className="space-y-1">
                                 <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Gestão Diária</p>
-                                <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${activeTab === 'deliveries' ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400 font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
-                                    <LayoutDashboard className="w-5 h-5"/> Painel Principal
-                                </button>
-                                <button onClick={() => { setActiveTab('history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <History className="w-5 h-5"/> Histórico
-                                </button>
-                                <button onClick={() => { setActiveTab('reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <BarChart3 className="w-5 h-5"/> Relatórios
-                                </button>
-                                <button onClick={() => { setActiveTab('addresses'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <MapPin className="w-5 h-5"/> Agenda de Endereços
-                                </button>
-                                <button onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <ListTodo className="w-5 h-5"/> Lista de Tarefas
-                                </button>
+                                {canAccess('deliveries') && (
+                                    <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${activeTab === 'deliveries' ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400 font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                                        <LayoutDashboard className="w-5 h-5"/> Painel Principal
+                                    </button>
+                                )}
+                                {canAccess('local_history') && (
+                                    <button onClick={() => { setActiveTab('local_history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <History className="w-5 h-5"/> Histórico
+                                    </button>
+                                )}
+                                {canAccess('reports') && (
+                                    <button onClick={() => { setActiveTab('reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <BarChart3 className="w-5 h-5"/> Relatórios
+                                    </button>
+                                )}
+                                {canAccess('addresses') && (
+                                    <button onClick={() => { setActiveTab('addresses'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <MapPin className="w-5 h-5"/> Agenda de Endereços
+                                    </button>
+                                )}
+                                {canAccess('tasks') && (
+                                    <button onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <ListTodo className="w-5 h-5"/> Lista de Tarefas
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-1 mt-4">
                                 <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Ferramentas</p>
-                                <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Map className="w-5 h-5"/> Mapa Offline
-                                </button>
-                                <button onClick={() => { setActiveTab('map'); setMenuOpen(false); setTimeout(() => { const btn = document.querySelector('button.animate-pulse'); if(btn) (btn as HTMLButtonElement).click(); }, 300); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+                                {canAccess('map') && (
+                                    <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Map className="w-5 h-5"/> Mapa Offline
+                                    </button>
+                                )}
+                                <button onClick={() => { setShowBlitzModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
                                     <Zap className="w-5 h-5"/> Alerta Relâmpago
                                 </button>
                                 <button onClick={() => { setShowRouteCalc(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -717,25 +1026,39 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                 <button onClick={() => { setShowMaintenance(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                     <Wrench className="w-5 h-5"/> Manutenção
                                 </button>
-                                <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <ShoppingBag className="w-5 h-5"/> Loja de Peças
-                                </button>
+                                {canAccess('shop') && (
+                                    <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <ShoppingBag className="w-5 h-5"/> Loja de Peças
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-1 mt-4">
                                 <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta & Ajuda</p>
-                                <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <User className="w-5 h-5"/> Meu Perfil
-                                </button>
-                                <button onClick={() => { setActiveTab('assistant'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Bot className="w-5 h-5"/> Assistente IA
-                                </button>
-                                <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Headphones className="w-5 h-5"/> Suporte
-                                </button>
+                                {canAccess('profile') && (
+                                    <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <User className="w-5 h-5"/> Meu Perfil
+                                    </button>
+                                )}
+                                {canAccess('assistant') && (
+                                    <button onClick={() => { setActiveTab('assistant'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Bot className="w-5 h-5"/> Assistente IA
+                                    </button>
+                                )}
+                                {canAccess('support') && (
+                                    <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Headphones className="w-5 h-5"/> Suporte
+                                    </button>
+                                )}
                             </div>
                           </>
                       )}
+
+                      <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
+                          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                              <LogOut className="w-5 h-5"/> Sair
+                          </button>
+                      </div>
                   </div>
               </div>
           </div>
@@ -882,6 +1205,47 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 </div>
             </div>
         </div>
+      )}
+
+      {/* Lightning Alert Modal (Global) - Z-INDEX INCREASED TO 10000 */}
+      {showBlitzModal && (
+          <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                          <Zap className="w-6 h-6 text-red-600 fill-current"/> Alerta Relâmpago
+                      </h3>
+                      <button onClick={() => setShowBlitzModal(false)}><X className="w-6 h-6 dark:text-white"/></button>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                      <button onClick={() => setSelectedBlitzType('BLITZ')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'BLITZ' ? 'border-red-600 bg-red-50 dark:bg-red-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
+                          <div className="bg-red-100 p-2 rounded-full"><Siren className="w-6 h-6 text-red-600"/></div>
+                          <span className="font-bold text-sm dark:text-white">Blitz</span>
+                      </button>
+                      <button onClick={() => setSelectedBlitzType('ACCIDENT')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'ACCIDENT' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
+                          <div className="bg-orange-100 p-2 rounded-full"><AlertTriangle className="w-6 h-6 text-orange-500"/></div>
+                          <span className="font-bold text-sm dark:text-white">Acidente</span>
+                      </button>
+                      <button onClick={() => setSelectedBlitzType('TRAFFIC')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'TRAFFIC' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
+                          <div className="bg-yellow-100 p-2 rounded-full"><Clock className="w-6 h-6 text-yellow-600"/></div>
+                          <span className="font-bold text-sm dark:text-white">Trânsito</span>
+                      </button>
+                      <button onClick={() => setSelectedBlitzType('DANGER')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'DANGER' ? 'border-gray-800 bg-gray-100 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                          <div className="bg-gray-200 p-2 rounded-full"><AlertTriangle className="w-6 h-6 text-gray-800"/></div>
+                          <span className="font-bold text-sm dark:text-white">Perigo</span>
+                      </button>
+                  </div>
+
+                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-6">
+                      Sua localização atual será enviada para todos os usuários da cidade.
+                  </p>
+
+                  <Button fullWidth onClick={handleGlobalReportBlitz} disabled={blitzLocationLoading} className="bg-red-600 hover:bg-red-700 text-white">
+                      {blitzLocationLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Confirmar e Alertar'}
+                  </Button>
+              </div>
+          </div>
       )}
 
       {/* Delete Transaction Confirm */}

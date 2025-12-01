@@ -519,8 +519,39 @@ CREATE TABLE IF NOT EXISTS public.asaas_webhook_logs (
 ALTER TABLE public.asaas_webhook_logs ENABLE ROW LEVEL SECURITY;
 
 -- ==================================================================
--- 8. POLÍTICAS DE SEGURANÇA (RLS) - PERMISSÕES DE LEITURA PÚBLICA
+-- 8. POLÍTICAS DE SEGURANÇA (RLS)
 -- ==================================================================
+
+-- Helper Function to check Admin (Avoids recursion)
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.user_profiles 
+    WHERE id = auth.uid() AND role = 'ADMIN'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Update Policies for user_profiles
+DO $$ BEGIN
+    -- 1. Users can read their own profile (Critical for role check)
+    DROP POLICY IF EXISTS "Users can read own profile" ON public.user_profiles;
+    CREATE POLICY "Users can read own profile" ON public.user_profiles FOR SELECT USING (auth.uid() = id);
+    
+    -- 2. Admins can read all profiles (Critical for Admin Panel)
+    DROP POLICY IF EXISTS "Admins can read all profiles" ON public.user_profiles;
+    CREATE POLICY "Admins can read all profiles" ON public.user_profiles FOR SELECT USING (public.is_admin());
+
+    -- 3. Admins can update all profiles (For banning/approval)
+    DROP POLICY IF EXISTS "Admins can update all profiles" ON public.user_profiles;
+    CREATE POLICY "Admins can update all profiles" ON public.user_profiles FOR UPDATE USING (public.is_admin());
+    
+    -- 4. Users can update own profile (For editing details)
+    DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
+    CREATE POLICY "Users can update own profile" ON public.user_profiles FOR UPDATE USING (auth.uid() = id);
+    
+EXCEPTION WHEN others THEN null; END $$;
 
 -- Cidades (Necessário para Cadastro)
 DO $$ BEGIN
@@ -541,6 +572,14 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
     CREATE POLICY "Public read pwa_settings" ON public.pwa_settings FOR SELECT USING (true);
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+-- Blitz Alerts Policies
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Authenticated users can insert blitz alerts" ON public.blitz_alerts;
+    DROP POLICY IF EXISTS "Everyone can view blitz alerts" ON public.blitz_alerts;
+    CREATE POLICY "Authenticated users can insert blitz alerts" ON public.blitz_alerts FOR INSERT TO authenticated WITH CHECK (true);
+    CREATE POLICY "Everyone can view blitz alerts" ON public.blitz_alerts FOR SELECT USING (true);
+EXCEPTION WHEN others THEN null; END $$;
 
 -- ==================================================================
 -- 9. DADOS INICIAIS (SEED) - SEGURO
@@ -581,7 +620,8 @@ BEGIN
     new.raw_user_meta_data->>'phone',
     new.raw_user_meta_data->>'cpf',
     new.raw_user_meta_data->>'city',
-    COALESCE((new.raw_user_meta_data->>'role')::public.user_role_enum, 'USER'),
+    -- Cast explícito para o enum e fallback seguro
+    COALESCE((new.raw_user_meta_data->>'role')::public.user_role_enum, 'USER'::public.user_role_enum),
     'active',
     CASE
       WHEN (new.raw_user_meta_data->>'role') = 'DELIVERY_PARTNER' THEN 'NOT_SUBMITTED'::public.verification_status_enum
@@ -685,3 +725,27 @@ BEGIN
   RETURN EXISTS (SELECT 1 FROM public.user_profiles WHERE email ILIKE email_input);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==================================================================
+-- 13. SCRIPT DE CORREÇÃO EM LOTE PARA ROLES
+-- ==================================================================
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT id, raw_user_meta_data FROM auth.users LOOP
+        IF (r.raw_user_meta_data->>'role') IS NOT NULL AND (r.raw_user_meta_data->>'role') != 'USER' THEN
+            -- Se a metadata for diferente de USER, atualiza o perfil (mesmo que já esteja correto, é idempotente)
+            -- Normaliza para o ENUM correto (ignora case se possível via cast, mas aqui assumimos consistência)
+            -- A conversão para user_role_enum deve ser exata, então garantimos maiúsculas.
+            BEGIN
+                UPDATE public.user_profiles
+                SET role = UPPER(r.raw_user_meta_data->>'role')::public.user_role_enum
+                WHERE id = r.id;
+            EXCEPTION WHEN OTHERS THEN
+                -- Ignora erros de cast se role inválida, mantém original
+                NULL;
+            END;
+        END IF;
+    END LOOP;
+END $$;

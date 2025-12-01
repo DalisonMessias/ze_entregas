@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowRight, Store, Bike, Shield, Zap, Bell, Map, BarChart3, Headphones, CheckCircle, ChevronDown, Smartphone, Star, Instagram, Facebook, Twitter, Linkedin, Download, Gift, MessageCircle, Newspaper } from 'lucide-react';
+import { ArrowRight, Store, Bike, Shield, Zap, Bell, Map, BarChart3, Headphones, CheckCircle, ChevronDown, Smartphone, Star, Instagram, Facebook, Twitter, Linkedin, Download, Gift, MessageCircle, Newspaper, Wallet, Megaphone, ShoppingBag, Users, Bot, Navigation } from 'lucide-react';
 import { Button } from './Button';
 import { TermsOfService } from './TermsOfService';
 import { PrivacyPolicy } from './PrivacyPolicy';
@@ -12,7 +12,6 @@ import { ShopSettings, CompanyInfo, PlatformNews } from '../types';
 // Helper: Componente para renderizar ícones dinamicamente
 const icons: { [key: string]: React.ElementType } = {
   Bike,
-  // FIX: Using BarChart3 which is now correctly imported.
   BarChart3,
   MessageCircle,
   Gift,
@@ -25,6 +24,12 @@ const icons: { [key: string]: React.ElementType } = {
   Smartphone,
   Star,
   Newspaper,
+  Wallet,
+  Megaphone,
+  ShoppingBag,
+  Users,
+  Bot,
+  Navigation
 };
 
 const IconComponent = ({ name, ...props }: { name: string, [key: string]: any }) => {
@@ -161,6 +166,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
     const [installPrompt, setInstallPrompt] = useState<any>(null);
     const [installFeedback, setInstallFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+    // Hero Carousel State
+    const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
+
+    const heroSlides = [
+        {
+            title: <>A Revolução da <span className="bg-white/20 px-2 rounded-lg text-white backdrop-blur-sm">Logística Urbana</span>.</>,
+            subtitle: "Conectamos lojas e entregadores com tecnologia de ponta. Otimize rotas, reduza custos e escale seu negócio com eficiência máxima."
+        },
+        {
+            title: <>Sua Loja Vendendo <br/><span className="text-yellow-300">Muito Mais</span>.</>,
+            subtitle: "Tenha controle total da sua operação. Encontre entregadores em segundos, gerencie pagamentos e fidelize seus clientes com entregas expressas."
+        },
+        {
+            title: <>Liberdade para <span className="underline decoration-wavy decoration-white/50">Faturar Alto</span>.</>,
+            subtitle: "Para quem vive na estrada: escolha suas corridas, receba com transparência e tenha as melhores ferramentas para o seu corre diário."
+        }
+    ];
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentHeroSlide((prev) => (prev + 1) % heroSlides.length);
+        }, 5000);
+        return () => clearInterval(timer);
+    }, []);
+
     useEffect(() => {
         cloud.getShopSettings().then(s => {
             if (s?.social_media) setSocialLinks(s.social_media);
@@ -217,22 +247,43 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
             
             <main className="flex-1">
                 {/* Hero Section */}
-                <header id="hero" className="relative pt-32 pb-20 md:pt-48 md:pb-32 px-4 overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 -z-10"></div>
+                <header id="hero" className="relative pt-32 pb-24 md:pt-48 md:pb-36 px-4 overflow-hidden bg-brand-600 text-white">
+                    {/* Background Pattern */}
+                    <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#ffffff 2px, transparent 2px)', backgroundSize: '32px 32px' }}></div>
                     
-                    {/* Background Blobs */}
-                    <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-brand-500/5 rounded-full blur-[100px] animate-pulse"></div>
-                    <div className="absolute bottom-[10%] left-[-10%] w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[100px] delay-1000 animate-pulse"></div>
+                    {/* Background Blobs (White/Glow) */}
+                    <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] bg-white/10 rounded-full blur-[120px] animate-pulse"></div>
+                    <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-orange-500/20 rounded-full blur-[100px] delay-1000 animate-pulse"></div>
 
-                    <div className="max-w-5xl mx-auto text-center relative z-10">
+                    <div className="max-w-5xl mx-auto text-center relative z-10 min-h-[300px] flex flex-col justify-center">
                         
-                        <h1 className="text-5xl md:text-7xl font-black text-gray-900 dark:text-white mb-8 leading-[1.1] tracking-tighter animate-in fade-in slide-in-from-bottom-6 delay-100">
-                            A <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-orange-500">solução completa</span> para sua logística de entregas.
-                        </h1>
-                        
-                        <p className="text-lg md:text-xl text-gray-500 dark:text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-8 delay-200">
-                           Otimize rotas, gerencie pagamentos e escale seu negócio. A plataforma definitiva para lojas e entregadores.
-                        </p>
+                        {/* Carousel Content */}
+                        {heroSlides.map((slide, index) => (
+                            <div 
+                                key={index}
+                                className={`transition-all duration-700 absolute inset-0 flex flex-col items-center justify-center ${index === currentHeroSlide ? 'opacity-100 translate-x-0 relative' : 'opacity-0 translate-x-10 absolute pointer-events-none'}`}
+                            >
+                                <h1 className="text-5xl md:text-7xl font-black mb-8 leading-[1.1] tracking-tighter drop-shadow-sm">
+                                    {slide.title}
+                                </h1>
+                                
+                                <p className="text-lg md:text-2xl text-brand-50 mb-10 max-w-3xl mx-auto leading-relaxed font-medium">
+                                   {slide.subtitle}
+                                </p>
+                            </div>
+                        ))}
+
+                        {/* Carousel Indicators */}
+                        <div className="flex justify-center gap-3 mt-8 absolute bottom-0 left-0 right-0">
+                            {heroSlides.map((_, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => setCurrentHeroSlide(idx)}
+                                    className={`h-2 rounded-full transition-all duration-300 ${currentHeroSlide === idx ? 'w-8 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'}`}
+                                    aria-label={`Ir para slide ${idx + 1}`}
+                                />
+                            ))}
+                        </div>
                         
                     </div>
                 </header>
@@ -446,6 +497,42 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
                                 title="Programa de Níveis" 
                                 description="Benefícios exclusivos para parceiros com alto desempenho." 
                                 colorClass="from-yellow-400 to-amber-500 bg-yellow-400"
+                            />
+                            <BenefitCard
+                                icon={<Wallet className="w-6 h-6"/>}
+                                title="Gestão Financeira"
+                                description="Controle total de fluxo de caixa, extratos e carteira digital integrada."
+                                colorClass="from-emerald-500 to-teal-600 bg-emerald-500"
+                            />
+                            <BenefitCard
+                                icon={<Megaphone className="w-6 h-6"/>}
+                                title="Marketing Digital"
+                                description="Crie cartões de visita e artes profissionais para divulgar seu serviço."
+                                colorClass="from-pink-500 to-fuchsia-600 bg-pink-500"
+                            />
+                            <BenefitCard
+                                icon={<ShoppingBag className="w-6 h-6"/>}
+                                title="Catálogo Digital"
+                                description="Venda produtos e serviços diretamente pelo app com gestão de estoque."
+                                colorClass="from-orange-500 to-amber-600 bg-orange-500"
+                            />
+                            <BenefitCard
+                                icon={<Users className="w-6 h-6"/>}
+                                title="Gestão de Equipe"
+                                description="Lojistas podem gerenciar múltiplos entregadores e acompanhar métricas."
+                                colorClass="from-blue-500 to-indigo-600 bg-blue-500"
+                            />
+                            <BenefitCard
+                                icon={<Bot className="w-6 h-6"/>}
+                                title="Assistente Virtual"
+                                description="Tire dúvidas e obtenha insights do seu negócio com nossa IA integrada."
+                                colorClass="from-violet-500 to-purple-600 bg-violet-500"
+                            />
+                            <BenefitCard
+                                icon={<Navigation className="w-6 h-6"/>}
+                                title="Rastreamento em Tempo Real"
+                                description="Acompanhe entregas ao vivo com atualizações de status precisas."
+                                colorClass="from-cyan-500 to-sky-600 bg-cyan-500"
                             />
                         </div>
                     </div>

@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
-import { Shield, Search, Edit, Trash2, Loader2, UserCheck, Settings, Power, PowerOff, X, CheckCircle, Plus, Key, Wallet, Smartphone, RefreshCw, Banknote, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star, LifeBuoy, Clock, Crown, Activity, MessageCircle, Ban, Cpu, Globe, ShieldAlert, Newspaper, Megaphone } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Shield, Search, MoreVertical, Edit, UserX, Trash2, Loader2, UserCheck, UserCog, Send, ListOrdered, Settings, Package, Power, PowerOff, X, CheckCircle, AlertTriangle, CreditCard, QrCode, Barcode, Plus, Grid, Tag, Headphones, MessageSquare, Phone, Key, Bot, Wallet, Smartphone, Upload, RefreshCw, Banknote, MapPin, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star, Globe, Info, Briefcase, Newspaper, Mail, Save } from 'lucide-react';
 import * as cloud from '../services/cloud';
-import { ManagedUser, ShopSettings, Category, Claim, PartnerFeeSettings, PWASettings, PayoutSettings, City, CityRequest, PartnerDocument, PartnerProfile, PartnerLevelBenefit, StoreWallet, FraudAlert, IdentityVerification, PlatformNews, PartnerRating, BlacklistEntry, AdminSubTab } from '../types';
+import { ManagedUser, UserRole, UserStatus, GlobalNotification, Product, AdminOrder, ShopSettings, Category, Claim, PartnerFeeSettings, PWASettings, PWAIcon, PayoutSettings, City, CityRequest, PartnerDocument, PartnerProfile, PartnerLevelBenefit, CompanyInfo } from '../types';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
 import { AsaasWebhookManagement } from './AsaasWebhookManagement';
@@ -11,838 +11,18 @@ import { AdminReferrals } from './AdminReferrals';
 import { ChatWindow } from './ChatWindow';
 import { AdminWalletControl } from './AdminWalletControl';
 
-// --- USER MANAGEMENT ---
-const UserManagement: React.FC = () => {
-    const [users, setUsers] = useState<ManagedUser[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-
-    useEffect(() => { loadUsers(); }, []);
-
-    const loadUsers = async () => {
-        setLoading(true);
-        try {
-            const data = await cloud.getAllUsers();
-            setUsers(data);
-        } catch (e) { console.error(e); }
-        finally { setLoading(false); }
-    };
-
-    const filtered = users.filter(u => 
-        (u.name?.toLowerCase() || '').includes(search.toLowerCase()) || 
-        (u.email?.toLowerCase() || '').includes(search.toLowerCase())
-    );
-
-    const handleToggleStatus = async (user: ManagedUser) => {
-        const newStatus = user.status === 'active' ? 'banned' : 'active';
-        if (!confirm(`Confirmar alteração de status para ${newStatus}?`)) return;
-        try {
-            await cloud.updateUserStatus(user.id, newStatus);
-            loadUsers();
-        } catch (e: any) { alert(e.message); }
-    };
-
-    return (
-        <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-4">
-                <input 
-                    type="text" 
-                    placeholder="Buscar usuários..." 
-                    value={search} 
-                    onChange={e => setSearch(e.target.value)} 
-                    className="flex-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 dark:text-white"
-                />
-                <Button onClick={loadUsers}><RefreshCw className="w-4 h-4"/></Button>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
-                        <tr>
-                            <th className="px-4 py-3">Usuário</th>
-                            <th className="px-4 py-3">Role</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3 text-right">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && <tr><td colSpan={4} className="text-center p-4"><Loader2 className="animate-spin mx-auto"/></td></tr>}
-                        {!loading && filtered.map(u => (
-                            <tr key={u.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <td className="px-4 py-3">
-                                    <p className="font-bold dark:text-white">{u.name || 'Sem nome'}</p>
-                                    <p className="text-xs text-gray-500">{u.email}</p>
-                                </td>
-                                <td className="px-4 py-3"><span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded">{u.role}</span></td>
-                                <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded ${u.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{u.status}</span></td>
-                                <td className="px-4 py-3 text-right">
-                                    <button onClick={() => handleToggleStatus(u)} className="text-red-500 hover:underline text-xs font-bold">
-                                        {u.status === 'active' ? 'Bloquear' : 'Desbloquear'}
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
+// ... (keep existing helper functions like debounce, parseCurrency)
+const debounce = <T extends (...args: any[]) => void>(func: T, delay: number) => {
+  let timeout: ReturnType<typeof setTimeout>;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), delay);
+  };
 };
 
-// --- BLACKLIST MANAGEMENT ---
-const BlacklistManagement: React.FC = () => {
-    const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [newPhone, setNewPhone] = useState('');
-    const [newReason, setNewReason] = useState('');
-
-    useEffect(() => { load(); }, []);
-
-    const load = async () => {
-        setLoading(true);
-        try {
-            const data = await cloud.adminGetBlacklist();
-            setBlacklist(data);
-        } catch(e) { console.error(e); } finally { setLoading(false); }
-    };
-
-    const handleAdd = async () => {
-        if (!newPhone || !newReason) return alert("Preencha telefone e motivo.");
-        try {
-            await cloud.adminAddToBlacklist('', newPhone, newReason);
-            setNewPhone(''); setNewReason('');
-            load();
-        } catch (e: any) { alert("Erro: " + e.message); }
-    };
-
-    const handleRemove = async (id: string) => {
-        if (!confirm("Remover da lista negra?")) return;
-        await cloud.adminRemoveFromBlacklist(id);
-        load();
-    };
-
-    return (
-        <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700">
-                <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Ban className="w-5 h-5 text-red-500"/> Lista Negra</h3>
-                <div className="flex gap-2 mb-4">
-                    <input type="text" placeholder="Telefone" value={newPhone} onChange={e => setNewPhone(e.target.value)} className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
-                    <input type="text" placeholder="Motivo" value={newReason} onChange={e => setNewReason(e.target.value)} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
-                    <Button onClick={handleAdd}>Adicionar</Button>
-                </div>
-                <div className="space-y-2">
-                    {blacklist.map(b => (
-                        <div key={b.id} className="p-3 bg-red-50 dark:bg-red-900/10 rounded flex justify-between items-center">
-                            <div>
-                                <p className="font-bold text-red-700 dark:text-red-300">{b.phone_number || b.email}</p>
-                                <p className="text-xs text-red-500">{b.reason}</p>
-                            </div>
-                            <button onClick={() => handleRemove(b.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- INSTITUTIONAL MANAGEMENT ---
-const InstitutionalManagement: React.FC = () => {
-    const [info, setInfo] = useState({
-        about_text: '',
-        careers_email: '',
-        press_email: '',
-        contact_address: '',
-        contact_support_email: '',
-        contact_commercial_email: ''
-    });
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        loadData();
-    }, []);
-
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            const settings = await cloud.getShopSettings();
-            if (settings?.company_info) {
-                setInfo({
-                    about_text: settings.company_info.about_text || '',
-                    careers_email: settings.company_info.careers_email || '',
-                    press_email: settings.company_info.press_email || '',
-                    contact_address: settings.company_info.contact_address || '',
-                    contact_support_email: settings.company_info.contact_support_email || '',
-                    contact_commercial_email: settings.company_info.contact_commercial_email || ''
-                });
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await cloud.adminUpdateShopSettings({ company_info: info });
-            alert("Dados institucionais atualizados!");
-        } catch (e: any) {
-            alert("Erro ao salvar: " + e.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
-            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Globe className="w-5 h-5 text-blue-500"/> Dados Institucionais</h3>
-            
-            <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Sobre Nós (Texto)</label>
-                <textarea 
-                    value={info.about_text} 
-                    onChange={e => setInfo({...info, about_text: e.target.value})} 
-                    className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white h-24"
-                />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Email Carreiras</label>
-                    <input 
-                        type="email" 
-                        value={info.careers_email} 
-                        onChange={e => setInfo({...info, careers_email: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Email Imprensa</label>
-                    <input 
-                        type="email" 
-                        value={info.press_email} 
-                        onChange={e => setInfo({...info, press_email: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Email Suporte</label>
-                    <input 
-                        type="email" 
-                        value={info.contact_support_email} 
-                        onChange={e => setInfo({...info, contact_support_email: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Email Comercial</label>
-                    <input 
-                        type="email" 
-                        value={info.contact_commercial_email} 
-                        onChange={e => setInfo({...info, contact_commercial_email: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                </div>
-            </div>
-
-            <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Endereço da Sede</label>
-                <input 
-                    type="text" 
-                    value={info.contact_address} 
-                    onChange={e => setInfo({...info, contact_address: e.target.value})} 
-                    className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-            </div>
-
-            <Button onClick={handleSave} disabled={saving} fullWidth>
-                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Alterações'}
-            </Button>
-        </div>
-    );
-};
-
-// --- AI CONFIG ---
-const AIConfig: React.FC = () => {
-    const [apiKey, setApiKey] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            try {
-                const settings = await cloud.getShopSettings();
-                if (settings?.google_gemini_api_key) {
-                    setApiKey(settings.google_gemini_api_key);
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, []);
-
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await cloud.adminUpdateShopSettings({ google_gemini_api_key: apiKey });
-            alert("Configurações de IA salvas!");
-        } catch (e: any) {
-            alert("Erro: " + e.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
-            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Cpu className="w-5 h-5 text-purple-500"/> Inteligência Artificial</h3>
-            
-            <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Google Gemini API Key</label>
-                <div className="relative">
-                    <input 
-                        type="password" 
-                        value={apiKey} 
-                        onChange={e => setApiKey(e.target.value)} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono"
-                        placeholder="sk-..."
-                    />
-                    <Key className="absolute right-3 top-2.5 w-4 h-4 text-gray-400"/>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Chave necessária para o funcionamento do Chat Assistente.</p>
-            </div>
-
-            <Button onClick={handleSave} disabled={saving} fullWidth>
-                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Chave'}
-            </Button>
-        </div>
-    );
-};
-
-// --- PWA SETTINGS ---
-const PWASettingsPanel: React.FC = () => {
-    const [settings, setSettings] = useState<PWASettings>({
-        display_name: 'Zé Entregas',
-        short_name: 'Zé',
-        theme_color: '#ed2b05',
-        background_color: '#f9fafb',
-        start_url: '/',
-        orientation: 'portrait',
-        language: 'pt-BR',
-        app_version: 1
-    });
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            try {
-                const data = await cloud.adminGetPWASettings();
-                if (data) setSettings(data);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, []);
-
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await cloud.adminUpdatePWASettings(settings);
-            alert("Configurações do PWA atualizadas! Usuários receberão a atualização em breve.");
-        } catch (e: any) {
-            alert("Erro: " + e.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
-            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-green-500"/> Configuração do App (PWA)</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Nome do App</label>
-                    <input 
-                        type="text" 
-                        value={settings.display_name} 
-                        onChange={e => setSettings({...settings, display_name: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Nome Curto (Ícone)</label>
-                    <input 
-                        type="text" 
-                        value={settings.short_name} 
-                        onChange={e => setSettings({...settings, short_name: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Cor do Tema (Hex)</label>
-                    <div className="flex gap-2">
-                        <input 
-                            type="color" 
-                            value={settings.theme_color} 
-                            onChange={e => setSettings({...settings, theme_color: e.target.value})} 
-                            className="h-10 w-10 p-0 border-0 rounded"
-                        />
-                        <input 
-                            type="text" 
-                            value={settings.theme_color} 
-                            onChange={e => setSettings({...settings, theme_color: e.target.value})} 
-                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
-                        />
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Cor de Fundo (Hex)</label>
-                    <div className="flex gap-2">
-                        <input 
-                            type="color" 
-                            value={settings.background_color} 
-                            onChange={e => setSettings({...settings, background_color: e.target.value})} 
-                            className="h-10 w-10 p-0 border-0 rounded"
-                        />
-                        <input 
-                            type="text" 
-                            value={settings.background_color} 
-                            onChange={e => setSettings({...settings, background_color: e.target.value})} 
-                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <Button onClick={handleSave} disabled={saving} fullWidth>
-                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Publicar Alterações'}
-            </Button>
-        </div>
-    );
-};
-
-// --- SHOP MANAGEMENT ---
-const ShopManagement: React.FC = () => {
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [newCat, setNewCat] = useState('');
-    
-    useEffect(() => { loadData(); }, []);
-    
-    const loadData = async () => {
-        const c = await cloud.adminGetCategories();
-        setCategories(c);
-    };
-
-    const handleAdd = async () => {
-        if (!newCat) return;
-        await cloud.adminAddCategory(newCat);
-        setNewCat('');
-        loadData();
-    };
-
-    const handleDelete = async (id: string) => {
-        if (!confirm("Deletar categoria?")) return;
-        await cloud.adminDeleteCategory(id);
-        loadData();
-    };
-
-    return (
-        <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700">
-                <h3 className="font-bold dark:text-white mb-4">Categorias da Loja</h3>
-                <div className="flex gap-2 mb-4">
-                    <input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nova Categoria" className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
-                    <Button onClick={handleAdd}>Adicionar</Button>
-                </div>
-                <div className="space-y-2">
-                    {categories.map(c => (
-                        <div key={c.id} className="flex justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                            <span className="dark:text-white">{c.name}</span>
-                            <button onClick={() => handleDelete(c.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- SECURITY MONITOR ---
-const SecurityMonitor: React.FC = () => {
-    const [alerts, setAlerts] = useState<FraudAlert[]>([]);
-    const [verifications, setVerifications] = useState<IdentityVerification[]>([]);
-    const [activeTab, setActiveTab] = useState<'alerts' | 'verifications'>('alerts');
-
-    useEffect(() => { loadData(); }, [activeTab]);
-
-    const loadData = async () => {
-        if (activeTab === 'alerts') {
-            const a = await cloud.adminGetFraudAlerts();
-            setAlerts(a);
-        } else {
-            const v = await cloud.adminGetVerifications();
-            setVerifications(v);
-        }
-    };
-
-    return (
-        <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
-                <button onClick={() => setActiveTab('alerts')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'alerts' ? 'bg-white dark:bg-gray-700 shadow text-red-600' : 'text-gray-500'}`}>Alertas de Fraude</button>
-                <button onClick={() => setActiveTab('verifications')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'verifications' ? 'bg-white dark:bg-gray-700 shadow text-blue-600' : 'text-gray-500'}`}>Verificações</button>
-            </div>
-
-            {activeTab === 'alerts' && (
-                <div className="space-y-3">
-                    {alerts.map(alert => (
-                        <div key={alert.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-red-100 dark:border-red-900/30">
-                            <div className="flex justify-between">
-                                <span className="font-bold text-red-600">{alert.type}</span>
-                                <span className="text-xs text-gray-500">{new Date(alert.created_at).toLocaleString()}</span>
-                            </div>
-                            <p className="text-sm mt-1 dark:text-gray-300">{alert.description}</p>
-                            <p className="text-xs text-gray-400 mt-2">Usuário: {alert.user_email}</p>
-                        </div>
-                    ))}
-                    {alerts.length === 0 && <p className="text-gray-400">Nenhum alerta.</p>}
-                </div>
-            )}
-
-            {activeTab === 'verifications' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {verifications.map(v => (
-                        <div key={v.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                            <img src={v.photo_url} alt="Selfie" className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"/>
-                            <p className="font-bold text-sm dark:text-white">Confiança: {(v.confidence_score * 100).toFixed(1)}%</p>
-                            <p className="text-xs text-gray-500">Usuário: {v.user_email}</p>
-                            <p className="text-xs text-gray-500">Data: {new Date(v.created_at).toLocaleString()}</p>
-                        </div>
-                    ))}
-                    {verifications.length === 0 && <p className="text-gray-400">Nenhuma verificação recente.</p>}
-                </div>
-            )}
-        </div>
-    );
-};
-
-// --- RATING MONITOR ---
-const RatingMonitor: React.FC = () => {
-    const [ratings, setRatings] = useState<PartnerRating[]>([]);
-    
-    useEffect(() => {
-        cloud.adminGetAllRatings().then(setRatings);
-    }, []);
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in">
-            <h3 className="font-bold dark:text-white mb-4">Monitor de Avaliações</h3>
-            <div className="space-y-3">
-                {ratings.map(r => (
-                    <div key={r.id} className="p-3 border border-gray-100 dark:border-gray-700 rounded-lg">
-                        <div className="flex justify-between">
-                            <span className="font-bold text-sm dark:text-white">{r.evaluator_name} &rarr; {r.evaluated_name}</span>
-                            <div className="flex items-center gap-1 text-yellow-500">
-                                <Star className="w-3 h-3 fill-current"/>
-                                <span className="text-xs font-bold">{r.rating}</span>
-                            </div>
-                        </div>
-                        {r.comment && <p className="text-sm text-gray-500 mt-1">"{r.comment}"</p>}
-                    </div>
-                ))}
-                {ratings.length === 0 && <p className="text-gray-400">Nenhuma avaliação.</p>}
-            </div>
-        </div>
-    );
-};
-
-// --- FEES MANAGEMENT ---
-const FeesManagement: React.FC = () => {
-    const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        cloud.adminGetFeeSettings().then(f => {
-            setFees(f);
-            setLoading(false);
-        });
-    }, []);
-
-    const handleChange = (field: keyof PartnerFeeSettings, value: number) => {
-        setFees(prev => prev ? ({ ...prev, [field]: value }) : null);
-    };
-
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await cloud.adminUpdateFeeSettings(fees);
-            alert("Taxas atualizadas!");
-        } catch(e: any) {
-            alert("Erro: " + e.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <Loader2 className="animate-spin mx-auto"/>;
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-4">
-            <h3 className="font-bold dark:text-white">Taxas e Preços</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="text-xs text-gray-500">Taxa Fixa da Loja</label>
-                    <input type="number" value={fees?.global_tax_fixed} onChange={e => handleChange('global_tax_fixed', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                </div>
-                <div>
-                    <label className="text-xs text-gray-500">Comissão (%)</label>
-                    <input type="number" value={fees?.global_tax_percent} onChange={e => handleChange('global_tax_percent', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                </div>
-                <div>
-                    <label className="text-xs text-gray-500">Valor Base Entrega</label>
-                    <input type="number" value={fees?.base_delivery_value} onChange={e => handleChange('base_delivery_value', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                </div>
-                <div>
-                    <label className="text-xs text-gray-500">Valor por KM Extra</label>
-                    <input type="number" value={fees?.extra_km_value} onChange={e => handleChange('extra_km_value', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                </div>
-                <div>
-                    <label className="text-xs text-gray-500">Taxa por Ponto Adicional</label>
-                    <input type="number" value={fees?.additional_stop_fee} onChange={e => handleChange('additional_stop_fee', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                </div>
-                <div>
-                    <label className="text-xs text-gray-500">Mensalidade Super Loja</label>
-                    <input type="number" value={fees?.super_store_monthly_fee} onChange={e => handleChange('super_store_monthly_fee', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                </div>
-            </div>
-            <Button onClick={handleSave} disabled={saving} fullWidth>{saving ? <Loader2 className="animate-spin"/> : "Salvar"}</Button>
-        </div>
-    );
-};
-
-// --- SUPPORT CLAIMS MANAGEMENT ---
-const ClaimsManagement: React.FC = () => {
-    const [claims, setClaims] = useState<Claim[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
-    const [response, setResponse] = useState('');
-
-    useEffect(() => { load(); }, []);
-
-    const load = async () => {
-        setLoading(true);
-        try {
-            const data = await cloud.adminGetClaims();
-            setClaims(data);
-        } catch(e) { console.error(e); } finally { setLoading(false); }
-    };
-
-    const handleResolve = async () => {
-        if (!selectedClaim || !response) return;
-        try {
-            await cloud.adminResolveClaim(selectedClaim.id, response);
-            alert("Chamado respondido.");
-            setSelectedClaim(null);
-            setResponse('');
-            load();
-        } catch(e: any) {
-            alert("Erro: " + e.message);
-        }
-    };
-
-    return (
-        <div className="space-y-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
-                        <tr>
-                            <th className="px-4 py-3">Usuário</th>
-                            <th className="px-4 py-3">Assunto</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && <tr><td colSpan={4} className="text-center p-4"><Loader2 className="animate-spin mx-auto"/></td></tr>}
-                        {claims.map(c => (
-                            <tr key={c.id} className="border-b dark:border-gray-700">
-                                <td className="px-4 py-3">{c.user_email}</td>
-                                <td className="px-4 py-3">{c.type}</td>
-                                <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${c.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{c.status}</span></td>
-                                <td className="px-4 py-3"><button onClick={() => setSelectedClaim(c)} className="text-blue-500">Ver</button></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {selectedClaim && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold dark:text-white">Responder Chamado</h3>
-                            <button onClick={() => setSelectedClaim(null)}><X className="w-5 h-5"/></button>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg mb-4 text-sm">
-                            <p className="font-bold mb-1">Descrição do Usuário:</p>
-                            <p>{selectedClaim.description}</p>
-                        </div>
-                        <textarea 
-                            value={response} 
-                            onChange={e => setResponse(e.target.value)} 
-                            placeholder="Sua resposta..." 
-                            className="w-full p-3 border rounded-xl dark:bg-gray-700 h-32 mb-4"
-                        />
-                        <Button fullWidth onClick={handleResolve}>Enviar Resposta e Fechar</Button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-// --- PLATFORM NEWS MANAGEMENT ---
-const NewsManagement: React.FC = () => {
-    const [news, setNews] = useState<PlatformNews[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isEditing, setIsEditing] = useState(false);
-    const [currentItem, setCurrentItem] = useState<Partial<PlatformNews>>({});
-
-    useEffect(() => { load(); }, []);
-
-    const load = async () => {
-        setLoading(true);
-        const data = await cloud.adminGetPlatformNews();
-        setNews(data);
-        setLoading(false);
-    };
-
-    const handleSave = async () => {
-        if (!currentItem.title || !currentItem.description || !currentItem.icon_name) return alert("Preencha todos os campos.");
-        await cloud.adminUpsertPlatformNews(currentItem);
-        setIsEditing(false);
-        setCurrentItem({});
-        load();
-    };
-
-    const handleDelete = async (id: string) => {
-        if (!confirm("Deletar notícia?")) return;
-        await cloud.adminDeletePlatformNews(id);
-        load();
-    };
-
-    return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h3 className="font-bold dark:text-white">Novidades da Plataforma</h3>
-                <Button onClick={() => setIsEditing(true)}><Plus className="w-4 h-4"/> Nova</Button>
-            </div>
-
-            {isEditing && (
-                <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-700 space-y-3">
-                    <input type="text" placeholder="Título" value={currentItem.title || ''} onChange={e => setCurrentItem({...currentItem, title: e.target.value})} className="w-full p-2 rounded border"/>
-                    <textarea placeholder="Descrição" value={currentItem.description || ''} onChange={e => setCurrentItem({...currentItem, description: e.target.value})} className="w-full p-2 rounded border"/>
-                    <input type="text" placeholder="Ícone (Lucide Name)" value={currentItem.icon_name || ''} onChange={e => setCurrentItem({...currentItem, icon_name: e.target.value})} className="w-full p-2 rounded border"/>
-                    <div className="flex items-center gap-2">
-                        <input type="checkbox" checked={currentItem.is_active ?? true} onChange={e => setCurrentItem({...currentItem, is_active: e.target.checked})} />
-                        <span className="text-sm">Ativo</span>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button onClick={handleSave}>Salvar</Button>
-                        <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancelar</Button>
-                    </div>
-                </div>
-            )}
-
-            <div className="space-y-2">
-                {news.map(item => (
-                    <div key={item.id} className="p-4 border rounded-xl flex justify-between items-center bg-white dark:bg-gray-800">
-                        <div>
-                            <p className="font-bold dark:text-white">{item.title}</p>
-                            <p className="text-xs text-gray-500">{item.description}</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => { setCurrentItem(item); setIsEditing(true); }} className="p-2 text-blue-500"><Edit className="w-4 h-4"/></button>
-                            <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500"><Trash2 className="w-4 h-4"/></button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-// --- SUPPORT CHAT THREADS ---
-const SupportThreads: React.FC = () => {
-    const [threads, setThreads] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedUser, setSelectedUser] = useState<string | null>(null);
-    const [selectedUserName, setSelectedUserName] = useState('');
-
-    useEffect(() => {
-        load();
-    }, []);
-
-    const load = async () => {
-        setLoading(true);
-        const data = await cloud.adminGetSupportThreads();
-        setThreads(data);
-        setLoading(false);
-    };
-
-    return (
-        <div className="h-[600px] flex gap-4 bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700">
-            <div className="w-1/3 border-r dark:border-gray-700 flex flex-col">
-                <div className="p-4 border-b dark:border-gray-700 font-bold dark:text-white">Conversas</div>
-                <div className="flex-1 overflow-y-auto">
-                    {loading && <div className="p-4 text-center"><Loader2 className="animate-spin mx-auto"/></div>}
-                    {threads.map(t => (
-                        <div 
-                            key={t.userId} 
-                            onClick={() => { setSelectedUser(t.userId); setSelectedUserName(t.userName); }}
-                            className={`p-4 border-b dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${selectedUser === t.userId ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                        >
-                            <p className="font-bold text-sm dark:text-white truncate">{t.userName}</p>
-                            <p className="text-xs text-gray-500 truncate">{t.lastMessage}</p>
-                            <p className="text-[10px] text-gray-400 mt-1">{new Date(t.lastDate).toLocaleString()}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-            <div className="flex-1 relative">
-                {selectedUser ? (
-                    <div className="absolute inset-0">
-                        <ChatWindow 
-                            type="SUPPORT" 
-                            adminTargetUserId={selectedUser} 
-                            onClose={() => setSelectedUser(null)} 
-                            title={`Suporte: ${selectedUserName}`} 
-                        />
-                    </div>
-                ) : (
-                    <div className="flex items-center justify-center h-full text-gray-400">Selecione uma conversa</div>
-                )}
-            </div>
-        </div>
-    );
+const parseCurrency = (val: string): number => {
+    if (!val) return 0;
+    return parseFloat(val.replace(/\./g, '').replace(',', '.'));
 };
 
 // --- PARTNER VERIFICATION MODULE ---
@@ -961,6 +141,7 @@ const PartnerVerification: React.FC = () => {
         </div>
     );
 };
+
 
 // --- CITY MANAGEMENT MODULE ---
 const CityManagement: React.FC = () => {
@@ -1132,6 +313,217 @@ const CityManagement: React.FC = () => {
                         <div className="flex gap-3">
                             <Button variant="outline" onClick={() => setEditingCity(null)} fullWidth>Cancelar</Button>
                             <Button onClick={handleSaveChanges} fullWidth>Salvar</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- INSTITUTIONAL MANAGEMENT ---
+const InstitutionalManagement: React.FC = () => {
+    const [info, setInfo] = useState<CompanyInfo>({
+        about_text: '',
+        careers_email: '',
+        careers_text: '',
+        press_email: '',
+        press_text: '',
+        contact_address: '',
+        contact_support_email: '',
+        contact_commercial_email: ''
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    
+    // Controls which modal is being edited
+    const [editingSection, setEditingSection] = useState<'about' | 'careers' | 'press' | 'contact' | null>(null);
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const settings = await cloud.getShopSettings();
+            if (settings?.company_info) {
+                setInfo(prev => ({ ...prev, ...settings.company_info }));
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await cloud.adminUpdateShopSettings({ company_info: info });
+            alert("Dados institucionais atualizados!");
+            setEditingSection(null);
+        } catch (e: any) {
+            alert("Erro ao salvar: " + e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
+
+    const sections = [
+        { id: 'about', title: 'Sobre Nós', icon: Info, color: 'bg-blue-100 text-blue-600', description: 'História e missão da empresa' },
+        { id: 'careers', title: 'Carreiras', icon: Briefcase, color: 'bg-green-100 text-green-600', description: 'Vagas e cultura' },
+        { id: 'press', title: 'Imprensa', icon: Newspaper, color: 'bg-purple-100 text-purple-600', description: 'Mídia e releases' },
+        { id: 'contact', title: 'Contato', icon: Mail, color: 'bg-orange-100 text-orange-600', description: 'Endereços e emails' },
+    ];
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+            <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
+                <Globe className="w-5 h-5 text-brand-500"/> Dados Institucionais
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {sections.map(s => (
+                    <button 
+                        key={s.id}
+                        onClick={() => setEditingSection(s.id as any)}
+                        className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all text-left flex items-start gap-4 group"
+                    >
+                        <div className={`p-3 rounded-xl ${s.color} group-hover:scale-110 transition-transform`}>
+                            <s.icon className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-900 dark:text-white text-lg">{s.title}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{s.description}</p>
+                        </div>
+                        <div className="ml-auto self-center bg-gray-50 dark:bg-gray-700 p-2 rounded-lg text-gray-400 group-hover:text-brand-500 transition-colors">
+                            <Edit className="w-4 h-4" />
+                        </div>
+                    </button>
+                ))}
+            </div>
+
+            {/* Edit Modal */}
+            {editingSection && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setEditingSection(null)}>
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+                            <h3 className="font-bold text-xl dark:text-white flex items-center gap-2">
+                                <Edit className="w-5 h-5 text-brand-500"/> 
+                                Editar: {sections.find(s => s.id === editingSection)?.title}
+                            </h3>
+                            <button onClick={() => setEditingSection(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-500">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                            {editingSection === 'about' && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Texto Institucional (Sobre Nós)</label>
+                                    <textarea 
+                                        value={info.about_text} 
+                                        onChange={e => setInfo({...info, about_text: e.target.value})} 
+                                        className="w-full p-4 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white h-64 text-sm leading-relaxed resize-none focus:ring-2 focus:ring-brand-500 outline-none"
+                                        placeholder="Escreva sobre a história, missão e valores da empresa..."
+                                    />
+                                </div>
+                            )}
+
+                            {editingSection === 'careers' && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Descrição da Área de Carreiras</label>
+                                        <textarea 
+                                            value={info.careers_text} 
+                                            onChange={e => setInfo({...info, careers_text: e.target.value})} 
+                                            className="w-full p-4 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white h-40 text-sm resize-none focus:ring-2 focus:ring-brand-500 outline-none"
+                                            placeholder="Texto convidativo para novos talentos..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Email para Envio de Currículo</label>
+                                        <input 
+                                            type="email" 
+                                            value={info.careers_email} 
+                                            onChange={e => setInfo({...info, careers_email: e.target.value})} 
+                                            className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            placeholder="vagas@exemplo.com"
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            {editingSection === 'press' && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Texto para Imprensa/Mídia</label>
+                                        <textarea 
+                                            value={info.press_text} 
+                                            onChange={e => setInfo({...info, press_text: e.target.value})} 
+                                            className="w-full p-4 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white h-40 text-sm resize-none focus:ring-2 focus:ring-brand-500 outline-none"
+                                            placeholder="Informações para jornalistas e parceiros de mídia..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Email da Assessoria</label>
+                                        <input 
+                                            type="email" 
+                                            value={info.press_email} 
+                                            onChange={e => setInfo({...info, press_email: e.target.value})} 
+                                            className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            placeholder="imprensa@exemplo.com"
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            {editingSection === 'contact' && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Endereço da Sede</label>
+                                        <input 
+                                            type="text" 
+                                            value={info.contact_address} 
+                                            onChange={e => setInfo({...info, contact_address: e.target.value})} 
+                                            className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            placeholder="Rua, Número, Bairro, Cidade - UF"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">Email de Suporte</label>
+                                            <input 
+                                                type="email" 
+                                                value={info.contact_support_email} 
+                                                onChange={e => setInfo({...info, contact_support_email: e.target.value})} 
+                                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                                placeholder="suporte@..."
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">Email Comercial</label>
+                                            <input 
+                                                type="email" 
+                                                value={info.contact_commercial_email} 
+                                                onChange={e => setInfo({...info, contact_commercial_email: e.target.value})} 
+                                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                                placeholder="comercial@..."
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="pt-6 mt-4 border-t border-gray-100 dark:border-gray-700 flex gap-3">
+                            <Button variant="outline" onClick={() => setEditingSection(null)} fullWidth>Cancelar</Button>
+                            <Button onClick={handleSave} disabled={saving} fullWidth>
+                                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : <><Save className="w-4 h-4 mr-2"/> Salvar</>}
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -1384,6 +776,719 @@ const PartnerLevelsManagement: React.FC = () => {
                 <Button onClick={handleSave} disabled={saving} className="w-full mt-6">
                     {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Alterações'}
                 </Button>
+            </div>
+        </div>
+    );
+};
+
+// --- AI CONFIG ---
+const AIConfig: React.FC = () => {
+    const [apiKey, setApiKey] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            try {
+                const settings = await cloud.getShopSettings();
+                if (settings?.google_gemini_api_key) {
+                    setApiKey(settings.google_gemini_api_key);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, []);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await cloud.adminUpdateShopSettings({ google_gemini_api_key: apiKey });
+            alert("Configurações de IA salvas!");
+        } catch (e: any) {
+            alert("Erro: " + e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
+            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Bot className="w-5 h-5 text-purple-500"/> Inteligência Artificial</h3>
+            
+            <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">Google Gemini API Key</label>
+                <div className="relative">
+                    <input 
+                        type="password" 
+                        value={apiKey} 
+                        onChange={e => setApiKey(e.target.value)} 
+                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono"
+                        placeholder="sk-..."
+                    />
+                    <Key className="absolute right-3 top-2.5 w-4 h-4 text-gray-400"/>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Chave necessária para o funcionamento do Chat Assistente.</p>
+            </div>
+
+            <Button onClick={handleSave} disabled={saving} fullWidth>
+                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Chave'}
+            </Button>
+        </div>
+    );
+};
+
+// --- PWA SETTINGS ---
+const PWASettingsPanel: React.FC = () => {
+    const [settings, setSettings] = useState<PWASettings>({
+        display_name: 'Zé Entregas',
+        short_name: 'Zé',
+        theme_color: '#ed2b05',
+        background_color: '#f9fafb',
+        start_url: '/',
+        orientation: 'portrait',
+        language: 'pt-BR',
+        app_version: 1
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            try {
+                const data = await cloud.adminGetPWASettings();
+                if (data) setSettings(data);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, []);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await cloud.adminUpdatePWASettings(settings);
+            alert("Configurações do PWA atualizadas! Usuários receberão a atualização em breve.");
+        } catch (e: any) {
+            alert("Erro: " + e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
+            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-green-500"/> Configuração do App (PWA)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Nome do App</label>
+                    <input 
+                        type="text" 
+                        value={settings.display_name} 
+                        onChange={e => setSettings({...settings, display_name: e.target.value})} 
+                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Nome Curto (Ícone)</label>
+                    <input 
+                        type="text" 
+                        value={settings.short_name} 
+                        onChange={e => setSettings({...settings, short_name: e.target.value})} 
+                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Cor do Tema (Hex)</label>
+                    <div className="flex gap-2">
+                        <input 
+                            type="color" 
+                            value={settings.theme_color} 
+                            onChange={e => setSettings({...settings, theme_color: e.target.value})} 
+                            className="h-10 w-10 p-0 border-0 rounded"
+                        />
+                        <input 
+                            type="text" 
+                            value={settings.theme_color} 
+                            onChange={e => setSettings({...settings, theme_color: e.target.value})} 
+                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
+                        />
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Cor de Fundo (Hex)</label>
+                    <div className="flex gap-2">
+                        <input 
+                            type="color" 
+                            value={settings.background_color} 
+                            onChange={e => setSettings({...settings, background_color: e.target.value})} 
+                            className="h-10 w-10 p-0 border-0 rounded"
+                        />
+                        <input 
+                            type="text" 
+                            value={settings.background_color} 
+                            onChange={e => setSettings({...settings, background_color: e.target.value})} 
+                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <Button onClick={handleSave} disabled={saving} fullWidth>
+                {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Publicar Alterações'}
+            </Button>
+        </div>
+    );
+};
+
+// --- FEES MANAGEMENT ---
+const FeesManagement: React.FC = () => {
+    const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        cloud.adminGetFeeSettings().then(f => {
+            setFees(f);
+            setLoading(false);
+        });
+    }, []);
+
+    const handleChange = (field: keyof PartnerFeeSettings, value: number) => {
+        setFees(prev => prev ? ({ ...prev, [field]: value }) : null);
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await cloud.adminUpdateFeeSettings(fees);
+            alert("Taxas atualizadas!");
+        } catch(e: any) {
+            alert("Erro: " + e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <Loader2 className="animate-spin mx-auto"/>;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-4">
+            <h3 className="font-bold dark:text-white">Taxas e Preços</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="text-xs text-gray-500">Taxa Fixa da Loja</label>
+                    <input type="number" value={fees?.global_tax_fixed} onChange={e => handleChange('global_tax_fixed', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
+                </div>
+                <div>
+                    <label className="text-xs text-gray-500">Comissão (%)</label>
+                    <input type="number" value={fees?.global_tax_percent} onChange={e => handleChange('global_tax_percent', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
+                </div>
+                <div>
+                    <label className="text-xs text-gray-500">Valor Base Entrega</label>
+                    <input type="number" value={fees?.base_delivery_value} onChange={e => handleChange('base_delivery_value', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
+                </div>
+                <div>
+                    <label className="text-xs text-gray-500">Valor por KM Extra</label>
+                    <input type="number" value={fees?.extra_km_value} onChange={e => handleChange('extra_km_value', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
+                </div>
+                <div>
+                    <label className="text-xs text-gray-500">Taxa por Ponto Adicional</label>
+                    <input type="number" value={fees?.additional_stop_fee} onChange={e => handleChange('additional_stop_fee', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
+                </div>
+                <div>
+                    <label className="text-xs text-gray-500">Mensalidade Super Loja</label>
+                    <input type="number" value={fees?.super_store_monthly_fee} onChange={e => handleChange('super_store_monthly_fee', parseFloat(e.target.value))} className="w-full p-2 border rounded dark:bg-gray-700"/>
+                </div>
+            </div>
+            <Button onClick={handleSave} disabled={saving} fullWidth>{saving ? <Loader2 className="animate-spin"/> : "Salvar"}</Button>
+        </div>
+    );
+};
+
+// --- USER MANAGEMENT ---
+const UserManagement: React.FC = () => {
+    const [users, setUsers] = useState<ManagedUser[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+
+    useEffect(() => { loadUsers(); }, []);
+
+    const loadUsers = async () => {
+        setLoading(true);
+        try {
+            const data = await cloud.getAllUsers();
+            setUsers(data);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    };
+
+    const filtered = users.filter(u => 
+        (u.name?.toLowerCase() || '').includes(search.toLowerCase()) || 
+        (u.email?.toLowerCase() || '').includes(search.toLowerCase())
+    );
+
+    const handleToggleStatus = async (user: ManagedUser) => {
+        const newStatus = user.status === 'active' ? 'banned' : 'active';
+        if (!confirm(`Confirmar alteração de status para ${newStatus}?`)) return;
+        try {
+            await cloud.updateUserStatus(user.id, newStatus);
+            loadUsers();
+        } catch (e: any) { alert(e.message); }
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+            <div className="flex gap-4">
+                <input 
+                    type="text" 
+                    placeholder="Buscar usuários..." 
+                    value={search} 
+                    onChange={e => setSearch(e.target.value)} 
+                    className="flex-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 dark:text-white"
+                />
+                <Button onClick={loadUsers}><RefreshCw className="w-4 h-4"/></Button>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
+                        <tr>
+                            <th className="px-4 py-3">Usuário</th>
+                            <th className="px-4 py-3">Role</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading && <tr><td colSpan={4} className="text-center p-4"><Loader2 className="animate-spin mx-auto"/></td></tr>}
+                        {!loading && filtered.map(u => (
+                            <tr key={u.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td className="px-4 py-3">
+                                    <p className="font-bold dark:text-white">{u.name || 'Sem nome'}</p>
+                                    <p className="text-xs text-gray-500">{u.email}</p>
+                                </td>
+                                <td className="px-4 py-3"><span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded">{u.role}</span></td>
+                                <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded ${u.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{u.status}</span></td>
+                                <td className="px-4 py-3 text-right">
+                                    <button onClick={() => handleToggleStatus(u)} className="text-red-500 hover:underline text-xs font-bold">
+                                        {u.status === 'active' ? 'Bloquear' : 'Desbloquear'}
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+// --- BLACKLIST MANAGEMENT ---
+const BlacklistManagement: React.FC = () => {
+    const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [newPhone, setNewPhone] = useState('');
+    const [newReason, setNewReason] = useState('');
+
+    useEffect(() => { load(); }, []);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const data = await cloud.adminGetBlacklist();
+            setBlacklist(data);
+        } catch(e) { console.error(e); } finally { setLoading(false); }
+    };
+
+    const handleAdd = async () => {
+        if (!newPhone || !newReason) return alert("Preencha telefone e motivo.");
+        try {
+            await cloud.adminAddToBlacklist('', newPhone, newReason);
+            setNewPhone(''); setNewReason('');
+            load();
+        } catch (e: any) { alert("Erro: " + e.message); }
+    };
+
+    const handleRemove = async (id: string) => {
+        if (!confirm("Remover da lista negra?")) return;
+        await cloud.adminRemoveFromBlacklist(id);
+        load();
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700">
+                <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Ban className="w-5 h-5 text-red-500"/> Lista Negra</h3>
+                <div className="flex gap-2 mb-4">
+                    <input type="text" placeholder="Telefone" value={newPhone} onChange={e => setNewPhone(e.target.value)} className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
+                    <input type="text" placeholder="Motivo" value={newReason} onChange={e => setNewReason(e.target.value)} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
+                    <Button onClick={handleAdd}>Adicionar</Button>
+                </div>
+                <div className="space-y-2">
+                    {blacklist.map(b => (
+                        <div key={b.id} className="p-3 bg-red-50 dark:bg-red-900/10 rounded flex justify-between items-center">
+                            <div>
+                                <p className="font-bold text-red-700 dark:text-red-300">{b.phone_number || b.email}</p>
+                                <p className="text-xs text-red-500">{b.reason}</p>
+                            </div>
+                            <button onClick={() => handleRemove(b.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- SHOP MANAGEMENT ---
+const ShopManagement: React.FC = () => {
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [newCat, setNewCat] = useState('');
+    
+    useEffect(() => { loadData(); }, []);
+    
+    const loadData = async () => {
+        const c = await cloud.adminGetCategories();
+        setCategories(c);
+    };
+
+    const handleAdd = async () => {
+        if (!newCat) return;
+        await cloud.adminAddCategory(newCat);
+        setNewCat('');
+        loadData();
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm("Deletar categoria?")) return;
+        await cloud.adminDeleteCategory(id);
+        loadData();
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700">
+                <h3 className="font-bold dark:text-white mb-4">Categorias da Loja</h3>
+                <div className="flex gap-2 mb-4">
+                    <input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nova Categoria" className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
+                    <Button onClick={handleAdd}>Adicionar</Button>
+                </div>
+                <div className="space-y-2">
+                    {categories.map(c => (
+                        <div key={c.id} className="flex justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <span className="dark:text-white">{c.name}</span>
+                            <button onClick={() => handleDelete(c.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- SECURITY MONITOR ---
+const SecurityMonitor: React.FC = () => {
+    const [alerts, setAlerts] = useState<FraudAlert[]>([]);
+    const [verifications, setVerifications] = useState<IdentityVerification[]>([]);
+    const [activeTab, setActiveTab] = useState<'alerts' | 'verifications'>('alerts');
+
+    useEffect(() => { loadData(); }, [activeTab]);
+
+    const loadData = async () => {
+        if (activeTab === 'alerts') {
+            const a = await cloud.adminGetFraudAlerts();
+            setAlerts(a);
+        } else {
+            const v = await cloud.adminGetVerifications();
+            setVerifications(v);
+        }
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+                <button onClick={() => setActiveTab('alerts')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'alerts' ? 'bg-white dark:bg-gray-700 shadow text-red-600' : 'text-gray-500'}`}>Alertas de Fraude</button>
+                <button onClick={() => setActiveTab('verifications')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'verifications' ? 'bg-white dark:bg-gray-700 shadow text-blue-600' : 'text-gray-500'}`}>Verificações</button>
+            </div>
+
+            {activeTab === 'alerts' && (
+                <div className="space-y-3">
+                    {alerts.map(alert => (
+                        <div key={alert.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-red-100 dark:border-red-900/30">
+                            <div className="flex justify-between">
+                                <span className="font-bold text-red-600">{alert.type}</span>
+                                <span className="text-xs text-gray-500">{new Date(alert.created_at).toLocaleString()}</span>
+                            </div>
+                            <p className="text-sm mt-1 dark:text-gray-300">{alert.description}</p>
+                            <p className="text-xs text-gray-400 mt-2">Usuário: {alert.user_email}</p>
+                        </div>
+                    ))}
+                    {alerts.length === 0 && <p className="text-gray-400">Nenhum alerta.</p>}
+                </div>
+            )}
+
+            {activeTab === 'verifications' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {verifications.map(v => (
+                        <div key={v.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                            <img src={v.photo_url} alt="Selfie" className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"/>
+                            <p className="font-bold text-sm dark:text-white">Confiança: {(v.confidence_score * 100).toFixed(1)}%</p>
+                            <p className="text-xs text-gray-500">Usuário: {v.user_email}</p>
+                            <p className="text-xs text-gray-500">Data: {new Date(v.created_at).toLocaleString()}</p>
+                        </div>
+                    ))}
+                    {verifications.length === 0 && <p className="text-gray-400">Nenhuma verificação recente.</p>}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- RATING MONITOR ---
+const RatingMonitor: React.FC = () => {
+    const [ratings, setRatings] = useState<PartnerRating[]>([]);
+    
+    useEffect(() => {
+        cloud.adminGetAllRatings().then(setRatings);
+    }, []);
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in">
+            <h3 className="font-bold dark:text-white mb-4">Monitor de Avaliações</h3>
+            <div className="space-y-3">
+                {ratings.map(r => (
+                    <div key={r.id} className="p-3 border border-gray-100 dark:border-gray-700 rounded-lg">
+                        <div className="flex justify-between">
+                            <span className="font-bold text-sm dark:text-white">{r.evaluator_name} &rarr; {r.evaluated_name}</span>
+                            <div className="flex items-center gap-1 text-yellow-500">
+                                <Star className="w-3 h-3 fill-current"/>
+                                <span className="text-xs font-bold">{r.rating}</span>
+                            </div>
+                        </div>
+                        {r.comment && <p className="text-sm text-gray-500 mt-1">"{r.comment}"</p>}
+                    </div>
+                ))}
+                {ratings.length === 0 && <p className="text-gray-400">Nenhuma avaliação.</p>}
+            </div>
+        </div>
+    );
+};
+
+// --- SUPPORT CLAIMS MANAGEMENT ---
+const ClaimsManagement: React.FC = () => {
+    const [claims, setClaims] = useState<Claim[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
+    const [response, setResponse] = useState('');
+
+    useEffect(() => { load(); }, []);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const data = await cloud.adminGetClaims();
+            setClaims(data);
+        } catch(e) { console.error(e); } finally { setLoading(false); }
+    };
+
+    const handleResolve = async () => {
+        if (!selectedClaim || !response) return;
+        try {
+            await cloud.adminResolveClaim(selectedClaim.id, response);
+            alert("Chamado respondido.");
+            setSelectedClaim(null);
+            setResponse('');
+            load();
+        } catch(e: any) {
+            alert("Erro: " + e.message);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
+                        <tr>
+                            <th className="px-4 py-3">Usuário</th>
+                            <th className="px-4 py-3">Assunto</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading && <tr><td colSpan={4} className="text-center p-4"><Loader2 className="animate-spin mx-auto"/></td></tr>}
+                        {claims.map(c => (
+                            <tr key={c.id} className="border-b dark:border-gray-700">
+                                <td className="px-4 py-3">{c.user_email}</td>
+                                <td className="px-4 py-3">{c.type}</td>
+                                <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${c.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{c.status}</span></td>
+                                <td className="px-4 py-3"><button onClick={() => setSelectedClaim(c)} className="text-blue-500">Ver</button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {selectedClaim && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold dark:text-white">Responder Chamado</h3>
+                            <button onClick={() => setSelectedClaim(null)}><X className="w-5 h-5"/></button>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg mb-4 text-sm">
+                            <p className="font-bold mb-1">Descrição do Usuário:</p>
+                            <p>{selectedClaim.description}</p>
+                        </div>
+                        <textarea 
+                            value={response} 
+                            onChange={e => setResponse(e.target.value)} 
+                            placeholder="Sua resposta..." 
+                            className="w-full p-3 border rounded-xl dark:bg-gray-700 h-32 mb-4"
+                        />
+                        <Button fullWidth onClick={handleResolve}>Enviar Resposta e Fechar</Button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- PLATFORM NEWS MANAGEMENT ---
+const NewsManagement: React.FC = () => {
+    const [news, setNews] = useState<PlatformNews[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isEditing, setIsEditing] = useState(false);
+    const [currentItem, setCurrentItem] = useState<Partial<PlatformNews>>({});
+
+    useEffect(() => { load(); }, []);
+
+    const load = async () => {
+        setLoading(true);
+        const data = await cloud.adminGetPlatformNews();
+        setNews(data);
+        setLoading(false);
+    };
+
+    const handleSave = async () => {
+        if (!currentItem.title || !currentItem.description || !currentItem.icon_name) return alert("Preencha todos os campos.");
+        await cloud.adminUpsertPlatformNews(currentItem);
+        setIsEditing(false);
+        setCurrentItem({});
+        load();
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm("Deletar notícia?")) return;
+        await cloud.adminDeletePlatformNews(id);
+        load();
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <h3 className="font-bold dark:text-white">Novidades da Plataforma</h3>
+                <Button onClick={() => setIsEditing(true)}><Plus className="w-4 h-4"/> Nova</Button>
+            </div>
+
+            {isEditing && (
+                <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-700 space-y-3">
+                    <input type="text" placeholder="Título" value={currentItem.title || ''} onChange={e => setCurrentItem({...currentItem, title: e.target.value})} className="w-full p-2 rounded border"/>
+                    <textarea placeholder="Descrição" value={currentItem.description || ''} onChange={e => setCurrentItem({...currentItem, description: e.target.value})} className="w-full p-2 rounded border"/>
+                    <input type="text" placeholder="Ícone (Lucide Name)" value={currentItem.icon_name || ''} onChange={e => setCurrentItem({...currentItem, icon_name: e.target.value})} className="w-full p-2 rounded border"/>
+                    <div className="flex items-center gap-2">
+                        <input type="checkbox" checked={currentItem.is_active ?? true} onChange={e => setCurrentItem({...currentItem, is_active: e.target.checked})} />
+                        <span className="text-sm">Ativo</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button onClick={handleSave}>Salvar</Button>
+                        <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                    </div>
+                </div>
+            )}
+
+            <div className="space-y-2">
+                {news.map(item => (
+                    <div key={item.id} className="p-4 border rounded-xl flex justify-between items-center bg-white dark:bg-gray-800">
+                        <div>
+                            <p className="font-bold dark:text-white">{item.title}</p>
+                            <p className="text-xs text-gray-500">{item.description}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => { setCurrentItem(item); setIsEditing(true); }} className="p-2 text-blue-500"><Edit className="w-4 h-4"/></button>
+                            <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// --- SUPPORT CHAT THREADS ---
+const SupportThreads: React.FC = () => {
+    const [threads, setThreads] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedUser, setSelectedUser] = useState<string | null>(null);
+    const [selectedUserName, setSelectedUserName] = useState('');
+
+    useEffect(() => {
+        load();
+    }, []);
+
+    const load = async () => {
+        setLoading(true);
+        const data = await cloud.adminGetSupportThreads();
+        setThreads(data);
+        setLoading(false);
+    };
+
+    return (
+        <div className="h-[600px] flex gap-4 bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700">
+            <div className="w-1/3 border-r dark:border-gray-700 flex flex-col">
+                <div className="p-4 border-b dark:border-gray-700 font-bold dark:text-white">Conversas</div>
+                <div className="flex-1 overflow-y-auto">
+                    {loading && <div className="p-4 text-center"><Loader2 className="animate-spin mx-auto"/></div>}
+                    {threads.map(t => (
+                        <div 
+                            key={t.userId} 
+                            onClick={() => { setSelectedUser(t.userId); setSelectedUserName(t.userName); }}
+                            className={`p-4 border-b dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${selectedUser === t.userId ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                        >
+                            <p className="font-bold text-sm dark:text-white truncate">{t.userName}</p>
+                            <p className="text-xs text-gray-500 truncate">{t.lastMessage}</p>
+                            <p className="text-[10px] text-gray-400 mt-1">{new Date(t.lastDate).toLocaleString()}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div className="flex-1 relative">
+                {selectedUser ? (
+                    <div className="absolute inset-0">
+                        <ChatWindow 
+                            type="SUPPORT" 
+                            adminTargetUserId={selectedUser} 
+                            onClose={() => setSelectedUser(null)} 
+                            title={`Suporte: ${selectedUserName}`} 
+                        />
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">Selecione uma conversa</div>
+                )}
             </div>
         </div>
     );

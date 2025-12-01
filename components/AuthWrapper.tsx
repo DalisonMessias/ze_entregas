@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import App from '../App';
 import * as cloud from '../services/cloud';
@@ -236,10 +237,11 @@ export const AuthWrapper: React.FC = () => {
     setAuthMessage(null);
 
     try {
-      // Regra: Lojista cria Lojista. Entregador cria Usuário Comum.
       let roleToRegister = 'USER';
       if (signupType === 'STORE_PARTNER') {
           roleToRegister = 'STORE_PARTNER';
+      } else if (signupType === 'DELIVERY_PARTNER') {
+          roleToRegister = 'DELIVERY_PARTNER';
       }
       
       const result = await cloud.registerUserWithType(email, password, name, phone, cpf, roleToRegister, selectedCity);
@@ -294,10 +296,8 @@ export const AuthWrapper: React.FC = () => {
   }
 
   if (session && userId) {
-    return <App userId={userId} userRole={userRole} />;
+    return <App key={userId} userId={userId} userRole={userRole} />;
   }
-
-  // --- VIEWS ---
 
   if (view === 'landing') {
       return (
@@ -307,7 +307,6 @@ export const AuthWrapper: React.FC = () => {
                   setSignupType(type);
                   setView('signup_city');
                   setAuthMessage(null);
-                  // Reset form fields
                   setName(''); setEmail(''); setPhone(''); setCpf(''); setPassword('');
               }}
           />
@@ -356,6 +355,7 @@ export const AuthWrapper: React.FC = () => {
                             className="ifood-input w-full p-4" 
                             placeholder="Digite seu login"
                             autoFocus
+                            autoComplete="username"
                         />
                     </div>
                     
@@ -368,6 +368,7 @@ export const AuthWrapper: React.FC = () => {
                                 onChange={e => setPassword(e.target.value)} 
                                 className="ifood-input w-full p-4 pr-12" 
                                 placeholder="Sua senha"
+                                autoComplete="current-password"
                             />
                             <button 
                                 type="button"
@@ -402,6 +403,7 @@ export const AuthWrapper: React.FC = () => {
                             className="ifood-input w-full p-4" 
                             placeholder="seu@email.com"
                             autoFocus
+                            autoComplete="email"
                         />
                     </div>
 
@@ -433,7 +435,7 @@ export const AuthWrapper: React.FC = () => {
                     
                     <div className="text-center mb-4">
                         <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 tracking-wide">
-                            {signupType === 'STORE_PARTNER' ? 'STORE_PARTNER' : 'USER'}
+                            {signupType === 'STORE_PARTNER' ? 'Otimize sua Logística 🚀' : 'Sua Renda, Suas Regras 🏍️'}
                         </span>
                     </div>
                     
@@ -453,6 +455,7 @@ export const AuthWrapper: React.FC = () => {
                             onChange={e => setName(e.target.value)} 
                             className="ifood-input w-full p-3" 
                             placeholder="Seu nome"
+                            autoComplete="name"
                         />
                     </div>
 
@@ -466,6 +469,7 @@ export const AuthWrapper: React.FC = () => {
                                 className="ifood-input w-full p-3" 
                                 placeholder="(XX) XXXXX-XXXX"
                                 maxLength={15}
+                                autoComplete="tel"
                             />
                         </div>
                         <div>
@@ -477,6 +481,7 @@ export const AuthWrapper: React.FC = () => {
                                 className="ifood-input w-full p-3" 
                                 placeholder="000.000.000-00"
                                 maxLength={14}
+                                autoComplete="off"
                             />
                         </div>
                     </div>
@@ -489,6 +494,7 @@ export const AuthWrapper: React.FC = () => {
                             onChange={e => setEmail(e.target.value)} 
                             className="ifood-input w-full p-3" 
                             placeholder="seu@email.com"
+                            autoComplete="email"
                         />
                     </div>
 
@@ -501,6 +507,7 @@ export const AuthWrapper: React.FC = () => {
                                 onChange={e => setPassword(e.target.value)} 
                                 className="ifood-input w-full p-3 pr-10" 
                                 placeholder="Mínimo 6 caracteres"
+                                autoComplete="new-password"
                             />
                             <button 
                                 type="button"

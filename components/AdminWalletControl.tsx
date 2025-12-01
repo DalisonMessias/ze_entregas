@@ -38,7 +38,8 @@ export const AdminWalletControl: React.FC = () => {
 
     const filteredWallets = wallets.filter(w => {
         const matchesType = filter === 'ALL' || w.role === filter;
-        const matchesSearch = w.name?.toLowerCase().includes(search.toLowerCase()) || w.email?.toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = (w.name || '').toLowerCase().includes(search.toLowerCase()) || 
+                              (w.email || '').toLowerCase().includes(search.toLowerCase());
         return matchesType && matchesSearch;
     });
 

@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Navigation, WifiOff, Maximize2, Minimize2, Loader2, MapPin, Search, Mic, X, Clock, Map as MapIcon, RotateCcw, ArrowUp, ArrowUpLeft, ArrowUpRight, Flag, ListPlus, Download, SlidersHorizontal, AlertTriangle, GripVertical, CheckCircle, Volume2, VolumeX, CornerUpRight, CornerUpLeft, Crosshair, ChevronsRight, ArrowLeft, Layers, Trash2, Plus, Moon, Sun, Globe, Gauge, Siren, Zap, Bookmark } from 'lucide-react';
 import * as storage from '../services/storage';
@@ -19,6 +20,7 @@ interface OfflineMapProps {
   onClearDestination: () => void;
   onSaveRoute?: (value: number, km: number) => void;
   onBack?: () => void;
+  onOpenBlitzModal: () => void;
 }
 
 const ManeuverIcon = ({ step, className }: { step: any, className?: string }) => {
@@ -199,7 +201,7 @@ const formatDistance = (meters: number | null) => {
     return `${(meters / 1000).toFixed(1)} km`;
 };
 
-export const OfflineMap: React.FC<OfflineMapProps> = ({ initialDestination, onClearDestination, onSaveRoute, onBack }) => {
+export const OfflineMap: React.FC<OfflineMapProps> = ({ initialDestination, onClearDestination, onSaveRoute, onBack, onOpenBlitzModal }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
@@ -287,9 +289,7 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ initialDestination, onCl
   // Countdown State
   const [startCountdown, setStartCountdown] = useState<number | null>(null);
 
-  // Blitz States
-  const [showBlitzModal, setShowBlitzModal] = useState(false);
-  const [selectedBlitzType, setSelectedBlitzType] = useState<'BLITZ' | 'ACCIDENT' | 'TRAFFIC' | 'DANGER'>('BLITZ');
+  // Blitz States (Viewing Only - Reporting moved to global)
   const [blitzMarkers, setBlitzMarkers] = useState<BlitzAlert[]>([]);
   const [selectedBlitz, setSelectedBlitz] = useState<BlitzAlert | null>(null);
 
@@ -760,30 +760,6 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ initialDestination, onCl
       setIsSearching(false);
     }
   }, [startNavigation, travelMode]);
-
-  // --- BLITZ FUNCTIONALITY ---
-  const handleReportBlitz = async () => {
-      if (!userMarkerRef.current) return alert("Aguarde a localização GPS.");
-      const { lat, lng } = userMarkerRef.current.getLatLng();
-      
-      setIsSearching(true); // Reuse loader
-      try {
-          // Reverse geocode to get address
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-          const data = await res.json();
-          const address = data.display_name.split(',')[0];
-          const city = data.address.city || data.address.town || data.address.village || 'Cidade Desconhecida';
-
-          await cloud.reportBlitz(lat, lng, selectedBlitzType, address, city);
-          alert("Alerta enviado com sucesso! Outros usuários na região serão notificados.");
-          setShowBlitzModal(false);
-          fetchBlitzes(); // Refresh map
-      } catch(e: any) {
-          alert("Erro ao reportar: " + e.message);
-      } finally {
-          setIsSearching(false);
-      }
-  };
 
   const fetchBlitzes = async () => {
       if (!mapInstanceRef.current) return;
@@ -1279,6 +1255,10 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ initialDestination, onCl
         {/* Hide Download and Layers during Navigation */}
         {!isNavigating && (
             <>
+                <button onClick={onOpenBlitzModal} className="pointer-events-auto w-12 h-12 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center text-red-600 dark:text-red-500 border border-gray-100 dark:border-gray-700 hover:bg-red-50 transition-colors">
+                    <Zap className="w-6 h-6 fill-current"/>
+                </button>
+
                 <button onClick={() => setShowDownloadModal(true)} className="pointer-events-auto w-12 h-12 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-700 hover:bg-gray-50 transition-colors">
                     <Download className="w-6 h-6"/>
                 </button>
@@ -1320,142 +1300,14 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ initialDestination, onCl
                                 onClick={() => setCurrentLayer('osm')}
                                 className={`text-left text-sm font-medium p-2 rounded-lg flex items-center gap-2 transition-colors ${currentLayer === 'osm' ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                             >
-                                <MapIcon className="w-4 h-4"/> Detalhado (OSM)
+                                <MapIcon className="w-4 h-4"/> OpenStreetMap
                             </button>
                         </div>
                     )}
                 </div>
             </>
         )}
-
-        {/* Lightning Alert Button (Previously Blitz) */}
-        <button onClick={() => setShowBlitzModal(true)} title="Alerta Relâmpago" className="pointer-events-auto w-12 h-12 bg-red-600 rounded-full shadow-lg flex items-center justify-center text-white border border-red-700 hover:bg-red-700 transition-colors animate-pulse">
-            <Zap className="w-6 h-6 fill-current"/>
-        </button>
       </div>
-
-      {showDownloadModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-45 flex items-center justify-center p-4 animate-in fade-in">
-              <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
-                  <div className="flex justify-between items-center">
-                      <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Download className="w-5 h-5 text-brand-500"/> Baixar Mapa Offline</h3>
-                      <button onClick={() => setShowDownloadModal(false)}><X className="w-5 h-5"/></button>
-                  </div>
-
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Baixe uma área do mapa para usar sem internet. O tamanho do download aumenta com o raio.
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-400">Raio a partir da sua localização</label>
-                      <div className="flex items-center gap-4 mt-2">
-                          <input 
-                              type="range" 
-                              min="1" max="50" 
-                              value={downloadRadius} 
-                              onChange={e => setDownloadRadius(Number(e.target.value))}
-                              className="w-full"
-                              disabled={isDownloading}
-                          />
-                          <span className="font-bold text-lg w-16 text-center dark:text-white">{downloadRadius} km</span>
-                      </div>
-                  </div>
-                  
-                  <div className="text-center bg-gray-50 dark:bg-gray-700 p-3 rounded-lg text-xs">
-                      <p className="text-gray-500">Tamanho estimado:</p>
-                      <p className="font-bold dark:text-white">{isDownloading ? 'Baixando...' : estimatedSize}</p>
-                  </div>
-
-                  {isDownloading ? (
-                      <div>
-                          <progress value={downloadProgress.current} max={downloadProgress.total} className="w-full [&::-webkit-progress-bar]:rounded-lg [&::-webkit-progress-value]:rounded-lg   [&::-webkit-progress-bar]:bg-slate-300 [&::-webkit-progress-value]:bg-brand-600 [&::-moz-progress-bar]:bg-brand-600"></progress>
-                          <p className="text-xs text-center text-gray-400 mt-1">{downloadProgress.current} / {downloadProgress.total} tiles</p>
-                          <Button fullWidth variant="danger" onClick={cancelDownload} className="mt-3">Cancelar</Button>
-                      </div>
-                  ) : (
-                      <Button fullWidth onClick={handleDownload} disabled={!userMarkerRef.current}>
-                          Iniciar Download
-                      </Button>
-                  )}
-              </div>
-          </div>
-      )}
-
-      {showMapFailureModal && (
-          <div className="fixed inset-0 bg-black/60 z-45 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm text-center">
-                  <AlertTriangle className="w-12 h-12 text-orange-400 mx-auto mb-4"/>
-                  <h3 className="font-bold text-lg dark:text-white">Problema no Mapa</h3>
-                  <p className="text-sm text-gray-500 mt-2">Não foi possível carregar o mapa. Verifique sua conexão com a internet ou tente usar o mapa offline se já tiver baixado uma área.</p>
-                  <Button fullWidth onClick={() => { setShowMapFailureModal(false); window.location.reload(); }} className="mt-6">Recarregar Página</Button>
-              </div>
-          </div>
-      )}
-
-      {/* Lightning Alert Modal (Previously Blitz Modal) */}
-      {showBlitzModal && (
-          <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 animate-in fade-in">
-              <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                          <Zap className="w-6 h-6 text-red-600 fill-current"/> Alerta Relâmpago
-                      </h3>
-                      <button onClick={() => setShowBlitzModal(false)}><X className="w-6 h-6 dark:text-white"/></button>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                      <button onClick={() => setSelectedBlitzType('BLITZ')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'BLITZ' ? 'border-red-600 bg-red-50 dark:bg-red-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="bg-red-100 p-2 rounded-full"><Siren className="w-6 h-6 text-red-600"/></div>
-                          <span className="font-bold text-sm dark:text-white">Blitz</span>
-                      </button>
-                      <button onClick={() => setSelectedBlitzType('ACCIDENT')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'ACCIDENT' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="bg-orange-100 p-2 rounded-full"><AlertTriangle className="w-6 h-6 text-orange-500"/></div>
-                          <span className="font-bold text-sm dark:text-white">Acidente</span>
-                      </button>
-                      <button onClick={() => setSelectedBlitzType('TRAFFIC')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'TRAFFIC' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="bg-yellow-100 p-2 rounded-full"><Clock className="w-6 h-6 text-yellow-600"/></div>
-                          <span className="font-bold text-sm dark:text-white">Trânsito</span>
-                      </button>
-                      <button onClick={() => setSelectedBlitzType('DANGER')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'DANGER' ? 'border-gray-800 bg-gray-100 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="bg-gray-200 p-2 rounded-full"><AlertTriangle className="w-6 h-6 text-gray-800"/></div>
-                          <span className="font-bold text-sm dark:text-white">Perigo</span>
-                      </button>
-                  </div>
-
-                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-6">
-                      Sua localização atual será enviada para todos os usuários da cidade.
-                  </p>
-
-                  <Button fullWidth onClick={handleReportBlitz} disabled={isSearching} className="bg-red-600 hover:bg-red-700 text-white">
-                      {isSearching ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Confirmar e Alertar'}
-                  </Button>
-              </div>
-          </div>
-      )}
-
-      {/* Selected Alert Detail Modal */}
-      {selectedBlitz && (
-          <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setSelectedBlitz(null)}>
-              <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                  <div className="text-center mb-4">
-                      <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                          {selectedBlitz.type === 'BLITZ' ? <Siren className="w-8 h-8 text-red-600"/> : <AlertTriangle className="w-8 h-8 text-orange-500"/>}
-                      </div>
-                      <h3 className="text-xl font-black text-gray-900 dark:text-white">{selectedBlitz.type}</h3>
-                      <p className="text-xs text-gray-400">{new Date(selectedBlitz.created_at).toLocaleTimeString()}</p>
-                  </div>
-                  
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl mb-4">
-                      <p className="text-sm font-bold text-gray-800 dark:text-white mb-1">{selectedBlitz.address}</p>
-                      <p className="text-xs text-gray-500">{selectedBlitz.city}</p>
-                  </div>
-
-                  <p className="text-xs text-center text-gray-400 mb-4">Reportado por: {selectedBlitz.user_name || 'Anônimo'}</p>
-
-                  <Button fullWidth onClick={() => setSelectedBlitz(null)}>Fechar</Button>
-              </div>
-          </div>
-      )}
     </div>
   );
 };

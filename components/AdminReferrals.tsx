@@ -25,8 +25,8 @@ export const AdminReferrals: React.FC = () => {
     }, []);
 
     const filtered = referrals.filter(r => 
-        r.referrer?.name?.toLowerCase().includes(search.toLowerCase()) || 
-        r.referred?.name?.toLowerCase().includes(search.toLowerCase())
+        (r.referrer?.name || '').toLowerCase().includes(search.toLowerCase()) || 
+        (r.referred?.name || '').toLowerCase().includes(search.toLowerCase())
     );
 
     return (
