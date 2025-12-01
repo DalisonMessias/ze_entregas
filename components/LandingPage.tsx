@@ -121,11 +121,6 @@ const Header: React.FC<{ onLoginClick: () => void; onSignupClick: () => void; }>
                     {/* Logo Desktop (Completa) */}
                     <Logo className="h-10 w-auto hidden md:block text-black transition-transform group-hover:scale-105" mode="full" />
                 </a>
-                <div className="hidden md:flex items-center gap-8 text-sm font-bold">
-                    <a href="#solutions" onClick={(e) => handleScroll(e, 'solutions')} className="text-gray-600 dark:text-gray-300 hover:text-brand-600 transition-colors">Soluções</a>
-                    <a href="#app" onClick={(e) => handleScroll(e, 'app')} className="text-gray-600 dark:text-gray-300 hover:text-brand-600 transition-colors">App</a>
-                    <a href="#benefits" onClick={(e) => handleScroll(e, 'benefits')} className="text-gray-600 dark:text-gray-300 hover:text-brand-600 transition-colors">Vantagens</a>
-                </div>
                 <div className="flex items-center gap-3">
                     <Button onClick={onLoginClick} variant="outline" className="py-2 px-5 text-xs font-bold rounded-full border-gray-200 hover:bg-gray-50">
                         Entrar

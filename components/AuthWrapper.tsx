@@ -217,4 +217,223 @@ export const AuthWrapper: React.FC = () => {
     }
   };
 
-  const handle
+  const handleSignup = async () => {
+    if (!name || !email || !password || !phone) {
+        setAuthMessage({ type: 'error', text: 'Preencha todos os campos obrigatórios.' });
+        return;
+    }
+
+    if (signupType === 'DELIVERY_PARTNER' && !selectedCity) {
+        setAuthMessage({ type: 'error', text: 'Selecione uma cidade de atuação.' });
+        return;
+    }
+
+    setAuthLoading(true);
+    setAuthMessage(null);
+
+    try {
+        await cloud.registerUserWithType(email, password, name, phone, cpf, signupType || 'USER', selectedCity);
+        setAuthMessage({ type: 'success', text: 'Conta criada com sucesso! Verifique seu e-mail.' });
+    } catch (e: any) {
+        setAuthMessage({ type: 'error', text: e.message || "Erro ao criar conta." });
+    } finally {
+        setAuthLoading(false);
+    }
+  };
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <Skeleton className="w-12 h-12 rounded-full" />
+      </div>
+    );
+  }
+
+  if (session && userId) {
+    return <App userId={userId} userRole={userRole} />;
+  }
+
+  if (view === 'landing') {
+      return (
+        <LandingPage 
+            onLoginClick={() => setView('login')} 
+            onSignupClick={(type) => {
+                setSignupType(type);
+                setView(type === 'DELIVERY_PARTNER' ? 'signup_city' : 'signup_form');
+            }} 
+        />
+      );
+  }
+
+  const renderBack = () => (
+      <button 
+        onClick={() => setView('landing')} 
+        className="absolute top-6 left-6 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500"
+      >
+          <ArrowLeft className="w-6 h-6" />
+      </button>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+        {renderBack()}
+        
+        <div className="bg-white dark:bg-gray-800 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-in slide-in-from-bottom-5">
+            <div className="text-center mb-8">
+                <Logo className="h-10 w-auto mx-auto mb-4 text-brand-600" mode="icon" />
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white">
+                    {view === 'login' && 'Bem-vindo de volta!'}
+                    {view === 'forgot_password' && 'Recuperar Senha'}
+                    {(view === 'signup_form' || view === 'signup_city') && 'Criar Conta'}
+                </h2>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                    {view === 'login' && 'Acesse sua conta para continuar.'}
+                    {view === 'forgot_password' && 'Enviaremos um link para seu e-mail.'}
+                    {view === 'signup_city' && 'Onde você vai atuar?'}
+                    {view === 'signup_form' && 'Preencha seus dados.'}
+                </p>
+            </div>
+
+            {authMessage && (
+                <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-center gap-2 ${authMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                    {authMessage.type === 'error' ? <Ban className="w-4 h-4"/> : <CheckCircle className="w-4 h-4"/>}
+                    {authMessage.text}
+                </div>
+            )}
+
+            {view === 'login' && (
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email, Telefone ou CPF</label>
+                        <input 
+                            type="text" 
+                            value={emailOrPhone} 
+                            onChange={e => setEmailOrPhone(e.target.value)} 
+                            className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-transparent focus:border-brand-500 focus:bg-white dark:focus:bg-gray-800 outline-none transition-all dark:text-white"
+                            placeholder="Digite aqui..."
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Senha</label>
+                        <div className="relative">
+                            <input 
+                                type={showPassword ? 'text' : 'password'} 
+                                value={password} 
+                                onChange={e => setPassword(e.target.value)} 
+                                className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-transparent focus:border-brand-500 focus:bg-white dark:focus:bg-gray-800 outline-none transition-all dark:text-white pr-10"
+                                placeholder="******"
+                            />
+                            <button 
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                            >
+                                {showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                            </button>
+                        </div>
+                        <div className="text-right mt-2">
+                            <button onClick={() => setView('forgot_password')} className="text-xs font-bold text-brand-600 hover:underline">Esqueci minha senha</button>
+                        </div>
+                    </div>
+                    <Button fullWidth onClick={handleLogin} disabled={authLoading} className="py-4 text-lg shadow-xl shadow-brand-500/20">
+                        {authLoading ? <Loader2 className="w-6 h-6 animate-spin"/> : 'Entrar'}
+                    </Button>
+                </div>
+            )}
+
+            {view === 'forgot_password' && (
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
+                        <input 
+                            type="email" 
+                            value={emailOrPhone} 
+                            onChange={e => setEmailOrPhone(e.target.value)} 
+                            className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                            placeholder="seu@email.com"
+                        />
+                    </div>
+                    <Button fullWidth onClick={handleForgotPassword} disabled={authLoading} className="py-4">
+                        {authLoading ? <Loader2 className="animate-spin"/> : 'Enviar Link'}
+                    </Button>
+                    <button onClick={() => setView('login')} className="w-full text-center text-sm font-bold text-gray-500 hover:text-brand-600 mt-4">
+                        Voltar para Login
+                    </button>
+                </div>
+            )}
+
+            {view === 'signup_city' && (
+                <div className="space-y-4">
+                    <CitySelector 
+                        onSelect={(cityName, state) => {
+                            setSelectedCity(`${cityName} - ${state}`);
+                            setView('signup_form');
+                        }}
+                    />
+                    <div className="mt-4 text-center">
+                        <button onClick={() => setView('landing')} className="text-sm text-gray-500">Cancelar</button>
+                    </div>
+                </div>
+            )}
+
+            {view === 'signup_form' && (
+                <div className="space-y-4">
+                    <input 
+                        type="text" 
+                        placeholder="Nome Completo" 
+                        value={name} 
+                        onChange={e => setName(e.target.value)} 
+                        className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                    />
+                    <input 
+                        type="email" 
+                        placeholder="Email" 
+                        value={email} 
+                        onChange={e => setEmail(e.target.value)} 
+                        className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                    />
+                    <input 
+                        type="tel" 
+                        placeholder="Telefone (WhatsApp)" 
+                        value={phone} 
+                        onChange={e => setPhone(formatPhoneNumber(e.target.value))} 
+                        maxLength={15}
+                        className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                    />
+                    <input 
+                        type="text" 
+                        placeholder="CPF (Opcional)" 
+                        value={cpf} 
+                        onChange={e => setCpf(e.target.value)} 
+                        className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                    />
+                    <div className="relative">
+                        <input 
+                            type={showPassword ? 'text' : 'password'} 
+                            placeholder="Senha (mín. 6 caracteres)" 
+                            value={password} 
+                            onChange={e => setPassword(e.target.value)} 
+                            className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white pr-10"
+                        />
+                        <button 
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                        >
+                            {showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                        </button>
+                    </div>
+
+                    {signupType === 'DELIVERY_PARTNER' && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                            <MapPin className="w-4 h-4"/> Cidade: <strong>{selectedCity}</strong>
+                        </div>
+                    )}
+
+                    <Button fullWidth onClick={handleSignup} disabled={authLoading} className="py-4 text-lg">
+                        {authLoading ? <Loader2 className="animate-spin"/> : 'Finalizar Cadastro'}
+                    </Button>
+                </div>
+            )}
+        </div>
+    </div>
+  );
+};
