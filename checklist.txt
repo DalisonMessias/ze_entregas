@@ -47,3 +47,4 @@
 [2024-05-27 12:00] Added comprehensive RLS policies to `supabase_setup.txt` for `user_profiles` table, including `is_admin` helper function, enabling users to read their own role and admins to access all profiles, resolving the dashboard access redirection issue.
 [2024-05-27 13:00] Updated Company Modals (About, Careers, Press, Contact) to be fully dynamic and configurable via Admin Panel, allowing text content editing for all sections.
 [2024-05-27 13:15] Updated Admin Panel's Institutional section to use a Card Grid layout with dedicated editing modals for better UX.
+[2024-05-27 13:30] Added "Acessar Loja" button to Admin Menu under Operacional section and updated RBAC to allow admins to access the Shop interface directly.

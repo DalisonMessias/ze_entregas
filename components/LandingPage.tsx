@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, Store, Bike, Shield, Zap, Bell, Map, BarChart3, Headphones, CheckCircle, ChevronDown, Smartphone, Star, Instagram, Facebook, Twitter, Linkedin, Download, Gift, MessageCircle, Newspaper, Wallet, Megaphone, ShoppingBag, Users, Bot, Navigation } from 'lucide-react';
 import { Button } from './Button';
@@ -115,7 +116,10 @@ const Header: React.FC<{ onLoginClick: () => void; onSignupClick: () => void; }>
         <nav className="w-full fixed top-0 left-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 z-50 transition-colors duration-300">
             <div className="px-4 md:px-8 py-4 flex justify-between items-center max-w-7xl mx-auto w-full">
                 <a href="#hero" onClick={(e) => handleScroll(e, 'hero')} className="flex items-center gap-2 group text-black dark:text-white">
-                    <Logo className="h-10 w-auto transition-transform group-hover:scale-105 text-black" />
+                    {/* Logo Mobile (Ícone) */}
+                    <Logo className="h-10 w-auto md:hidden text-black transition-transform group-hover:scale-105" mode="icon" />
+                    {/* Logo Desktop (Completa) */}
+                    <Logo className="h-10 w-auto hidden md:block text-black transition-transform group-hover:scale-105" mode="full" />
                 </a>
                 <div className="hidden md:flex items-center gap-8 text-sm font-bold">
                     <a href="#solutions" onClick={(e) => handleScroll(e, 'solutions')} className="text-gray-600 dark:text-gray-300 hover:text-brand-600 transition-colors">Soluções</a>
@@ -434,210 +438,179 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
                                                         <path fill="#FFFFFF" fillRule="nonzero" d="M375.02 201.97c0,3.91 1.87,5.78 5.79,5.78l69.4 0c3.74,0 5.61,-1.87 5.61,-5.78l0 -19.05c0,-3.91 -1.87,-5.78 -5.61,-5.78l-36.23 0 37.59 -57.16c1.7,-2.55 2.89,-5.44 2.89,-9.02l0 -17.86c0,-3.91 -1.87,-5.78 -5.78,-5.78l-66 0c-3.91,0 -5.78,1.87 -5.78,5.78l0 19.05c0,3.91 1.87,5.78 5.78,5.78l33 0 -37.76 57.16c-1.7,2.55 -2.89,5.44 -2.89,9.01l0 17.86zm140.68 -16.5c-11.57,0 -16.67,-3.23 -18.03,-12.76l42.53 0c4.08,0 5.95,-1.53 5.95,-5.78l0 -9.87c0,-28.75 -12.25,-44.4 -38.95,-44.4 -26.88,0 -41.17,14.8 -41.17,47.97 0,34.7 15.31,48.82 46.61,48.82 10.72,0 19.73,-2.04 26.03,-4.76 3.06,-1.53 4.59,-3.06 4.08,-6.8l-1.7 -12.08c-0.51,-3.57 -3.06,-4.93 -6.63,-3.74 -4.76,1.7 -11.57,3.4 -18.71,3.4zm-8.17 -49.67c6.63,0 9.53,5.1 9.53,16.16l0 1.87 -20.24 0c0.85,-13.61 3.57,-18.03 10.72,-18.03zm-13.95 -33.34c-0.85,2.55 0.17,4.25 3.23,4.25l12.93 0c3.23,0 4.93,-0.68 6.98,-2.89l12.42 -12.93c1.87,-2.04 1.36,-5.61 -2.04,-5.61l-23.14 0c-3.23,0 -4.59,1.36 -5.44,3.74l-4.93 13.44z"/>
                                                         {/* Entregas - White */}
                                                         <path fill="#FFFFFF" fillRule="nonzero" d="M662.16 160.81c3.74,0 5.79,-2.04 5.79,-5.78l0 -16.84c0,-3.74 -2.04,-5.78 -5.79,-5.78l-32.15 0 0 -15.48 34.36 0c3.91,0 5.78,-1.87 5.78,-5.78l0 -18.03c0,-3.91 -1.87,-5.78 -5.78,-5.78l-62.26 0c-3.91,0 -5.79,1.87 -5.79,5.78l0 108.87c0,3.91 1.87,5.78 5.79,5.78l63.11 0c3.91,0 5.78,-1.87 5.78,-5.78l0 -18.03c0,-3.91 -1.87,-5.78 -5.78,-5.78l-35.21 0 0 -17.35 32.15 0zm100.02 -16.5c0,-20.07 -7.48,-31.64 -25.69,-31.64 -10.89,0 -18.71,5.1 -22.45,10.2l-1.19 -4.25c-0.68,-2.72 -2.04,-4.25 -5.96,-4.25l-18.88 0c-3.57,0 -5.27,1.7 -5.27,5.27l0 82.84c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.57,0 5.27,-1.7 5.27,-5.27l0 -48.14c0,-8.68 2.21,-13.44 8.68,-13.44 5.27,0 6.63,3.57 6.63,11.06l0 50.52c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.74,0 5.44,-1.7 5.44,-5.27l0 -58.18zm58.35 1.53c3.57,0 5.27,-1.7 5.27,-5.28l0 -15.48c0,-3.57 -1.7,-5.28 -5.27,-5.28l-10.38 0 0 -19.39c0,-3.4 -1.7,-5.1 -5.44,-5.1l-20.07 0c-3.74,0 -5.44,1.7 -5.44,5.1l0 19.39 -4.59 0c-3.57,0 -5.1,1.53 -5.1,5.1l0 15.82c0,3.57 1.53,5.1 5.1,5.1l4.42 0 0 33.85c0,22.12 7.99,29.26 28.41,29.26 5.61,0 10.55,-0.51 13.78,-1.36 3.06,-0.85 4.59,-2.21 4.59,-5.44l0 -15.14c0,-3.57 -1.7,-5.1 -4.93,-5.1 -1.19,0 -3.23,0.17 -4.08,0.17 -5.1,0 -6.47,-1.7 -6.47,-7.65l0 -28.58 10.21 0zm20.75 -31.47c-3.57,0 -5.27,1.7 -5.27,5.27l0 82.84c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.57,0 5.27,-1.7 5.27,-5.27l0 -40.83c0,-9.53 4.59,-14.97 13.44,-14.97 2.72,0 4.25,0.51 6.47,0.51 2.72,0 4.59,-1.02 4.59,-4.59l0 -23.98c0,-3.74 -1.36,-5.27 -5.44,-5.27 -9.7,0 -16.5,7.31 -19.56,13.44l-1.19 -7.49c-0.51,-3.4 -1.7,-4.93 -5.78,-4.93l-19.22 0zm107.17 71.1c-11.57,0 -16.67,-3.23 -18.03,-12.76l42.53 0c4.08,0 5.95,-1.53 5.95,-5.78l0 -9.87c0,-28.75 -12.25,-44.4 -38.95,-44.4 -26.88,0 -41.17,14.8 -41.17,47.97 0,34.7 15.31,48.82 46.61,48.82 10.72,0 19.73,-2.04 26.03,-4.76 3.06,-1.53 4.59,-3.06 4.08,-6.8l-1.7 -12.08c-0.51,-3.57 -3.06,-4.93 -6.63,-3.74 -4.76,1.7 -11.57,3.4 -18.71,3.4zm-8.17 -49.67c6.63,0 9.53,5.1 9.53,16.16l0 1.87 -20.24 0c0.85,-13.61 3.57,-18.03 10.72,-18.03zm97.64 18.2c0,11.91 -2.55,17.69 -8.85,17.69 -6.47,0 -8.34,-5.78 -8.34,-17.69 0,-11.74 2.04,-17.35 8.34,-17.35 6.29,0 8.85,5.61 8.85,17.35zm31.13 -34.36c0,-3.57 -1.7,-5.27 -5.44,-5.27l-17.52 0c-3.74,0 -5.27,1.53 -5.96,4.25l-1.02 3.74c-3.57,-4.93 -10.38,-9.53 -20.41,-9.53 -18.54,0 -30.11,11.06 -30.11,41.17 0,29.77 10.38,41 29.94,41 9.87,0 16.67,-3.06 20.24,-8.16l0 3.57c0,9.53 -4.77,13.61 -16.33,13.61 -8.17,0 -15.82,-2.04 -20.07,-3.23 -3.91,-1.19 -6.12,0.17 -6.63,3.74l-1.7 12.76c-0.51,3.91 1.02,5.28 4.08,6.8 5.61,2.55 17.86,4.08 28.24,4.08 28.92,0 42.7,-11.4 42.7,-36.74l0 -71.79zm87.95 23.3c0,-20.75 -11.57,-30.11 -37.6,-30.11 -11.06,0 -22.96,2.21 -30.11,4.93 -3.06,1.02 -4.42,2.89 -3.91,6.3l2.04 14.12c0.51,3.57 3.06,4.76 6.63,3.74 4.77,-1.53 12.08,-3.74 20.24,-3.74 8.17,0 11.74,2.04 11.74,7.66l0 4.08c-29.26,0.51 -46.78,4.25 -46.78,30.62 0,19.56 11.06,28.24 25.35,28.24 12.42,0 19.39,-4.42 23.13,-9.01l1.02 3.74c0.68,2.72 2.21,4.25 5.96,4.25l16.84 0c3.74,0 5.44,-1.7 5.44,-5.27l0 -59.54zm-30.96 32.15c0,7.31 -1.7,12.25 -9.01,12.25 -5.1,0 -7.31,-3.57 -7.31,-9.19 0,-9.19 3.91,-11.06 16.33,-11.4l0 8.34zm108.7 6.29c0,-17.52 -9.01,-23.64 -22.28,-29.43 -8.67,-3.74 -14.29,-5.78 -14.29,-9.69 0,-3.57 3.74,-4.59 9.7,-4.59 5.61,0 11.4,1.19 14.63,2.04 3.57,0.85 5.78,-0.51 6.12,-3.74l1.53 -13.78c0.51,3.57 -0.68,-5.1 -3.91,-6.29 -4.93,-1.7 -14.63,-3.23 -24.16,-3.23 -23.3,0 -35.38,8.16 -35.38,28.07 0,21.09 11.74,25.68 23.82,30.62 8.17,3.4 12.76,5.1 12.76,8.68 0,3.4 -5.1,4.25 -11.4,4.25 -6.8,0 -12.93,-1.19 -16.33,-2.38 -3.91,-1.19 -6.12,0.34 -6.46,3.57l-1.53 13.95c-0.51,3.57 0.68,5.1 3.91,6.29 5.61,1.87 15.14,3.74 25.86,3.74 19.22,0 37.42,-4.59 37.42,-28.07z"/>
+                                                        {/* Caminho 4: Detalhe interno da caixa ("raio") */}
+                                                        <path fill="#ED2B05" d="M10240.99 10130.51l0 3809.72 816.14 -465.19c170.05,-96.98 388.6,-37.29 485.43,132.93 96.98,170.22 37.12,388.26 -133.1,485.24l-898.76 512.35c-182.42,103.99 -387.93,161.85 -592.25,166.03 -7.21,1.17 -20.24,1.83 -33.13,1.83 -13.03,0 -26.09,-0.67 -33.1,-1.83 -204.15,-4.02 -410.5,-62.04 -592.75,-166.2l-3145.39 -1797.35c-389.43,-222.56 -628.54,-638.08 -628.54,-1086.19l0 -3594.67c0,-447.95 239.28,-863.8 628.54,-1086.36l3145.39 -1797.35c190.46,-108.84 406.31,-167.2 625.85,-167.2 219.4,0 435.42,58.52 625.88,167.2l3145.39 1797.35c389.26,222.56 628.54,638.41 628.54,1086.36l0 898.59c0,195.95 -159.69,355.83 -355.66,355.83 -196.14,0 -355.99,-159.69 -355.99,-355.83l0 -808.13 -1463.09 839.4c-15.05,11.03 -35.93,23.23 -52.84,30.25l-1816.56 1043.22zm2340.45 1986.78l1545.35 -1545.68c138.78,-138.78 364.7,-138.95 503.48,0.17 138.28,138.45 138.45,364.7 0,503.15l-1797.35 1797.16c-138.78,138.78 -364.51,138.78 -503.31,0l-898.73 -898.76c-138.62,-138.78 -138.45,-364.67 0.17,-503.29 138.78,-138.62 364.67,-138.62 503.29,0l647.11 647.26zm-3051.91 -1986.78l-3332.33 -1912.87 0 3504.21c0,192.62 102.33,372.71 269.86,468.36l3062.47 1749.53 0 -3809.22zm1661.06 -1365.59l-3327.31 -1903.86 -1303.07 744.42 3325.12 1908.85 1305.26 -749.42zm715.15 -410.33l1304.74 -749.11 -3052.41 -1744.01c-82.95,-47.49 -177.09,-73.55 -272.74,-73.55 -95.64,0 -189.77,26.06 -272.71,73.55l-1032.69 589.92 3325.81 1903.19z"/>
                                                     </g>
                                                   </svg>
                                             </div>
-                                            <div className="h-6 w-32 bg-white/20 rounded mb-2"></div>
-                                            <div className="h-4 w-20 bg-white/20 rounded"></div>
+                                            <h3 className="font-bold text-lg mb-1">R$ 1.450,00</h3>
+                                            <p className="text-[10px] text-brand-100 opacity-80">Saldo Disponível</p>
                                         </div>
-                                        <div className="p-4 space-y-3">
-                                            <div className="h-24 bg-white rounded-2xl shadow-sm"></div>
-                                            <div className="h-24 bg-white rounded-2xl shadow-sm"></div>
-                                            <div className="h-24 bg-white rounded-2xl shadow-sm"></div>
+                                        <div className="p-4 space-y-4">
+                                            <div className="h-20 bg-gray-100 rounded-2xl"></div>
+                                            <div className="space-y-2">
+                                                <div className="h-4 bg-gray-100 rounded w-3/4"></div>
+                                                <div className="h-4 bg-gray-100 rounded w-1/2"></div>
+                                            </div>
+                                            <div className="h-32 bg-gray-100 rounded-2xl mt-4"></div>
                                         </div>
-                                        <div className="mt-auto m-4 h-16 bg-white rounded-full shadow-lg flex justify-around items-center px-6">
+                                        {/* Bottom Navigation Mockup */}
+                                        <div className="mt-auto h-16 bg-white border-t border-gray-100 flex justify-around items-center px-6">
+                                            <div className="w-6 h-6 bg-brand-600 rounded-full"></div>
                                             <div className="w-6 h-6 bg-gray-200 rounded-full"></div>
                                             <div className="w-6 h-6 bg-gray-200 rounded-full"></div>
                                             <div className="w-6 h-6 bg-gray-200 rounded-full"></div>
                                         </div>
                                     </div>
+                                    
+                                    {/* Reflection Overlay */}
+                                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none rounded-[2rem]"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                {/* Benefits Grid */}
-                <section id="benefits" className="py-24 px-4 bg-white dark:bg-gray-950">
-                    <div className="max-w-7xl mx-auto">
-                        <SectionTitle title="Vantagens Exclusivas" subtitle="Ferramentas pensadas para impulsionar seus resultados." />
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Benefits Section */}
+                <section id="benefits" className="py-24 px-4 bg-white dark:bg-gray-900">
+                    <div className="max-w-6xl mx-auto">
+                        <SectionTitle title="Por que escolher o Zé?" subtitle="Vantagens pensadas para quem precisa de agilidade e confiança." />
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                             <BenefitCard 
-                                icon={<BarChart3 className="w-6 h-6"/>} 
-                                title="Analytics Completo" 
-                                description="Acompanhe métricas de desempenho e faturamento com gráficos intuitivos." 
-                                colorClass="from-purple-500 to-indigo-600 bg-purple-500"
-                            />
-                            <BenefitCard 
-                                icon={<Map className="w-6 h-6"/>} 
-                                title="Rotas Inteligentes" 
-                                description="Algoritmo de roteirização que economiza tempo e combustível." 
-                                colorClass="from-blue-500 to-cyan-500 bg-blue-500"
+                                icon={<Zap className="w-8 h-8"/>}
+                                title="Ultra Rápido"
+                                description="Conexão instantânea entre lojas e entregadores. Otimização de rotas para entregas em tempo recorde."
+                                colorClass="from-yellow-400 to-orange-500"
                             />
                             <BenefitCard 
-                                icon={<Shield className="w-6 h-6"/>} 
-                                title="Segurança Total" 
-                                description="Verificação de documentos e monitoramento em tempo real." 
-                                colorClass="from-green-500 to-emerald-600 bg-green-500"
+                                icon={<Shield className="w-8 h-8"/>}
+                                title="Segurança Total"
+                                description="Verificação rigorosa de parceiros, monitoramento em tempo real e suporte dedicado para qualquer imprevisto."
+                                colorClass="from-blue-500 to-cyan-500"
                             />
                             <BenefitCard 
-                                icon={<Bell className="w-6 h-6"/>} 
-                                title="Alertas Instantâneos" 
-                                description="Não perca nenhuma oportunidade com nosso sistema de notificações." 
-                                colorClass="from-orange-500 to-red-500 bg-orange-500"
-                            />
-                            <BenefitCard 
-                                icon={<Headphones className="w-6 h-6"/>} 
-                                title="Suporte 24h" 
-                                description="Conte com nosso assistente virtual e equipe humana sempre que precisar." 
-                                colorClass="from-pink-500 to-rose-500 bg-pink-500"
-                            />
-                            <BenefitCard 
-                                icon={<Star className="w-6 h-6"/>} 
-                                title="Programa de Níveis" 
-                                description="Benefícios exclusivos para parceiros com alto desempenho." 
-                                colorClass="from-yellow-400 to-amber-500 bg-yellow-400"
-                            />
-                            <BenefitCard
-                                icon={<Wallet className="w-6 h-6"/>}
-                                title="Gestão Financeira"
-                                description="Controle total de fluxo de caixa, extratos e carteira digital integrada."
-                                colorClass="from-emerald-500 to-teal-600 bg-emerald-500"
-                            />
-                            <BenefitCard
-                                icon={<Megaphone className="w-6 h-6"/>}
-                                title="Marketing Digital"
-                                description="Crie cartões de visita e artes profissionais para divulgar seu serviço."
-                                colorClass="from-pink-500 to-fuchsia-600 bg-pink-500"
-                            />
-                            <BenefitCard
-                                icon={<ShoppingBag className="w-6 h-6"/>}
-                                title="Catálogo Digital"
-                                description="Venda produtos e serviços diretamente pelo app com gestão de estoque."
-                                colorClass="from-orange-500 to-amber-600 bg-orange-500"
-                            />
-                            <BenefitCard
-                                icon={<Users className="w-6 h-6"/>}
-                                title="Gestão de Equipe"
-                                description="Lojistas podem gerenciar múltiplos entregadores e acompanhar métricas."
-                                colorClass="from-blue-500 to-indigo-600 bg-blue-500"
-                            />
-                            <BenefitCard
-                                icon={<Bot className="w-6 h-6"/>}
-                                title="Assistente Virtual"
-                                description="Tire dúvidas e obtenha insights do seu negócio com nossa IA integrada."
-                                colorClass="from-violet-500 to-purple-600 bg-violet-500"
-                            />
-                            <BenefitCard
-                                icon={<Navigation className="w-6 h-6"/>}
-                                title="Rastreamento em Tempo Real"
-                                description="Acompanhe entregas ao vivo com atualizações de status precisas."
-                                colorClass="from-cyan-500 to-sky-600 bg-cyan-500"
+                                icon={<Wallet className="w-8 h-8"/>}
+                                title="Taxas Justas"
+                                description="Modelo de negócio transparente. Sem surpresas no final do mês, com repasses rápidos e claros."
+                                colorClass="from-green-500 to-emerald-500"
                             />
                         </div>
                     </div>
                 </section>
 
-                {/* Platform News Section */}
+                {/* News Section */}
                 {platformNews.length > 0 && (
-                    <section id="news" className="py-24 px-4 bg-gray-100/50 dark:bg-gray-900">
-                        <div className="max-w-7xl mx-auto">
-                            <SectionTitle title="Novidades da Plataforma" subtitle="Fique por dentro das últimas funcionalidades e melhorias que preparamos para você." />
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <section className="py-24 px-4 bg-gray-50 dark:bg-gray-950">
+                        <div className="max-w-6xl mx-auto">
+                            <SectionTitle title="Novidades" subtitle="Fique por dentro das últimas atualizações da plataforma." />
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                 {platformNews.map((item, index) => (
                                     <NewsCard key={item.id} item={item} index={index} />
                                 ))}
-                            </div>
-                            <div className="text-center mt-16">
-                                <Button 
-                                    variant="outline" 
-                                    className="py-3 px-8 text-base rounded-full border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 shadow-sm"
-                                    onClick={(e) => handleScroll(e, 'cadastro')}
-                                >
-                                    Ver mais detalhes <ArrowRight className="w-4 h-4 ml-2"/>
-                                </Button>
                             </div>
                         </div>
                     </section>
                 )}
 
-                {/* Final CTA */}
-                <section id="cadastro" className="py-24 px-4 bg-gray-50 dark:bg-gray-900 text-center">
-                    <div className="max-w-3xl mx-auto">
-                        <h2 className="text-4xl font-black text-gray-900 dark:text-white mb-6">Comece agora mesmo.</h2>
-                        <p className="text-xl text-gray-500 dark:text-gray-400 mb-10">Junte-se a milhares de parceiros que estão transformando a logística urbana.</p>
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                            <Button onClick={() => onSignupClick('STORE_PARTNER')} className="w-full sm:w-auto py-4 px-12 text-lg rounded-full bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-500/20">
-                                Sou Lojista
+                {/* CTA Section */}
+                <section id="cadastro" className="py-24 px-4 bg-brand-600 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    <div className="max-w-4xl mx-auto text-center relative z-10">
+                        <h2 className="text-4xl md:text-5xl font-black text-white mb-8">Pronto para começar?</h2>
+                        <p className="text-xl text-brand-100 mb-12 max-w-2xl mx-auto">
+                            Junte-se a milhares de lojas e entregadores que já estão transformando a logística urbana.
+                        </p>
+                        <div className="flex flex-col sm:flex-row justify-center gap-6">
+                            <Button 
+                                onClick={() => onSignupClick('STORE_PARTNER')}
+                                className="bg-white text-brand-600 hover:bg-gray-100 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-brand-900/20 transform hover:-translate-y-1 transition-all border-none"
+                            >
+                                <Store className="w-6 h-6 mr-3" />
+                                Cadastrar Minha Loja
                             </Button>
-                            <Button onClick={() => onSignupClick('DELIVERY_PARTNER')} variant="success" className="w-full sm:w-auto py-4 px-12 text-lg rounded-full shadow-xl shadow-green-500/20">
-                                Sou Entregador
+                            <Button 
+                                onClick={() => onSignupClick('DELIVERY_PARTNER')}
+                                className="bg-gray-900 text-white hover:bg-gray-800 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-gray-900/20 transform hover:-translate-y-1 transition-all border-none"
+                            >
+                                <Bike className="w-6 h-6 mr-3" />
+                                Quero Entregar
                             </Button>
                         </div>
                     </div>
                 </section>
             </main>
 
-            {/* Elegant Footer */}
-            <footer className="bg-gray-950 text-white pt-20 pb-10 border-t border-gray-900">
-                <div className="max-w-7xl mx-auto px-4 md:px-8">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+            <footer className="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 pt-16 pb-8 px-4">
+                <div className="max-w-7xl mx-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
                         <div className="col-span-1 md:col-span-1">
-                            <div className="flex items-center gap-2 mb-6 text-white">
-                                <Logo className="h-10 w-auto text-white" />
+                            <div className="flex items-center gap-2 mb-6">
+                                <Logo className="h-8 w-auto text-brand-600" />
                             </div>
-                            <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                                Conectando negócios e entregadores através de tecnologia e eficiência.
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                Conectando a cidade, uma entrega de cada vez. Tecnologia e eficiência para o seu negócio.
                             </p>
                             <div className="flex gap-4">
-                                {socialLinks.instagram && <a href={socialLinks.instagram} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white transition-colors"><Instagram className="w-5 h-5"/></a>}
-                                {socialLinks.facebook && <a href={socialLinks.facebook} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white transition-colors"><Facebook className="w-5 h-5"/></a>}
-                                {socialLinks.twitter && <a href={socialLinks.twitter} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white transition-colors"><Twitter className="w-5 h-5"/></a>}
-                                {socialLinks.linkedin && <a href={socialLinks.linkedin} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-white transition-colors"><Linkedin className="w-5 h-5"/></a>}
+                                {socialLinks.instagram && <a href={socialLinks.instagram} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-brand-600 transition-colors"><Instagram className="w-5 h-5" /></a>}
+                                {socialLinks.facebook && <a href={socialLinks.facebook} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-brand-600 transition-colors"><Facebook className="w-5 h-5" /></a>}
+                                {socialLinks.twitter && <a href={socialLinks.twitter} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-brand-600 transition-colors"><Twitter className="w-5 h-5" /></a>}
+                                {socialLinks.linkedin && <a href={socialLinks.linkedin} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-brand-600 transition-colors"><Linkedin className="w-5 h-5" /></a>}
                             </div>
                         </div>
                         
                         <div>
-                            <h4 className="font-bold text-white mb-6">Produto</h4>
-                            <ul className="space-y-4 text-sm text-gray-400">
-                                <li><a href="#solutions" onClick={(e) => handleScroll(e, 'solutions')} className="hover:text-brand-500 transition-colors">Para Lojas</a></li>
-                                <li><a href="#solutions" onClick={(e) => handleScroll(e, 'solutions')} className="hover:text-brand-500 transition-colors">Para Entregadores</a></li>
-                                <li><a href="#app" onClick={(e) => handleScroll(e, 'app')} className="hover:text-brand-500 transition-colors">Aplicativo Mobile</a></li>
-                                <li><a href="#benefits" onClick={(e) => handleScroll(e, 'benefits')} className="hover:text-brand-500 transition-colors">Funcionalidades</a></li>
+                            <h4 className="font-bold text-gray-900 dark:text-white mb-6">Empresa</h4>
+                            <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
+                                <li><button onClick={() => setCompanyModal('about')} className="hover:text-brand-600 transition-colors">Sobre Nós</button></li>
+                                <li><button onClick={() => setCompanyModal('careers')} className="hover:text-brand-600 transition-colors">Carreiras</button></li>
+                                <li><button onClick={() => setCompanyModal('press')} className="hover:text-brand-600 transition-colors">Imprensa</button></li>
+                                <li><button onClick={() => setCompanyModal('contact')} className="hover:text-brand-600 transition-colors">Contato</button></li>
                             </ul>
                         </div>
 
                         <div>
-                            <h4 className="font-bold text-white mb-6">Empresa</h4>
-                            <ul className="space-y-4 text-sm text-gray-400">
-                                <li><button onClick={() => setCompanyModal('about')} className="hover:text-brand-500 transition-colors text-left">Sobre Nós</button></li>
-                                <li><button onClick={() => setCompanyModal('careers')} className="hover:text-brand-500 transition-colors text-left">Carreiras</button></li>
-                                <li><button onClick={() => setCompanyModal('press')} className="hover:text-brand-500 transition-colors text-left">Imprensa</button></li>
-                                <li><button onClick={() => setCompanyModal('contact')} className="hover:text-brand-500 transition-colors text-left">Contato</button></li>
+                            <h4 className="font-bold text-gray-900 dark:text-white mb-6">Legal</h4>
+                            <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
+                                <li><button onClick={() => setShowTermsModal(true)} className="hover:text-brand-600 transition-colors">Termos de Uso</button></li>
+                                <li><button onClick={() => setShowPrivacyModal(true)} className="hover:text-brand-600 transition-colors">Política de Privacidade</button></li>
+                                <li><button onClick={() => setShowCookieModal(true)} className="hover:text-brand-600 transition-colors">Cookies</button></li>
                             </ul>
                         </div>
 
                         <div>
-                            <h4 className="font-bold text-white mb-6">Legal</h4>
-                            <ul className="space-y-4 text-sm text-gray-400">
-                                <li><button onClick={() => setShowTermsModal(true)} className="hover:text-brand-500 transition-colors text-left">Termos de Uso</button></li>
-                                <li><button onClick={() => setShowPrivacyModal(true)} className="hover:text-brand-500 transition-colors text-left">Política de Privacidade</button></li>
-                                <li><button onClick={() => setShowCookieModal(true)} className="hover:text-brand-500 transition-colors text-left">Cookies</button></li>
-                            </ul>
+                            <h4 className="font-bold text-gray-900 dark:text-white mb-6">Baixe o App</h4>
+                            <div className="space-y-3">
+                                <button className="w-full bg-black text-white p-3 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-800 transition-colors">
+                                    <Smartphone className="w-5 h-5" />
+                                    <div className="text-left">
+                                        <div className="text-[10px] uppercase">Disponível no</div>
+                                        <div className="text-sm font-bold leading-none">Google Play</div>
+                                    </div>
+                                </button>
+                                <button className="w-full bg-black text-white p-3 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-800 transition-colors">
+                                    <Smartphone className="w-5 h-5" />
+                                    <div className="text-left">
+                                        <div className="text-[10px] uppercase">Baixar na</div>
+                                        <div className="text-sm font-bold leading-none">App Store</div>
+                                    </div>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
-                    <div className="pt-8 border-t border-gray-900 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
-                        <p>&copy; {new Date().getFullYear()} Zé Entregas. Todos os direitos reservados.</p>
-                        <p>Feito com ❤️ para o Brasil.</p>
+                    <div className="pt-8 border-t border-gray-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-400 text-center md:text-left">
+                        <p>© {new Date().getFullYear()} Zé Entregas. Todos os direitos reservados.</p>
+                        <p>Feito com 🧡 para o corre.</p>
                     </div>
                 </div>
             </footer>
 
+            {/* Modals */}
             {showTermsModal && <TermsOfService onClose={() => setShowTermsModal(false)} />}
             {showPrivacyModal && <PrivacyPolicy onClose={() => setShowPrivacyModal(false)} />}
             {showCookieModal && <CookiePreferencesModal onClose={() => setShowCookieModal(false)} />}
-            <CompanyModal type={companyModal} onClose={() => setCompanyModal(null)} data={companyInfo} />
+            {companyModal && <CompanyModal type={companyModal} onClose={() => setCompanyModal(null)} data={companyInfo} />}
         </div>
     );
 };

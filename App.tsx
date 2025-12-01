@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Save, Minus, Sun, Moon, Bell, BellOff, Package, Map, Clock, X, Search, RotateCcw, Plus, DollarSign, Gauge, Play, Calculator, Settings, Download, Upload, Target, Trophy, User, BarChart3, TrendingDown, TrendingUp, Share2, Wrench, Fuel, CreditCard, Wallet, MapPin, ShieldAlert, Info, Shield, ShoppingCart, Menu, LogOut, FileText, Cloud, Megaphone, Siren, CheckCircle, History, Bot, AlertTriangle, Trash2, Tag, Headphones, ChevronRight, Bike, Power, Users, Banknote, ListOrdered, UserCheck, Smartphone, Link2, Star, Flame, Truck, Loader2, ShoppingBag, ChevronUp, ChevronDown, Rocket, Lock, LayoutDashboard, Newspaper, ShieldCheck, Gift, ListTodo, HelpCircle, UserCog, LifeBuoy, Wand2, IdCard, Globe, Cpu, Ban, Landmark, MessageSquare, Zap, BookOpen } from 'lucide-react';
+import { Save, Minus, Sun, Moon, Bell, BellOff, Package, Map, Clock, X, Search, RotateCcw, Plus, DollarSign, Gauge, Play, Calculator, Settings, Download, Upload, Target, Trophy, User, BarChart3, TrendingDown, TrendingUp, Share2, Wrench, Fuel, CreditCard, Wallet, MapPin, ShieldAlert, Info, Shield, ShoppingCart, Menu, LogOut, FileText, Cloud, Megaphone, Siren, CheckCircle, History, Bot, AlertTriangle, Trash2, Tag, Headphones, ChevronRight, Bike, Power, Users, Banknote, ListOrdered, UserCheck, Smartphone, Link2, Star, Flame, Truck, Loader2, ShoppingBag, ChevronUp, ChevronDown, Rocket, Lock, LayoutDashboard, Newspaper, ShieldCheck, Gift, ListTodo, HelpCircle, UserCog, LifeBuoy, Wand2, IdCard, Globe, Cpu, Ban, Landmark, MessageSquare, Zap, BookOpen, Store } from 'lucide-react';
 import { Button } from './components/Button';
 import { HistoryTable } from './components/HistoryTable';
 import { AddressBook } from './components/AddressBook';
@@ -60,7 +60,12 @@ interface AppProps {
 // Define estritamente o que cada papel pode ver.
 const ROLE_ACCESS: Record<string, ActiveTab[]> = {
     admin: [
-        'admin', 'profile', 'support'
+        // Admin Core
+        'admin', 'profile', 'support', 'shop', 'assistant',
+        // Store View Access
+        'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_finance_panel',
+        // Partner/User View Access
+        'partner', 'driver_marketing', 'map', 'deliveries', 'local_history', 'reports', 'addresses', 'tasks', 'heatmap'
     ],
     store_partner: [
         'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 
@@ -221,13 +226,16 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
         // Load Notifications from Cloud
         cloud.getNotifications().then(setNotifications);
         
-        // Check Super Store Status if Store Partner
-        if (safeRole === 'store_partner') {
+        // Check Super Store Status if Store Partner OR Admin (Admins can monitor super store features)
+        if (safeRole === 'store_partner' || safeRole === 'admin') {
             const user = await cloud.getClient()?.auth.getUser();
             if (user?.data.user) {
                 const profile = await cloud.getClient()?.from('user_profiles').select('is_super_store').eq('id', user.data.user.id).single();
                 if (profile?.data) {
                     setIsSuperStore(profile.data.is_super_store);
+                } else if (safeRole === 'admin') {
+                    // Admins always see Super Store features for monitoring
+                    setIsSuperStore(true);
                 }
             }
         }
@@ -480,7 +488,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
           case 'support': return <SupportPage onBack={() => setActiveTab('deliveries')} onNavigateToChat={() => setActiveTab('assistant')} />;
           
           // History Views
-          case 'history': return <OrderHistory userRole={safeRole as 'store_partner' | 'delivery_partner'} />;
+          case 'history': return <OrderHistory userRole={safeRole === 'store_partner' ? 'store_partner' : 'delivery_partner'} />;
           case 'local_history': return <HistoryTable history={history} onClear={() => {}} onExport={() => {}} dateFilter={dateFilter} setDateFilter={setDateFilter} expenseFilter={expenseFilter} setExpenseFilter={setExpenseFilter} onUpdateHistory={setHistoryState} />;
           
           case 'reports': return <Reports history={history} todayStats={{ value: getDailySummary().profit, count: getDailySummary().deliveryCount, km: getDailySummary().km }} />;
@@ -504,7 +512,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
           
           // Partner Specific
           case 'partner': return <PartnerArea />;
-          case 'driver_marketing': return <DriverMarketing userRole={safeRole as UserRole} />;
+          case 'driver_marketing': return <DriverMarketing userRole={safeRole === 'delivery_partner' ? 'delivery_partner' : 'user'} />;
           
           case 'deliveries':
           default:
@@ -648,8 +656,8 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
               return (
                   <div className="animate-in fade-in pb-20">
-                      {safeRole === 'delivery_partner' && (
-                          <PartnerDashboardWidgets onNavigate={setActiveTab} userRole={safeRole as UserRole} />
+                      {(safeRole === 'delivery_partner' || safeRole === 'admin') && (
+                          <PartnerDashboardWidgets onNavigate={setActiveTab} userRole={safeRole === 'admin' ? 'delivery_partner' : safeRole as UserRole} />
                       )}
                       
                       <div className={safeRole === 'delivery_partner' ? 'mt-6' : ''}>
@@ -669,7 +677,9 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 <button onClick={() => setMenuOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-brand-700 dark:hover:bg-gray-800 transition-colors">
                     <Menu className="w-6 h-6 text-white dark:text-gray-200" />
                 </button>
-                <Logo className="h-8 w-auto" variant="full-white" />
+                {/* Logo Responsiva: Ícone no Mobile, Completa no Desktop */}
+                <Logo className="h-8 w-auto md:hidden" variant="full-white" mode="icon" />
+                <Logo className="h-8 w-auto hidden md:block" variant="full-white" mode="full" />
             </div>
             <div className="flex items-center gap-2">
                 <NotificationsBell 
@@ -689,7 +699,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                   <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                       <div className="flex flex-col">
                           <h2 className="font-black text-xl text-gray-900 dark:text-white flex items-center gap-2">
-                              <Logo className="h-6 w-auto" /> Menu
+                              <Logo className="h-6 w-auto" mode="icon"/> Menu
                           </h2>
                           <div className="mt-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs font-bold text-brand-600 w-fit uppercase">
                               {safeRole === 'admin' ? 'Administrador' : safeRole === 'store_partner' ? 'Lojista' : safeRole === 'delivery_partner' ? 'Parceiro' : 'Usuário'}
@@ -748,7 +758,10 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                       <MapPin className="w-5 h-5"/> Cidades
                                   </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                      <ShoppingBag className="w-5 h-5"/> Categorias da Loja
+                                      <ShoppingBag className="w-5 h-5"/> Gestão da Loja
+                                  </button>
+                                  <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                      <Store className="w-5 h-5"/> Acessar Loja (Visualização)
                                   </button>
                                   <button onClick={() => { setActiveTab('admin'); setActiveAdminSubTab('levels'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                       <Star className="w-5 h-5"/> Níveis de Parceiro
@@ -807,9 +820,11 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                           </div>
                       )}
 
-                      {/* === STORE PARTNER MENU === */}
-                      {safeRole === 'store_partner' && (
+                      {/* === STORE PARTNER MENU (Visible for Admins too) === */}
+                      {(safeRole === 'store_partner' || safeRole === 'admin') && (
                           <>
+                            {safeRole === 'admin' && <div className="border-t border-gray-200 dark:border-gray-700 my-4 pt-4 px-4 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase text-center">--- VISÃO LOJISTA ---</div>}
+                            
                             <div className="space-y-1">
                                 <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Operacional</p>
                                 {canAccess('wallet') && (
@@ -848,8 +863,8 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                 )}
                             </div>
 
-                            {/* Super Store Exclusive */}
-                            {isSuperStore && (
+                            {/* Super Store Exclusive (Or Admin View) */}
+                            {(isSuperStore || safeRole === 'admin') && (
                                 <div className="space-y-1 mt-4">
                                     <p className="px-4 text-xs font-bold text-yellow-600 dark:text-yellow-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Star className="w-3 h-3 fill-current"/> Super Loja</p>
                                     {canAccess('store_reports') && (
@@ -865,30 +880,35 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                 </div>
                             )}
 
-                            <div className="space-y-1 mt-4">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta</p>
-                                {canAccess('profile') && (
-                                    <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <User className="w-5 h-5"/> Meu Perfil
-                                    </button>
-                                )}
-                                {canAccess('store_settings') && (
-                                    <button onClick={() => { setActiveTab('store_settings'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Settings className="w-5 h-5"/> Configurações
-                                    </button>
-                                )}
-                                {canAccess('support') && (
-                                    <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Headphones className="w-5 h-5"/> Suporte
-                                    </button>
-                                )}
-                            </div>
+                            {/* Only show these common links if user is strictly a store_partner, otherwise Admin has them in main menu */}
+                            {safeRole === 'store_partner' && (
+                                <div className="space-y-1 mt-4">
+                                    <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta</p>
+                                    {canAccess('profile') && (
+                                        <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                            <User className="w-5 h-5"/> Meu Perfil
+                                        </button>
+                                    )}
+                                    {canAccess('store_settings') && (
+                                        <button onClick={() => { setActiveTab('store_settings'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                            <Settings className="w-5 h-5"/> Configurações
+                                        </button>
+                                    )}
+                                    {canAccess('support') && (
+                                        <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                            <Headphones className="w-5 h-5"/> Suporte
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                           </>
                       )}
                       
-                      {/* === DELIVERY PARTNER MENU === */}
-                      {safeRole === 'delivery_partner' && (
+                      {/* === DELIVERY PARTNER MENU (Visible for Admins too) === */}
+                      {(safeRole === 'delivery_partner' || safeRole === 'admin') && (
                           <>
+                            {safeRole === 'admin' && <div className="border-t border-gray-200 dark:border-gray-700 my-4 pt-4 px-4 text-xs font-bold text-green-600 dark:text-green-400 uppercase text-center">--- VISÃO PARCEIRO ---</div>}
+
                             <div className="space-y-1 bg-green-50 dark:bg-green-900/10 rounded-xl p-2 border border-green-100 dark:border-green-900/30 mb-4">
                                 <p className="px-2 text-xs font-bold text-green-600 dark:text-green-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Bike className="w-3 h-3 fill-current"/> Plataforma</p>
                                 {canAccess('partner') && (
@@ -940,340 +960,4 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                     </button>
                                 )}
                                 {canAccess('map') && (
-                                    <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Map className="w-5 h-5"/> Mapa Offline
-                                    </button>
-                                )}
-                                <button onClick={() => { setShowBlitzModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
-                                    <Zap className="w-5 h-5"/> Alerta Relâmpago
-                                </button>
-                                <button onClick={() => { setShowRouteCalc(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Calculator className="w-5 h-5"/> Calculadora de Rota
-                                </button>
-                                <button onClick={() => { setShowFuelCalc(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Fuel className="w-5 h-5"/> Calc. Combustível
-                                </button>
-                                <button onClick={() => { setShowMaintenance(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Wrench className="w-5 h-5"/> Manutenção
-                                </button>
-                                {canAccess('shop') && (
-                                    <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <ShoppingBag className="w-5 h-5"/> Loja de Peças
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="space-y-1 mt-4">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta & Ajuda</p>
-                                {canAccess('profile') && (
-                                    <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <User className="w-5 h-5"/> Meu Perfil
-                                    </button>
-                                )}
-                                {canAccess('assistant') && (
-                                    <button onClick={() => { setActiveTab('assistant'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Bot className="w-5 h-5"/> Assistente IA
-                                    </button>
-                                )}
-                                {canAccess('support') && (
-                                    <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Headphones className="w-5 h-5"/> Suporte
-                                    </button>
-                                )}
-                            </div>
-                          </>
-                      )}
-
-                      {/* === NORMAL USER MENU === */}
-                      {safeRole === 'user' && (
-                          <>
-                            <div className="space-y-1">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Gestão Diária</p>
-                                {canAccess('deliveries') && (
-                                    <button onClick={() => { setActiveTab('deliveries'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${activeTab === 'deliveries' ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400 font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
-                                        <LayoutDashboard className="w-5 h-5"/> Painel Principal
-                                    </button>
-                                )}
-                                {canAccess('local_history') && (
-                                    <button onClick={() => { setActiveTab('local_history'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <History className="w-5 h-5"/> Histórico
-                                    </button>
-                                )}
-                                {canAccess('reports') && (
-                                    <button onClick={() => { setActiveTab('reports'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <BarChart3 className="w-5 h-5"/> Relatórios
-                                    </button>
-                                )}
-                                {canAccess('addresses') && (
-                                    <button onClick={() => { setActiveTab('addresses'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <MapPin className="w-5 h-5"/> Agenda de Endereços
-                                    </button>
-                                )}
-                                {canAccess('tasks') && (
-                                    <button onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <ListTodo className="w-5 h-5"/> Lista de Tarefas
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="space-y-1 mt-4">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Ferramentas</p>
-                                {canAccess('map') && (
-                                    <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Map className="w-5 h-5"/> Mapa Offline
-                                    </button>
-                                )}
-                                <button onClick={() => { setShowBlitzModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
-                                    <Zap className="w-5 h-5"/> Alerta Relâmpago
-                                </button>
-                                <button onClick={() => { setShowRouteCalc(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Calculator className="w-5 h-5"/> Calculadora de Rota
-                                </button>
-                                <button onClick={() => { setShowFuelCalc(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Fuel className="w-5 h-5"/> Calc. Combustível
-                                </button>
-                                <button onClick={() => { setShowMaintenance(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                    <Wrench className="w-5 h-5"/> Manutenção
-                                </button>
-                                {canAccess('shop') && (
-                                    <button onClick={() => { setActiveTab('shop'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <ShoppingBag className="w-5 h-5"/> Loja de Peças
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="space-y-1 mt-4">
-                                <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conta & Ajuda</p>
-                                {canAccess('profile') && (
-                                    <button onClick={() => { setActiveTab('profile'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <User className="w-5 h-5"/> Meu Perfil
-                                    </button>
-                                )}
-                                {canAccess('assistant') && (
-                                    <button onClick={() => { setActiveTab('assistant'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Bot className="w-5 h-5"/> Assistente IA
-                                    </button>
-                                )}
-                                {canAccess('support') && (
-                                    <button onClick={() => { setActiveTab('support'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Headphones className="w-5 h-5"/> Suporte
-                                    </button>
-                                )}
-                            </div>
-                          </>
-                      )}
-
-                      <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
-                          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                              <LogOut className="w-5 h-5"/> Sair
-                          </button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-      <main className={`flex-1 pb-20 w-full mx-auto transition-all duration-300 ${activeTab === 'map' ? 'p-0' : 'px-4 pt-28 max-w-7xl'}`}>
-          {renderContent()}
-      </main>
-
-      <EmergencyModal isOpen={showEmergencyModal} onClose={() => setShowEmergencyModal(false)} />
-      {showSettingsModal && <NotificationSettings onClose={() => setShowSettingsModal(false)} />}
-      {showAboutModal && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm max-h-[80vh] overflow-y-auto">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold dark:text-white">Sobre</h3>
-                      <button onClick={() => setShowAboutModal(false)}><X className="w-5 h-5"/></button>
-                  </div>
-                  <AboutApp />
-              </div>
-          </div>
-      )}
-      {showPermissionModal && <PermissionModal onClose={() => setShowPermissionModal(false)} />}
-      
-      {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
-      {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
-      {showShareCard && daySummaryData && <ShareCard data={{ value: daySummaryData.profit, count: daySummaryData.count, km: daySummaryData.km, date: new Date().toLocaleDateString() }} onClose={() => setShowShareCard(false)} />}
-      {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
-      
-      {/* End Day Confirmation */}
-      {showEndDayConfirm && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm">
-                  <h3 className="font-bold text-lg mb-2 dark:text-white">Encerrar o dia?</h3>
-                  <p className="text-gray-500 mb-4">Isso salvará o histórico e limpará o painel para amanhã.</p>
-                  <div className="flex gap-3">
-                      <Button variant="outline" fullWidth onClick={() => setShowEndDayConfirm(false)}>Cancelar</Button>
-                      <Button fullWidth onClick={confirmEndDay}>Confirmar</Button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Day Summary Modal */}
-      {showDaySummary && daySummaryData && (
-          <ShareCard 
-              data={{
-                  value: daySummaryData.profit,
-                  count: daySummaryData.count,
-                  km: daySummaryData.km,
-                  date: new Date().toLocaleDateString()
-              }}
-              onClose={() => setShowDaySummary(false)}
-          />
-      )}
-
-      {showNotifications && (
-          <NotificationsPanel 
-              notifications={notifications} 
-              onMarkAsRead={(id) => {
-                  cloud.markNotificationAsRead(id);
-                  setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-              }}
-              onClose={() => setShowNotifications(false)}
-          />
-      )}
-
-      {/* Extra Modal */}
-      {showExtraModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
-                <h3 className="font-bold text-lg dark:text-white">Adicionar Entrega Extra</h3>
-                <div>
-                    <label className="text-xs font-bold text-gray-400">Valor (R$)</label>
-                    <input type="tel" value={extraValue} onChange={e => handleCurrencyMask(e, setExtraValue)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" autoFocus/>
-                </div>
-                <div>
-                    <label className="text-xs font-bold text-gray-400">KM (Opcional)</label>
-                    <input type="number" value={extraKm} onChange={e => setExtraKm(e.target.value)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" />
-                </div>
-                <div>
-                    <label className="text-xs font-bold text-gray-400">Descrição (Opcional)</label>
-                    <input type="text" value={extraDesc} onChange={e => setExtraDesc(e.target.value)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: Corrida particular" />
-                </div>
-                <div className="flex gap-3 pt-2">
-                    <Button variant="outline" fullWidth onClick={() => setShowExtraModal(false)}>Cancelar</Button>
-                    <Button fullWidth onClick={() => handleAddDelivery('extra')}>Adicionar</Button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* Expense Modal */}
-      {showExpenseModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
-                <h3 className="font-bold text-lg dark:text-white">Registrar Gasto</h3>
-                <div>
-                    <label className="text-xs font-bold text-gray-400">Valor (R$)</label>
-                    <input type="tel" value={expenseValue} onChange={e => handleCurrencyMask(e, setExpenseValue)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" autoFocus/>
-                </div>
-                <div>
-                    <label className="text-xs font-bold text-gray-400">Categoria</label>
-                    <CustomSelect 
-                        options={[
-                            { label: 'Combustível', value: 'fuel' },
-                            { label: 'Alimentação', value: 'food' },
-                            { label: 'Manutenção', value: 'maintenance' },
-                            { label: 'Outros', value: 'other' }
-                        ]}
-                        value={expenseCategory}
-                        onChange={(val: any) => setExpenseCategory(val)}
-                        className="mt-1"
-                    />
-                </div>
-                <div>
-                    <label className="text-xs font-bold text-gray-400">Descrição (Opcional)</label>
-                    <input type="text" value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: Almoço" />
-                </div>
-                <div className="flex gap-3 pt-2">
-                    <Button variant="outline" fullWidth onClick={() => setShowExpenseModal(false)}>Cancelar</Button>
-                    <Button fullWidth onClick={handleAddExpense} variant="danger">Registrar</Button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* Start Day Modal */}
-      {showStartModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
-                <h3 className="font-bold text-lg dark:text-white">Configurar Dia</h3>
-                <div>
-                    <label className="text-xs font-bold text-gray-400">Valor Fixo da Entrega (R$) (Opcional)</label>
-                    <input type="tel" value={startDayValue} onChange={e => handleCurrencyMask(e, setStartDayValue)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: 7,00" autoFocus/>
-                    <p className="text-[10px] text-gray-400 mt-1">Isso agiliza o lançamento de entregas padrão.</p>
-                </div>
-                <div>
-                    <label className="text-xs font-bold text-gray-400">Meta de Lucro (R$) (Opcional)</label>
-                    <input type="tel" value={startDayGoal} onChange={e => handleCurrencyMask(e, setStartDayGoal)} className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mt-1" placeholder="Ex: 150,00"/>
-                </div>
-                <div className="flex gap-3 pt-2">
-                    <Button variant="outline" fullWidth onClick={() => setShowStartModal(false)}>Cancelar</Button>
-                    <Button fullWidth onClick={handleStartDay}>Salvar e Começar</Button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* Lightning Alert Modal (Global) - Z-INDEX INCREASED TO 10000 */}
-      {showBlitzModal && (
-          <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-in fade-in">
-              <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                          <Zap className="w-6 h-6 text-red-600 fill-current"/> Alerta Relâmpago
-                      </h3>
-                      <button onClick={() => setShowBlitzModal(false)}><X className="w-6 h-6 dark:text-white"/></button>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                      <button onClick={() => setSelectedBlitzType('BLITZ')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'BLITZ' ? 'border-red-600 bg-red-50 dark:bg-red-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="bg-red-100 p-2 rounded-full"><Siren className="w-6 h-6 text-red-600"/></div>
-                          <span className="font-bold text-sm dark:text-white">Blitz</span>
-                      </button>
-                      <button onClick={() => setSelectedBlitzType('ACCIDENT')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'ACCIDENT' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="bg-orange-100 p-2 rounded-full"><AlertTriangle className="w-6 h-6 text-orange-500"/></div>
-                          <span className="font-bold text-sm dark:text-white">Acidente</span>
-                      </button>
-                      <button onClick={() => setSelectedBlitzType('TRAFFIC')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'TRAFFIC' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="bg-yellow-100 p-2 rounded-full"><Clock className="w-6 h-6 text-yellow-600"/></div>
-                          <span className="font-bold text-sm dark:text-white">Trânsito</span>
-                      </button>
-                      <button onClick={() => setSelectedBlitzType('DANGER')} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${selectedBlitzType === 'DANGER' ? 'border-gray-800 bg-gray-100 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="bg-gray-200 p-2 rounded-full"><AlertTriangle className="w-6 h-6 text-gray-800"/></div>
-                          <span className="font-bold text-sm dark:text-white">Perigo</span>
-                      </button>
-                  </div>
-
-                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-6">
-                      Sua localização atual será enviada para todos os usuários da cidade.
-                  </p>
-
-                  <Button fullWidth onClick={handleGlobalReportBlitz} disabled={blitzLocationLoading} className="bg-red-600 hover:bg-red-700 text-white">
-                      {blitzLocationLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Confirmar e Alertar'}
-                  </Button>
-              </div>
-          </div>
-      )}
-
-      {/* Delete Transaction Confirm */}
-      {transactionToDelete && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm text-center">
-                  <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4"/>
-                  <h3 className="font-bold text-lg dark:text-white">Excluir Item?</h3>
-                  <p className="text-sm text-gray-500 mt-2 mb-6">Essa ação não pode ser desfeita.</p>
-                  <div className="flex gap-3">
-                      <Button variant="outline" fullWidth onClick={() => setTransactionToDelete(null)}>Cancelar</Button>
-                      <Button variant="danger" fullWidth onClick={confirmDeleteTransaction}>Excluir</Button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-    </div>
-  );
-};
-
-export default App;
+                                    <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-10

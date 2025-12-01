@@ -233,6 +233,8 @@ export interface ShopSettings {
     support_hours_start?: string;
     support_hours_end?: string;
     google_gemini_api_key?: string;
+    shop_name?: string;
+    shop_city?: string;
 }
 
 export interface Order {

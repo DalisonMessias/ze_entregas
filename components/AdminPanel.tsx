@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Shield, Search, MoreVertical, Edit, UserX, Trash2, Loader2, UserCheck, UserCog, Send, ListOrdered, Settings, Package, Power, PowerOff, X, CheckCircle, AlertTriangle, CreditCard, QrCode, Barcode, Plus, Grid, Tag, Headphones, MessageSquare, Phone, Key, Bot, Wallet, Smartphone, Upload, RefreshCw, Banknote, MapPin, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star, Globe, Info, Briefcase, Newspaper, Mail, Save, Ban } from 'lucide-react';
+import { Shield, Search, MoreVertical, Edit, UserX, Trash2, Loader2, UserCheck, UserCog, Send, ListOrdered, Settings, Package, Power, PowerOff, X, CheckCircle, AlertTriangle, CreditCard, QrCode, Barcode, Plus, Grid, Tag, Headphones, MessageSquare, Phone, Key, Bot, Wallet, Smartphone, Upload, RefreshCw, Banknote, MapPin, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star, Globe, Info, Briefcase, Newspaper, Mail, Save, Ban, Store, Lock, ShoppingBag } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { ManagedUser, UserRole, UserStatus, GlobalNotification, Product, AdminOrder, ShopSettings, Category, Claim, PartnerFeeSettings, PWASettings, PWAIcon, PayoutSettings, City, CityRequest, PartnerDocument, PartnerProfile, PartnerLevelBenefit, CompanyInfo, AdminSubTab, BlacklistEntry, FraudAlert, IdentityVerification, PartnerRating, PlatformNews } from '../types';
 import { Button } from './Button';
@@ -10,6 +10,7 @@ import { AdminDashboard } from './AdminDashboard';
 import { AdminReferrals } from './AdminReferrals';
 import { ChatWindow } from './ChatWindow';
 import { AdminWalletControl } from './AdminWalletControl';
+import { Switch } from './Switch';
 
 // ... (keep existing helper functions like debounce, parseCurrency)
 const debounce = <T extends (...args: any[]) => void>(func: T, delay: number) => {
@@ -23,6 +24,309 @@ const debounce = <T extends (...args: any[]) => void>(func: T, delay: number) =>
 const parseCurrency = (val: string): number => {
     if (!val) return 0;
     return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+};
+
+// --- SHOP MANAGEMENT MODULE (UPDATED) ---
+const ShopManagement: React.FC = () => {
+    const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'settings'>('products');
+    const [products, setProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
+    const [loading, setLoading] = useState(true);
+    
+    // Product Editing State
+    const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Category Editing State
+    const [newCategoryName, setNewCategoryName] = useState('');
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const [p, c, s] = await Promise.all([
+                cloud.adminGetProducts(),
+                cloud.adminGetCategories(),
+                cloud.getShopSettings()
+            ]);
+            setProducts(p);
+            setCategories(c);
+            setShopSettings(s || { id: true, is_shop_enabled: false });
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // --- Product Handlers ---
+    const handleSaveProduct = async () => {
+        if (!editingProduct?.name || !editingProduct?.price) return alert("Nome e preço são obrigatórios.");
+        setIsSaving(true);
+        try {
+            if (editingProduct.id) {
+                await cloud.adminUpdateProduct(editingProduct.id, editingProduct);
+            } else {
+                await cloud.adminAddProduct(editingProduct);
+            }
+            setEditingProduct(null);
+            loadData();
+        } catch (e: any) {
+            alert("Erro ao salvar produto: " + e.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteProduct = async (id: string) => {
+        if (!confirm("Deletar produto?")) return;
+        try {
+            await cloud.adminDeleteProduct(id);
+            loadData();
+        } catch (e: any) {
+            alert("Erro ao deletar: " + e.message);
+        }
+    };
+
+    // --- Category Handlers ---
+    const handleAddCategory = async () => {
+        if (!newCategoryName.trim()) return;
+        try {
+            await cloud.adminAddCategory(newCategoryName);
+            setNewCategoryName('');
+            loadData();
+        } catch (e: any) {
+            alert("Erro ao adicionar categoria: " + e.message);
+        }
+    };
+
+    const handleDeleteCategory = async (id: string) => {
+        if (!confirm("Deletar categoria?")) return;
+        try {
+            await cloud.adminDeleteCategory(id);
+            loadData();
+        } catch (e: any) {
+            alert("Erro ao deletar categoria: " + e.message);
+        }
+    };
+
+    // --- Settings Handlers ---
+    const handleSaveSettings = async () => {
+        if (!shopSettings) return;
+        setIsSaving(true);
+        try {
+            await cloud.adminUpdateShopSettings(shopSettings);
+            alert("Configurações da loja salvas!");
+        } catch (e: any) {
+            alert("Erro ao salvar configurações: " + e.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const updatePaymentMethod = (method: 'pix' | 'boleto' | 'credit_card') => {
+        setShopSettings(prev => {
+            if (!prev) return null;
+            const current = prev.payment_methods || { pix: false, boleto: false, credit_card: false };
+            return { ...prev, payment_methods: { ...current, [method]: !current[method] } };
+        });
+    };
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+            {/* Header Tabs */}
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+                <button onClick={() => setActiveTab('products')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'products' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Produtos</button>
+                <button onClick={() => setActiveTab('categories')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'categories' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Categorias</button>
+                <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'settings' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Configurações</button>
+            </div>
+
+            {/* --- PRODUCTS TAB --- */}
+            {activeTab === 'products' && (
+                <div className="space-y-4">
+                    <div className="flex justify-end">
+                        <Button onClick={() => setEditingProduct({ is_active: true })}>
+                            <Plus className="w-4 h-4 mr-2"/> Novo Produto
+                        </Button>
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
+                                <tr>
+                                    <th className="px-4 py-3">Nome</th>
+                                    <th className="px-4 py-3">Preço</th>
+                                    <th className="px-4 py-3">Estoque</th>
+                                    <th className="px-4 py-3">Status</th>
+                                    <th className="px-4 py-3 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {products.map(p => (
+                                    <tr key={p.id} className="border-b dark:border-gray-700">
+                                        <td className="px-4 py-3 font-bold dark:text-white">{p.name}</td>
+                                        <td className="px-4 py-3">R$ {p.price.toFixed(2)}</td>
+                                        <td className="px-4 py-3">{p.stock_quantity ?? '-'}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-bold ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {p.is_active ? 'Ativo' : 'Inativo'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                            <button onClick={() => setEditingProduct(p)} className="p-2 text-blue-500"><Edit className="w-4 h-4"/></button>
+                                            <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-red-500"><Trash2 className="w-4 h-4"/></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {products.length === 0 && <tr><td colSpan={5} className="text-center p-4 text-gray-400">Nenhum produto cadastrado.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* --- CATEGORIES TAB --- */}
+            {activeTab === 'categories' && (
+                <div className="space-y-4">
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-2">
+                        <input 
+                            type="text" 
+                            placeholder="Nova Categoria" 
+                            value={newCategoryName} 
+                            onChange={e => setNewCategoryName(e.target.value)} 
+                            className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                        <Button onClick={handleAddCategory}>Adicionar</Button>
+                    </div>
+                    <div className="space-y-2">
+                        {categories.map(c => (
+                            <div key={c.id} className="flex justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+                                <span className="font-bold dark:text-white">{c.name}</span>
+                                <button onClick={() => handleDeleteCategory(c.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* --- SETTINGS TAB --- */}
+            {activeTab === 'settings' && shopSettings && (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <div>
+                            <h4 className="font-bold dark:text-white">Status da Loja</h4>
+                            <p className="text-xs text-gray-500">Defina se a loja está aberta para receber pedidos.</p>
+                        </div>
+                        <Switch checked={shopSettings.is_shop_enabled || false} onChange={c => setShopSettings({...shopSettings, is_shop_enabled: c})} />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Nome da Loja (Exibição)</label>
+                            <input 
+                                type="text" 
+                                value={shopSettings.shop_name || ''} 
+                                onChange={e => setShopSettings({...shopSettings, shop_name: e.target.value})} 
+                                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Cidade Principal</label>
+                            <input 
+                                type="text" 
+                                value={shopSettings.shop_city || ''} 
+                                onChange={e => setShopSettings({...shopSettings, shop_city: e.target.value})} 
+                                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-3">Métodos de Pagamento</label>
+                        <div className="flex gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={shopSettings.payment_methods?.pix} onChange={() => updatePaymentMethod('pix')} className="rounded text-brand-600"/>
+                                <span className="dark:text-white">PIX</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={shopSettings.payment_methods?.boleto} onChange={() => updatePaymentMethod('boleto')} className="rounded text-brand-600"/>
+                                <span className="dark:text-white">Boleto</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={shopSettings.payment_methods?.credit_card} onChange={() => updatePaymentMethod('credit_card')} className="rounded text-brand-600"/>
+                                <span className="dark:text-white">Cartão de Crédito</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <Button onClick={handleSaveSettings} disabled={isSaving} fullWidth>
+                        {isSaving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Configurações'}
+                    </Button>
+                </div>
+            )}
+
+            {/* --- PRODUCT MODAL --- */}
+            {editingProduct && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="font-bold text-lg dark:text-white">{editingProduct.id ? 'Editar Produto' : 'Novo Produto'}</h3>
+                            <button onClick={() => setEditingProduct(null)}><X className="w-5 h-5"/></button>
+                        </div>
+                        
+                        <input type="text" placeholder="Nome do Produto" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        <textarea placeholder="Descrição" value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white h-24 resize-none" />
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs text-gray-500">Preço (R$)</label>
+                                <input type="number" step="0.01" value={editingProduct.price || ''} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500">Estoque</label>
+                                <input type="number" value={editingProduct.stock_quantity || ''} onChange={e => setEditingProduct({...editingProduct, stock_quantity: parseInt(e.target.value)})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs text-gray-500">Categoria</label>
+                            <select 
+                                value={editingProduct.category_id || ''} 
+                                onChange={e => setEditingProduct({...editingProduct, category_id: e.target.value})} 
+                                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            >
+                                <option value="">Selecione...</option>
+                                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-xs text-gray-500">URL da Imagem</label>
+                            <input type="text" placeholder="https://..." value={editingProduct.images?.[0] || ''} onChange={e => setEditingProduct({...editingProduct, images: [e.target.value]})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <input type="checkbox" checked={editingProduct.is_active ?? true} onChange={e => setEditingProduct({...editingProduct, is_active: e.target.checked})} className="rounded text-brand-600" />
+                            <span className="text-sm dark:text-white">Produto Ativo</span>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                            <Button variant="outline" onClick={() => setEditingProduct(null)} fullWidth>Cancelar</Button>
+                            <Button onClick={handleSaveProduct} disabled={isSaving} fullWidth>
+                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };
 
 // --- PARTNER VERIFICATION MODULE ---
@@ -972,52 +1276,6 @@ const BlacklistManagement: React.FC = () => {
                                 <p className="text-xs text-red-500">{b.reason}</p>
                             </div>
                             <button onClick={() => handleRemove(b.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- SHOP MANAGEMENT ---
-const ShopManagement: React.FC = () => {
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [newCat, setNewCat] = useState('');
-    
-    useEffect(() => { loadData(); }, []);
-    
-    const loadData = async () => {
-        const c = await cloud.adminGetCategories();
-        setCategories(c);
-    };
-
-    const handleAdd = async () => {
-        if (!newCat) return;
-        await cloud.adminAddCategory(newCat);
-        setNewCat('');
-        loadData();
-    };
-
-    const handleDelete = async (id: string) => {
-        if (!confirm("Deletar categoria?")) return;
-        await cloud.adminDeleteCategory(id);
-        loadData();
-    };
-
-    return (
-        <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700">
-                <h3 className="font-bold dark:text-white mb-4">Categorias da Loja</h3>
-                <div className="flex gap-2 mb-4">
-                    <input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nova Categoria" className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
-                    <Button onClick={handleAdd}>Adicionar</Button>
-                </div>
-                <div className="space-y-2">
-                    {categories.map(c => (
-                        <div key={c.id} className="flex justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                            <span className="dark:text-white">{c.name}</span>
-                            <button onClick={() => handleDelete(c.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button>
                         </div>
                     ))}
                 </div>
