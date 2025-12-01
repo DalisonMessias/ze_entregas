@@ -904,7 +904,7 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                           </>
                       )}
                       
-                      {/* === DELIVERY PARTNER MENU (Visible for Admins too) === */}
+                      {/* === DELIVERY PARTNER PLATFORM (Exclusive to Partners & Admin) === */}
                       {(safeRole === 'delivery_partner' || safeRole === 'admin') && (
                           <>
                             {safeRole === 'admin' && <div className="border-t border-gray-200 dark:border-gray-700 my-4 pt-4 px-4 text-xs font-bold text-green-600 dark:text-green-400 uppercase text-center">--- VISÃO PARCEIRO ---</div>}
@@ -922,6 +922,13 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                     </button>
                                 )}
                             </div>
+                          </>
+                      )}
+
+                      {/* === GENERAL USER TOOLS (Visible to ALL roles except maybe Store who has their own flow, but Admin sees this as User view) === */}
+                      {(safeRole === 'user' || safeRole === 'delivery_partner' || safeRole === 'admin') && (
+                          <>
+                            {safeRole === 'admin' && <div className="border-t border-gray-200 dark:border-gray-700 my-4 pt-4 px-4 text-xs font-bold text-gray-400 uppercase text-center">--- VISÃO USUÁRIO ---</div>}
 
                             <div className="space-y-1">
                                 <p className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Meu Controle (Manual)</p>
@@ -960,4 +967,334 @@ const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                     </button>
                                 )}
                                 {canAccess('map') && (
-                                    <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-10
+                                    <button onClick={() => { setActiveTab('map'); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <Map className="w-5 h-5"/> Mapa Offline
+                                    </button>
+                                )}
+                                <button onClick={() => { setShowBlitzModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-bold">
+                                    <Siren className="w-5 h-5"/> Alerta Relâmpago
+                                </button>
+                            </div>
+                          </>
+                      )}
+
+                      {/* --- COMMON BOTTOM ACTIONS --- */}
+                      <div className="pt-4 mt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                          <button onClick={() => { setShowSettingsModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                              <Settings className="w-5 h-5"/> Ajustes do App
+                          </button>
+                          <button onClick={() => { setShowAboutModal(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                              <Info className="w-5 h-5"/> Sobre o Zé
+                          </button>
+                          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                              <LogOut className="w-5 h-5"/> Sair
+                          </button>
+                      </div>
+                      
+                      <div className="p-4 text-xs text-center text-gray-400">
+                          Versão 1.5.0 • <span className="font-mono">Offline-First</span>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- REMAINDER OF THE RENDER (Modals, Content) --- */}
+      <main className="pb-24 pt-20 px-4 max-w-2xl mx-auto">
+          {renderContent()}
+      </main>
+
+      {/* Footer Navigation (Mobile) */}
+      {!isNavigating && !isSmartRouteMode && activeTab !== 'map' && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 pb-safe z-30">
+            <div className="flex justify-around items-center h-16">
+                <button onClick={() => setActiveTab(getInitialTab())} className={`flex flex-col items-center justify-center w-full h-full ${activeTab === getInitialTab() ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                    <LayoutDashboard className="w-6 h-6" />
+                    <span className="text-[10px] font-bold mt-1">Início</span>
+                </button>
+                
+                {canAccess('shop') && (
+                    <button onClick={() => setActiveTab('shop')} className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'shop' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                        <ShoppingBag className="w-6 h-6" />
+                        <span className="text-[10px] font-bold mt-1">Loja</span>
+                    </button>
+                )}
+
+                <div className="relative -top-6">
+                    <button 
+                        onClick={() => setActiveTab('assistant')}
+                        className="w-14 h-14 bg-gradient-to-tr from-brand-600 to-brand-500 rounded-full shadow-lg shadow-brand-500/40 flex items-center justify-center text-white border-4 border-gray-50 dark:border-gray-900 transform active:scale-95 transition-transform"
+                    >
+                        <SparklesIcon className="w-7 h-7 text-white" color="white" />
+                    </button>
+                </div>
+
+                {canAccess('history') && (
+                    <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'history' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                        <History className="w-6 h-6" />
+                        <span className="text-[10px] font-bold mt-1">Histórico</span>
+                    </button>
+                )}
+
+                {canAccess('profile') && (
+                    <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'profile' ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                        <User className="w-6 h-6" />
+                        <span className="text-[10px] font-bold mt-1">Perfil</span>
+                    </button>
+                )}
+            </div>
+        </nav>
+      )}
+
+      {/* All Modals */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowSettingsModal(false)}>
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <Settings className="w-6 h-6 text-gray-500" /> Ajustes
+                    </h3>
+                    <button onClick={() => setShowSettingsModal(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                </div>
+                
+                {/* Theme Toggle */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                        {theme === 'dark' ? <Moon className="w-6 h-6 text-purple-400" /> : <Sun className="w-6 h-6 text-orange-400" />}
+                        <span className="font-bold text-gray-700 dark:text-white">Modo Escuro</span>
+                    </div>
+                    <Switch checked={theme === 'dark'} onChange={() => {
+                        const newTheme = theme === 'light' ? 'dark' : 'light';
+                        setThemeState(newTheme);
+                        storage.setTheme(newTheme);
+                        document.documentElement.classList.toggle('dark');
+                    }} />
+                </div>
+
+                {/* Notifications */}
+                <button onClick={() => { setShowSettingsModal(false); setShowNotifications(true); }} className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                        <Bell className="w-6 h-6 text-blue-500" />
+                        <span className="font-bold text-gray-700 dark:text-white">Notificações</span>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                </button>
+
+                {/* Data Management */}
+                <div className="space-y-2">
+                    <p className="text-xs font-bold text-gray-400 uppercase ml-2">Dados</p>
+                    <button onClick={() => { setShowSettingsModal(false); setShowPermissionModal(true); }} className="w-full flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-left hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <Shield className="w-5 h-5 text-green-500" />
+                        <span className="text-sm font-bold text-gray-600 dark:text-gray-300">Permissões do App</span>
+                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => { 
+                            if(confirm('Tem certeza? Isso apagará todo o histórico local.')) {
+                                storage.clearAllData(); 
+                                window.location.reload(); 
+                            }
+                        }} className="p-3 border border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 text-red-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+                            <Trash2 className="w-4 h-4" /> Limpar Dados
+                        </button>
+                        <button onClick={handleLogout} className="p-3 border border-gray-200 dark:border-gray-700 text-gray-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+                            <LogOut className="w-4 h-4" /> Sair
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {showStartModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+                <h3 className="text-xl font-bold dark:text-white mb-4">Configurar Dia</h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase">Valor Fixo por Entrega</label>
+                        <input type="tel" value={startDayValue} onChange={e => handleCurrencyMask(e, setStartDayValue)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold text-lg outline-none dark:text-white" placeholder="0,00" autoFocus />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase">Meta de Lucro (Opcional)</label>
+                        <input type="tel" value={startDayGoal} onChange={e => handleCurrencyMask(e, setStartDayGoal)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold text-lg outline-none dark:text-white" placeholder="0,00" />
+                    </div>
+                    <Button onClick={handleStartDay} fullWidth>Começar</Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {showExtraModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold dark:text-white">Entrega Extra</h3>
+                    <button onClick={() => setShowExtraModal(false)}><X className="text-gray-400"/></button>
+                </div>
+                <div className="space-y-4">
+                    <input type="tel" value={extraValue} onChange={e => handleCurrencyMask(e, setExtraValue)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold text-lg outline-none dark:text-white" placeholder="Valor (R$)" autoFocus />
+                    <div className="flex gap-2">
+                        <input type="number" value={extraKm} onChange={e => setExtraKm(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white" placeholder="KM (Opcional)" />
+                        <input type="text" value={extraDesc} onChange={e => setExtraDesc(e.target.value)} className="flex-[2] p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white" placeholder="Descrição (Ex: Ifood)" />
+                    </div>
+                    <Button onClick={() => handleAddDelivery('extra')} fullWidth disabled={!extraValue}>Adicionar</Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {showExpenseModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold dark:text-white text-red-500">Registrar Gasto</h3>
+                    <button onClick={() => setShowExpenseModal(false)}><X className="text-gray-400"/></button>
+                </div>
+                <div className="space-y-4">
+                    <input type="tel" value={expenseValue} onChange={e => handleCurrencyMask(e, setExpenseValue)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl font-bold text-lg outline-none dark:text-white text-red-500" placeholder="Valor (R$)" autoFocus />
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setExpenseCategory('fuel')} className={`p-2 rounded-lg text-xs font-bold border ${expenseCategory === 'fuel' ? 'bg-orange-100 border-orange-500 text-orange-700' : 'border-gray-200 dark:border-gray-600 text-gray-500'}`}>Combustível</button>
+                        <button onClick={() => setExpenseCategory('food')} className={`p-2 rounded-lg text-xs font-bold border ${expenseCategory === 'food' ? 'bg-blue-100 border-blue-500 text-blue-700' : 'border-gray-200 dark:border-gray-600 text-gray-500'}`}>Alimentação</button>
+                        <button onClick={() => setExpenseCategory('maintenance')} className={`p-2 rounded-lg text-xs font-bold border ${expenseCategory === 'maintenance' ? 'bg-gray-200 border-gray-500 text-gray-700' : 'border-gray-200 dark:border-gray-600 text-gray-500'}`}>Manutenção</button>
+                        <button onClick={() => setExpenseCategory('other')} className={`p-2 rounded-lg text-xs font-bold border ${expenseCategory === 'other' ? 'bg-purple-100 border-purple-500 text-purple-700' : 'border-gray-200 dark:border-gray-600 text-gray-500'}`}>Outros</button>
+                    </div>
+
+                    <input type="text" value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white" placeholder="Descrição (Opcional)" />
+                    
+                    <Button onClick={handleAddExpense} fullWidth disabled={!expenseValue} variant="danger">Registrar Saída</Button>
+                </div>
+            </div>
+        </div>
+    );
+      )}
+
+      {transactionToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl text-center">
+                <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <h3 className="font-bold text-lg dark:text-white mb-2">Excluir Registro?</h3>
+                <p className="text-sm text-gray-500 mb-6">Essa ação não pode ser desfeita.</p>
+                <div className="flex gap-3">
+                    <Button variant="outline" fullWidth onClick={() => setTransactionToDelete(null)}>Cancelar</Button>
+                    <Button fullWidth variant="danger" onClick={confirmDeleteTransaction}>Excluir</Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {showEndDayConfirm && daySummaryData && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl">
+                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-6 text-center">Resumo do Dia</h3>
+                
+                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl mb-6 space-y-3">
+                    <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-500">Entregas</span>
+                        <span className="font-bold dark:text-white">{daySummaryData.count}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-500">KM Total</span>
+                        <span className="font-bold dark:text-white">{daySummaryData.km.toFixed(1)} km</span>
+                    </div>
+                    <div className="h-px bg-gray-200 dark:bg-gray-600 my-2"></div>
+                    <div className="flex justify-between items-center text-lg">
+                        <span className="font-bold text-gray-700 dark:text-gray-300">Lucro Líquido</span>
+                        <span className="font-black text-green-600 dark:text-green-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(daySummaryData.profit)}</span>
+                    </div>
+                </div>
+
+                <div className="flex gap-3">
+                    <Button variant="outline" fullWidth onClick={() => setShowEndDayConfirm(false)}>Voltar</Button>
+                    <Button fullWidth onClick={confirmEndDay} className="bg-green-600 hover:bg-green-700 text-white border-none shadow-lg shadow-green-500/30">
+                        Confirmar e Encerrar
+                    </Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {showDaySummary && history.length > 0 && (
+          <ShareCard 
+            data={{ 
+                value: history[0].totalValue, 
+                count: history[0].count, 
+                km: history[0].totalKm, 
+                date: history[0].formattedDate 
+            }} 
+            onClose={() => setShowDaySummary(false)} 
+          />
+      )}
+
+      {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
+      {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
+      {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
+      {showAboutModal && <AboutApp />}
+      {showPermissionModal && <PermissionModal onClose={() => setShowPermissionModal(false)} />}
+      
+      {/* Notifications Panel */}
+      {showNotifications && (
+        <NotificationsPanel 
+            notifications={notifications} 
+            onMarkAsRead={(id) => {
+                cloud.markNotificationAsRead(id);
+                setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+            }}
+            onClose={() => setShowNotifications(false)} 
+        />
+      )}
+
+      {/* Global Blitz Alert Modal */}
+      {showBlitzModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-3xl p-6 shadow-2xl relative text-center">
+                  <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                      <Siren className="w-8 h-8 text-red-600"/>
+                  </div>
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2">Alerta Relâmpago</h3>
+                  <p className="text-sm text-gray-500 mb-6">Selecione o tipo de alerta para reportar na sua localização atual.</p>
+                  
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                      <button onClick={() => setSelectedBlitzType('BLITZ')} className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedBlitzType === 'BLITZ' ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-600' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
+                          <Siren className="w-6 h-6"/> <span className="text-[10px] font-bold">Blitz</span>
+                      </button>
+                      <button onClick={() => setSelectedBlitzType('ACCIDENT')} className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedBlitzType === 'ACCIDENT' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-600' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
+                          <AlertTriangle className="w-6 h-6"/> <span className="text-[10px] font-bold">Acidente</span>
+                      </button>
+                      <button onClick={() => setSelectedBlitzType('TRAFFIC')} className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedBlitzType === 'TRAFFIC' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
+                          <Gauge className="w-6 h-6"/> <span className="text-[10px] font-bold">Trânsito</span>
+                      </button>
+                      <button onClick={() => setSelectedBlitzType('DANGER')} className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedBlitzType === 'DANGER' ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600' : 'border-gray-200 dark:border-gray-700 opacity-60'}`}>
+                          <ShieldAlert className="w-6 h-6"/> <span className="text-[10px] font-bold">Perigo</span>
+                      </button>
+                  </div>
+
+                  <div className="flex gap-3">
+                      <Button variant="outline" fullWidth onClick={() => setShowBlitzModal(false)} disabled={blitzLocationLoading}>Cancelar</Button>
+                      <Button fullWidth onClick={handleGlobalReportBlitz} disabled={blitzLocationLoading} variant="danger">
+                          {blitzLocationLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Reportar Agora'}
+                      </Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Settings Modal (Called from footer/menu) */}
+      {/* Note: showSettingsModal logic is handled inside renderContent for 'profile' or directly via state if triggered from menu */}
+      
+      {/* Emergency Button */}
+      <div className="fixed bottom-24 right-4 z-40">
+        <button 
+            onClick={() => setShowEmergencyModal(true)}
+            className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-full shadow-lg shadow-red-600/30 transition-transform active:scale-95 flex items-center justify-center animate-pulse"
+        >
+            <ShieldAlert className="w-6 h-6" />
+        </button>
+      </div>
+      <EmergencyModal isOpen={showEmergencyModal} onClose={() => setShowEmergencyModal(false)} />
+
+    </div>
+  );
+};
+
+export default App;
