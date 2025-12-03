@@ -1,9 +1,12 @@
 
+
+
 import React, { useState } from 'react';
 import { Gift, ChevronLeft, Megaphone, ChevronRight, IdCard } from 'lucide-react';
 import { ReferralProgram } from './ReferralProgram';
 import { PromotionCardGenerator } from './PromotionCardGenerator';
 import { UserRole } from '../types';
+import { ExclusiveLock } from './ExclusiveLock';
 
 interface DriverMarketingProps {
     userRole: UserRole;
@@ -11,6 +14,15 @@ interface DriverMarketingProps {
 
 export const DriverMarketing: React.FC<DriverMarketingProps> = ({ userRole }) => {
     const [currentView, setCurrentView] = useState<'menu' | 'referral' | 'digital_card'>('menu');
+
+    if (userRole !== 'delivery_partner') {
+        return (
+            <ExclusiveLock 
+                title="Marketing Pessoal"
+                description="Ferramentas exclusivas para divulgar seu trabalho e ganhar bônus por indicação. Torne-se parceiro para acessar."
+            />
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in pb-24">

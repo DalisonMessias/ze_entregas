@@ -122,6 +122,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ orderId, type, onClose, 
                     
                     {!loading && messages.length === 0 && (
                         <div className="text-center text-gray-400 py-10">
+                            <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-2">
+                                <User className="w-8 h-8 opacity-50" />
+                            </div>
                             <p className="text-sm">Nenhuma mensagem ainda.</p>
                             <p className="text-xs mt-1">Comece a conversa!</p>
                         </div>

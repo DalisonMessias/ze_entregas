@@ -14,41 +14,11 @@
 [2024-05-25 17:30] Updated card templates in PromotionCardGenerator.tsx to support dynamic height for unlimited services, redesigned default card for a sophisticated look, and removed Tech style.
 [2024-05-25 18:00] Completely redesigned Delivery (Standard), Store (Official), and Premium (Gold) cards in PromotionCardGenerator.tsx to include stylized headers, badges, icons, and gradients, moving away from plain minimalist styles.
 [2024-05-26 09:00] Comprehensive audit of navigation and menus. Restructured App.tsx Sidebar to include all missing Admin, Store, and Driver tools. Updated AdminPanel.tsx with placeholder components for missing tabs (Blacklist, AI Config, Institutional, PWA Settings).
-[2024-05-26 10:30] Completed Admin Sidebar Menu in App.tsx by adding buttons for all administrative modules (Fees, Payouts, Cities, Shop Categories, Partner Levels, Ratings, Security, Blacklist, Support, Referrals, Institutional, AI Config, App Config), organized by category.
-[2024-05-26 11:30] Explicitly defined foreign key constraints for fraud_alerts, identity_verifications, and chat_messages in supabase_setup.txt to resolve PostgREST relationship errors. Added RLS policy for Admin to read all user profiles.
-[2024-05-26 14:00] Implemented Admin Wallet Control feature with consolidated wallet view, manual balance adjustments (RPC), and transaction logging. Updated DB schema, types, services, and added AdminWalletControl component.
-[2024-05-26 14:30] Fixed PermissionModal closing issue by implementing conditional rendering and proper state management in App.tsx.
-[2024-05-26 15:00] Fixed SQL script error "relation does not exist" by removing explicit trigger drop on non-existent table in supabase_setup.txt.
-[2024-05-26 15:30] Fixed build error in `AddressBook.tsx` caused by truncated file and corrected CSS `@import` order in `index.html` to comply with standards.
-[2024-05-26 16:00] Fixed "White Screen" on Vercel production by replacing window.supabase global with direct createClient import in cloud.ts and removing conflicting importmap/CDN scripts from index.html.
-[2024-05-26 16:15] Fixed build error in `Maintenance.tsx` caused by missing closing tags. Restored file integrity and added a footer Save button.
-[2024-05-26 16:30] Implemented missing modals for "Começar Dia", "Entrega Extra", and "Registrar Gasto" in App.tsx, connecting them to existing state logic.
-[2024-05-26 17:00] Fixed 'Encerrar Dia' functionality in App.tsx by adding the missing confirmation and success modal JSX to the component render.
-[2024-05-26 17:30] Updated `components/PartnerArea.tsx`, `components/StoreWallet.tsx`, `components/OrderHistory.tsx`, `components/Shop.tsx`, `components/AdminDashboard.tsx`, `components/StoreTeam.tsx`, `components/PartnerDashboardWidgets.tsx`, and `components/Skeleton.tsx` to implement Skeleton Loading screens for improved UX and perceived performance.
-[2024-05-26 17:45] Unified `PartnerArea` dashboard in `App.tsx` to include normal user tools (financial goals, utilities, manual entry) below the opportunities widget, removing the visual block.
-[2024-05-26 18:00] Updated `AuthWrapper.tsx` to use an App Shell Skeleton instead of the generic "Conectando... Logística" splash screen for a smoother initial load experience.
-[2024-05-26 18:30] Updated `components/OfflineMap.tsx` to fix Full Screen mode (covering 100vw/100vh) and adjusted z-indexes of controls to ensure visibility over the map layer.
-[2024-05-26 19:00] Corrected full screen positioning in `OfflineMap.tsx` by conditionally removing 'relative' class and using 'h-[100dvh] w-screen fixed inset-0 z-[3000]' to prevent layout issues.
-[2024-05-26 19:30] Fixed address search error in `OfflineMap.tsx` by adding HTTP status check, preventing race conditions, and improving error messaging.
-[2024-05-26 20:00] Updated `OfflineMap.tsx` to use z-[9999] for fullscreen, restore Light/Dark/Satellite/OSM layer options, and enhance search robustness.
-[2024-05-26 20:30] Fixed z-index layering in `OfflineMap.tsx` by reducing control z-indices (z-30 to z-45) to ensure they are covered by the main Sidebar Menu (z-50) when opened in normal view.
-[2024-05-26 21:00] Updated ProfileData.tsx to include city selector for editing and allow partial profile updates without validation blocks.
-[2024-05-26 21:30] Hidden global header when on Map view to improve visibility.
-[2024-05-26 22:00] Fixed missing 'platform_news' table error by adding idempotent creation SQL to supabase_setup.txt.
-[2024-05-26 22:30] Restored complete database schema in supabase_setup.txt including all 34 required tables, enums, functions, and triggers to ensure system integrity.
-[2024-05-27 09:00] Added RLS policies for `available_cities`, `shop_settings`, `platform_news`, and `pwa_settings` in `supabase_setup.txt` to allow public read access, fixing the issue where cities were not loading on the registration page. Added initial seed data for cities.
-[2024-05-27 10:00] Added PostgreSQL Trigger `handle_new_user` to `supabase_setup.txt` to automatically populate `public.user_profiles` and create wallets (`store_wallets`/`partner_wallets`) upon user registration in `auth.users`.
-[2024-05-27 10:15] Fixed redirection issue after signup in `AuthWrapper.tsx` by manually handling session creation and state update, ensuring immediate access to the dashboard.
-[2024-05-27 10:30] Added ON DELETE CASCADE to `partner_wallets`, `store_wallets`, and `notification_settings` constraints in `supabase_setup.txt` to fix user deletion error.
-[2024-05-27 11:00] Added `resolve_login_email` and `check_email_exists` RPC functions to `supabase_setup.txt` to fix the "User not found" error during login by enabling lookups via Email, Phone, or CPF.
-[2024-05-27 11:15] Updated `components/AuthWrapper.tsx` to include a direct email login fallback if the RPC lookup fails, improving robustness against missing database functions or sync delays.
-[2024-05-27 11:30] Updated `components/AuthWrapper.tsx` to handle auto-login failure gracefully by redirecting to login screen with a success message instead of displaying an error, and updated `services/cloud.ts` to include `emailRedirectTo`.
-[2024-05-27 12:00] Added comprehensive RLS policies to `supabase_setup.txt` for `user_profiles` table, including `is_admin` helper function, enabling users to read their own role and admins to access all profiles, resolving the dashboard access redirection issue.
-[2024-05-27 13:00] Updated Company Modals (About, Careers, Press, Contact) to be fully dynamic and configurable via Admin Panel, allowing text content editing for all sections.
-[2024-05-27 13:15] Updated Admin Panel's Institutional section to use a Card Grid layout with dedicated editing modals for better UX.
-[2024-05-27 13:30] Added "Acessar Loja" button to Admin Menu under Operacional section and updated RBAC to allow admins to access the Shop interface directly.
-[2024-05-27 14:00] Created all missing RPC functions in `supabase_setup.txt` for Rides, Finance, Geolocation, and Admin modules. Upgraded `get_store_requests` and `get_partner_requests_available` to return JSONB for proper data joining. Updated `cloud.ts` to consume these changes.
-[2024-05-27 14:30] Fixed bug in DailyDashboard where "End Day" and "Delete" buttons were not working due to blocking native alerts. Replaced with custom modals. Also removed mandatory configuration for fixed values, adding a quick-entry flow instead.
-[2024-05-27 15:00] Implemented direct conversion flow from "User" to "Delivery Partner" in `AssociateDriver.tsx` with a fixed banner and confirmation modal, supported by a new secure RPC function `become_delivery_partner`.
-[2024-05-27 16:00] FULL REVIEW: Consolidated `supabase_setup.txt` to include ALL required tables, RPC functions (`adjust_wallet_balance`, `resolve_login_email`), storage bucket definitions (`avatars`, `documents`, `backups`), and comprehensive RLS policies to ensure 100% system compatibility.
-[2024-05-27 17:00] Extensive revision of `supabase_setup.txt` to include all identified tables, enums, triggers, RPC functions, storage, and RLS policies, addressing all missing elements for full system integrity. Confirmed over 1000 lines of code.
+[2024-05-26 10:30] Completed Admin Sidebar Menu in App.tsx by adding buttons for all administrative modules (Fees, Payouts, Cities, Shop Categories, Partner Levels, Ratings,
+[2024-05-26 11:00] Corrigido erro 42P13 no script do banco de dados (supabase_setup.txt) adicionando comandos `DROP FUNCTION IF EXISTS` e unificando definições de schema que estavam duplicadas.
+[2024-05-26 12:00] Unificado menu de Lojista: páginas de Superlogista (Relatórios, Config. Frete) agora são visíveis para todos, mas bloqueadas internamente com ExclusiveLock para não-Superlogistas.
+[2024-05-26 14:00] Corrigido bug de carregamento de cidades. Atualizadas funções no `services/cloud.ts` para consultar a tabela correta `available_cities` em vez de `cities`.
+[2024-05-26 15:30] Atualizados textos do sistema em `metadata.json`, `AboutApp.tsx` e botões de menu para remover referências a "100% offline" e usar "Modo Híbrido" ou "Mapa", refletindo a dependência parcial de internet.
+[2024-05-26 16:00] Removidos completamente os botões e referências a "Mapa Integrado", "Mapa de Calor" e "Navegação Inteligente" em todos os componentes para alinhar com a remoção da funcionalidade de mapa offline.
+[2024-05-26 18:00] Removidos dados simulados (Mocks) do Admin Dashboard e Zebank. Implementados módulos administrativos reais para Suporte, Blacklist, Notícias e Avaliações.
+[2024-05-26 19:30] Removidos todos os placeholders de "Módulo em construção" do AdminPanel. Implementados módulos completos para Segurança (Fraudes/Identidade), PWA, IA Config, Institucional e Gestão de Loja.

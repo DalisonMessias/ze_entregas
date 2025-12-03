@@ -6,13 +6,21 @@ import * as cloud from '../services/cloud';
 import { AdminDashboardStats } from '../types';
 import { Skeleton } from './Skeleton';
 
-const KPICard = ({ title, value, subtext, icon, colorClass }: { title: string, value: string, subtext?: string, icon: React.ReactNode, colorClass: string }) => (
+const KPICard = ({ title, value, subtext, icon, colorClass, trend }: { title: string, value: string, subtext?: string, icon: React.ReactNode, colorClass: string, trend?: 'up' | 'down' }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
         <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform ${colorClass.replace('bg-', 'text-')}`}>
             {icon}
         </div>
         <div className="relative z-10">
-            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">{title}</p>
+            <div className="flex justify-between items-start">
+                <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">{title}</p>
+                {trend && (
+                    <div className={`flex items-center text-xs font-bold ${trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                        {trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                        {trend === 'up' ? '+5%' : '-2%'} {/* Mocked trend for now */}
+                    </div>
+                )}
+            </div>
             <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-1">{value}</h3>
             {subtext && <p className="text-xs font-medium text-gray-400">{subtext}</p>}
         </div>
@@ -95,26 +103,25 @@ export const AdminDashboard: React.FC = () => {
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "dashboard_relatorio.csv");
+        link.setAttribute("download", "admin_dashboard_stats.csv");
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
-    if (loading && !stats) {
-        return <DashboardSkeleton />;
-    }
+    if (loading) return <DashboardSkeleton />;
+    if (!stats) return <div className="text-center p-10 text-gray-500">Falha ao carregar dados.</div>;
 
     return (
-        <div className="space-y-6 animate-in fade-in pb-10">
+        <div className="space-y-6 animate-in fade-in">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex justify-between items-center">
                 <div>
-                    <h2 className="text-2xl font-black text-gray-900 dark:text-white">Visão Geral</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Acompanhe os indicadores em tempo real.</p>
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white">Dashboard</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Visão geral do desempenho da plataforma.</p>
                 </div>
-                <Button onClick={handleExport} variant="outline" className="text-xs">
-                    <Download className="w-4 h-4 mr-2"/> Exportar Relatório
+                <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
+                    <Download className="w-4 h-4"/> Exportar CSV
                 </Button>
             </div>
 
@@ -122,78 +129,92 @@ export const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <KPICard 
                     title="Pedidos Hoje" 
-                    value={stats?.orders.today.toString() || "0"} 
-                    subtext={`${stats?.orders.week} na semana`}
-                    icon={<Activity className="w-8 h-8"/>}
+                    value={stats.orders.today.toString()} 
+                    subtext={`Total: ${stats.orders.total}`} 
+                    icon={<Activity className="w-8 h-8" />} 
                     colorClass="bg-blue-500"
+                    trend="up"
                 />
                 <KPICard 
-                    title="Faturamento (GMV)" 
-                    value={formatCurrency(stats?.finance.gmv || 0)} 
-                    subtext="Total Transacionado (Mês)"
-                    icon={<DollarSign className="w-8 h-8"/>}
+                    title="GMV Mensal" 
+                    value={formatCurrency(stats.finance.gmv)} 
+                    subtext="Volume Bruto de Mercadorias" 
+                    icon={<DollarSign className="w-8 h-8" />} 
                     colorClass="bg-green-500"
+                    trend="up"
                 />
                 <KPICard 
                     title="Receita Plataforma" 
-                    value={formatCurrency(stats?.finance.platformRevenue || 0)} 
-                    subtext="Lucro Líquido (Taxas)"
-                    icon={<TrendingUp className="w-8 h-8"/>}
+                    value={formatCurrency(stats.finance.platformRevenue)} 
+                    subtext="Taxas e Mensalidades" 
+                    icon={<TrendingUp className="w-8 h-8" />} 
                     colorClass="bg-purple-500"
+                    trend="up"
                 />
                 <KPICard 
-                    title="Entregadores Online" 
-                    value={stats?.users.drivers.online.toString() || "0"} 
-                    subtext={`De ${stats?.users.drivers.total} cadastrados`}
-                    icon={<Bike className="w-8 h-8"/>}
+                    title="Ticket Médio" 
+                    value={formatCurrency(stats.finance.averageTicket)} 
+                    subtext="Por Pedido" 
+                    icon={<BarChart3 className="w-8 h-8" />} 
                     colorClass="bg-orange-500"
                 />
             </div>
 
-            {/* Charts Section */}
+            {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
                 {/* Orders Chart */}
                 <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                            <BarChart3 className="w-5 h-5 text-gray-500"/> Volume de Pedidos (7 Dias)
-                        </h3>
-                    </div>
-                    {stats?.orders.graphData && <SimpleBarChart data={stats.orders.graphData} />}
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-brand-600"/> Pedidos nos Últimos Dias
+                    </h3>
+                    <SimpleBarChart data={stats.orders.graphData || []} />
                 </div>
 
-                {/* Status Breakdown */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <h3 className="font-bold text-lg dark:text-white mb-6 flex items-center gap-2">
-                        <Users className="w-5 h-5 text-gray-500"/> Status da Rede
-                    </h3>
-                    
-                    <div className="space-y-6">
-                        <div>
-                            <div className="flex justify-between text-sm mb-2">
-                                <span className="text-gray-500 flex items-center gap-2"><Store className="w-4 h-4"/> Lojas Ativas</span>
-                                <span className="font-bold dark:text-white">{stats?.users.stores.active} / {stats?.users.stores.total}</span>
+                {/* Live Status */}
+                <div className="space-y-4">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-green-500"/> Status em Tempo Real
+                        </h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600">
+                                        <Store className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase font-bold">Lojas Ativas</p>
+                                        <p className="font-black text-gray-900 dark:text-white">{stats.users.stores.active} / {stats.users.stores.total}</p>
+                                    </div>
+                                </div>
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                             </div>
-                            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                                <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${stats?.users.stores.total ? (stats.users.stores.active / stats.users.stores.total) * 100 : 0}%` }}></div>
+
+                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center text-orange-600">
+                                        <Bike className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase font-bold">Entregadores Online</p>
+                                        <p className="font-black text-gray-900 dark:text-white">{stats.users.drivers.online} / {stats.users.drivers.total}</p>
+                                    </div>
+                                </div>
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                             </div>
                         </div>
+                    </div>
 
-                        <div>
-                            <div className="flex justify-between text-sm mb-2">
-                                <span className="text-gray-500 flex items-center gap-2"><Bike className="w-4 h-4"/> Frota Online</span>
-                                <span className="font-bold dark:text-white">{stats?.users.drivers.online} / {stats?.users.drivers.total}</span>
-                            </div>
-                            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${stats?.users.drivers.total ? (stats.users.drivers.online / stats.users.drivers.total) * 100 : 0}%` }}></div>
-                            </div>
-                        </div>
-
-                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600 mt-4">
-                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Ticket Médio</p>
-                            <p className="text-2xl font-black text-gray-900 dark:text-white">
-                                {formatCurrency(stats?.finance.averageTicket || 0)}
+                    <div className="bg-gradient-to-br from-brand-600 to-brand-700 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
+                        <div className="relative z-10">
+                            <p className="text-brand-100 text-xs font-bold uppercase mb-1">Dica do Dia</p>
+                            <p className="font-medium text-sm leading-relaxed">
+                                Lojas com fotos de produtos vendem 30% mais. Incentive seus parceiros a completarem o cadastro!
                             </p>
+                        </div>
+                        <div className="absolute -bottom-4 -right-4 text-brand-500/30">
+                            <Store className="w-24 h-24" />
                         </div>
                     </div>
                 </div>

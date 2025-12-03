@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Cloud, Lock, LogIn, UploadCloud, DownloadCloud, AlertCircle, CheckCircle, LogOut, Eye, EyeOff } from 'lucide-react';
 import { Button } from './Button';
@@ -17,6 +19,18 @@ export const CloudSync: React.FC = () => {
 
   // Ref para verificar se o componente ainda está montado antes de atualizar o estado em callbacks assíncronos
   const isMountedRef = useRef(true);
+
+  // Helper para tradução de erros
+  const getErrorMessage = (error: any) => {
+      const msg = error?.message || '';
+      if (msg.includes("Invalid login credentials")) return "E-mail ou senha incorretos.";
+      if (msg.includes("User already registered")) return "Este e-mail já está cadastrado. Tente entrar.";
+      if (msg.includes("Password should be at least")) return "A senha deve ter pelo menos 6 caracteres.";
+      if (msg.includes("Anonymous")) return "Erro de configuração no servidor.";
+      if (msg.includes("rate limit")) return "Muitas tentativas. Aguarde um momento.";
+      if (msg.includes("network") || msg.includes("fetch")) return "Erro de conexão. Verifique sua internet.";
+      return "Erro na autenticação. Verifique seus dados.";
+  };
 
   useEffect(() => {
     isMountedRef.current = true; // Componente montado
@@ -118,7 +132,8 @@ export const CloudSync: React.FC = () => {
             options: {
                 data: {
                     name: auth.name,
-                    phone: auth.phone
+                    phone: auth.phone,
+                    role: 'delivery_person' // Corrected: Lowercase for DB Enum compatibility
                 }
             }
           })
@@ -132,21 +147,16 @@ export const CloudSync: React.FC = () => {
 
     } catch (e: any) {
       console.error(e);
-      let errorMsg = e.message || 'Erro na autenticação';
-      
-      if (errorMsg.includes('Invalid login credentials')) {
-         setMessage({ type: 'info', text: 'Conta não encontrada ou senha incorreta. Verifique seus dados.' });
-      } else if (errorMsg.includes('Anonymous')) {
-         errorMsg = 'Erro de configuração. Verifique se o provedor de E-mail está ativo no Supabase.';
-         setMessage({ type: 'error', text: errorMsg });
-      } else if (errorMsg.includes('User already registered')) {
-         setMessage({ type: 'info', text: 'Este e-mail já está cadastrado. Tente entrar.' });
-         setAuthMode('login'); // Sugerir login se já cadastrado
-      } else if (errorMsg.includes('rate limit')) {
-         setMessage({ type: 'error', text: 'Muitas tentativas. Aguarde um pouco.' });
-      } else {
-          setMessage({ type: 'error', text: errorMsg });
+      let errorText = getErrorMessage(e);
+      let errorType: 'error' | 'info' = 'error';
+
+      if (errorText.includes("já está cadastrado")) {
+          errorType = 'info';
+          setAuthMode('login');
       }
+      
+      setMessage({ type: errorType, text: errorText });
+
     } finally {
       if (isMountedRef.current) { // Verificar se o componente ainda está montado
         setLoading(false);

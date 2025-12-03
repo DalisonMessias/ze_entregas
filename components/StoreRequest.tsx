@@ -1,36 +1,53 @@
 
-
-
-
 import React, { useState, useEffect } from 'react';
-import { MapPin, Calculator, Loader2, DollarSign, Navigation, Info, Plus, Trash2, ArrowDown, UserX, Phone, Star, X } from 'lucide-react';
+import { MapPin, Calculator, Loader2, DollarSign, Navigation, Info, Plus, Trash2, UserX, Phone, Star, X, ShieldCheck, Users, AlertTriangle, Send, Check, Wallet, CheckCircle, Home, Lock } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
-import { PartnerFeeSettings, OfflineDriver } from '../types';
+import { PartnerFeeSettings, OfflineDriver, StoreDeliveryPartner } from '../types';
+import { openNavigation } from '../utils/mapHelpers';
+
+interface AddressData {
+    id: string;
+    street: string;
+    number: string;
+    neighborhood: string;
+    cep?: string;
+    city?: string;
+    state?: string;
+    lat?: number;
+    lng?: number;
+    validated: boolean;
+    error?: string;
+    validating?: boolean;
+}
+
+interface StoreRequestProps {
+    onNavigate: (tab: any) => void;
+}
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-export const StoreRequest: React.FC = () => {
+export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
     const [loading, setLoading] = useState(true);
     const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
     const [storeCity, setStoreCity] = useState<string>('');
     const [walletBalance, setWalletBalance] = useState(0);
+    const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
+    const [isSuperStore, setIsSuperStore] = useState(false);
 
-    // Form Inputs
-    const [pickup, setPickup] = useState('');
-    const [deliveries, setDeliveries] = useState<string[]>(['']); // Array of delivery addresses
+    const [requestType, setRequestType] = useState<'PLATFORM' | 'ASSOCIATE'>('PLATFORM');
+    const [pickup, setPickup] = useState<AddressData>({ id: 'pickup', street: '', number: '', neighborhood: '', validated: false });
+    const [deliveries, setDeliveries] = useState<AddressData[]>([{ id: crypto.randomUUID(), street: '', number: '', neighborhood: '', validated: false }]);
     
-    // Calculation State
     const [calculating, setCalculating] = useState(false);
     const [distanceKm, setDistanceKm] = useState<number | null>(null);
     const [cost, setCost] = useState<number | null>(null);
     const [partnerNet, setPartnerNet] = useState<number | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Offline Drivers Modal
-    const [offlineDrivers, setOfflineDrivers] = useState<OfflineDriver[]>([]);
-    const [showOfflineModal, setShowOfflineModal] = useState(false);
-    const [checkingAvailability, setCheckingAvailability] = useState(false);
+    const [associatedDrivers, setAssociatedDrivers] = useState<StoreDeliveryPartner[]>([]);
+    const [selectedAssociateIds, setSelectedAssociateIds] = useState<string[]>([]);
+    const [loadingAssociates, setLoadingAssociates] = useState(false);
 
     useEffect(() => {
         const init = async () => {
@@ -45,14 +62,26 @@ export const StoreRequest: React.FC = () => {
                 setFees(f);
                 setWalletBalance(w?.balance_decimal || 0);
                 
-                // Extract City from Metadata or Profile
-                if (user?.data.user?.user_metadata?.city) {
-                    setStoreCity(user.data.user.user_metadata.city);
+                const profile = await cloud.getClient()?.from('user_profiles').select('city, is_super_store').eq('id', user?.data?.user?.id).single();
+                
+                if (profile?.data) {
+                    const rawCity = profile.data.city || '';
+                    const cleanCity = rawCity.split(' - ')[0].trim();
+                    setStoreCity(cleanCity);
+                    
+                    const superStatus = profile.data.is_super_store || false;
+                    setIsSuperStore(superStatus);
+
+                    // Se não for Super Store, força o modo Associado por padrão
+                    if (!superStatus) {
+                        setRequestType('ASSOCIATE');
+                    }
                 } else {
-                    alert("Cidade não configurada no perfil. Atualize seus dados.");
+                    setNotification({ type: 'error', message: "Dados do perfil não encontrados. Atualize seu cadastro."});
                 }
             } catch (e) {
                 console.error(e);
+                 setNotification({ type: 'error', message: "Erro ao carregar configurações."});
             } finally {
                 setLoading(false);
             }
@@ -60,301 +89,270 @@ export const StoreRequest: React.FC = () => {
         init();
     }, []);
 
-    const addDelivery = () => setDeliveries([...deliveries, '']);
-    const removeDelivery = (index: number) => {
-        if (deliveries.length > 1) {
-            setDeliveries(deliveries.filter((_, i) => i !== index));
+    useEffect(() => {
+        if (requestType === 'ASSOCIATE') {
+            setLoadingAssociates(true);
+            cloud.getStoreAssociatedPartners()
+                .then(setAssociatedDrivers)
+                .catch(console.error)
+                .finally(() => setLoadingAssociates(false));
+        } else {
+            setSelectedAssociateIds([]);
         }
-    };
-    const updateDelivery = (index: number, val: string) => {
-        const newD = [...deliveries];
-        newD[index] = val;
-        setDeliveries(newD);
+    }, [requestType]);
+
+    const handleSelectPlatform = () => {
+        if (!isSuperStore) {
+            setNotification({ type: 'info', message: "Recurso Exclusivo: Apenas Superlogistas podem selecionar entregadores parceiros." });
+            return;
+        }
+        setRequestType('PLATFORM');
     };
 
-    const geocode = async (address: string) => {
-        const query = `${address}, ${storeCity}, Brasil`;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-        const data = await res.json();
-        if (!data || data.length === 0) throw new Error(`Endereço não encontrado: ${address}`);
-        return { lat: data[0].lat, lon: data[0].lon };
+    const addDelivery = () => setDeliveries([...deliveries, { id: crypto.randomUUID(), street: '', number: '', neighborhood: '', validated: false }]);
+    const removeDelivery = (id: string) => {
+        if (deliveries.length > 1) setDeliveries(deliveries.filter(d => d.id !== id));
+    };
+    
+    const updateDeliveryField = (id: string, field: keyof AddressData, value: string) => {
+        setDeliveries(prev => prev.map(d => d.id === id ? { ...d, [field]: value, validated: false, error: undefined } : d));
     };
 
-    const handleCalculate = async () => {
-        if (!pickup || deliveries.some(d => !d.trim())) return alert("Preencha todos os endereços.");
-        if (!storeCity) return alert("Cidade da loja não identificada.");
-        
-        setCalculating(true);
-        setDistanceKm(null);
-        setCost(null);
+    const formatAddressString = (addr: AddressData) => `${addr.street}, ${addr.number} - ${addr.neighborhood}, ${addr.city} - ${addr.state}`;
+
+    const validateAddress = async (id: string) => {
+        const isPickup = id === 'pickup';
+        const addressToValidate = isPickup ? pickup : deliveries.find(d => d.id === id);
+        if (!addressToValidate || !addressToValidate.street) return;
+
+        const updateState = (data: Partial<AddressData>) => {
+            if (isPickup) setPickup(prev => ({ ...prev, ...data }));
+            else setDeliveries(prev => prev.map(d => d.id === id ? { ...d, ...data } : d));
+        };
+
+        updateState({ validating: true, error: undefined, validated: false });
 
         try {
-            // 1. Geocode Pickup & Deliveries
-            const pickupCoords = await geocode(pickup);
-            const deliveryCoords = await Promise.all(deliveries.map(d => geocode(d)));
-
-            // 2. Build Route Query (Pickup -> D1 -> D2 ...)
-            const coords = [pickupCoords, ...deliveryCoords];
-            const coordString = coords.map(c => `${c.lon},${c.lat}`).join(';');
+            const query = `${addressToValidate.street}, ${addressToValidate.number || ''}, ${addressToValidate.neighborhood || ''}`;
+            const response = await fetch(`https://api.geocode.br/search?q=${encodeURIComponent(query)}&municipio=${encodeURIComponent(storeCity)}`);
             
-            // OSRM Call
-            const url = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=false`;
-            const resRoute = await fetch(url);
-            const dataRoute = await resRoute.json();
+            if (!response.ok) throw new Error("Falha na comunicação com a API de endereços.");
+            
+            const data = await response.json();
 
-            if (dataRoute.code !== 'Ok' || !dataRoute.routes || dataRoute.routes.length === 0) {
-                throw new Error("Não foi possível calcular a rota.");
+            if (!data.features || data.features.length === 0) {
+                throw new Error(`Endereço não encontrado em ${storeCity}. Tente ser mais específico.`);
+            }
+            
+            const result = data.features[0];
+            const properties = result.properties;
+            
+            if (properties.city.toLowerCase() !== storeCity.toLowerCase()) {
+                throw new Error(`Endereço inválido. O endereço pertence a ${properties.city}, não a ${storeCity}.`);
             }
 
-            const dist = dataRoute.routes[0].distance / 1000; // Meters to KM
-            setDistanceKm(dist);
-
-            // 3. Calculate Cost
-            if (fees) {
-                // Base Cost + Extra KM
-                let partnerVal = fees.base_delivery_value;
-                if (dist > fees.base_delivery_km) {
-                    partnerVal += (dist - fees.base_delivery_km) * fees.extra_km_value;
-                }
-                
-                // Add Multi-Stop Fee (Fee per EXTRA stop)
-                // If 1 delivery = 0 extra stops. If 2 deliveries = 1 extra stop.
-                const extraStops = Math.max(0, deliveries.length - 1);
-                const stopsFee = extraStops * (fees.additional_stop_fee || 0);
-                
-                partnerVal += stopsFee;
-
-                // Apply Global Store Fee (Admin Cut)
-                const totalCharged = partnerVal + fees.global_tax_fixed + (partnerVal * fees.global_tax_percent);
-                
-                setPartnerNet(partnerVal);
-                setCost(totalCharged);
-            }
+            updateState({
+                street: properties.street || addressToValidate.street,
+                number: properties.housenumber || addressToValidate.number,
+                neighborhood: properties.district || addressToValidate.neighborhood,
+                cep: properties.postcode,
+                city: properties.city,
+                state: properties.state,
+                lat: result.geometry.coordinates[1],
+                lng: result.geometry.coordinates[0],
+                validated: true,
+                error: undefined,
+            });
 
         } catch (e: any) {
-            alert(e.message);
+            updateState({ validated: false, error: e.message });
         } finally {
-            setCalculating(false);
+            updateState({ validating: false });
         }
     };
-
-    const handleConfirmRequest = async (force: boolean = false) => {
-        if (!distanceKm || !cost || !partnerNet || !fees) return;
-        if (walletBalance < cost) return alert("Saldo insuficiente. Faça uma recarga na sua carteira.");
-
-        setCheckingAvailability(true);
+    
+    const handleDispatch = async () => {
         setIsSubmitting(true);
+        setNotification(null);
+
+        const allAddresses = [pickup, ...deliveries];
+        if (allAddresses.some(addr => !addr.validated)) {
+            setNotification({ type: 'error', message: "Valide todos os endereços antes de continuar." });
+            setIsSubmitting(false);
+            return;
+        }
+
+        if (requestType === 'ASSOCIATE' && selectedAssociateIds.length === 0) {
+            setNotification({ type: 'error', message: "Selecione pelo menos um entregador fixo." });
+            setIsSubmitting(false);
+            return;
+        }
 
         try {
-            // Check for online drivers first (simulated by checking city radius or just active in city)
-            // Ideally we pass coords, but simplified check:
-            const pickupCoords = await geocode(pickup);
-            const onlineDrivers = await cloud.getOnlineDrivers(parseFloat(pickupCoords.lat), parseFloat(pickupCoords.lon), 15); // 15km radius
-
-            if (onlineDrivers.length === 0 && !force) {
-                // No online drivers, check for offline contacts
-                const offlineContacts = await cloud.getOfflineDriversForContact(storeCity);
-                
-                if (offlineContacts.length > 0) {
-                    setOfflineDrivers(offlineContacts);
-                    setShowOfflineModal(true);
-                    setCheckingAvailability(false);
-                    setIsSubmitting(false);
-                    return; // Stop here, show modal
+            const pickupAddrStr = formatAddressString(pickup);
+            const deliveryAddrStr = deliveries.map(formatAddressString).join(' -> ');
+            
+            if (requestType === 'ASSOCIATE') {
+                 for (const partnerId of selectedAssociateIds) {
+                    await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, 0, 0, 0, fees, 'ASSOCIATE', partnerId);
                 }
-                // If no offline contacts either, proceed to create request anyway (maybe someone comes online)
+                setNotification({ type: 'success', message: `Solicitação enviada para ${selectedAssociateIds.length} entregador(es)!` });
+            } else {
+                if (walletBalance < (cost || 0)) {
+                    setNotification({ type: 'error', message: "Saldo insuficiente para esta solicitação." });
+                    setIsSubmitting(false);
+                    return;
+                }
+                await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, distanceKm || 0, cost || 0, partnerNet || 0, fees, 'PLATFORM');
+                setNotification({ type: 'success', message: "Solicitação enviada para a plataforma Zé!" });
             }
 
-            const fullPickup = `${pickup} - ${storeCity}`;
-            const fullDelivery = deliveries.map(d => `${d} - ${storeCity}`).join(' -> ');
-            
-            await cloud.createPartnerRequest(fullPickup, fullDelivery, distanceKm, cost, partnerNet, fees);
-            alert("Solicitação enviada com sucesso! Aguarde um entregador aceitar.");
-            
-            // Reset
-            setPickup('');
-            setDeliveries(['']);
-            setDistanceKm(null);
-            setCost(null);
-            setShowOfflineModal(false);
-            
-            setWalletBalance(prev => prev - cost);
+            setPickup({ id: 'pickup', street: '', number: '', neighborhood: '', validated: false });
+            setDeliveries([{ id: crypto.randomUUID(), street: '', number: '', neighborhood: '', validated: false }]);
+            setSelectedAssociateIds([]);
 
         } catch (e: any) {
-            alert("Erro ao criar solicitação: " + e.message);
+            setNotification({ type: 'error', message: e.message });
         } finally {
             setIsSubmitting(false);
-            setCheckingAvailability(false);
         }
+    };
+
+    const toggleAssociateSelection = (id: string) => {
+        setSelectedAssociateIds(prev => prev.includes(id) ? prev.filter(pId => pId !== id) : [...prev, id]);
+    };
+    
+    const renderAddressInputs = (addr: AddressData, isPickup: boolean) => {
+        const handleInputChange = (field: keyof AddressData, value: string) => {
+            if (isPickup) {
+                setPickup(prev => ({ ...prev, [field]: value, validated: false, error: undefined }));
+            } else {
+                updateDeliveryField(addr.id, field, value);
+            }
+        };
+
+        return (
+            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl space-y-3">
+                <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-gray-500 flex items-center gap-2">
+                        {isPickup ? <Home className="w-4 h-4"/> : <MapPin className="w-4 h-4"/>} 
+                        {isPickup ? 'Endereço de Coleta' : 'Endereço de Entrega'}
+                    </label>
+                    {!isPickup && deliveries.length > 1 && (
+                        <button onClick={() => removeDelivery(addr.id)} className="p-1 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                    )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2">
+                    <input type="text" placeholder="Rua / Avenida" value={addr.street} onChange={e => handleInputChange('street', e.target.value)} className="w-full p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 text-sm" />
+                    <input type="text" placeholder="Número" value={addr.number} onChange={e => handleInputChange('number', e.target.value)} className="w-full p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 text-sm" />
+                </div>
+                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                    <input type="text" placeholder="Bairro" value={addr.neighborhood} onChange={e => handleInputChange('neighborhood', e.target.value)} className="w-full p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 text-sm" />
+                    <Button variant="outline" onClick={() => validateAddress(addr.id)} disabled={addr.validating} className="h-full px-4">
+                        {addr.validating ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Validar'}
+                    </Button>
+                </div>
+                {addr.error && <p className="text-xs font-bold text-red-500 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> {addr.error}</p>}
+                {addr.validated && (
+                    <div className="flex items-center justify-between text-xs text-green-600 mt-1 font-bold p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <span className="flex items-center gap-1"><CheckCircle className="w-4 h-4"/> Endereço OK: {addr.cep}</span>
+                        <button onClick={() => openNavigation(addr.lat!, addr.lng!)} className="p-1 hover:bg-green-100 rounded-full" title="Abrir no Waze">
+                            <Navigation className="w-4 h-4"/>
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600"/></div>;
 
     return (
         <div className="space-y-6 animate-in fade-in">
+            {notification && (
+                <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 ${notification.type === 'success' ? 'bg-green-100 text-green-700' : notification.type === 'info' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                    {notification.type === 'success' ? <Check className="w-5 h-5"/> : notification.type === 'info' ? <Info className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5" />}
+                    <span className="font-bold text-sm">{notification.message}</span>
+                    <button onClick={() => setNotification(null)} className="ml-auto"><X className="w-4 h-4" /></button>
+                </div>
+            )}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <div className="flex justify-between items-start mb-6">
+                 <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h1 className="text-xl font-black text-gray-900 dark:text-white">Solicitar Entregador</h1>
-                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-                            <MapPin className="w-3 h-3" /> Cidade base: <strong>{storeCity}</strong>
-                        </p>
+                        <h1 className="text-xl font-black text-gray-900 dark:text-white">Solicitar Entrega</h1>
+                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3"/> {storeCity}</p>
                     </div>
-                    <div className="text-right">
-                        <p className="text-xs text-gray-400 font-bold uppercase">Seu Saldo</p>
+                     <div className="text-right">
+                        <p className="text-xs text-gray-400 font-bold uppercase">Saldo</p>
                         <p className={`font-bold text-lg ${walletBalance > 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(walletBalance)}</p>
                     </div>
                 </div>
 
-                <div className="space-y-4">
-                    {/* Pickup */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">Onde buscar? (Coleta)</label>
-                        <div className="relative">
-                            <input 
-                                type="text" 
-                                placeholder="Ex: Rua das Flores, 123" 
-                                value={pickup}
-                                onChange={e => setPickup(e.target.value)}
-                                className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Deliveries */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-2">Onde levar? (Entregas)</label>
-                        <div className="space-y-3">
-                            {deliveries.map((addr, idx) => (
-                                <div key={idx} className="flex gap-2 items-center animate-in slide-in-from-left-2">
-                                    <div className="flex-1 relative">
-                                        <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 text-gray-300">
-                                            <ArrowDown className="w-4 h-4"/>
-                                        </div>
-                                        <input 
-                                            type="text" 
-                                            placeholder={`Ponto de entrega ${idx + 1}`} 
-                                            value={addr}
-                                            onChange={e => updateDelivery(idx, e.target.value)}
-                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
-                                        />
-                                    </div>
-                                    {deliveries.length > 1 && (
-                                        <button onClick={() => removeDelivery(idx)} className="p-3 text-red-400 hover:text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl">
-                                            <Trash2 className="w-5 h-5"/>
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                        <button 
-                            onClick={addDelivery} 
-                            className="mt-3 text-xs font-bold text-brand-600 flex items-center gap-1 hover:underline"
-                        >
-                            <Plus className="w-4 h-4"/> Adicionar parada
-                        </button>
-                    </div>
-
-                    {!distanceKm && (
-                        <Button 
-                            fullWidth 
-                            onClick={handleCalculate} 
-                            disabled={calculating || !pickup || deliveries.some(d => !d.trim())}
-                            variant="outline"
-                            className="py-3 mt-4"
-                        >
-                            {calculating ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Calculator className="w-4 h-4 mr-2"/>}
-                            {calculating ? 'Calculando Rota...' : 'Calcular Valor'}
-                        </Button>
-                    )}
+                <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-xl flex gap-1 mb-6">
+                    <button 
+                        onClick={handleSelectPlatform} 
+                        className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 transition-all rounded-lg ${requestType === 'PLATFORM' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500 dark:text-gray-400'}`}
+                    >
+                        {isSuperStore ? <ShieldCheck className="w-4 h-4"/> : <Lock className="w-4 h-4"/>} 
+                        Parceiro Zé
+                    </button>
+                    <button 
+                        onClick={() => setRequestType('ASSOCIATE')} 
+                        className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 transition-all rounded-lg ${requestType === 'ASSOCIATE' ? 'bg-white dark:bg-gray-600 shadow' : ''}`}
+                    >
+                        <Users className="w-4 h-4"/> Entregador Fixo
+                    </button>
                 </div>
-            </div>
 
-            {/* Result Card */}
-            {distanceKm !== null && cost !== null && (
-                <div className="bg-gradient-to-br from-brand-600 to-brand-700 rounded-2xl p-6 text-white shadow-lg animate-in slide-in-from-bottom-4">
-                    <div className="flex justify-between items-center mb-4">
-                        <div>
-                            <p className="text-brand-100 text-xs font-bold uppercase mb-1">Rota Total</p>
-                            <div className="flex items-center gap-2">
-                                <Navigation className="w-5 h-5 text-white"/>
-                                <span className="text-2xl font-bold">{distanceKm.toFixed(1)} km</span>
+                {requestType === 'PLATFORM' && (
+                    <div className="space-y-4">
+                       {renderAddressInputs(pickup, true)}
+                       {deliveries.map(d => renderAddressInputs(d, false))}
+                       <Button variant="outline" size="sm" onClick={addDelivery} fullWidth><Plus className="w-4 h-4 mr-1"/> Adicionar Parada</Button>
+                       <Button fullWidth onClick={handleDispatch} disabled={isSubmitting} className="py-4 mt-4">
+                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Chamar Entregador Zé'}
+                       </Button>
+                    </div>
+                )}
+                
+                {requestType === 'ASSOCIATE' && (
+                    <div className="space-y-6">
+                        {loadingAssociates ? <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400"/> : 
+                        associatedDrivers.length === 0 ? (
+                            <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                                <UserX className="w-8 h-8 text-red-400 mx-auto mb-2"/>
+                                <p className="font-bold text-red-600 text-sm">Nenhum entregador associado.</p>
                             </div>
-                            <p className="text-xs text-white/70 mt-1">{deliveries.length} entrega(s)</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-brand-100 text-xs font-bold uppercase mb-1">Valor Final</p>
-                            <div className="flex items-center justify-end gap-1">
-                                <span className="text-3xl font-black">{formatCurrency(cost)}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white/10 rounded-xl p-3 mb-4 text-xs text-brand-50 flex items-start gap-2">
-                        <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <p>O valor inclui taxas de serviço e adicional por parada extra (se houver).</p>
-                    </div>
-
-                    <div className="flex gap-3">
-                        <Button 
-                            variant="ghost" 
-                            className="flex-1 bg-white/20 hover:bg-white/30 text-white"
-                            onClick={() => { setDistanceKm(null); setCost(null); }}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button 
-                            className="flex-[2] bg-white text-brand-700 hover:bg-gray-100 border-none"
-                            onClick={() => handleConfirmRequest(false)}
-                            disabled={isSubmitting}
-                        >
-                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Confirmar e Chamar'}
-                        </Button>
-                    </div>
-                </div>
-            )}
-
-            {/* Offline Drivers Modal */}
-            {showOfflineModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-[32px] p-6 shadow-2xl flex flex-col max-h-[85vh]">
-                        <div className="flex justify-between items-start mb-4">
+                        ) : (
                             <div>
-                                <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                                    <UserX className="w-6 h-6 text-orange-500"/> Ninguém Online
-                                </h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Não encontramos entregadores online agora. Tente ligar para estes parceiros:</p>
-                            </div>
-                            <button onClick={() => setShowOfflineModal(false)}><X className="w-6 h-6 text-gray-400"/></button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto space-y-3 mb-4 custom-scrollbar">
-                            {offlineDrivers.map((driver, idx) => (
-                                <div key={idx} className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl flex items-center justify-between border border-gray-100 dark:border-gray-700">
-                                    <div>
-                                        <p className="font-bold text-gray-900 dark:text-white">{driver.name}</p>
-                                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                                            <span className="flex items-center gap-1 text-yellow-600 font-bold bg-yellow-100 px-1.5 py-0.5 rounded"><Star className="w-3 h-3 fill-current"/> {driver.average_rating.toFixed(1)}</span>
-                                            <span className="uppercase font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">{driver.vehicle_type}</span>
+                                <h3 className="text-sm font-bold text-gray-500 mb-2">Selecione o(s) entregador(es)</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {associatedDrivers.map(d => (
+                                        <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                                            {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600"/> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
+                                            <div>
+                                                <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
+                                                <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <a href={`tel:${driver.phone_number}`} className="bg-green-500 hover:bg-green-600 text-white p-3 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95">
-                                        <Phone className="w-5 h-5"/>
-                                    </a>
+                                    ))}
                                 </div>
-                            ))}
+                            </div>
+                        )}
+
+                        <div className="space-y-4">
+                             {renderAddressInputs(pickup, true)}
+                             {deliveries.map(d => renderAddressInputs(d, false))}
+                             <Button variant="outline" size="sm" onClick={addDelivery} fullWidth><Plus className="w-4 h-4 mr-1"/> Adicionar Parada</Button>
                         </div>
 
-                        <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-100 dark:border-orange-800 text-xs text-orange-800 dark:text-orange-200 mb-4">
-                            <strong>Atenção:</strong> Ao negociar diretamente, o pagamento e a responsabilidade são exclusivos entre você e o entregador. A plataforma não monitora essa entrega.
-                        </div>
-
-                        <Button variant="outline" fullWidth onClick={() => handleConfirmRequest(true)}>
-                            Criar pedido no sistema mesmo assim
+                        <Button fullWidth onClick={handleDispatch} disabled={isSubmitting || loadingAssociates || associatedDrivers.length === 0} className="py-4 mt-4">
+                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5 mr-2"/>}
+                            Enviar para Selecionado(s)
                         </Button>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };

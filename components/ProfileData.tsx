@@ -113,6 +113,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
   
   // Status Message State
   const [statusMessage, setStatusMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [showSensitive, setShowSensitive] = useState(false);
   
   const [user, setUser] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,29 +127,48 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
 
         if (user) {
             const role = await cloud.getUserRole();
-            setIsPartner(role === 'delivery_partner');
+            setIsPartner(role === 'delivery_partner' || role === 'delivery_person');
 
-            setPersonalData({ 
-                name: user.user_metadata.name || '', 
-                phone: user.user_metadata.phone || '',
-                email: user.email || '',
-                city: user.user_metadata.city || '',
-                address: user.user_metadata.address || ''
-            });
-            
-            if (user.user_metadata.profile_picture_url) {
-                setProfilePictureUrl(user.user_metadata.profile_picture_url);
-            }
-            
-            if (user.user_metadata.bank_details) {
-                setBankDetails(prev => ({ ...prev, ...user.user_metadata.bank_details }));
-            }
+            // Fetch from user_profiles table (source of truth)
+            const { data: profileData, error } = await client.from('user_profiles').select('*').eq('id', user.id).single();
 
-            // Fetch Partner Profile details specifically for the share switch
-            if (role === 'delivery_partner') {
-                const partnerProfile = await cloud.getMyPartnerProfile();
-                if (partnerProfile) {
-                    setSharePhoneOffline(partnerProfile.share_phone_offline || false);
+            if (profileData) {
+                setPersonalData({ 
+                    name: profileData.name || user.user_metadata.name || '', 
+                    phone: profileData.phone_number || user.user_metadata.phone || '',
+                    email: profileData.email || user.email || '',
+                    city: profileData.city || user.user_metadata.city || '',
+                    address: profileData.address || user.user_metadata.address || '' // Assuming address field exists or will exist
+                });
+                
+                if (profileData.avatar_url) {
+                    setProfilePictureUrl(profileData.avatar_url);
+                } else if (user.user_metadata.profile_picture_url) {
+                    setProfilePictureUrl(user.user_metadata.profile_picture_url); // Fallback to old metadata
+                }
+                
+                if (profileData.bank_details) {
+                    setBankDetails(prev => ({ ...prev, ...profileData.bank_details }));
+                }
+
+                // Fetch Partner Profile details specifically for the share switch
+                if (role === 'delivery_partner' || role === 'delivery_person') {
+                    setSharePhoneOffline(profileData.share_phone_offline || false);
+                }
+            } else {
+                // Fallback to auth.users metadata if profileData not found (e.g., new user, race condition)
+                setPersonalData({ 
+                    name: user.user_metadata.name || '', 
+                    phone: user.user_metadata.phone || '',
+                    email: user.email || '',
+                    city: user.user_metadata.city || '',
+                    address: user.user_metadata.address || ''
+                });
+                if (user.user_metadata.profile_picture_url) {
+                    setProfilePictureUrl(user.user_metadata.profile_picture_url);
+                }
+                if (user.user_metadata.bank_details) {
+                    setBankDetails(prev => ({ ...prev, ...user.user_metadata.bank_details }));
                 }
             }
         }
@@ -163,15 +183,18 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
     try {
         const client = cloud.getClient();
         if (user && client) {
-             // Save core metadata - Even partial updates are allowed
-             await (client.auth as any).updateUser({
-                 data: { 
-                     phone: personalData.phone,
+             // Save core metadata to user_profiles table
+             const { error: profileUpdateError } = await client
+                 .from('user_profiles')
+                 .update({
+                     phone_number: personalData.phone,
                      city: personalData.city,
-                     address: personalData.address,
-                     bank_details: bankDetails 
-                 }
-             });
+                     address: personalData.address, // Assuming address field exists
+                     bank_details: bankDetails // Save bank details as JSONB
+                 })
+                 .eq('id', user.id);
+
+             if (profileUpdateError) throw profileUpdateError;
              
              // Save Partner Settings if applicable
              if (isPartner) {
@@ -200,12 +223,12 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
       try {
           const publicUrl = await cloud.uploadProfilePicture(file);
           setProfilePictureUrl(publicUrl);
-          // Save URL immediately to metadata
+          // Save URL immediately to user_profiles table
           const client = cloud.getClient();
           if (user && client) {
-              await (client.auth as any).updateUser({
-                  data: { profile_picture_url: publicUrl }
-              });
+              await client.from('user_profiles').update({
+                  avatar_url: publicUrl
+              }).eq('id', user.id);
           }
       } catch (e: any) {
           alert("Erro no upload da foto: " + e.message);
@@ -253,9 +276,22 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
 
   const BankFormFields = () => (
       <div className="space-y-4">
-          <div>
+          <div className="relative">
               <label className="text-xs font-bold text-gray-500 uppercase">Chave PIX</label>
-              <input type="text" value={bankDetails.pixKey} onChange={e => setBankDetails({...bankDetails, pixKey: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white" placeholder="CPF, Email ou Telefone"/>
+              <input 
+                type={showSensitive ? 'text' : 'password'} 
+                value={bankDetails.pixKey} 
+                onChange={e => setBankDetails({...bankDetails, pixKey: e.target.value})} 
+                className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white pr-10" 
+                placeholder="CPF, Email ou Telefone"
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowSensitive(!showSensitive)} 
+                className="absolute right-3 top-8 text-gray-400"
+              >
+                {showSensitive ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+              </button>
           </div>
           
           <div className="grid grid-cols-2 gap-4">

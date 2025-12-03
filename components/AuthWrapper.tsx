@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import App from '../App';
+import React, { useState, useEffect, useRef } from 'react';
+import { App } from './App';
 import * as cloud from '../services/cloud';
 import { UserRole } from '../types';
 import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin } from 'lucide-react';
 import { Button } from './Button';
 import { LandingPage } from './LandingPage';
 import { CitySelector } from './CitySelector';
-import { formatPhoneNumber } from '../utils/mapHelpers';
+import { formatPhoneNumber, formatCpf } from '../utils/mapHelpers'; // Import formatCpf
 import { Logo } from './Logo';
 import { Skeleton } from './Skeleton';
 
@@ -15,7 +15,8 @@ type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_pa
 export const AuthWrapper: React.FC = () => {
   const [session, setSession] = useState<any | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<UserRole>('user');
+  // Fix: Changed initial userRole from 'user' to 'delivery_person'
+  const [userRole, setUserRole] = useState<UserRole>('delivery_person');
   const [isCheckingSession, setIsCheckingSession] = useState(true);
 
   const [view, setView] = useState<AuthView>('landing');
@@ -32,6 +33,19 @@ export const AuthWrapper: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
+
+  // Helper para tradução de erros do Supabase/Auth
+  const getErrorMessage = (error: any) => {
+      const msg = error?.message || '';
+      if (msg.includes("Invalid login credentials")) return "Credenciais inválidas. Verifique e-mail e senha.";
+      if (msg.includes("User already registered")) return "Este usuário já está cadastrado.";
+      if (msg.includes("Password should be at least")) return "A senha deve ter pelo menos 6 caracteres.";
+      if (msg.includes("Database error")) return "Erro ao salvar usuário. Verifique se o e-mail ou telefone já estão em uso."; // Generic but localized
+      if (msg.includes("refresh_token")) return "Sessão expirada. Faça login novamente.";
+      if (msg.includes("rate limit")) return "Muitas tentativas. Aguarde alguns instantes.";
+      if (msg.includes("network") || msg.includes("fetch")) return "Erro de conexão. Verifique sua internet.";
+      return "Ocorreu um erro inesperado. Tente novamente.";
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -61,11 +75,13 @@ export const AuthWrapper: React.FC = () => {
               setAuthMessage({ type: 'error', text: 'Sua conta foi suspensa.' });
               setSession(null);
               setUserId(null);
-              setUserRole('user');
+              // Fix: Changed 'user' to 'delivery_person'
+              setUserRole('delivery_person');
             } else {
               setSession(initialSession);
               setUserId(initialSession.user.id);
-              setUserRole(role || 'user');
+              // Fix: Changed 'user' to 'delivery_person'
+              setUserRole(role || 'delivery_person');
             }
           }
         }
@@ -77,7 +93,8 @@ export const AuthWrapper: React.FC = () => {
             if (mounted) {
                 setSession(null);
                 setUserId(null);
-                setUserRole('user');
+                // Fix: Changed 'user' to 'delivery_person'
+                setUserRole('delivery_person');
             }
         }
       } finally {
@@ -92,7 +109,8 @@ export const AuthWrapper: React.FC = () => {
         if (event === 'SIGNED_OUT') {
           setSession(null);
           setUserId(null);
-          setUserRole('user');
+          // Fix: Changed 'user' to 'delivery_person'
+          setUserRole('delivery_person');
           setView('landing');
         } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           if (currentSession) {
@@ -104,7 +122,8 @@ export const AuthWrapper: React.FC = () => {
                  const role = await cloud.getUserRole();
                  setSession(currentSession);
                  setUserId(currentSession.user.id);
-                 setUserRole(role || 'user');
+                 // Fix: Changed 'user' to 'delivery_person'
+                 setUserRole(role || 'delivery_person');
              }
           }
         }
@@ -144,6 +163,7 @@ export const AuthWrapper: React.FC = () => {
               return;
           }
           if (payload.new.role) {
+            // Fix: Changed 'user' to 'delivery_person' as default/fallback
             setUserRole(payload.new.role.toLowerCase() as UserRole);
           }
         }
@@ -187,11 +207,8 @@ export const AuthWrapper: React.FC = () => {
       if (error) throw error;
 
     } catch (error: any) {
-      if (error.message.includes("Invalid login credentials")) {
-          setAuthMessage({ type: 'error', text: 'Credenciais inválidas.' });
-      } else {
-          setAuthMessage({ type: 'error', text: error.message || 'Erro ao entrar.' });
-      }
+        // Use translation helper
+        setAuthMessage({ type: 'error', text: getErrorMessage(error) });
     } finally {
       setAuthLoading(false);
     }
@@ -210,7 +227,8 @@ export const AuthWrapper: React.FC = () => {
       await cloud.sendPasswordResetEmail(emailOrPhone);
       setAuthMessage({ type: 'success', text: 'E-mail de recuperação enviado!' });
     } catch (error: any) {
-      setAuthMessage({ type: 'error', text: error.message || 'Erro ao enviar e-mail.' });
+        // Use translation helper
+        setAuthMessage({ type: 'error', text: getErrorMessage(error) });
     } finally {
       setAuthLoading(false);
     }
@@ -231,10 +249,17 @@ export const AuthWrapper: React.FC = () => {
     setAuthMessage(null);
 
     try {
-        await cloud.registerUserWithType(email, password, name, phone, cpf, signupType || 'USER', selectedCity);
+        // CORREÇÃO CRÍTICA: Converter role para minúsculo para bater com o ENUM do banco de dados
+        // Mapeia o tipo de cadastro para o role correto no DB
+        let roleToSend = 'delivery_person';
+        if (signupType === 'STORE_PARTNER') roleToSend = 'store_partner';
+        if (signupType === 'DELIVERY_PARTNER') roleToSend = 'delivery_partner';
+        
+        await cloud.registerUserWithType(email, password, name, phone, cpf, roleToSend, selectedCity);
         setAuthMessage({ type: 'success', text: 'Conta criada com sucesso! Verifique seu e-mail.' });
     } catch (e: any) {
-        setAuthMessage({ type: 'error', text: e.message || "Erro ao criar conta." });
+        // Use translation helper
+        setAuthMessage({ type: 'error', text: getErrorMessage(e) });
     } finally {
         setAuthLoading(false);
     }
@@ -289,7 +314,13 @@ export const AuthWrapper: React.FC = () => {
                     {view === 'login' && 'Acesse sua conta para continuar.'}
                     {view === 'forgot_password' && 'Enviaremos um link para seu e-mail.'}
                     {view === 'signup_city' && 'Onde você vai atuar?'}
-                    {view === 'signup_form' && 'Preencha seus dados.'}
+                    {view === 'signup_form' && (
+                        signupType === 'STORE_PARTNER' 
+                        ? 'Cadastre sua loja e impulsione suas vendas.' 
+                        : signupType === 'DELIVERY_PARTNER' 
+                            ? 'Faça seu cadastro e comece a faturar.'
+                            : 'Preencha seus dados para continuar.'
+                    )}
                 </p>
             </div>
 
@@ -308,8 +339,11 @@ export const AuthWrapper: React.FC = () => {
                             type="text" 
                             value={emailOrPhone} 
                             onChange={e => setEmailOrPhone(e.target.value)} 
+                            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                             className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-transparent focus:border-brand-500 focus:bg-white dark:focus:bg-gray-800 outline-none transition-all dark:text-white"
                             placeholder="Digite aqui..."
+                            autoComplete="username"
+                            autoFocus
                         />
                     </div>
                     <div>
@@ -319,8 +353,10 @@ export const AuthWrapper: React.FC = () => {
                                 type={showPassword ? 'text' : 'password'} 
                                 value={password} 
                                 onChange={e => setPassword(e.target.value)} 
+                                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                                 className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-transparent focus:border-brand-500 focus:bg-white dark:focus:bg-gray-800 outline-none transition-all dark:text-white pr-10"
                                 placeholder="******"
+                                autoComplete="current-password"
                             />
                             <button 
                                 onClick={() => setShowPassword(!showPassword)}
@@ -347,8 +383,11 @@ export const AuthWrapper: React.FC = () => {
                             type="email" 
                             value={emailOrPhone} 
                             onChange={e => setEmailOrPhone(e.target.value)} 
+                            onKeyDown={(e) => e.key === 'Enter' && handleForgotPassword()}
                             className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
                             placeholder="seu@email.com"
+                            autoComplete="email"
+                            autoFocus
                         />
                     </div>
                     <Button fullWidth onClick={handleForgotPassword} disabled={authLoading} className="py-4">
@@ -381,29 +420,41 @@ export const AuthWrapper: React.FC = () => {
                         placeholder="Nome Completo" 
                         value={name} 
                         onChange={e => setName(e.target.value)} 
+                        onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
                         className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                        autoComplete="name"
+                        autoFocus
                     />
                     <input 
                         type="email" 
                         placeholder="Email" 
                         value={email} 
                         onChange={e => setEmail(e.target.value)} 
+                        onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
                         className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                        autoComplete="email"
                     />
                     <input 
                         type="tel" 
                         placeholder="Telefone (WhatsApp)" 
                         value={phone} 
                         onChange={e => setPhone(formatPhoneNumber(e.target.value))} 
+                        onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
                         maxLength={15}
                         className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                        autoComplete="tel"
+                        inputMode="tel"
                     />
                     <input 
                         type="text" 
                         placeholder="CPF (Opcional)" 
                         value={cpf} 
-                        onChange={e => setCpf(e.target.value)} 
+                        onChange={e => setCpf(formatCpf(e.target.value))} 
+                        onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
                         className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white"
+                        autoComplete="off"
+                        inputMode="numeric"
+                        maxLength={14}
                     />
                     <div className="relative">
                         <input 
@@ -411,7 +462,9 @@ export const AuthWrapper: React.FC = () => {
                             placeholder="Senha (mín. 6 caracteres)" 
                             value={password} 
                             onChange={e => setPassword(e.target.value)} 
+                            onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
                             className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-transparent focus:border-brand-500 border dark:text-white pr-10"
+                            autoComplete="new-password"
                         />
                         <button 
                             onClick={() => setShowPassword(!showPassword)}
@@ -422,8 +475,11 @@ export const AuthWrapper: React.FC = () => {
                     </div>
 
                     {signupType === 'DELIVERY_PARTNER' && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-xs text-blue-700 dark:text-blue-300">
                             <MapPin className="w-4 h-4"/> Cidade: <strong>{selectedCity}</strong>
+                            <button onClick={() => setView('signup_city')} className="ml-auto text-xs font-bold text-blue-800 dark:text-blue-200 hover:underline">
+                                (Mudar)
+                            </button>
                         </div>
                     )}
 

@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Wallet, Plus, Loader2, Copy, ExternalLink, X, AlertTriangle, QrCode, MapPin, Star, MessageCircle, Gift, Crown, ChevronRight, Truck } from 'lucide-react';
+import { Wallet, Plus, Loader2, Copy, ExternalLink, X, AlertTriangle, QrCode, MapPin, Star, MessageCircle, Gift, Crown, ChevronRight, Truck, Send, Users, BarChart3, Megaphone, History } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
-import { StoreWallet, WalletTransaction, PartnerRequest, PartnerRequestStatus } from '../types';
+import { StoreWallet, WalletTransaction, PartnerRequest, PartnerRequestStatus, PartnerFeeSettings } from '../types';
 import { LiveTrackingMap } from './LiveTrackingMap';
 import { RatingModal } from './RatingModal';
 import { FinancialPanel } from './FinancialPanel';
@@ -46,12 +46,18 @@ const StoreWalletSkeleton = () => (
     </div>
 );
 
-export const StoreWalletModule: React.FC = () => {
+interface StoreWalletModuleProps {
+    onNavigate?: (tab: any) => void;
+}
+
+export const StoreWalletModule: React.FC<StoreWalletModuleProps> = ({ onNavigate }) => {
     const [wallet, setWallet] = useState<StoreWallet | null>(null);
     const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
     const [loading, setLoading] = useState(false);
     const [myRequests, setMyRequests] = useState<PartnerRequest[]>([]);
     const [isSuperStore, setIsSuperStore] = useState(false);
+    const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
+    const [storeCode, setStoreCode] = useState<string>('');
     
     // Recharge States
     const [showRechargeModal, setShowRechargeModal] = useState(false);
@@ -62,6 +68,12 @@ export const StoreWalletModule: React.FC = () => {
     const [paymentDetails, setPaymentDetails] = useState<any>(null);
     const qrCanvasRef = useRef<HTMLCanvasElement>(null);
     
+    // Transfer States
+    const [showTransferModal, setShowTransferModal] = useState(false);
+    const [transferCode, setTransferCode] = useState('');
+    const [transferAmount, setTransferAmount] = useState('');
+    const [processingTransfer, setProcessingTransfer] = useState(false);
+
     // Decision States
     const [decisionRequest, setDecisionRequest] = useState<PartnerRequest | null>(null);
     const [processingDecision, setProcessingDecision] = useState(false);
@@ -83,21 +95,23 @@ export const StoreWalletModule: React.FC = () => {
     const loadData = async (showLoading: boolean = true) => { 
         if(showLoading) setLoading(true); 
         try { 
-            const [w, t, reqs] = await Promise.all([
+            const [w, t, reqs, f, user] = await Promise.all([
                 cloud.getMyWallet(), 
                 cloud.getWalletTransactions(), 
-                cloud.getStoreRequests()
+                cloud.getStoreRequests(),
+                cloud.adminGetFeeSettings(),
+                cloud.getClient()?.auth.getUser()
             ]); 
             setWallet(w); 
             setTransactions(t); 
             setMyRequests(reqs); 
+            setFees(f);
             
-            // Check Super Store Status
-            const user = await cloud.getClient()?.auth.getUser();
             if (user?.data.user) {
-                const profile = await cloud.getClient()?.from('user_profiles').select('is_super_store').eq('id', user.data.user.id).single();
+                const profile = await cloud.getClient()?.from('user_profiles').select('is_super_store, association_code').eq('id', user.data.user.id).single();
                 if (profile?.data) {
                     setIsSuperStore(profile.data.is_super_store);
+                    setStoreCode(profile.data.association_code || '---');
                 }
             }
 
@@ -128,6 +142,27 @@ export const StoreWalletModule: React.FC = () => {
     
     const resetRecharge = () => { setShowRechargeModal(false); setRechargeStep('amount'); setRechargeAmount(''); setPaymentDetails(null); };
     
+    const handleTransfer = async () => {
+        if (!transferAmount || !transferCode) return alert("Preencha todos os campos.");
+        const val = parseFloat(transferAmount.replace(',', '.'));
+        if (isNaN(val) || val <= 0) return alert("Valor inválido.");
+        
+        setProcessingTransfer(true);
+        try {
+            // Using P2P transfer logic but adapted for Store -> Partner
+            await cloud.performInternalTransfer(transferCode.toUpperCase(), val, 'STORE');
+            alert("Transferência realizada!");
+            setShowTransferModal(false);
+            setTransferAmount('');
+            setTransferCode('');
+            loadData(false);
+        } catch (e: any) {
+            alert("Erro: " + e.message);
+        } finally {
+            setProcessingTransfer(false);
+        }
+    };
+
     const handleDecision = async (decision: 'RETURN' | 'DISCARD') => { 
         if (!decisionRequest) return; 
         if (!confirm(decision === 'RETURN' ? "O item será devolvido à loja?" : "O entregador pode ficar/descartar?")) return; 
@@ -194,8 +229,8 @@ export const StoreWalletModule: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {/* Super Store Banner */}
-            {!isSuperStore && (
+            {/* Super Store Banner (Dynamic) */}
+            {!isSuperStore && fees && (
                 <div 
                     onClick={() => setShowSuperStoreModal(true)}
                     className="relative overflow-hidden bg-gradient-to-r from-yellow-400 to-orange-500 p-4 rounded-2xl shadow-lg cursor-pointer transform hover:scale-[1.01] transition-transform"
@@ -210,23 +245,72 @@ export const StoreWalletModule: React.FC = () => {
                                 <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-lg">Novo</span>
                             </div>
                             <h3 className="font-black text-xl leading-tight">Seja Super Lojista!</h3>
-                            <p className="text-xs text-yellow-100 mt-1 max-w-[200px]">Desbloqueie gerentes, relatórios exclusivos e regras de frete.</p>
+                            <p className="text-xs text-yellow-100 mt-1 max-w-[200px]">
+                                Apenas {formatCurrency(fees.super_store_monthly_fee || 0)}/mês. Cancele quando quiser.
+                            </p>
                         </div>
-                        <div className="bg-white text-orange-600 p-2 rounded-full shadow-md">
+                        <div className="bg-white text-orange-600 p-2 rounded-full shadow-md animate-pulse">
                             <ChevronRight className="w-5 h-5" />
                         </div>
                     </div>
                 </div>
             )}
 
-            <div className="bg-gradient-to-br from-brand-600 to-brand-700 text-white p-6 rounded-3xl shadow-lg flex justify-between items-center">
-                <div>
-                    <p className="text-brand-100 text-sm font-medium">Saldo Disponível</p>
-                    <h2 className="text-4xl font-black">{formatCurrency(wallet?.balance_decimal || 0)}</h2>
-                </div>
-                <button onClick={() => setShowRechargeModal(true)} className="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-full text-sm flex items-center gap-2 transition-colors">
-                    <Plus className="w-4 h-4" /> Recarregar
+            {/* Quick Access Shortcuts - Visible to ALL Store Partners */}
+            <div className="grid grid-cols-4 gap-2 mb-2">
+                <button onClick={() => onNavigate?.('new_request')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
+                        <Truck className="w-5 h-5"/>
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Nova Entrega</span>
                 </button>
+                
+                <button onClick={() => onNavigate?.('history')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
+                        <History className="w-5 h-5"/>
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Histórico</span>
+                </button>
+
+                <button onClick={() => onNavigate?.('store_team')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
+                        <Users className="w-5 h-5"/>
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Equipe</span>
+                </button>
+
+                <button onClick={() => onNavigate?.('store_marketing')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
+                        <Megaphone className="w-5 h-5"/>
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Marketing</span>
+                </button>
+            </div>
+
+            <div className="bg-gradient-to-br from-brand-600 to-brand-700 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-6 opacity-10">
+                    <Wallet className="w-32 h-32" />
+                </div>
+                <div className="relative z-10 flex flex-col justify-between gap-4">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-brand-100 text-sm font-medium">Saldo Disponível</p>
+                            <h2 className="text-4xl font-black">{formatCurrency(wallet?.balance_decimal || 0)}</h2>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-brand-100 text-[10px] font-bold uppercase opacity-80">Código da Loja</p>
+                            <p className="font-mono text-lg font-bold">{storeCode}</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={() => setShowRechargeModal(true)} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
+                            <Plus className="w-4 h-4" /> Recarregar
+                        </button>
+                        <button onClick={() => setShowTransferModal(true)} className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors border border-white/20">
+                            <Send className="w-4 h-4" /> Transferir
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* Active Requests */}
@@ -285,6 +369,42 @@ export const StoreWalletModule: React.FC = () => {
             {showRechargeModal && renderRechargeModal()}
             {renderDecisionModal()}
             
+            {/* Transfer Modal */}
+            {showTransferModal && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl relative">
+                        <button onClick={() => setShowTransferModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+                        <h3 className="font-bold text-lg dark:text-white mb-6 flex items-center gap-2">Transferência Interna</h3>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Código do Destinatário</label>
+                                <input 
+                                    type="text" 
+                                    value={transferCode}
+                                    onChange={e => setTransferCode(e.target.value.toUpperCase())}
+                                    className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none font-mono uppercase"
+                                    placeholder="EX: P12345"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Valor (R$)</label>
+                                <input 
+                                    type="number" 
+                                    value={transferAmount}
+                                    onChange={e => setTransferAmount(e.target.value)}
+                                    className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none font-black text-xl"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                            <Button fullWidth onClick={handleTransfer} disabled={processingTransfer}>
+                                {processingTransfer ? <Loader2 className="w-6 h-6 animate-spin"/> : 'Confirmar Transferência'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {trackingRequest && (
                 <LiveTrackingMap 
                     requestId={trackingRequest.id} 
@@ -309,7 +429,7 @@ export const StoreWalletModule: React.FC = () => {
                 />
             )}
 
-            {showSuperStoreModal && (
+            {showSuperStoreModal && fees && (
                 <SuperStoreModal 
                     onClose={() => setShowSuperStoreModal(false)}
                     onSuccess={() => {

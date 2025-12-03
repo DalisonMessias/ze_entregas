@@ -30,7 +30,11 @@ const icons: { [key: string]: React.ElementType } = {
   ShoppingBag,
   Users,
   Bot,
-  Navigation
+  Navigation,
+  Instagram,
+  Facebook,
+  Twitter,
+  Linkedin
 };
 
 const IconComponent = ({ name, ...props }: { name: string, [key: string]: any }) => {
@@ -83,6 +87,7 @@ const NewsCard: React.FC<NewsCardProps> = ({ item, index }) => {
                     <IconComponent name={item.icon_name} className="w-6 h-6" />
                 </div>
                 <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-3">{item.title}</h3>
+                {/* Fix: Removed duplicate className attribute */}
                 <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed flex-1">{item.description}</p>
             </div>
         </div>
@@ -111,7 +116,8 @@ const handleScroll = (e: React.MouseEvent<HTMLElement>, targetId: string) => {
     }
 };
 
-const Header: React.FC<{ onLoginClick: () => void; onSignupClick: () => void; }> = ({ onLoginClick, onSignupClick }) => {
+// FIX: Removed onSignupClick from Header props as it's not used directly
+const Header: React.FC<{ onLoginClick: () => void; }> = ({ onLoginClick }) => {
     return (
         <nav className="w-full fixed top-0 left-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 z-50 transition-colors duration-300">
             <div className="px-4 md:px-8 py-4 flex justify-between items-center max-w-7xl mx-auto w-full">
@@ -148,6 +154,7 @@ const BenefitCard = ({ icon, title, description, colorClass }: { icon: React.Rea
             {icon}
         </div>
         <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-3">{title}</h3>
+        {/* Fix: Removed duplicate className attribute */}
         <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{description}</p>
     </div>
 );
@@ -242,7 +249,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
 
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950 flex flex-col font-sans">
-            <Header onLoginClick={onLoginClick} onSignupClick={() => {}} />
+            {/* FIX: Removed onSignupClick prop */}
+            <Header onLoginClick={onLoginClick} />
             
             <main className="flex-1">
                 {/* Hero Section */}
@@ -307,8 +315,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
                                         <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-medium"><div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="w-4 h-4 text-green-600"/></div> Radar de entregadores próximos</li>
                                         <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-medium"><div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="w-4 h-4 text-green-600"/></div> Relatórios financeiros detalhados</li>
                                     </ul>
-                                    <Button onClick={() => onSignupClick('STORE_PARTNER')} className="bg-brand-600 hover:bg-brand-700 text-white w-full py-4 rounded-2xl text-lg shadow-lg shadow-brand-500/20">
-                                        Começar como Loja
+                                    <Button onClick={() => onSignupClick('STORE_PARTNER')} className="bg-brand-600 text-white hover:bg-brand-700 w-full py-4 rounded-2xl text-lg shadow-lg shadow-gray-200/50">
+                                        Cadastrar Minha Loja
                                     </Button>
                                 </div>
                             </div>
@@ -432,7 +440,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
                                                         {/* Zé - White */}
                                                         <path fill="#FFFFFF" fillRule="nonzero" d="M375.02 201.97c0,3.91 1.87,5.78 5.79,5.78l69.4 0c3.74,0 5.61,-1.87 5.61,-5.78l0 -19.05c0,-3.91 -1.87,-5.78 -5.61,-5.78l-36.23 0 37.59 -57.16c1.7,-2.55 2.89,-5.44 2.89,-9.02l0 -17.86c0,-3.91 -1.87,-5.78 -5.78,-5.78l-66 0c-3.91,0 -5.78,1.87 -5.78,5.78l0 19.05c0,3.91 1.87,5.78 5.78,5.78l33 0 -37.76 57.16c-1.7,2.55 -2.89,5.44 -2.89,9.01l0 17.86zm140.68 -16.5c-11.57,0 -16.67,-3.23 -18.03,-12.76l42.53 0c4.08,0 5.95,-1.53 5.95,-5.78l0 -9.87c0,-28.75 -12.25,-44.4 -38.95,-44.4 -26.88,0 -41.17,14.8 -41.17,47.97 0,34.7 15.31,48.82 46.61,48.82 10.72,0 19.73,-2.04 26.03,-4.76 3.06,-1.53 4.59,-3.06 4.08,-6.8l-1.7 -12.08c-0.51,-3.57 -3.06,-4.93 -6.63,-3.74 -4.76,1.7 -11.57,3.4 -18.71,3.4zm-8.17 -49.67c6.63,0 9.53,5.1 9.53,16.16l0 1.87 -20.24 0c0.85,-13.61 3.57,-18.03 10.72,-18.03zm-13.95 -33.34c-0.85,2.55 0.17,4.25 3.23,4.25l12.93 0c3.23,0 4.93,-0.68 6.98,-2.89l12.42 -12.93c1.87,-2.04 1.36,-5.61 -2.04,-5.61l-23.14 0c-3.23,0 -4.59,1.36 -5.44,3.74l-4.93 13.44z"/>
                                                         {/* Entregas - White */}
-                                                        <path fill="#FFFFFF" fillRule="nonzero" d="M662.16 160.81c3.74,0 5.79,-2.04 5.79,-5.78l0 -16.84c0,-3.74 -2.04,-5.78 -5.79,-5.78l-32.15 0 0 -15.48 34.36 0c3.91,0 5.78,-1.87 5.78,-5.78l0 -18.03c0,-3.91 -1.87,-5.78 -5.78,-5.78l-62.26 0c-3.91,0 -5.79,1.87 -5.79,5.78l0 108.87c0,3.91 1.87,5.78 5.79,5.78l63.11 0c3.91,0 5.78,-1.87 5.78,-5.78l0 -18.03c0,-3.91 -1.87,-5.78 -5.78,-5.78l-35.21 0 0 -17.35 32.15 0zm100.02 -16.5c0,-20.07 -7.48,-31.64 -25.69,-31.64 -10.89,0 -18.71,5.1 -22.45,10.2l-1.19 -4.25c-0.68,-2.72 -2.04,-4.25 -5.96,-4.25l-18.88 0c-3.57,0 -5.27,1.7 -5.27,5.27l0 82.84c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.57,0 5.27,-1.7 5.27,-5.27l0 -48.14c0,-8.68 2.21,-13.44 8.68,-13.44 5.27,0 6.63,3.57 6.63,11.06l0 50.52c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.74,0 5.44,-1.7 5.44,-5.27l0 -58.18zm58.35 1.53c3.57,0 5.27,-1.7 5.27,-5.28l0 -15.48c0,-3.57 -1.7,-5.28 -5.27,-5.28l-10.38 0 0 -19.39c0,-3.4 -1.7,-5.1 -5.44,-5.1l-20.07 0c-3.74,0 -5.44,1.7 -5.44,5.1l0 19.39 -4.59 0c-3.57,0 -5.1,1.53 -5.1,5.1l0 15.82c0,3.57 1.53,5.1 5.1,5.1l4.42 0 0 33.85c0,22.12 7.99,29.26 28.41,29.26 5.61,0 10.55,-0.51 13.78,-1.36 3.06,-0.85 4.59,-2.21 4.59,-5.44l0 -15.14c0,-3.57 -1.7,-5.1 -4.93,-5.1 -1.19,0 -3.23,0.17 -4.08,0.17 -5.1,0 -6.47,-1.7 -6.47,-7.65l0 -28.58 10.21 0zm20.75 -31.47c-3.57,0 -5.27,1.7 -5.27,5.27l0 82.84c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.57,0 5.27,-1.7 5.27,-5.27l0 -40.83c0,-9.53 4.59,-14.97 13.44,-14.97 2.72,0 4.25,0.51 6.47,0.51 2.72,0 4.59,-1.02 4.59,-4.59l0 -23.98c0,-3.74 -1.36,-5.27 -5.44,-5.27 -9.7,0 -16.5,7.31 -19.56,13.44l-1.19 -7.49c-0.51,-3.4 -1.7,-4.93 -5.78,-4.93l-19.22 0zm107.17 71.1c-11.57,0 -16.67,-3.23 -18.03,-12.76l42.53 0c4.08,0 5.95,-1.53 5.95,-5.78l0 -9.87c0,-28.75 -12.25,-44.4 -38.95,-44.4 -26.88,0 -41.17,14.8 -41.17,47.97 0,34.7 15.31,48.82 46.61,48.82 10.72,0 19.73,-2.04 26.03,-4.76 3.06,-1.53 4.59,-3.06 4.08,-6.8l-1.7 -12.08c-0.51,-3.57 -3.06,-4.93 -6.63,-3.74 -4.76,1.7 -11.57,3.4 -18.71,3.4zm-8.17 -49.67c6.63,0 9.53,5.1 9.53,16.16l0 1.87 -20.24 0c0.85,-13.61 3.57,-18.03 10.72,-18.03zm97.64 18.2c0,11.91 -2.55,17.69 -8.85,17.69 -6.47,0 -8.34,-5.78 -8.34,-17.69 0,-11.74 2.04,-17.35 8.34,-17.35 6.29,0 8.85,5.61 8.85,17.35zm31.13 -34.36c0,-3.57 -1.7,-5.27 -5.44,-5.27l-17.52 0c-3.74,0 -5.27,1.53 -5.96,4.25l-1.02 3.74c-3.57,-4.93 -10.38,-9.53 -20.41,-9.53 -18.54,0 -30.11,11.06 -30.11,41.17 0,29.77 10.38,41 29.94,41 9.87,0 16.67,-3.06 20.24,-8.16l0 3.57c0,9.53 -4.77,13.61 -16.33,13.61 -8.17,0 -15.82,-2.04 -20.07,-3.23 -3.91,-1.19 -6.12,0.17 -6.63,3.74l-1.7 12.76c-0.51,3.91 1.02,5.28 4.08,6.8 5.61,2.55 17.86,4.08 28.24,4.08 28.92,0 42.7,-11.4 42.7,-36.74l0 -71.79zm87.95 23.3c0,-20.75 -11.57,-30.11 -37.6,-30.11 -11.06,0 -22.96,2.21 -30.11,4.93 -3.06,1.02 -4.42,2.89 -3.91,6.3l2.04 14.12c0.51,3.57 3.06,4.76 6.63,3.74 4.77,-1.53 12.08,-3.74 20.24,-3.74 8.17,0 11.74,2.04 11.74,7.66l0 4.08c-29.26,0.51 -46.78,4.25 -46.78,30.62 0,19.56 11.06,28.24 25.35,28.24 12.42,0 19.39,-4.42 23.13,-9.01l1.02 3.74c0.68,2.72 2.21,4.25 5.96,4.25l16.84 0c3.74,0 5.44,-1.7 5.44,-5.27l0 -59.54zm-30.96 32.15c0,7.31 -1.7,12.25 -9.01,12.25 -5.1,0 -7.31,-3.57 -7.31,-9.19 0,-9.19 3.91,-11.06 16.33,-11.4l0 8.34zm108.7 6.29c0,-17.52 -9.01,-23.64 -22.28,-29.43 -8.67,-3.74 -14.29,-5.78 -14.29,-9.69 0,-3.57 3.74,-4.59 9.7,-4.59 5.61,0 11.4,1.19 14.63,2.04 3.57,0.85 5.78,-0.51 6.12,-3.74l1.53 -13.78c0.51,3.57 -0.68,-5.1 -3.91,-6.29 -4.93,-1.7 -14.63,-3.23 -24.16,-3.23 -23.3,0 -35.38,8.16 -35.38,28.07 0,21.09 11.74,25.68 23.82,30.62 8.17,3.4 12.76,5.1 12.76,8.68 0,3.4 -5.1,4.25 -11.4,4.25 -6.8,0 -12.93,-1.19 -16.33,-2.38 -3.91,-1.19 -6.12,0.34 -6.46,3.57l-1.53 13.95c-0.51,3.57 0.68,5.1 3.91,6.29 5.61,1.87 15.14,3.74 25.86,3.74 19.22,0 37.42,-4.59 37.42,-28.07z"/>
+                                                        <path fill="#FFFFFF" fillRule="nonzero" d="M662.16 160.81c3.74,0 5.79,-2.04 5.79,-5.78l0 -16.84c0,-3.74 -2.04,-5.78 -5.79,-5.78l-32.15 0 0 -15.48 34.36 0c3.91,0 5.78,-1.87 5.78,-5.78l0 -18.03c0,-3.91 -1.87,-5.78 -5.78,-5.78l-62.26 0c-3.91,0 -5.79,1.87 -5.79,5.78l0 108.87c0,3.91 1.87,5.78 5.79,5.78l63.11 0c3.91,0 5.78,-1.87 5.78,-5.78l0 -18.03c0,-3.91 -1.87,-5.78 -5.78,-5.78l-35.21 0 0 -17.35 32.15 0zm100.02 -16.5c0,-20.07 -7.48,-31.64 -25.69,-31.64 -10.89,0 -18.71,5.1 -22.45,10.2l-1.19 -4.25c-0.68,-2.72 -2.04,-4.25 -5.96,-4.25l-18.88 0c-3.57,0 -5.27,1.7 -5.27,5.27l0 82.84c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.57,0 5.27,-1.7 5.27,-5.27l0 -48.14c0,-8.68 2.21,-13.44 8.68,-13.44 5.27,0 6.63,3.57 6.63,11.06l0 50.52c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.74,0 5.44,-1.7 5.44,-5.27l0 -58.18zm58.35 1.53c3.57,0 5.27,-1.7 5.27,-5.28l0 -15.48c0,-3.57 -1.7,-5.28 -5.28,-5.28l-10.38 0 0 -19.39c0,-3.4 -1.7,-5.1 -5.44,-5.1l-20.07 0c-3.74,0 -5.44,1.7 -5.44,5.1l0 19.39 -4.59 0c-3.57,0 -5.1,1.53 -5.1,5.1l0 15.82c0,3.57 1.53,5.1 5.1,5.1l4.42 0 0 33.85c0,22.12 7.99,29.26 28.41,29.26 5.61,0 10.55,-0.51 13.78,-1.36 3.06,-0.85 4.59,-2.21 4.59,-5.44l0 -15.14c0,-3.57 -1.7,-5.1 -4.93,-5.1 -1.19,0 -3.23,0.17 -4.08,0.17 -5.1,0 -6.47,-1.7 -6.47,-7.65l0 -28.58 10.21 0zm20.75 -31.47c-3.57,0 -5.27,1.7 -5.27,5.27l0 82.84c0,3.57 1.7,5.27 5.27,5.27l21.43 0c3.57,0 5.27,-1.7 5.27,-5.27l0 -40.83c0,-9.53 4.59,-14.97 13.44,-14.97 2.72,0 4.25,0.51 6.47,0.51 2.72,0 4.59,-1.02 4.59,-4.59l0 -23.98c0,-3.74 -1.36,-5.27 -5.44,-5.27 -9.7,0 -16.5,7.31 -19.56,13.44l-1.19 -7.49c-0.51,-3.4 -1.7,-4.93 -5.78,-4.93l-19.22 0zm107.17 71.1c-11.57,0 -16.67,-3.23 -18.03,-12.76l42.53 0c4.08,0 5.95,-1.53 5.95,-5.78l0 -9.87c0,-28.75 -12.25,-44.4 -38.95,-44.4 -26.88,0 -41.17,14.8 -41.17,47.97 0,34.7 15.31,48.82 46.61,48.82 10.72,0 19.73,-2.04 26.03,-4.76 3.06,-1.53 4.59,-3.06 4.08,-6.8l-1.7 -12.08c-0.51,-3.57 -3.06,-4.93 -6.63,-3.74 -4.76,1.7 -11.57,3.4 -18.71,3.4zm-8.17 -49.67c6.63,0 9.53,5.1 9.53,16.16l0 1.87 -20.24 0c0.85,-13.61 3.57,-18.03 10.72,-18.03zm97.64 18.2c0,11.91 -2.55,17.69 -8.85,17.69 -6.47,0 -8.34,-5.78 -8.34,-17.69 0,-11.74 2.04,-17.35 8.34,-17.35 6.29,0 8.85,5.61 8.85,17.35zm31.13 -34.36c0,-3.57 -1.7,-5.27 -5.44,-5.27l-17.52 0c-3.74,0 -5.27,1.53 -5.96,4.25l-1.02 3.74c-3.57,-4.93 -10.38,-9.53 -20.41,-9.53 -18.54,0 -30.11,11.06 -30.11,41.17 0,29.77 10.38,41 29.94,41 9.87,0 16.67,-3.06 20.24,-8.16l0 3.57c0,9.53 -4.77,13.61 -16.33,13.61 -8.17,0 -15.82,-2.04 -20.07,-3.23 -3.91,-1.19 -6.12,0.17 -6.63,3.74l-1.7 12.76c-0.51,3.91 1.02,5.28 4.08,6.8 5.61,2.55 17.86,4.08 28.24,4.08 28.92,0 42.7,-11.4 42.7,-36.74l0 -71.79zm87.95 23.3c0,-20.75 -11.57,-30.11 -37.6,-30.11 -11.06,0 -22.96,2.21 -30.11,4.93 -3.06,1.02 -4.42,2.89 -3.91,6.3l2.04 14.12c0.51,3.57 3.06,4.76 6.63,3.74 4.77,-1.53 12.08,-3.74 20.24,-3.74 8.17,0 11.74,2.04 11.74,7.66l0 4.08c-29.26,0.51 -46.78,4.25 -46.78,30.62 0,19.56 11.06,28.24 25.35,28.24 12.42,0 19.39,-4.42 23.13,-9.01l1.02 3.74c0.68,2.72 2.21,4.25 5.96,4.25l16.84 0c3.74,0 5.44,-1.7 5.44,-5.27l0 -59.54zm-30.96 32.15c0,7.31 -1.7,12.25 -9.01,12.25 -5.1,0 -7.31,-3.57 -7.31,-9.19 0,-9.19 3.91,-11.06 16.33,-11.4l0 8.34zm108.7 6.29c0,-17.52 -9.01,-23.64 -22.28,-29.43 -8.67,-3.74 -14.29,-5.78 -14.29,-9.69 0,-3.57 3.74,-4.59 9.7,-4.59 5.61,0 11.4,1.19 14.63,2.04 3.57,0.85 5.78,-0.51 6.12,-3.74l1.53 -13.78c0.51,3.57 -0.68,-5.1 -3.91,-6.29 -4.93,-1.7 -14.63,-3.23 -24.16,-3.23 -23.3,0 -35.38,8.16 -35.38,28.07 0,21.09 11.74,25.68 23.82,30.62 8.17,3.4 12.76,5.1 12.76,8.68 0,3.4 -5.1,4.25 -11.4,4.25 -6.8,0 -12.93,-1.19 -16.33,-2.38 -3.91,-1.19 -6.12,0.34 -6.46,3.57l-1.53 13.95c-0.51,3.57 0.68,5.1 3.91,6.29 5.61,1.87 15.14,3.74 25.86,3.74 19.22,0 37.42,-4.59 37.42,-28.07z"/>
                                                         {/* Caminho 4: Detalhe interno da caixa ("raio") */}
                                                         <path fill="#ED2B05" d="M10240.99 10130.51l0 3809.72 816.14 -465.19c170.05,-96.98 388.6,-37.29 485.43,132.93 96.98,170.22 37.12,388.26 -133.1,485.24l-898.76 512.35c-182.42,103.99 -387.93,161.85 -592.25,166.03 -7.21,1.17 -20.24,1.83 -33.13,1.83 -13.03,0 -26.09,-0.67 -33.1,-1.83 -204.15,-4.02 -410.5,-62.04 -592.75,-166.2l-3145.39 -1797.35c-389.43,-222.56 -628.54,-638.08 -628.54,-1086.19l0 -3594.67c0,-447.95 239.28,-863.8 628.54,-1086.36l3145.39 -1797.35c190.46,-108.84 406.31,-167.2 625.85,-167.2 219.4,0 435.42,58.52 625.88,167.2l3145.39 1797.35c389.26,222.56 628.54,638.41 628.54,1086.36l0 898.59c0,195.95 -159.69,355.83 -355.66,355.83 -196.14,0 -355.99,-159.69 -355.99,-355.83l0 -808.13 -1463.09 839.4c-15.05,11.03 -35.93,23.23 -52.84,30.25l-1816.56 1043.22zm2340.45 1986.78l1545.35 -1545.68c138.78,-138.78 364.7,-138.95 503.48,0.17 138.28,138.45 138.45,364.7 0,503.15l-1797.35 1797.16c-138.78,138.78 -364.51,138.78 -503.31,0l-898.73 -898.76c-138.62,-138.78 -138.45,-364.67 0.17,-503.29 138.78,-138.62 364.67,-138.62 503.29,0l647.11 647.26zm-3051.91 -1986.78l-3332.33 -1912.87 0 3504.21c0,192.62 102.33,372.71 269.86,468.36l3062.47 1749.53 0 -3809.22zm1661.06 -1365.59l-3327.31 -1903.86 -1303.07 744.42 3325.12 1908.85 1305.26 -749.42zm715.15 -410.33l1304.74 -749.11 -3052.41 -1744.01c-82.95,-47.49 -177.09,-73.55 -272.74,-73.55 -95.64,0 -189.77,26.06 -272.71,73.55l-1032.69 589.92 3325.81 1903.19z"/>
                                                     </g>
@@ -519,14 +527,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
                         <div className="flex flex-col sm:flex-row justify-center gap-6">
                             <Button 
                                 onClick={() => onSignupClick('STORE_PARTNER')}
-                                className="bg-white text-brand-600 hover:bg-gray-100 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-brand-900/20 transform hover:-translate-y-1 transition-all border-none"
+                                className="!bg-white !text-brand-600 !hover:bg-gray-50 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-gray-200/50 transform hover:-translate-y-1 transition-all border-none"
                             >
                                 <Store className="w-6 h-6 mr-3" />
                                 Cadastrar Minha Loja
                             </Button>
                             <Button 
                                 onClick={() => onSignupClick('DELIVERY_PARTNER')}
-                                className="bg-gray-900 text-white hover:bg-gray-800 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-gray-900/20 transform hover:-translate-y-1 transition-all border-none"
+                                className="!bg-gray-900 !text-white !hover:bg-gray-800 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-gray-900/20 transform hover:-translate-y-1 transition-all border-none"
                             >
                                 <Bike className="w-6 h-6 mr-3" />
                                 Quero Entregar
@@ -573,23 +581,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
                             </ul>
                         </div>
 
+                        {/* Updated Social Media section */}
                         <div>
-                            <h4 className="font-bold text-gray-900 dark:text-white mb-6">Baixe o App</h4>
+                            <h4 className="font-bold text-gray-900 dark:text-white mb-6">Siga-nos</h4>
                             <div className="space-y-3">
-                                <button className="w-full bg-black text-white p-3 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-800 transition-colors">
-                                    <Smartphone className="w-5 h-5" />
-                                    <div className="text-left">
-                                        <div className="text-[10px] uppercase">Disponível no</div>
-                                        <div className="text-sm font-bold leading-none">Google Play</div>
-                                    </div>
-                                </button>
-                                <button className="w-full bg-black text-white p-3 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-800 transition-colors">
-                                    <Smartphone className="w-5 h-5" />
-                                    <div className="text-left">
-                                        <div className="text-[10px] uppercase">Baixar na</div>
-                                        <div className="text-sm font-bold leading-none">App Store</div>
-                                    </div>
-                                </button>
+                                {socialLinks.instagram && (
+                                    <a href={socialLinks.instagram} target="_blank" rel="noreferrer" className="w-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 p-3 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                        <Instagram className="w-5 h-5 text-pink-500" />
+                                        <div className="text-left">
+                                            <div className="text-sm font-bold leading-none">Instagram</div>
+                                        </div>
+                                    </a>
+                                )}
+                                {socialLinks.facebook && (
+                                    <a href={socialLinks.facebook} target="_blank" rel="noreferrer" className="w-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 p-3 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                        <Facebook className="w-5 h-5 text-blue-600" />
+                                        <div className="text-left">
+                                            <div className="text-sm font-bold leading-none">Facebook</div>
+                                        </div>
+                                    </a>
+                                )}
                             </div>
                         </div>
                     </div>

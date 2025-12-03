@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { App } from './components/App';
 import { AuthWrapper } from './components/AuthWrapper';
 
 // Capture PWA install prompt early to prevent missing it during app load

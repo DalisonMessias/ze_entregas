@@ -1,6 +1,7 @@
 
 
-import { DeliveryRecord, Theme, SavedAddress, DailyTransaction, UserBankDetails, MaintenanceData, NavigationState, PromotionDetails, ChatMessage, StorageKey, Reminder, CookiePreferences, SavedRoute, NotificationPreferences, Task } from '../types';
+
+import { DeliveryRecord, Theme, SavedAddress, DailyTransaction, UserBankDetails, MaintenanceData, NavigationState, PromotionDetails, ChatMessage, StorageKey, Reminder, CookiePreferences, SavedRoute, NotificationPreferences, Task, RouteListItem } from '../types';
 
 // DAILY TRANSACTIONS MANAGEMENT
 
@@ -352,6 +353,24 @@ export const saveSavedRoutes = (routes: SavedRoute[]): void => {
   }
 };
 
+// --- ROUTE LIST ITEMS (NEW FEATURE) ---
+export const getRouteListItems = (): RouteListItem[] => {
+  try {
+    const stored = localStorage.getItem('route_list_items');
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+export const saveRouteListItems = (items: RouteListItem[]): void => {
+  try {
+    localStorage.setItem('route_list_items', JSON.stringify(items));
+  } catch (e) {
+    console.error("Error saving route list items", e);
+  }
+};
+
 // --- NOTIFICATION PREFERENCES (NEW) ---
 export const getNotificationPreferences = (): NotificationPreferences => {
     try {
@@ -417,7 +436,8 @@ const KEYS_TO_BACKUP: StorageKey[] = [
   'app_cookie_preferences',
   'saved_routes',
   'notification_preferences',
-  'task_list'
+  'task_list',
+  'route_list_items'
 ];
 
 export const createBackup = (): string => {

@@ -1,22 +1,16 @@
-
 import React, { useState, useEffect } from 'react';
-import { UserCheck, Copy, Share2, Store, Loader2, Bike, CheckCircle, ArrowRight, X } from 'lucide-react';
+import { UserCheck, Copy, Share2, Store, Loader2, ArrowLeft } from 'lucide-react';
 import * as cloud from '../services/cloud';
-import { PartnerProfile, UserRole } from '../types';
-import { Button } from './Button';
+import { PartnerProfile } from '../types';
 
 interface AssociateDriverProps {
-    userRole?: UserRole;
+    onBack?: () => void;
 }
 
-export const AssociateDriver: React.FC<AssociateDriverProps> = ({ userRole = 'user' }) => {
+export const AssociateDriver: React.FC<AssociateDriverProps> = ({ onBack }) => {
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [associatedStores, setAssociatedStores] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    
-    // Upgrade State
-    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-    const [upgrading, setUpgrading] = useState(false);
 
     useEffect(() => {
         const load = async () => {
@@ -50,18 +44,6 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ userRole = 'us
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
-    const handleUpgradeToPartner = async () => {
-        setUpgrading(true);
-        try {
-            await cloud.becomeDeliveryPartner();
-            // Force reload to update app state and redirect to new role dashboard
-            window.location.reload();
-        } catch (e: any) {
-            alert("Erro ao atualizar perfil: " + e.message);
-            setUpgrading(false);
-        }
-    };
-
     if (loading) {
         return (
             <div className="flex justify-center p-10">
@@ -71,7 +53,16 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ userRole = 'us
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in pb-20 relative">
+        <div className="space-y-6 animate-in fade-in">
+            {onBack && (
+                <button 
+                    onClick={onBack} 
+                    className="flex items-center text-sm font-bold text-gray-500 hover:text-brand-600 mb-2 transition-colors"
+                >
+                    <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
+                </button>
+            )}
+
             <div className="flex items-center gap-2 mb-2">
                 <UserCheck className="w-6 h-6 text-brand-600" />
                 <h2 className="text-xl font-black text-gray-900 dark:text-white">Entregador Associado</h2>
@@ -128,77 +119,6 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ userRole = 'us
                     </div>
                 )}
             </div>
-
-            {/* Banner Convite para Usuário Normal */}
-            {userRole === 'user' && (
-                <div 
-                    onClick={() => setShowUpgradeModal(true)}
-                    className="fixed bottom-20 left-4 right-4 bg-gray-900 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between cursor-pointer hover:scale-[1.02] transition-transform z-40 border border-gray-700"
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-brand-600 p-3 rounded-full animate-pulse">
-                            <Bike className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <p className="font-black text-lg leading-tight">Quer fazer entregas?</p>
-                            <p className="text-xs text-gray-400">Comece a ganhar dinheiro hoje.</p>
-                        </div>
-                    </div>
-                    <ArrowRight className="w-6 h-6 text-brand-500" />
-                </div>
-            )}
-
-            {/* Modal de Conversão */}
-            {showUpgradeModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-[32px] p-6 shadow-2xl relative overflow-hidden">
-                        <button 
-                            onClick={() => setShowUpgradeModal(false)} 
-                            className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
-                        >
-                            <X className="w-5 h-5 text-gray-500" />
-                        </button>
-
-                        <div className="text-center mb-6 pt-4">
-                            <div className="w-20 h-20 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-600">
-                                <Bike className="w-10 h-10" />
-                            </div>
-                            <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">
-                                Como funciona ser um entregador parceiro
-                            </h2>
-                        </div>
-
-                        <div className="space-y-4 mb-8">
-                            <div className="flex items-start gap-3">
-                                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                                <p className="text-sm text-gray-600 dark:text-gray-300">Receba solicitações de entrega diretamente no app.</p>
-                            </div>
-                            <div className="flex items-start gap-3">
-                                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                                <p className="text-sm text-gray-600 dark:text-gray-300">Tenha acesso à Carteira Digital e saques rápidos.</p>
-                            </div>
-                            <div className="flex items-start gap-3">
-                                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                                <p className="text-sm text-gray-600 dark:text-gray-300">Participe do Clube de Benefícios e níveis VIP.</p>
-                            </div>
-                            <div className="flex items-start gap-3">
-                                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                                <p className="text-sm text-gray-600 dark:text-gray-300">Total liberdade para aceitar ou recusar corridas.</p>
-                            </div>
-                        </div>
-
-                        <Button 
-                            fullWidth 
-                            onClick={handleUpgradeToPartner} 
-                            disabled={upgrading}
-                            className="py-4 text-lg shadow-xl shadow-brand-500/20"
-                        >
-                            {upgrading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Quero ser Entregador Parceiro'}
-                        </Button>
-                        <p className="text-center text-xs text-gray-400 mt-4">Ao confirmar, seu perfil será atualizado imediatamente.</p>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

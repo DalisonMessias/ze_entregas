@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, Trash2, RotateCcw, Download, Plus, ArrowLeft, Eraser, Copy, Check, ChevronDown, ChevronUp, Mic, Map, Square, CheckSquare, X, Loader2 } from 'lucide-react';
 import { Button } from './Button';
@@ -23,7 +24,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   
   const [listeningField, setListeningField] = useState<'name' | 'addr' | null>(null);
   
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useState(new Set<string>());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   
@@ -31,10 +32,17 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   const [deletedItem, setDeletedItem] = useState<SavedAddress | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState(new Set<string>());
+  
+  // Sort State
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showMap, setShowMap] = useState(false);
 
   useEffect(() => {
-    setAddresses(storage.getAddresses());
+    let loaded = storage.getAddresses();
+    // Default sort by visit count/time
+    loaded.sort((a,b) => (b.visitCount || 0) - (a.visitCount || 0));
+    setAddresses(loaded);
   }, []);
 
   const handleClearForm = () => {
@@ -227,19 +235,41 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
     });
   };
 
+  const toggleSort = () => {
+      const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      setSortOrder(newOrder);
+      const sorted = [...addresses].sort((a,b) => {
+          const nameA = a.name.toLowerCase();
+          const nameB = b.name.toLowerCase();
+          return newOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+      });
+      setAddresses(sorted);
+  };
+
   return (
     <div className="space-y-6">
       
       {!isSelectionMode && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-4">
-              <button onClick={onClose} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors">
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-brand-600" />
-                Agenda de Endereços
-              </h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <button onClick={onClose} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors">
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-brand-600" />
+                    Agenda
+                </h2>
+              </div>
+              
+              <div className="flex gap-2">
+                  <button onClick={() => setShowMap(!showMap)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
+                      <Map className="w-5 h-5" />
+                  </button>
+                  <button onClick={toggleSort} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
+                      {sortOrder === 'asc' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </button>
+              </div>
             </div>
             
             <div className="space-y-4">
@@ -272,6 +302,13 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
                 </div>
               </div>
             </div>
+          </div>
+      )}
+
+      {/* Map Placeholder */}
+      {showMap && (
+          <div className="bg-gray-200 dark:bg-gray-800 rounded-2xl h-48 flex items-center justify-center text-gray-500 animate-in fade-in">
+              <p className="text-sm">Mapa de endereços em breve...</p>
           </div>
       )}
 
@@ -339,8 +376,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
                         disabled={isGeocoding}
                         className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50"
                     >
-                        {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin"/> : <Navigation className="w-4 h-4" />}
-                        {isGeocoding ? 'Buscando...' : 'Iniciar Rota'}
+                        {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Iniciar Rota'}
                     </button>
                     </div>
                 )}

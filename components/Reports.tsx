@@ -62,6 +62,10 @@ export const Reports: React.FC<ReportsProps> = ({ history, todayStats }) => {
   const averageTicket = totalDeliveries > 0 ? totalEarnings / totalDeliveries : 0;
   const earningsPerKm = totalKm > 0 ? totalEarnings / totalKm : 0;
 
+  // Comparison Logic (Mock for now, or based on previous period)
+  // Simple: Positive if earnings > 0
+  const isPositiveTrend = totalEarnings > 0;
+
   // EXPENSE BREAKDOWN (Aggregated from history)
   const expenseStats: Record<string, number> = {};
   filteredData.forEach(record => {
@@ -110,7 +114,10 @@ export const Reports: React.FC<ReportsProps> = ({ history, todayStats }) => {
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-brand-600 text-white p-4 rounded-2xl shadow-lg shadow-brand-200 dark:shadow-none relative overflow-hidden">
            <div className="relative z-10">
-             <div className="text-xs font-bold uppercase opacity-80 mb-1">Faturamento</div>
+             <div className="text-xs font-bold uppercase opacity-80 mb-1 flex justify-between">
+                Faturamento
+                {isPositiveTrend ? <TrendingUp className="w-4 h-4 text-green-300"/> : <TrendingDown className="w-4 h-4 text-red-300"/>}
+             </div>
              <div className="text-2xl font-black">{formatCurrency(totalEarnings)}</div>
              <div className="text-[10px] mt-1 opacity-70">
                 {period === 'week' ? 'Últimos 7 dias' : 'Total acumulado em ' + now.toLocaleDateString('pt-BR', { month: 'long' })}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Plus, Calculator, TrendingDown, Trophy, Map, Mic, Milestone, Navigation, Gauge, Share2, MapPin, BarChart3, Wrench, Cloud, Download, ShieldAlert, Info } from 'lucide-react';
+import { Play, Plus, Calculator, TrendingDown, Trophy, Share2, MapPin, BarChart3, Wrench, Cloud, Download, ShieldAlert, Info, Mic } from 'lucide-react';
 
 const FeatureItem = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) => (
   <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
@@ -19,7 +19,7 @@ export const AboutApp: React.FC = () => {
       <div className="text-center">
         <Info className="w-10 h-10 text-brand-500 mx-auto mb-2" />
         <h3 className="text-lg font-black text-gray-900 dark:text-white">Sobre o Zé Entregas</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Seu assistente de entregas completo, 100% offline.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Seu assistente de entregas completo.</p>
       </div>
 
       <div className="space-y-4">
@@ -35,18 +35,9 @@ export const AboutApp: React.FC = () => {
         </div>
 
         <div>
-          <h4 className="font-bold text-xs uppercase text-gray-400 mb-2">Navegação Inteligente</h4>
-          <div className="space-y-2">
-            <FeatureItem icon={<Map size={20}/>} title="Mapa Offline" description="O mapa salva as áreas que você visualiza, garantindo acesso mesmo sem internet." />
-            <FeatureItem icon={<Mic size={20}/>} title="Busca por Voz" description="Pesquise endereços de forma rápida e segura usando sua voz." />
-            <FeatureItem icon={<Milestone size={20}/>} title="Navegação Integrada" description="Trace rotas ponto-a-ponto com instruções passo-a-passo, tudo dentro do app e funcionando offline." />
-            <FeatureItem icon={<Gauge size={20}/>} title="Velocímetro" description="Acompanhe sua velocidade em tempo real durante a navegação em tela cheia." />
-          </div>
-        </div>
-
-        <div>
           <h4 className="font-bold text-xs uppercase text-gray-400 mb-2">Ferramentas e Relatórios</h4>
           <div className="space-y-2">
+            <FeatureItem icon={<Mic size={20}/>} title="Busca por Voz" description="Pesquise endereços na sua agenda de forma rápida usando sua voz." />
             <FeatureItem icon={<Share2 size={20}/>} title="Resumo do Dia" description="Compartilhe uma imagem estilizada do seu faturamento diário nas redes sociais." />
             <FeatureItem icon={<MapPin size={20}/>} title="Agenda de Endereços" description="Salve endereços frequentes para agilizar o início de novas rotas." />
             <FeatureItem icon={<BarChart3 size={20}/>} title="Relatórios de Desempenho" description="Analise seus ganhos, quantidade de entregas e gastos em gráficos semanais ou mensais." />
@@ -59,7 +50,7 @@ export const AboutApp: React.FC = () => {
           <div className="space-y-2">
             <FeatureItem icon={<Cloud size={20}/>} title="Backup na Nuvem (Opcional)" description="Crie uma conta para salvar seus dados com segurança e restaurá-los em qualquer dispositivo." />
             <FeatureItem icon={<Download size={20}/>} title="Backup Local" description="Exporte e importe um arquivo de backup local a qualquer momento, sem precisar de conta." />
-            <FeatureItem icon={<ShieldAlert size={20}/>} title="100% Offline" description="O app funciona perfeitamente sem internet. Seus dados ficam salvos apenas no seu aparelho." />
+            <FeatureItem icon={<ShieldAlert size={20}/>} title="Modo Híbrido" description="Funcionalidades essenciais disponíveis via cache. Sincronize seus dados assim que estiver online." />
           </div>
         </div>
       </div>

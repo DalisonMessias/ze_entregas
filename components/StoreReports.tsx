@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, BarChart3, Clock, Users } from 'lucide-react';
 import { StoreReportData } from '../types';
 import * as cloud from '../services/cloud';
+import { ExclusiveLock } from './ExclusiveLock';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -37,13 +38,25 @@ const PeakHoursChart = ({ data }: { data: { hour: number, count: number }[] }) =
 export const StoreReports: React.FC = () => {
     const [report, setReport] = useState<StoreReportData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSuperStore, setIsSuperStore] = useState(false);
 
     useEffect(() => {
         const loadReport = async () => {
             setLoading(true);
             try {
-                const data = await cloud.getStoreReportsData();
-                setReport(data);
+                // 1. Verificar se é Superlogista
+                const user = await cloud.getClient()?.auth.getUser();
+                if (user?.data.user) {
+                    const profileData = await cloud.getClient()?.from('user_profiles').select('is_super_store').eq('id', user.data.user.id).single();
+                    const isSuper = profileData?.data?.is_super_store || false;
+                    setIsSuperStore(isSuper);
+
+                    // 2. Se for Super, carregar dados. Se não, parar.
+                    if (isSuper) {
+                        const data = await cloud.getStoreReportsData();
+                        setReport(data);
+                    }
+                }
             } catch (e) {
                 console.error(e);
             } finally {
@@ -55,6 +68,16 @@ export const StoreReports: React.FC = () => {
 
     if (loading) {
         return <div className="flex justify-center items-center h-64"><Loader2 className="w-10 h-10 animate-spin text-brand-600"/></div>;
+    }
+
+    // Bloqueio para Lojistas Normais
+    if (!isSuperStore) {
+        return (
+            <ExclusiveLock 
+                title="Relatórios Avançados" 
+                description="Recurso Exclusivo: Acesso disponível apenas para Superlogista. Visualize horários de pico, desempenho de entregadores e métricas financeiras detalhadas." 
+            />
+        );
     }
 
     if (!report) {

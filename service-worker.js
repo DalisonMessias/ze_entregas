@@ -8,8 +8,6 @@ const ASSETS = [
   '/index.html',
   '/manifest.json',
   'https://cdn.tailwindcss.com',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', // Adicionado Supabase ao Cache
   'https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js',
   'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js'
@@ -30,7 +28,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keyList) => {
       return Promise.all(
         keyList.map((key) => {
-          if (key !== CACHE_NAME && key !== MAP_CACHE_NAME) {
+          if (key !== CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -42,31 +40,6 @@ self.addEventListener('activate', (event) => {
 // Fetch Event
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-
-  // Estratégia de Cache para Mapas (CartoDB Clean Tiles & OSM)
-  // Armazena todos os tiles carregados para uso offline
-  // Inclui openstreetmap.org (legado) e cartocdn.com (novo design clean)
-  if (
-      url.hostname.includes('openstreetmap.org') || 
-      url.hostname.includes('cartocdn.com') ||
-      url.hostname.includes('tile.openstreetmap')
-  ) {
-    event.respondWith(
-      caches.open(MAP_CACHE_NAME).then((cache) => {
-        return cache.match(event.request).then((response) => {
-          // Retorna do cache se existir, senão busca na rede e cacheia
-          return response || fetch(event.request).then((networkResponse) => {
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
-          }).catch(() => {
-             // Se falhar (offline e sem cache), retorna uma imagem vazia ou nada
-             return new Response(); 
-          });
-        });
-      })
-    );
-    return;
-  }
 
   // Estratégia Padrão: Network First, fall back to Cache
   event.respondWith(

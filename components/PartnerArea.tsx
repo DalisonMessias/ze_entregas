@@ -1,10 +1,12 @@
 
+
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, Navigation, CheckCircle, DollarSign, ToggleLeft, ToggleRight, Wallet, AlertTriangle, History, MapPin, Store, Copy, Play, Pause, Square, Clock, MessageCircle, Map, Gift, UserX, UserCheck, Share2, Wrench, Calculator, Fuel, Share, Image as ImageIcon, ClipboardList } from 'lucide-react';
+import { Loader2, Navigation, CheckCircle, DollarSign, ToggleLeft, ToggleRight, Wallet, AlertTriangle, History, MapPin, Store, Copy, Play, Pause, Square, Clock, MessageCircle, Map, Gift, UserX, UserCheck, Share2, Sparkles, ChevronRight, Fuel, Calculator, Wrench, Zap } from 'lucide-react';
 import { Button } from './Button';
 import { PartnerDocumentation } from './PartnerDocumentation';
 import * as cloud from '../services/cloud';
-import { PartnerRequest, PayoutSummary, PartnerPayment, PartnerProfile, PartnerLevelBenefit, WorkShift } from '../types';
+import { PartnerRequest, PayoutSummary, PartnerPayment, PartnerProfile, PartnerLevelBenefit, WorkShift, UserRole } from '../types';
 import { OrderHistory } from './OrderHistory';
 import { RatingModal } from './RatingModal';
 import { FinancialPanel } from './FinancialPanel';
@@ -14,12 +16,10 @@ import { openNavigation } from '../utils/mapHelpers';
 import { ReferralProgram } from './ReferralProgram';
 import { Skeleton } from './Skeleton';
 import { AssociateDriver } from './AssociateDriver';
-import { Maintenance } from './Maintenance';
-import { RouteCalculator } from './RouteCalculator';
 import { FuelCalculator } from './FuelCalculator';
-import { ShareCard } from './ShareCard';
-import { PromotionCardGenerator } from './PromotionCardGenerator';
-import { DailyDashboard } from './DailyDashboard';
+import { RouteCalculator } from './RouteCalculator';
+import { Maintenance } from './Maintenance';
+import { ExclusiveLock } from './ExclusiveLock';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -86,8 +86,13 @@ const PartnerAreaSkeleton = () => (
     </div>
 );
 
-export const PartnerArea: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'requests' | 'manual' | 'finance' | 'history' | 'stores' | 'tools'>('requests');
+interface PartnerAreaProps {
+    userRole: UserRole;
+    onNavigate: (tab: any) => void;
+}
+
+export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }) => {
+    const [activeTab, setActiveTab] = useState<'requests' | 'finance' | 'history' | 'stores'>('requests');
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [requests, setRequests] = useState<PartnerRequest[]>([]);
     const [activeDelivery, setActiveDelivery] = useState<PartnerRequest | null>(null);
@@ -116,11 +121,16 @@ export const PartnerArea: React.FC = () => {
     // Referral
     const [showReferral, setShowReferral] = useState(false);
 
-    // Tool Modals
-    const [openTool, setOpenTool] = useState<'maintenance' | 'route_calc' | 'fuel_calc' | 'share_daily' | 'promo_card' | null>(null);
-
     // Live Tracking Ref
     const watchIdRef = useRef<number | null>(null);
+
+    // Upgrade Flow
+    const [showUpgradeFlow, setShowUpgradeFlow] = useState(false);
+
+    // Utility Modals
+    const [showFuelCalc, setShowFuelCalc] = useState(false);
+    const [showRouteCalc, setShowRouteCalc] = useState(false);
+    const [showMaintenance, setShowMaintenance] = useState(false);
 
     useEffect(() => { const l = async () => { try { const p = await cloud.getMyPartnerProfile(); setProfile(p); } catch (e) { console.error(e); } }; l(); }, []);
 
@@ -309,8 +319,26 @@ export const PartnerArea: React.FC = () => {
         setShiftLoading(false);
     };
 
+    // --- CONDITIONAL RENDERS ---
+
     if (!profile) return <PartnerAreaSkeleton />;
-    if (profile?.verification_status !== 'APPROVED') return <PartnerDocumentation profile={profile} onProfileUpdate={setProfile} />;
+    
+    // Only block if role is PARTNER and verification is not APPROVED
+    if (userRole === 'delivery_partner' && profile?.verification_status !== 'APPROVED') {
+        return <PartnerDocumentation profile={profile} onProfileUpdate={setProfile} />;
+    }
+
+    // Upgrade Flow
+    if (showUpgradeFlow) {
+        return (
+            <div className="space-y-4">
+                <button onClick={() => setShowUpgradeFlow(false)} className="flex items-center text-sm font-bold text-gray-500 hover:text-brand-600 mb-2">
+                    <ChevronRight className="w-4 h-4 rotate-180 mr-1" /> Voltar
+                </button>
+                <PartnerDocumentation profile={profile} onProfileUpdate={setProfile} />
+            </div>
+        );
+    }
 
     const renderShiftControl = () => {
         if (!currentShift) {
@@ -365,19 +393,61 @@ export const PartnerArea: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6 pb-24 animate-in fade-in">
+        <div className="space-y-6 pb-24 animate-in fade-in relative">
+            
+            {/* Lock Overlay for Non-Partners */}
+            {userRole !== 'delivery_partner' && (
+                <div className="absolute inset-0 z-50 bg-white/80 dark:bg-gray-900/90 backdrop-blur-sm flex items-center justify-center p-4">
+                    <ExclusiveLock 
+                        title="Painel de Corridas"
+                        description="Área exclusiva para parceiros verificados. Receba pedidos de lojas, gerencie seus turnos e aumente seus ganhos."
+                    />
+                </div>
+            )}
+
             <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar">
-                <button onClick={() => setActiveTab('requests')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Online</button>
-                <button onClick={() => setActiveTab('manual')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'manual' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Diário</button>
+                <button onClick={() => setActiveTab('requests')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>
+                    Entregas
+                </button>
                 <button onClick={() => setActiveTab('finance')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'finance' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Financeiro</button>
                 <button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'history' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Histórico</button>
                 <button onClick={() => setActiveTab('stores')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'stores' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojas</button>
-                <button onClick={() => setActiveTab('tools')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'tools' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Tools</button>
             </div>
             
             {activeTab === 'requests' && (
                 <>
                     {renderShiftControl()}
+
+                    {/* Quick Tools Grid for Partners */}
+                    <div>
+                        <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2 mt-6">Ferramentas Rápidas</h3>
+                        <div className="grid grid-cols-4 gap-2">
+                            <button onClick={() => setShowFuelCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
+                                    <Fuel className="w-5 h-5"/>
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Combustível</span>
+                            </button>
+                            <button onClick={() => setShowRouteCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
+                                    <Calculator className="w-5 h-5"/>
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Calc. Rota</span>
+                            </button>
+                            <button onClick={() => setShowMaintenance(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
+                                    <Wrench className="w-5 h-5"/>
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Manutenção</span>
+                            </button>
+                            <button onClick={() => onNavigate('map')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
+                                    <Zap className="w-5 h-5 fill-current"/>
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Alertas</span>
+                            </button>
+                        </div>
+                    </div>
 
                     <div className="mt-4">
                         <Button 
@@ -388,7 +458,7 @@ export const PartnerArea: React.FC = () => {
                         </Button>
                     </div>
 
-                    {/* Active Delivery Card - Always show if exists, regardless of shift status (edge case) */}
+                    {/* Active Delivery Card */}
                     {activeDelivery && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-2xl border-2 border-brand-500 animate-in zoom-in-95 mt-6">
                             <div className="flex justify-between items-start mb-4"><span className="bg-brand-100 text-brand-700 px-3 py-1 rounded-full text-xs font-bold uppercase">{activeDelivery.status === 'ACCEPTED' ? 'Vá para Coleta' : activeDelivery.status === 'IN_TRANSIT' ? 'Em Rota' : activeDelivery.status === 'AWAITING_STORE_DECISION' ? 'Aguardando Loja' : activeDelivery.status === 'RETURNING' ? 'Retornando à Loja' : activeDelivery.status}</span><p className="font-black text-xl text-green-600">{formatCurrency(activeDelivery.net_value_partner)}</p></div>
@@ -447,16 +517,11 @@ export const PartnerArea: React.FC = () => {
                     )}
                 </>
             )}
-
-            {/* Manual Entry Tab */}
-            {activeTab === 'manual' && (
-                <DailyDashboard />
-            )}
             
             {activeTab === 'finance' && (
                 <div className="space-y-6">
-                    {/* Action Button for Emergency Withdraw */}
-                    {summary && summary.can_request_emergency && (
+                    {/* Action Button for Emergency Withdraw (Only Partners) */}
+                    {userRole === 'delivery_partner' && summary && summary.can_request_emergency && (
                         <div className="mb-4">
                             <button onClick={() => setShowWithdrawConfirm(true)} className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
                                 <Wallet className="w-4 h-4" /> Solicitar Saque Emergencial
@@ -475,46 +540,6 @@ export const PartnerArea: React.FC = () => {
 
             {activeTab === 'stores' && (
                 <AssociateDriver />
-            )}
-
-            {activeTab === 'tools' && (
-                <div className="space-y-6">
-                    <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                        <Wrench className="w-5 h-5 text-gray-500" /> Ferramentas do Dia a Dia
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <button onClick={() => setOpenTool('maintenance')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform">
-                            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full">
-                                <Wrench className="w-6 h-6" />
-                            </div>
-                            <span className="font-bold text-gray-900 dark:text-white text-sm">Manutenção</span>
-                        </button>
-                        <button onClick={() => setOpenTool('route_calc')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform">
-                            <div className="p-3 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full">
-                                <Calculator className="w-6 h-6" />
-                            </div>
-                            <span className="font-bold text-gray-900 dark:text-white text-sm">Calc. Rota</span>
-                        </button>
-                        <button onClick={() => setOpenTool('fuel_calc')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform">
-                            <div className="p-3 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-full">
-                                <Fuel className="w-6 h-6" />
-                            </div>
-                            <span className="font-bold text-gray-900 dark:text-white text-sm">Combustível</span>
-                        </button>
-                        <button onClick={() => setOpenTool('share_daily')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform">
-                            <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-full">
-                                <Share className="w-6 h-6" />
-                            </div>
-                            <span className="font-bold text-gray-900 dark:text-white text-sm">Resumo do Dia</span>
-                        </button>
-                        <button onClick={() => setOpenTool('promo_card')} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center gap-3 hover:scale-[1.02] transition-transform col-span-2">
-                            <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 rounded-full">
-                                <ImageIcon className="w-6 h-6" />
-                            </div>
-                            <span className="font-bold text-gray-900 dark:text-white text-sm">Criar Cartão Digital</span>
-                        </button>
-                    </div>
-                </div>
             )}
 
             {showWithdrawConfirm && summary && (
@@ -550,24 +575,15 @@ export const PartnerArea: React.FC = () => {
 
             {showReferral && (
                 <ReferralProgram 
-                    userRole="delivery_partner" 
+                    userRole={userRole} 
                     onClose={() => setShowReferral(false)} 
                 />
             )}
 
-            {/* Tool Modals */}
-            {openTool === 'maintenance' && <Maintenance onClose={() => setOpenTool(null)} />}
-            {openTool === 'route_calc' && <RouteCalculator onClose={() => setOpenTool(null)} />}
-            {openTool === 'fuel_calc' && <FuelCalculator onClose={() => setOpenTool(null)} />}
-            {openTool === 'share_daily' && <ShareCard data={{ value: 0, count: 0, km: 0, date: new Date().toLocaleDateString() }} onClose={() => setOpenTool(null)} />} {/* Placeholder data, ideally from summary */}
-            {openTool === 'promo_card' && (
-                <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 overflow-y-auto">
-                    <div className="p-4">
-                        <button onClick={() => setOpenTool(null)} className="mb-4 text-blue-500 font-bold">Voltar</button>
-                        <PromotionCardGenerator />
-                    </div>
-                </div>
-            )}
+            {/* Utility Modals */}
+            {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
+            {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
+            {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
         </div>
     );
 };

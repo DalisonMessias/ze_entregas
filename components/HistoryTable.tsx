@@ -1,8 +1,4 @@
 
-
-
-
-
 import React, { useState } from 'react';
 import { Trash2, Wallet, CreditCard, ChevronDown, Filter, TrendingDown, Plus, Calendar, Clock, Edit2 } from 'lucide-react';
 import { DeliveryRecord, DailyTransaction } from '../types';
@@ -109,9 +105,14 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({ history, onClear, on
       
       {/* Filter Bar */}
       <div className="mb-6">
-        <div className="flex items-center gap-2 mb-3 px-1">
-          <Filter className="w-4 h-4 text-gray-400" />
-          <h3 className="font-bold text-gray-500 text-sm">Filtros</h3>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-gray-400" />
+            <h3 className="font-bold text-gray-500 text-sm">Filtros</h3>
+          </div>
+          <button onClick={() => alert("Função de adicionar registro manual em desenvolvimento")} className="text-brand-600 hover:text-brand-700 flex items-center gap-1 text-xs font-bold">
+             <Plus className="w-3 h-3" /> Novo Registro
+          </button>
         </div>
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 min-w-[150px]">
