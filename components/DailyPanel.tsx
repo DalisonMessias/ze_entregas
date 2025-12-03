@@ -1,9 +1,4 @@
 
-
-
-
-
-
 import React, { useState, useEffect } from 'react';
 import { Play, Plus, Calculator, TrendingDown, Target, Trash2, Edit2, Share2, MapPin, Gauge, Package, DollarSign, X, Check, Coffee, Wrench, Fuel, AlertCircle, Sparkles, ChevronRight, Settings, Zap, Siren, Map as MapIcon, Loader2, History, ClipboardList, ListPlus, Megaphone, ShoppingBag } from 'lucide-react';
 import { Button } from './Button';
@@ -19,6 +14,22 @@ import { Switch } from './Switch';
 
 // Helper for currency
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+  let value = e.target.value.replace(/\D/g, "");
+  if (!value) {
+    setter("");
+    return;
+  }
+  const amount = Number(value) / 100;
+  const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  setter(formatted);
+};
+
+const parseCurrency = (val: string) => {
+  if (!val) return 0;
+  return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+};
 
 interface DailyPanelProps {
     onNavigate: (tab: any) => void;
@@ -75,8 +86,8 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
         // Pre-fill edit form
         if (storedFixed !== null) {
             setEditForm({ 
-                fixed: storedFixed.toString(), 
-                goal: storedGoal ? storedGoal.toString() : '' 
+                fixed: storedFixed.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), 
+                goal: storedGoal ? storedGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '' 
             });
         } else {
             // New user: Default to Quick Start ACTIVE (skip inputs)
@@ -94,8 +105,8 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
         let goal = 0;
 
         if (!isQuickStart) {
-             fixed = parseFloat(startForm.fixed.replace(',', '.')) || 0;
-             goal = parseFloat(startForm.goal.replace(',', '.')) || 0;
+             fixed = parseCurrency(startForm.fixed);
+             goal = parseCurrency(startForm.goal);
         }
         
         storage.setFixedValue(fixed);
@@ -103,13 +114,16 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
         
         setFixedValue(fixed);
         setDailyGoal(goal);
-        setEditForm({ fixed: fixed > 0 ? fixed.toString() : '', goal: goal > 0 ? goal.toString() : '' });
+        setEditForm({ 
+            fixed: fixed > 0 ? fixed.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '', 
+            goal: goal > 0 ? goal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '' 
+        });
         setShowStartModal(false);
     };
 
     const handleSaveConfig = () => {
-        const fixed = parseFloat(editForm.fixed.replace(',', '.')) || 0;
-        const goal = parseFloat(editForm.goal.replace(',', '.')) || 0;
+        const fixed = parseCurrency(editForm.fixed);
+        const goal = parseCurrency(editForm.goal);
 
         storage.setFixedValue(fixed);
         storage.setDailyGoal(goal);
@@ -138,7 +152,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
     };
 
     const handleAddExtra = () => {
-        const val = parseFloat(extraForm.value.replace(',', '.'));
+        const val = parseCurrency(extraForm.value);
         const km = parseFloat(extraForm.km.replace(',', '.'));
         
         if (!val) return alert("Informe o valor.");
@@ -157,7 +171,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
     };
 
     const handleAddExpense = () => {
-        const val = parseFloat(expenseForm.value.replace(',', '.'));
+        const val = parseCurrency(expenseForm.value);
         if (!val) return alert("Informe o valor.");
 
         addTransaction({
@@ -318,20 +332,20 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-left">
                                 <label className="text-xs font-bold text-gray-500 uppercase ml-1">Valor Entrega Padrão (R$)</label>
                                 <input 
-                                    type="number" 
+                                    type="tel" 
                                     value={startForm.fixed}
-                                    onChange={e => setStartForm({...startForm, fixed: e.target.value})}
-                                    placeholder="Ex: 8.00"
+                                    onChange={e => handleCurrencyMask(e, val => setStartForm({...startForm, fixed: val}))}
+                                    placeholder="Ex: 8,00"
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 mt-1 rounded-xl text-xl font-bold outline-none dark:text-white"
                                 />
                             </div>
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-left">
                                 <label className="text-xs font-bold text-gray-500 uppercase ml-1">Meta do Dia (R$)</label>
                                 <input 
-                                    type="number" 
+                                    type="tel" 
                                     value={startForm.goal}
-                                    onChange={e => setStartForm({...startForm, goal: e.target.value})}
-                                    placeholder="Ex: 150.00"
+                                    onChange={e => handleCurrencyMask(e, val => setStartForm({...startForm, goal: val}))}
+                                    placeholder="Ex: 150,00"
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 mt-1 rounded-xl text-xl font-bold outline-none dark:text-white"
                                 />
                             </div>
@@ -652,7 +666,14 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                             <button onClick={() => setShowExtraModal(false)}><X className="w-5 h-5 text-gray-400"/></button>
                         </div>
                         <div className="space-y-3">
-                            <input type="number" placeholder="Valor (R$)" value={extraForm.value} onChange={e=>setExtraForm({...extraForm, value: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border border-transparent focus:border-brand-500 dark:text-white font-bold" autoFocus />
+                            <input 
+                                type="tel" 
+                                placeholder="Valor (R$)" 
+                                value={extraForm.value} 
+                                onChange={e=>handleCurrencyMask(e, val => setExtraForm({...extraForm, value: val}))} 
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border border-transparent focus:border-brand-500 dark:text-white font-bold" 
+                                autoFocus 
+                            />
                             <input type="number" placeholder="KM (Opcional)" value={extraForm.km} onChange={e=>setExtraForm({...extraForm, km: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white" />
                             <input type="text" placeholder="Descrição (Opcional)" value={extraForm.desc} onChange={e=>setExtraForm({...extraForm, desc: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white text-sm" />
                             <Button fullWidth onClick={handleAddExtra}>Adicionar</Button>
@@ -680,7 +701,14 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                                     <Wrench className="w-4 h-4"/> Manutenção
                                 </button>
                             </div>
-                            <input type="number" placeholder="Valor (R$)" value={expenseForm.value} onChange={e=>setExpenseForm({...expenseForm, value: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-red-200 focus:border-red-500 border font-bold text-red-500 dark:bg-gray-700" autoFocus />
+                            <input 
+                                type="tel" 
+                                placeholder="Valor (R$)" 
+                                value={expenseForm.value} 
+                                onChange={e=>handleCurrencyMask(e, val => setExpenseForm({...expenseForm, value: val}))} 
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border-red-200 focus:border-red-500 border font-bold text-red-500 dark:bg-gray-700" 
+                                autoFocus 
+                            />
                             <input type="text" placeholder="Detalhes (Opcional)" value={expenseForm.desc} onChange={e=>setExpenseForm({...expenseForm, desc: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none dark:text-white text-sm" />
                             <Button fullWidth onClick={handleAddExpense} variant="danger">Registrar Saída</Button>
                         </div>
@@ -700,18 +728,18 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase ml-1">Valor Entrega Padrão (R$)</label>
                                 <input 
-                                    type="number" 
+                                    type="tel" 
                                     value={editForm.fixed}
-                                    onChange={e => setEditForm({...editForm, fixed: e.target.value})}
+                                    onChange={e => handleCurrencyMask(e, val => setEditForm({...editForm, fixed: val}))}
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 mt-1 rounded-xl text-lg font-bold outline-none dark:text-white"
                                 />
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase ml-1">Meta do Dia (R$)</label>
                                 <input 
-                                    type="number" 
+                                    type="tel" 
                                     value={editForm.goal}
-                                    onChange={e => setEditForm({...editForm, goal: e.target.value})}
+                                    onChange={e => handleCurrencyMask(e, val => setEditForm({...editForm, goal: val}))}
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 mt-1 rounded-xl text-lg font-bold outline-none dark:text-white"
                                 />
                             </div>

@@ -16,6 +16,17 @@ declare const QRious: any;
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
+const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+  let value = e.target.value.replace(/\D/g, "");
+  if (!value) {
+    setter("");
+    return;
+  }
+  const amount = Number(value) / 100;
+  const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  setter(formatted);
+};
+
 const getStatusChip = (status: PartnerRequestStatus) => {
     const baseClasses = "px-2 py-1 rounded-full text-xs font-bold";
     switch (status) {
@@ -125,7 +136,7 @@ export const StoreWalletModule: React.FC<StoreWalletModuleProps> = ({ onNavigate
     useEffect(() => { loadData(); const interval = setInterval(() => loadData(false), 30000); return () => clearInterval(interval); }, []);
 
     const handleCreateRecharge = async (method: 'PIX' | 'BOLETO') => { 
-        const amount = parseFloat(rechargeAmount.replace(',', '.')); 
+        const amount = parseFloat(rechargeAmount.replace(/\./g, '').replace(',', '.')); 
         if (isNaN(amount) || amount <= 0) return alert("Valor inválido"); 
         setPaymentMethod(method); 
         setProcessingRecharge(true); 
@@ -144,7 +155,7 @@ export const StoreWalletModule: React.FC<StoreWalletModuleProps> = ({ onNavigate
     
     const handleTransfer = async () => {
         if (!transferAmount || !transferCode) return alert("Preencha todos os campos.");
-        const val = parseFloat(transferAmount.replace(',', '.'));
+        const val = parseFloat(transferAmount.replace(/\./g, '').replace(',', '.'));
         if (isNaN(val) || val <= 0) return alert("Valor inválido.");
         
         setProcessingTransfer(true);
@@ -203,7 +214,20 @@ export const StoreWalletModule: React.FC<StoreWalletModuleProps> = ({ onNavigate
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
                  <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg dark:text-white">Recarregar</h3><button onClick={resetRecharge}><X className="w-5 h-5"/></button></div>
                 {rechargeStep === 'amount' ? (
-                    <><input type="number" placeholder="Valor (R$)" value={rechargeAmount} onChange={e => setRechargeAmount(e.target.value)} className="w-full p-4 text-xl font-bold bg-gray-50 dark:bg-gray-700 rounded-xl outline-none mb-4" autoFocus /><div className="space-y-3"><Button fullWidth onClick={() => handleCreateRecharge('PIX')} disabled={processingRecharge}>{processingRecharge ? <Loader2 className="animate-spin"/> : 'PIX'}</Button><Button fullWidth onClick={() => handleCreateRecharge('BOLETO')} variant="outline" disabled={processingRecharge}>{processingRecharge ? <Loader2 className="animate-spin"/> : 'Boleto'}</Button></div></>
+                    <>
+                        <input 
+                            type="tel" 
+                            placeholder="Valor (R$)" 
+                            value={rechargeAmount} 
+                            onChange={e => handleCurrencyMask(e, setRechargeAmount)} 
+                            className="w-full p-4 text-xl font-bold bg-gray-50 dark:bg-gray-700 rounded-xl outline-none mb-4" 
+                            autoFocus 
+                        />
+                        <div className="space-y-3">
+                            <Button fullWidth onClick={() => handleCreateRecharge('PIX')} disabled={processingRecharge}>{processingRecharge ? <Loader2 className="animate-spin"/> : 'PIX'}</Button>
+                            <Button fullWidth onClick={() => handleCreateRecharge('BOLETO')} variant="outline" disabled={processingRecharge}>{processingRecharge ? <Loader2 className="animate-spin"/> : 'Boleto'}</Button>
+                        </div>
+                    </>
                 ) : (paymentMethod === 'PIX' && paymentDetails ? ( <div className="text-center space-y-4"><p className="text-sm">Escaneie o QR Code:</p><canvas ref={qrCanvasRef} className="mx-auto border rounded-lg"/><Button fullWidth variant="outline" onClick={() => navigator.clipboard.writeText(paymentDetails.asaas_pix_copy_paste)}><Copy className="w-4 h-4 mr-2"/> Copiar Código</Button></div> ) : ( paymentDetails && <a href={paymentDetails.asaas_bank_slip_url} target="_blank" rel="noopener noreferrer" className="block"><Button fullWidth><ExternalLink className="w-4 h-4 mr-2"/> Abrir Boleto</Button></a> ))}
             </div>
         </div>
@@ -390,11 +414,11 @@ export const StoreWalletModule: React.FC<StoreWalletModuleProps> = ({ onNavigate
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Valor (R$)</label>
                                 <input 
-                                    type="number" 
+                                    type="tel" 
                                     value={transferAmount}
-                                    onChange={e => setTransferAmount(e.target.value)}
+                                    onChange={e => handleCurrencyMask(e, setTransferAmount)}
                                     className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none font-black text-xl"
-                                    placeholder="0.00"
+                                    placeholder="0,00"
                                 />
                             </div>
                             <Button fullWidth onClick={handleTransfer} disabled={processingTransfer}>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { UserRole, AppNotification, DailySummary, DailyTransaction } from '../types';
 import * as cloud from '../services/cloud';
@@ -6,7 +5,8 @@ import * as storage from '../services/storage';
 import { initNotificationService, stopNotificationService } from '../services/notificationService';
 
 // Icons
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, Cloud, Info, ShoppingBag, LayoutDashboard, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, Globe, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, ListPlus } from 'lucide-react';
+// FIX: Added UserX icon to imports.
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, Globe, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, ListPlus, Link2 } from 'lucide-react';
 
 // Components
 import { Logo } from './Logo';
@@ -292,26 +292,25 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                                     <MenuButton icon={FileCheck} label="Validação de Parceiros" tab="admin_validation" />
                                     <MenuButton icon={Wallet} label="Controle de Saldos" tab="admin_wallet_control" />
                                     <MenuButton icon={ShieldAlert} label="Segurança & Fraude" tab="admin_security" />
-                                    <MenuButton icon={User} label="Lista Negra" tab="admin_blacklist" />
+                                    <MenuButton icon={UserX} label="Lista Negra" tab="admin_blacklist" />
 
                                     <MenuSection title="Operacional" />
                                     <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
                                     <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                                     <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
-                                    <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_support" />
-                                    <MenuButton icon={AlertTriangle} label="Reclamações" tab="admin_claims" />
+                                    <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
                                     <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
 
                                     <MenuSection title="Financeiro" />
                                     <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
                                     <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
-                                    <MenuButton icon={Cloud} label="Webhooks (Asaas)" tab="admin_asaas_webhook" />
+                                    <MenuButton icon={Link2} label="Webhooks (Asaas)" tab="admin_asaas_webhook" />
 
                                     <MenuSection title="Marketing & Conteúdo" />
                                     <MenuButton icon={Megaphone} label="Indicações" tab="admin_referrals" />
-                                    <MenuButton icon={Bell} label="Notificações" tab="admin_notifications" />
+                                    <MenuButton icon={Bell} label="Notificações Globais" tab="admin_notifications" />
                                     <MenuButton icon={FileText} label="Institucional" tab="admin_institutional" />
-                                    <MenuButton icon={Newspaper} label="Novidades" tab="admin_platform_news" />
+                                    <MenuButton icon={Newspaper} label="Novidades da Plataforma" tab="admin_platform_news" />
 
                                     <MenuSection title="Configurações do Sistema" />
                                     <MenuButton icon={Bot} label="Inteligência Artificial" tab="admin_ai_config" />

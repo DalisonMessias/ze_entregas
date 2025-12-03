@@ -21,6 +21,17 @@ const formatDate = (dateString: string) => {
     }
 };
 
+const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+  let value = e.target.value.replace(/\D/g, "");
+  if (!value) {
+    setter("");
+    return;
+  }
+  const amount = Number(value) / 100;
+  const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  setter(formatted);
+};
+
 // --- TOAST COMPONENT ---
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error' | 'info', onClose: () => void }) => {
     useEffect(() => {
@@ -100,7 +111,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
 
     const handleTransfer = async () => {
         if (!amount || !transferCode) return showToast('error', "Preencha todos os campos.");
-        const val = parseFloat(amount.replace(',', '.'));
+        const val = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
         if (isNaN(val) || val <= 0) return showToast('error', "Valor inválido.");
         
         setProcessing(true);
@@ -120,7 +131,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
 
     const handleSavings = async () => {
         if (!amount) return showToast('error', "Preencha o valor.");
-        const val = parseFloat(amount.replace(',', '.'));
+        const val = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
         if (isNaN(val) || val <= 0) return showToast('error', "Valor inválido.");
 
         setProcessing(true);
@@ -232,7 +243,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
 
     const handleSimulatePurchase = async () => {
         if (!amount || !simMerchant) return showToast('error', "Preencha valor e estabelecimento.");
-        const val = parseFloat(amount.replace(',', '.'));
+        const val = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
         if (isNaN(val) || val <= 0) return showToast('error', "Valor inválido.");
 
         setProcessing(true);
@@ -699,12 +710,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Valor (R$)</label>
                                 <input 
-                                    type="number" 
+                                    type="tel" 
                                     value={amount}
-                                    onChange={e => setAmount(e.target.value)}
+                                    onChange={e => handleCurrencyMask(e, setAmount)}
                                     className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-transparent focus:border-brand-500 outline-none font-black text-2xl text-center dark:text-white"
-                                    placeholder="0.00"
-                                    inputMode="decimal"
+                                    placeholder="0,00"
                                 />
                             </div>
                             <Button fullWidth onClick={handleTransfer} disabled={processing} className="py-4 shadow-lg shadow-brand-500/20">
@@ -735,13 +745,12 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
 
                         <div className="space-y-4">
                             <input 
-                                type="number" 
+                                type="tel" 
                                 value={amount}
-                                onChange={e => setAmount(e.target.value)}
+                                onChange={e => handleCurrencyMask(e, setAmount)}
                                 className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-transparent focus:border-brand-500 outline-none font-black text-3xl text-center text-gray-900 dark:text-white"
-                                placeholder="0.00"
+                                placeholder="0,00"
                                 autoFocus
-                                inputMode="decimal"
                             />
                             <Button fullWidth onClick={handleSavings} disabled={processing} className="py-4 shadow-lg">
                                 {processing ? <Loader2 className="w-6 h-6 animate-spin"/> : 'Confirmar'}
@@ -802,12 +811,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Valor (R$)</label>
                                 <input 
-                                    type="number" 
+                                    type="tel" 
                                     value={amount}
-                                    onChange={e => setAmount(e.target.value)}
+                                    onChange={e => handleCurrencyMask(e, setAmount)}
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border border-transparent focus:border-green-500 dark:text-white font-bold text-xl"
-                                    placeholder="0.00"
-                                    inputMode="decimal"
+                                    placeholder="0,00"
                                 />
                             </div>
                             <Button fullWidth onClick={handleSimulatePurchase} disabled={processing} className="bg-green-600 hover:bg-green-700 border-none">

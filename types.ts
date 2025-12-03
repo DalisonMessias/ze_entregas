@@ -232,6 +232,7 @@ export interface ManagedUser {
     completed_deliveries?: number;
     association_code?: string;
     balance?: number; // Visual only for lists
+    partner_level?: string;
 }
 
 export interface CompanyInfo {

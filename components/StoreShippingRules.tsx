@@ -5,6 +5,22 @@ import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { StoreShippingRule } from '../types';
 
+const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+  let value = e.target.value.replace(/\D/g, "");
+  if (!value) {
+    setter("");
+    return;
+  }
+  const amount = Number(value) / 100;
+  const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  setter(formatted);
+};
+
+const parseCurrency = (val: string) => {
+  if (!val) return 0;
+  return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+};
+
 export const StoreShippingRules: React.FC = () => {
     const [rules, setRules] = useState<StoreShippingRule[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,12 +51,15 @@ export const StoreShippingRules: React.FC = () => {
         if (!value) return alert("Defina o valor.");
         if (type === 'free_above' && !threshold) return alert("Defina o valor mínimo do pedido.");
 
+        const valFloat = parseCurrency(value);
+        const thresholdFloat = threshold ? parseCurrency(threshold) : undefined;
+
         setSaving(true);
         try {
             await cloud.createStoreShippingRule({
                 rule_type: type,
-                value: parseFloat(value),
-                threshold: threshold ? parseFloat(threshold) : undefined
+                value: valFloat,
+                threshold: thresholdFloat
             });
             setValue('');
             setThreshold('');
@@ -94,10 +113,10 @@ export const StoreShippingRules: React.FC = () => {
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase">Valor Mínimo do Pedido</label>
                                 <input 
-                                    type="number" 
-                                    placeholder="Ex: 100.00" 
+                                    type="tel" 
+                                    placeholder="Ex: 100,00" 
                                     value={threshold}
-                                    onChange={e => setThreshold(e.target.value)}
+                                    onChange={e => handleCurrencyMask(e, setThreshold)}
                                     className="w-full p-3 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 outline-none"
                                 />
                             </div>
@@ -107,10 +126,10 @@ export const StoreShippingRules: React.FC = () => {
                                 {type === 'free_above' ? 'Custo para Loja (Subsídio)' : 'Valor da Taxa Fixa'}
                             </label>
                             <input 
-                                type="number" 
-                                placeholder="Ex: 10.00" 
+                                type="tel" 
+                                placeholder="Ex: 10,00" 
                                 value={value}
-                                onChange={e => setValue(e.target.value)}
+                                onChange={e => handleCurrencyMask(e, setValue)}
                                 className="w-full p-3 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 outline-none"
                             />
                         </div>
@@ -136,12 +155,12 @@ export const StoreShippingRules: React.FC = () => {
                                 <div>
                                     <p className="font-bold text-gray-900 dark:text-white text-sm">
                                         {rule.rule_type === 'free_above' 
-                                            ? `Frete Grátis p/ pedidos > R$ ${rule.threshold}` 
+                                            ? `Frete Grátis p/ pedidos > R$ ${rule.threshold?.toFixed(2)}` 
                                             : `Taxa Fixa de Entrega`
                                         }
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                        Valor: R$ {rule.value}
+                                        Valor: R$ {rule.value.toFixed(2)}
                                     </p>
                                 </div>
                                 <button onClick={() => handleDelete(rule.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors">
