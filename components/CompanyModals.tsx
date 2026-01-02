@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { X, Mail, MapPin, Briefcase, Newspaper, Info } from 'lucide-react';
+import { Mail, MapPin, Briefcase, Newspaper, Info } from 'lucide-react';
 import { CompanyInfo } from '../types';
+import { BaseModal } from './BaseModal'; // Import BaseModal
 
 interface CompanyModalProps {
     type: 'about' | 'careers' | 'press' | 'contact' | null;
@@ -97,23 +98,8 @@ export const CompanyModal: React.FC<CompanyModalProps> = ({ type, onClose, data 
     const current = content[type];
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 sm:p-8 animate-in zoom-in-95 relative flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors">
-                    <X className="w-5 h-5" />
-                </button>
-                
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                        {current.icon}
-                    </div>
-                    <h3 className="text-2xl font-black text-gray-900 dark:text-white">{current.title}</h3>
-                </div>
-
-                <div className="overflow-y-auto pr-2 custom-scrollbar">
-                    {current.body}
-                </div>
-            </div>
-        </div>
+        <BaseModal isOpen={!!type} onClose={onClose} title={current.title} icon={current.icon}>
+            {current.body}
+        </BaseModal>
     );
 };

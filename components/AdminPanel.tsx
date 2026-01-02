@@ -1,137 +1,423 @@
 
-import React, { useState, useEffect } from 'react';
-import { Shield, Search, Edit, Trash2, Loader2, UserCheck, UserCog, Settings, Package, Power, PowerOff, X, CheckCircle, AlertTriangle, CreditCard, QrCode, Barcode, Plus, Tag, Headphones, MessageCircle, Phone, Key, Bot, Smartphone, RefreshCw, Banknote, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star } from 'lucide-react';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+// FIX: Corrigindo a importação do ícone Edit2
+import { Shield, Search, MoreVertical, Edit2, UserX, Trash2, Loader2, UserCheck, UserCog, Send, ListOrdered, Settings, Package, Power, PowerOff, X, CheckCircle, AlertTriangle, CreditCard, QrCode, Barcode, Plus, Grid, Tag, Headphones, MessageSquare, Phone, Key, Bot, Wallet, Smartphone, Upload, RefreshCw, Banknote, MapPin, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star, FileText, Newspaper, Globe, Palette, User, Filter, Eye, ShoppingBag, Bell, Award, ClipboardList, Gauge, Construction } from 'lucide-react';
 import * as cloud from '../services/cloud';
-import { ManagedUser, Product, ShopSettings, Category, Claim, PartnerFeeSettings, PWASettings, PayoutSettings, City, CityRequest, PartnerDocument, PartnerProfile, PartnerLevelBenefit, CompanyInfo, AdminSubTab, BlacklistEntry, FraudAlert, PartnerRating, PlatformNews, AdminWalletUser } from '../types';
+import { ManagedUser, UserRole, UserStatus, GlobalNotification, Product, AdminOrder, ShopSettings, Category, Claim, PartnerFeeSettings, PWASettings, PWAIcon, PayoutSettings, City, CityRequest, PartnerDocument, PartnerProfile, PartnerLevelBenefit, BlacklistEntry, IdentityVerification, FraudAlert, PlatformNews, AdminSubTab } from '../types';
 import { Button } from './Button';
-import { AsaasWebhookManagement } from './AsaasWebhookManagement';
+import { CustomSelect } from './CustomSelect';
+import { useDialog } from '../utils/dialogService';
 import { AdminDashboard } from './AdminDashboard';
-import { AdminReferrals } from './AdminReferrals';
-import { ChatWindow } from './ChatWindow';
 import { AdminWalletControl } from './AdminWalletControl';
+import { AdminReferrals } from './AdminReferrals';
 import { Switch } from './Switch';
+import { SecurityManagement } from './SecurityManagement';
+import { FinancialPanel } from './FinancialPanel';
+import { AdminNotifications } from './AdminNotifications';
+import { AdminShopManagement } from './AdminShopManagement';
+import { AdminClaims } from './AdminClaims';
+import { AdminFees } from './AdminFees';
+import { AdminPWASettings } from './AdminPWASettings';
+import { AdminRatings } from './AdminRatings';
+import { AdminBlacklist } from './AdminBlacklist';
+import { AdminInstitutionalContent } from './AdminInstitutionalContent';
+import { AdminPlatformNews } from './AdminPlatformNews';
+import { AdminStoreFinance } from './AdminStoreFinance';
+import { AsaasWebhookManagement } from './AdminAsaasConfig';
+import { AdminApiKeysUnified } from './AdminApiKeysUnified';
+import { AdminAIConfig } from './AdminAIConfig';
+import { AdminRoutingConfig } from './AdminRoutingConfig';
+import { AdminPartnerLevels } from './AdminPartnerLevels';
+import { AdminMaintenance } from './AdminMaintenance'; // NEW: Maintenance Module
+import { AdminLoanConfig } from './AdminLoanConfig';
+import { AdminInvestments } from './AdminInvestments';
+import { AdminSlides } from './AdminSlides';
 
-// --- SHOP MANAGEMENT MODULE ---
-const ShopManagement: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'settings'>('products');
-    const [products, setProducts] = useState<Product[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
+
+import { AdminPayouts } from './AdminPayouts';
+
+
+// --- HELPERS ---
+const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    let value = e.target.value.replace(/\D/g, "");
+    if (!value) { setter(""); return; }
+    const amount = Number(value) / 100;
+    const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setter(formatted);
+};
+
+const parseCurrency = (val: string): number => {
+    if (!val) return 0;
+    return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+};
+
+// Tradução de Enums para UI
+const getRoleLabel = (role: string) => {
+    const map: Record<string, string> = {
+        'admin': 'Administrador',
+        'store_partner': 'Lojista Parceiro',
+        'delivery_partner': 'Entregador Parceiro',
+        'delivery_person': 'Entregador (App)'
+    };
+    return map[role] || role;
+};
+
+const getRoleColor = (role: string) => {
+    switch (role) {
+        case 'admin': return 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800';
+        case 'store_partner': return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800';
+        case 'delivery_partner': return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800';
+        default: return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600';
+    }
+};
+
+const getStatusLabel = (status: string) => {
+    const map: Record<string, string> = {
+        'active': 'Ativo',
+        'banned': 'Banido',
+        'pending': 'Pendente',
+        'APPROVED': 'Verificado',
+        'REJECTED': 'Rejeitado',
+        'PENDING_REVIEW': 'Em Análise'
+    };
+    return map[status] || status;
+};
+
+const getStatusColor = (status: string) => {
+    switch (status) {
+        case 'active':
+        case 'APPROVED': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+        case 'banned':
+        case 'REJECTED': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+        case 'pending':
+        case 'PENDING_REVIEW': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
+        default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+    }
+};
+
+// --- TOAST COMPONENT ---
+const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    return (
+        <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-10 fade-in duration-300 border ${type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
+            <div className={`p-2 rounded-full ${type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+            </div>
+            <div>
+                <h4 className={`font-bold text-sm ${type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                    {type === 'success' ? 'Sucesso' : 'Erro'}
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
+            </div>
+            <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+        </div>
+    );
+};
+
+// --- USER MANAGEMENT MODULE ---
+const UserManagement: React.FC = () => {
+    const [users, setUsers] = useState<ManagedUser[]>([]);
     const [loading, setLoading] = useState(true);
-    
-    const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+    const [search, setSearch] = useState('');
+    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+    // Edit State
+    const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
+    const [editForm, setEditForm] = useState({
+        name: '',
+        phone: '',
+        cpf: '',
+        city: '',
+        email: '',
+        role: '' as UserRole,
+        status: '' as UserStatus,
+        verification_status: '',
+        partner_level: '',
+        is_super_store: false
+    });
     const [isSaving, setIsSaving] = useState(false);
-    const [newCategoryName, setNewCategoryName] = useState('');
 
-    useEffect(() => { loadData(); }, []);
+    // Filter states
+    const [roleFilter, setRoleFilter] = useState<string>('ALL');
 
-    const loadData = async () => {
+    useEffect(() => { loadUsers(); }, []);
+
+    const loadUsers = async () => {
         setLoading(true);
         try {
-            const [p, c, s] = await Promise.all([
-                cloud.adminGetProducts(),
-                cloud.adminGetCategories(),
-                cloud.getShopSettings()
-            ]);
-            setProducts(p);
-            setCategories(c);
-            setShopSettings(s || { id: true, is_shop_enabled: false });
+            const data = await cloud.getAllUsers();
+            setUsers(data);
         } catch (e) { console.error(e); } finally { setLoading(false); }
     };
 
-    const handleSaveProduct = async () => {
-        if (!editingProduct?.name || !editingProduct?.price) return alert("Nome e preço são obrigatórios.");
+    const handleEditClick = (user: ManagedUser) => {
+        setSelectedUser(user);
+        setEditForm({
+            name: user.name || '',
+            phone: user.phone_number || '',
+            cpf: user.cpf || '',
+            city: user.city || '',
+            email: user.email || '',
+            role: user.role,
+            status: user.status,
+            verification_status: user.verification_status || 'NOT_SUBMITTED',
+            partner_level: user.partner_level || 'BRONZE',
+            is_super_store: user.is_super_store || false
+        });
+    };
+
+    const handleSaveUser = async () => {
+        if (!selectedUser) return;
         setIsSaving(true);
         try {
-            if (editingProduct.id) await cloud.adminUpdateProduct(editingProduct.id, editingProduct);
-            else await cloud.adminAddProduct(editingProduct);
-            setEditingProduct(null);
-            loadData();
-        } catch (e: any) { alert("Erro ao salvar produto: " + e.message); } finally { setIsSaving(false); }
+            // Mapeamento correto para as colunas do banco de dados (user_profiles)
+            const rawPhone = (editForm.phone || '').replace(/\D/g, '');
+            const rawCpf = (editForm.cpf || '').replace(/\D/g, '');
+
+            const updates = {
+                role: editForm.role,
+                status: editForm.status,
+                name: editForm.name,
+                phone_number: rawPhone,
+                cpf: rawCpf,
+                city: editForm.city,
+                verification_status: editForm.verification_status,
+                partner_level: editForm.partner_level,
+                is_super_store: editForm.is_super_store
+            };
+
+            await cloud.adminUpdateUserProfile(selectedUser.id, updates);
+            setToast({ type: 'success', message: "Dados do usuário atualizados com sucesso!" });
+            setSelectedUser(null);
+            loadUsers();
+        } catch (e: any) {
+            setToast({ type: 'error', message: "Erro ao salvar: " + e.message });
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const handleDeleteProduct = async (id: string) => {
-        if (!confirm("Deletar produto?")) return;
-        try { await cloud.adminDeleteProduct(id); loadData(); } catch (e: any) { alert("Erro ao deletar: " + e.message); }
-    };
-
-    const handleAddCategory = async () => {
-        if (!newCategoryName.trim()) return;
-        try { await cloud.adminAddCategory(newCategoryName); setNewCategoryName(''); loadData(); } catch (e: any) { alert("Erro: " + e.message); }
-    };
-
-    const handleDeleteCategory = async (id: string) => {
-        if (!confirm("Deletar categoria?")) return;
-        try { await cloud.adminDeleteCategory(id); loadData(); } catch (e: any) { alert("Erro: " + e.message); }
-    };
-
-    const handleSaveSettings = async () => {
-        if (!shopSettings) return;
-        setIsSaving(true);
-        try { await cloud.adminUpdateShopSettings(shopSettings); alert("Configurações salvas!"); } catch (e: any) { alert("Erro: " + e.message); } finally { setIsSaving(false); }
-    };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
+    const filteredUsers = users.filter(u => {
+        const matchesSearch = (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (u.email || '').toLowerCase().includes(search.toLowerCase());
+        const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+        return matchesSearch && matchesRole;
+    });
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
-                <button onClick={() => setActiveTab('products')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'products' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Produtos</button>
-                <button onClick={() => setActiveTab('categories')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'categories' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Categorias</button>
-                <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'settings' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Configurações</button>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+            {/* Header & Filters */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                <div className="relative flex-1 w-full md:max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Buscar por nome ou email..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        className="w-full pl-10 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white transition-all"
+                    />
+                </div>
+                <div className="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1">
+                    <button onClick={() => setRoleFilter('ALL')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'ALL' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Todos</button>
+                    <button onClick={() => setRoleFilter('store_partner')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'store_partner' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Lojistas</button>
+                    <button onClick={() => setRoleFilter('delivery_partner')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'delivery_partner' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Parceiros</button>
+                </div>
             </div>
 
-            {activeTab === 'products' && (
-                <div className="space-y-4">
-                    <div className="flex justify-end"><Button onClick={() => setEditingProduct({ is_active: true })}><Plus className="w-4 h-4 mr-2"/> Novo Produto</Button></div>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
-                                <tr>
-                                    <th className="px-4 py-3">Nome</th>
-                                    <th className="px-4 py-3">Preço</th>
-                                    <th className="px-4 py-3">Estoque</th>
-                                    <th className="px-4 py-3">Status</th>
-                                    <th className="px-4 py-3 text-right">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {products.map(p => (
-                                    <tr key={p.id} className="border-b dark:border-gray-700">
-                                        <td className="px-4 py-3 font-bold dark:text-white">{p.name}</td>
-                                        <td className="px-4 py-3">R$ {p.price.toFixed(2)}</td>
-                                        <td className="px-4 py-3">{p.stock_quantity ?? '-'}</td>
-                                        <td className="px-4 py-3"><span className={`px-2 py-1 rounded text-[10px] font-bold ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{p.is_active ? 'Ativo' : 'Inativo'}</span></td>
-                                        <td className="px-4 py-3 text-right flex justify-end gap-2"><button onClick={() => setEditingProduct(p)} className="p-2 text-blue-500"><Edit className="w-4 h-4"/></button><button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-red-500"><Trash2 className="w-4 h-4"/></button></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            {/* Users List (Cards) */}
+            <div className="grid grid-cols-1 gap-3">
+                {loading ? (
+                    <div className="text-center p-10"><Loader2 className="w-8 h-8 animate-spin mx-auto text-brand-600" /></div>
+                ) : filteredUsers.length === 0 ? (
+                    <div className="text-center p-10 bg-white dark:bg-gray-800 rounded-2xl text-gray-400 border border-dashed border-gray-200 dark:border-gray-700">
+                        <UserX className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                        Nenhum usuário encontrado.
                     </div>
-                </div>
-            )}
+                ) : (
+                    filteredUsers.map(user => (
+                        <div key={user.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all hover:border-brand-200 dark:hover:border-brand-900 hover:shadow-md">
+                            <div className="flex items-center gap-4 w-full md:w-auto">
+                                <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-600">
+                                    {user.avatar_url ? (
+                                        <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <User className="w-6 h-6 text-gray-400" />
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="font-bold text-gray-900 dark:text-white truncate">{user.name || 'Sem Nome'}</h4>
+                                        {user.is_super_store && <span className="bg-yellow-100 text-yellow-700 text-[10px] px-1.5 py-0.5 rounded font-bold border border-yellow-200">SUPER</span>}
+                                        {user.verification_status === 'APPROVED' && <ShieldCheck className="w-3 h-3 text-green-500" />}
+                                    </div>
+                                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                                        {user.city && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {user.city}</span>}
+                                        {user.phone_number && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {user.phone_number}</span>}
+                                    </div>
+                                </div>
+                            </div>
 
-            {activeTab === 'categories' && (
-                <div className="space-y-4">
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-2"><input type="text" placeholder="Nova Categoria" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/><Button onClick={handleAddCategory}>Adicionar</Button></div>
-                    <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700"><span className="font-bold dark:text-white">{c.name}</span><button onClick={() => handleDeleteCategory(c.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button></div>))}</div>
-                </div>
-            )}
+                            <div className="flex flex-row md:flex-col lg:flex-row items-center gap-3 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-gray-100 dark:border-gray-700 pt-3 md:pt-0">
+                                <div className="flex gap-2">
+                                    <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${getRoleColor(user.role)}`}>
+                                        {getRoleLabel(user.role)}
+                                    </span>
+                                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${getStatusColor(user.status)}`}>
+                                        {getStatusLabel(user.status)}
+                                    </span>
+                                </div>
+                                <Button size="sm" variant="outline" onClick={() => handleEditClick(user)} className="whitespace-nowrap h-8 text-xs">
+                                    <Edit2 className="w-3 h-3 mr-1.5" /> Editar
+                                </Button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
 
-            {activeTab === 'settings' && shopSettings && (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
-                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl"><div><h4 className="font-bold dark:text-white">Status da Loja</h4><p className="text-xs text-gray-500">Defina se a loja está aberta.</p></div><Switch checked={shopSettings.is_shop_enabled || false} onChange={c => setShopSettings({...shopSettings, is_shop_enabled: c})} /></div>
-                    <Button onClick={handleSaveSettings} disabled={isSaving} fullWidth>{isSaving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Configurações'}</Button>
-                </div>
-            )}
+            {/* Edit Modal */}
+            {selectedUser && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setSelectedUser(null)}>
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-[32px] w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
+                            <div>
+                                <h3 className="font-black text-xl dark:text-white flex items-center gap-2">
+                                    <UserCog className="w-6 h-6 text-brand-600" /> Editar Usuário
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">ID: {selectedUser.id}</p>
+                            </div>
+                            <button onClick={() => setSelectedUser(null)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 hover:text-gray-700 dark:hover:text-white"><X className="w-5 h-5" /></button>
+                        </div>
 
-            {editingProduct && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-2"><h3 className="font-bold text-lg dark:text-white">{editingProduct.id ? 'Editar Produto' : 'Novo Produto'}</h3><button onClick={() => setEditingProduct(null)}><X className="w-5 h-5"/></button></div>
-                        <input type="text" placeholder="Nome" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                        <input type="number" step="0.01" placeholder="Preço" value={editingProduct.price || ''} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                        <div className="flex gap-3 pt-4"><Button variant="outline" onClick={() => setEditingProduct(null)} fullWidth>Cancelar</Button><Button onClick={handleSaveProduct} disabled={isSaving} fullWidth>{isSaving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar'}</Button></div>
+                        <div className="overflow-y-auto pr-2 custom-scrollbar space-y-5">
+                            {/* Personal Info */}
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 tracking-wider">Dados Pessoais</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Nome Completo</label>
+                                        <input
+                                            type="text"
+                                            value={editForm.name}
+                                            onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Email (Apenas visual</label>
+                                        <input type="text" value={editForm.email} disabled className="w-full p-3 bg-gray-100 dark:bg-gray-700/50 border-none rounded-xl text-gray-500 cursor-not-allowed" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Telefone</label>
+                                        <input
+                                            type="text"
+                                            value={editForm.phone}
+                                            onChange={e => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">CPF</label>
+                                        <input
+                                            type="text"
+                                            value={editForm.cpf}
+                                            onChange={e => setEditForm(prev => ({ ...prev, cpf: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Cidade</label>
+                                        <input
+                                            type="text"
+                                            value={editForm.city}
+                                            onChange={e => setEditForm(prev => ({ ...prev, city: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* System Info */}
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 tracking-wider">Dados do Sistema</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Função</label>
+                                        <CustomSelect
+                                            value={editForm.role}
+                                            onChange={val => setEditForm(prev => ({ ...prev, role: val as UserRole }))}
+                                            options={[
+                                                { label: 'Administrador', value: 'admin' },
+                                                { label: 'Lojista Parceiro', value: 'store_partner' },
+                                                { label: 'Entregador Parceiro', value: 'delivery_partner' },
+                                                { label: 'Entregador (App)', value: 'delivery_person' }
+                                            ]}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Status da Conta</label>
+                                        <CustomSelect
+                                            value={editForm.status}
+                                            onChange={val => setEditForm(prev => ({ ...prev, status: val as UserStatus }))}
+                                            options={[
+                                                { label: 'Ativo', value: 'active' },
+                                                { label: 'Banido', value: 'banned' },
+                                                { label: 'Pendente', value: 'pending' }
+                                            ]}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Status Verificação</label>
+                                        <CustomSelect
+                                            value={editForm.verification_status}
+                                            onChange={val => setEditForm(prev => ({ ...prev, verification_status: val }))}
+                                            options={[
+                                                { label: 'Não Enviado', value: 'NOT_SUBMITTED' },
+                                                { label: 'Em Análise', value: 'PENDING_REVIEW' },
+                                                { label: 'Aprovado', value: 'APPROVED' },
+                                                { label: 'Rejeitado', value: 'REJECTED' }
+                                            ]}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Nível de Parceiro</label>
+                                        <CustomSelect
+                                            value={editForm.partner_level}
+                                            onChange={val => setEditForm(prev => ({ ...prev, partner_level: val }))}
+                                            options={[
+                                                { label: 'BRONZE', value: 'BRONZE' },
+                                                { label: 'SILVER', value: 'SILVER' },
+                                                { label: 'GOLD', value: 'GOLD' },
+                                                { label: 'PLATINUM', value: 'PLATINUM' },
+                                                { label: 'DIAMOND', value: 'DIAMOND' }
+                                            ]}
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Super Lojista</label>
+                                        <Switch
+                                            checked={editForm.is_super_store}
+                                            onChange={val => setEditForm(prev => ({ ...prev, is_super_store: val }))}
+                                            label="Ativar Super Lojista"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+                            <Button fullWidth onClick={handleSaveUser} disabled={isSaving}>
+                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Salvar Alterações'}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -139,14 +425,20 @@ const ShopManagement: React.FC = () => {
     );
 };
 
+
+// --- PARTNER VERIFICATION MODULE ---
 const PartnerVerification: React.FC = () => {
     const [partners, setPartners] = useState<ManagedUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedPartner, setSelectedPartner] = useState<ManagedUser | null>(null);
     const [partnerDetails, setPartnerDetails] = useState<{ profile: PartnerProfile, documents: PartnerDocument[] } | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const { prompt, confirm: dialogConfirm } = useDialog();
 
-    useEffect(() => { loadPendingPartners(); }, []);
+    useEffect(() => {
+        loadPendingPartners();
+    }, []);
 
     const loadPendingPartners = async () => {
         setLoading(true);
@@ -166,30 +458,44 @@ const PartnerVerification: React.FC = () => {
     };
 
     const handleUpdateDocStatus = async (docId: string, status: 'APPROVED' | 'REJECTED') => {
-        const notes = status === 'REJECTED' ? prompt("Motivo da rejeição (opcional):") : '';
-        if (status === 'REJECTED' && notes === null) return;
+        let notes = '';
+        if (status === 'REJECTED') {
+            const result = await prompt({ title: 'Motivo da rejeição', message: 'Motivo da rejeição (opcional):', placeholder: '' });
+            if (result === null) return; // User cancelled prompt
+            notes = result;
+        }
+
         try {
             await cloud.adminUpdateDocumentStatus(docId, status, notes || '');
+            // Refresh details
             if (selectedPartner) openPartnerDetails(selectedPartner);
-        } catch (e: any) { alert("Erro: " + e.message); }
+            setToast({ type: 'success', message: "Documento atualizado!" });
+        } catch (e: any) { setToast({ type: 'error', message: "Erro: " + e.message }); }
     };
-    
+
     const handleUpdatePartnerStatus = async (userId: string, status: 'APPROVED' | 'REJECTED' | 'BLOCKED') => {
-        if (!confirm(`Tem certeza que deseja alterar o status deste parceiro para ${status}?`)) return;
+        const ok = await dialogConfirm({ title: 'Confirmar alteração', message: `Tem certeza que deseja alterar o status deste parceiro para ${status}?` });
+        if (!ok) return;
         try {
             await cloud.adminUpdatePartnerStatus(userId, status);
-            alert("Status do parceiro atualizado!");
-            if (selectedPartner) openPartnerDetails(selectedPartner);
-            loadPendingPartners();
-        } catch (e: any) { alert("Erro: " + e.message); }
+            setToast({ type: 'success', message: "Status do parceiro atualizado!" });
+            if (selectedPartner) openPartnerDetails(selectedPartner); // Refresh
+            loadPendingPartners(); // Refresh list in case status changes
+        } catch (e: any) { setToast({ type: 'error', message: "Erro: " + e.message }); }
     };
 
     return (
         <div className="space-y-6 animate-in fade-in">
-             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
-                        <tr><th className="px-4 py-3">Parceiro</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Data</th><th className="px-4 py-3"></th></tr>
+                        <tr>
+                            <th className="px-4 py-3">Parceiro</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Data</th>
+                            <th className="px-4 py-3"></th>
+                        </tr>
                     </thead>
                     <tbody>
                         {loading && <tr><td colSpan={4} className="text-center p-6"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>}
@@ -203,41 +509,71 @@ const PartnerVerification: React.FC = () => {
                         ))}
                     </tbody>
                 </table>
-             </div>
-             {selectedPartner && (
+            </div>
+            {selectedPartner && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPartner(null)}>
                     <div className="bg-white dark:bg-gray-800 w-full max-w-2xl max-h-[90vh] rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center"><h3 className="font-bold dark:text-white">Análise: {selectedPartner.name}</h3><button onClick={() => setSelectedPartner(null)}><X /></button></div>
+                        <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                            <h3 className="font-bold dark:text-white">Análise: {selectedPartner.name}</h3>
+                            <button onClick={() => setSelectedPartner(null)}><X /></button>
+                        </div>
                         <div className="p-6 overflow-y-auto space-y-4">
-                            {detailLoading ? <Loader2 className="animate-spin mx-auto"/> : (
+                            {detailLoading ? <Loader2 className="animate-spin mx-auto" /> : (
                                 <>
-                                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl space-y-2"><p><strong>Veículo:</strong> {partnerDetails?.profile.vehicle_type}</p><p><strong>Placa:</strong> {partnerDetails?.profile.vehicle_plate || 'N/A'}</p></div>
-                                    <div className="flex gap-2"><Button onClick={() => handleUpdatePartnerStatus(selectedPartner.id, 'APPROVED')} variant="success"><ShieldCheck className="w-4 h-4 mr-2"/> Aprovar Cadastro</Button><Button onClick={() => handleUpdatePartnerStatus(selectedPartner.id, 'BLOCKED')} variant="danger"><ShieldOff className="w-4 h-4 mr-2"/> Bloquear Parceiro</Button></div>
+                                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl space-y-2">
+                                        <p><strong>Veículo:</strong> {partnerDetails?.profile.vehicle_type}</p>
+                                        <p><strong>Placa:</strong> {partnerDetails?.profile.vehicle_plate || 'N/A'}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button onClick={() => handleUpdatePartnerStatus(selectedPartner.id, 'APPROVED')} variant="success"><ShieldCheck className="w-4 h-4 mr-2" /> Aprovar Cadastro</Button>
+                                        <Button onClick={() => handleUpdatePartnerStatus(selectedPartner.id, 'BLOCKED')} variant="danger"><ShieldOff className="w-4 h-4 mr-2" /> Bloquear Parceiro</Button>
+                                    </div>
                                     {partnerDetails?.documents.map(doc => (
-                                        <div key={doc.id} className="p-3 border dark:border-gray-700 rounded-lg flex items-center justify-between"><div><p className="font-bold text-sm dark:text-white">{doc.document_type}</p><a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 underline">Ver anexo</a>{doc.admin_notes && <p className="text-xs text-red-500 italic">Obs: {doc.admin_notes}</p>}</div><div className="flex items-center gap-2"><span className={`text-xs font-bold px-2 py-1 rounded-full ${doc.status === 'APPROVED' ? 'bg-green-100 text-green-600' : doc.status === 'REJECTED' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>{doc.status}</span><button onClick={() => handleUpdateDocStatus(doc.id, 'APPROVED')} className="p-2 bg-green-100 hover:bg-green-200 rounded"><FileCheck className="w-4 h-4 text-green-600"/></button><button onClick={() => handleUpdateDocStatus(doc.id, 'REJECTED')} className="p-2 bg-red-100 hover:bg-red-200 rounded"><FileX className="w-4 h-4 text-red-600"/></button></div></div>
+                                        <div key={doc.id} className="p-3 border dark:border-gray-700 rounded-lg flex items-center justify-between">
+                                            <div>
+                                                <p className="font-bold text-sm dark:text-white">{doc.document_type}</p>
+                                                <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 underline">Ver anexo</a>
+                                                {doc.admin_notes && <p className="text-xs text-red-500 italic">Obs: {doc.admin_notes}</p>}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${doc.status === 'APPROVED' ? 'bg-green-100 text-green-600' : doc.status === 'REJECTED' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>{doc.status}</span>
+                                                <button onClick={() => handleUpdateDocStatus(doc.id, 'APPROVED')} className="p-2 bg-green-100 hover:bg-green-200 rounded"><FileCheck className="w-4 h-4 text-green-600" /></button>
+                                                <button onClick={() => handleUpdateDocStatus(doc.id, 'REJECTED')} className="p-2 bg-red-100 hover:bg-red-200 rounded"><FileX className="w-4 h-4 text-red-600" /></button>
+                                            </div>
+                                        </div>
                                     ))}
                                 </>
                             )}
                         </div>
                     </div>
                 </div>
-             )}
+            )}
         </div>
     );
 };
 
+
+// --- CITY MANAGEMENT MODULE ---
 const CityManagement: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'cities' | 'requests'>('cities');
     const [cities, setCities] = useState<City[]>([]);
     const [requests, setRequests] = useState<CityRequest[]>([]);
     const [loading, setLoading] = useState(false);
+    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+    // Add City Form
     const [newName, setNewName] = useState('');
     const [newState, setNewState] = useState('');
+
+    // Edit City Modal
     const [editingCity, setEditingCity] = useState<City | null>(null);
     const [editName, setEditName] = useState('');
     const [editState, setEditState] = useState('');
+    const { confirm: dialogConfirm } = useDialog();
 
-    useEffect(() => { loadData(); }, [activeTab]);
+    useEffect(() => {
+        loadData();
+    }, [activeTab]);
 
     const loadData = async () => {
         setLoading(true);
@@ -249,408 +585,212 @@ const CityManagement: React.FC = () => {
                 const data = await cloud.adminGetCityRequests();
                 setRequests(data);
             }
-        } catch (e) { console.error(e); } finally { setLoading(false); }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleAddCity = async () => {
-        if (!newName || !newState) return alert("Preencha nome e estado.");
-        try { await cloud.adminAddCity(newName, newState); setNewName(''); setNewState(''); loadData(); } catch (e: any) { alert("Erro: " + e.message); }
+        if (!newName || !newState) return setToast({ type: 'error', message: "Preencha nome e estado." });
+        try {
+            await cloud.adminAddCity(newName, newState);
+            setNewName('');
+            setNewState('');
+            loadData();
+            setToast({ type: 'success', message: "Cidade adicionada com sucesso!" });
+        } catch (e: any) {
+            setToast({ type: 'error', message: "Erro: " + e.message });
+        }
     };
 
     const handleToggleStatus = async (city: City) => {
-        if (!confirm(`Tem certeza que deseja ${city.is_active ? "desativar" : "ativar"} a cidade ${city.name}?`)) return;
-        try { await cloud.adminUpdateCityStatus(city.id, !city.is_active); loadData(); } catch (e: any) { alert("Erro: " + e.message); }
+        const action = city.is_active ? "desativar" : "ativar";
+        const ok = await dialogConfirm({ title: 'Confirmar ação', message: `Tem certeza que deseja ${action} a cidade ${city.name}?` });
+        if (!ok) return;
+        try {
+            await cloud.adminUpdateCityStatus(city.id, !city.is_active);
+            loadData();
+            setToast({ type: 'success', message: `Cidade ${action === 'ativar' ? 'ativada' : 'desativada'}!` });
+        } catch (e: any) {
+            setToast({ type: 'error', message: "Erro: " + e.message });
+        }
     };
 
-    const openEditModal = (city: City) => { setEditingCity(city); setEditName(city.name); setEditState(city.state); };
-    const handleSaveChanges = async () => { if (!editingCity || !editName || !editState) return; try { await cloud.adminEditCity(editingCity.id, editName, editState); setEditingCity(null); loadData(); } catch (e: any) { alert("Erro ao editar: " + e.message); } };
-    const handleProcessRequest = async (id: string, status: 'APPROVED' | 'REJECTED') => { try { await cloud.adminProcessCityRequest(id, status); loadData(); } catch (e: any) { alert("Erro: " + e.message); } };
+    const openEditModal = (city: City) => {
+        setEditingCity(city);
+        setEditName(city.name);
+        setEditState(city.state);
+    };
+
+    const handleSaveChanges = async () => {
+        if (!editingCity || !editName || !editState) return;
+        try {
+            await cloud.adminEditCity(editingCity.id, editName, editState);
+            setEditingCity(null);
+            loadData();
+            setToast({ type: 'success', message: "Cidade editada com sucesso!" });
+        } catch (e: any) {
+            setToast({ type: 'error', message: "Erro ao editar: " + e.message });
+        }
+    };
+
+    const handleProcessRequest = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+        try {
+            await cloud.adminProcessCityRequest(id, status);
+            loadData();
+            setToast({ type: 'success', message: `Solicitação ${status === 'APPROVED' ? 'aprovada' : 'rejeitada'}!` });
+        } catch (e: any) {
+            setToast({ type: 'error', message: "Erro: " + e.message });
+        }
+    };
 
     return (
         <div className="space-y-6 animate-in fade-in">
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
             <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-fit">
                 <button onClick={() => setActiveTab('cities')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'cities' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Ativas</button>
                 <button onClick={() => setActiveTab('requests')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Solicitações</button>
             </div>
+
             {activeTab === 'cities' && (
                 <div className="space-y-6">
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-3 items-center"><input type="text" placeholder="Cidade" value={newName} onChange={e => setNewName(e.target.value)} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" /><input type="text" placeholder="UF" maxLength={2} value={newState} onChange={e => setNewState(e.target.value.toUpperCase())} className="w-20 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" /><Button onClick={handleAddCity} className="whitespace-nowrap px-4"><Plus className="w-4 h-4 mr-2"/> Adicionar</Button></div>
+                    {/* Add Form */}
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-3 items-center">
+                        <input type="text" placeholder="Cidade" value={newName} onChange={e => setNewName(e.target.value)} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" />
+                        <input type="text" placeholder="UF" maxLength={2} value={newState} onChange={e => setNewState(e.target.value.toUpperCase())} className="w-20 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" />
+                        <Button onClick={handleAddCity} className="whitespace-nowrap px-4">
+                            <Plus className="w-4 h-4 mr-2" /> Adicionar
+                        </Button>
+                    </div>
+
+                    {/* List */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                        <table className="w-full text-sm text-left"><thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Nome</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Ações</th></tr></thead><tbody>{cities.map(city => (<tr key={city.id} className="border-b border-gray-100 dark:border-gray-700 last:border-0"><td className="px-4 py-3 font-bold dark:text-white">{city.name}</td><td className="px-4 py-3">{city.state}</td><td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${city.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>{city.is_active ? 'Ativa' : 'Inativa'}</span></td><td className="px-4 py-3 text-right flex items-center justify-end gap-2"><button onClick={() => openEditModal(city)} className="text-blue-500 hover:bg-blue-50 p-2 rounded"><Edit className="w-4 h-4"/></button><button onClick={() => handleToggleStatus(city)} className={`${city.is_active ? 'text-red-500 hover:bg-red-50' : 'text-green-500 hover:bg-green-50'} p-2 rounded`}>{city.is_active ? <PowerOff className="w-4 h-4"/> : <Power className="w-4 h-4"/>}</button></td></tr>))}</tbody></table>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
+                                <tr>
+                                    <th className="px-4 py-3">Nome</th>
+                                    <th className="px-4 py-3">Estado</th>
+                                    <th className="px-4 py-3">Status</th>
+                                    <th className="px-4 py-3 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {cities.map(city => (
+                                    <tr key={city.id} className="border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                        <td className="px-4 py-3 font-bold dark:text-white">{city.name}</td>
+                                        <td className="px-4 py-3">{city.state}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${city.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>
+                                                {city.is_active ? 'Ativa' : 'Inativa'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                            <Button size="sm" variant="outline" onClick={() => openEditModal(city)}><Edit2 className="w-3 h-3" /></Button>
+                                            <Button size="sm" variant={city.is_active ? 'danger' : 'success'} onClick={() => handleToggleStatus(city)}>
+                                                {city.is_active ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}
+
             {activeTab === 'requests' && (
-                <div className="space-y-4">
-                    {requests.length === 0 && <p className="text-gray-400 text-center">Nenhuma solicitação pendente.</p>}
-                    {requests.map(req => (<div key={req.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex justify-between items-center"><div><div className="font-bold text-lg dark:text-white">{req.city_name} - {req.state}</div><div className="text-xs text-gray-500">{req.user_email || 'Anônimo'} • {req.status}</div></div>{req.status === 'PENDING' && (<div className="flex gap-2"><button onClick={() => handleProcessRequest(req.id, 'APPROVED')} className="bg-green-100 text-green-600 p-2 rounded hover:bg-green-200"><CheckCircle className="w-5 h-5"/></button><button onClick={() => handleProcessRequest(req.id, 'REJECTED')} className="bg-red-100 text-red-600 p-2 rounded hover:bg-red-200"><X className="w-5 h-5"/></button></div>)}</div>))}
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
+                            <tr>
+                                <th className="px-4 py-3">Cidade</th>
+                                <th className="px-4 py-3">Estado</th>
+                                <th className="px-4 py-3">Solicitante</th>
+                                <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {requests.length === 0 && <tr><td colSpan={5} className="text-center p-6 text-gray-400">Nenhuma solicitação pendente.</td></tr>}
+                            {requests.map(req => (
+                                <tr key={req.id} className="border-b border-gray-100 dark:border-gray-700">
+                                    <td className="px-4 py-3 font-bold dark:text-white">{req.city_name}</td>
+                                    <td className="px-4 py-3">{req.state}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-500">{req.user_email}</td>
+                                    <td className="px-4 py-3">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${req.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : req.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {req.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        {req.status === 'PENDING' && (
+                                            <div className="flex justify-end gap-2">
+                                                <Button size="sm" variant="success" onClick={() => handleProcessRequest(req.id, 'APPROVED')}>Aprovar</Button>
+                                                <Button size="sm" variant="danger" onClick={() => handleProcessRequest(req.id, 'REJECTED')}>Rejeitar</Button>
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
+
             {editingCity && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-xl p-6 space-y-4"><h3 className="font-bold dark:text-white">Editar Cidade</h3><input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" /><input type="text" value={editState} onChange={e => setEditState(e.target.value.toUpperCase())} maxLength={2} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" /><div className="flex gap-3"><Button variant="outline" onClick={() => setEditingCity(null)} fullWidth>Cancelar</Button><Button onClick={handleSaveChanges} fullWidth>Salvar</Button></div></div></div>
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl space-y-4">
+                        <h3 className="font-bold text-lg dark:text-white">Editar Cidade</h3>
+                        <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nome" />
+                        <input type="text" value={editState} onChange={e => setEditState(e.target.value.toUpperCase())} maxLength={2} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="UF" />
+                        <div className="flex gap-2 justify-end mt-4">
+                            <Button variant="outline" onClick={() => setEditingCity(null)}>Cancelar</Button>
+                            <Button onClick={handleSaveChanges}>Salvar</Button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
 };
 
-const PayoutsManagement: React.FC = () => {
-    const [settings, setSettings] = useState<PayoutSettings | null>(null);
-    const [history, setHistory] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
+interface AdminPanelProps {
+    activeSubTab: AdminSubTab;
+}
 
-    useEffect(() => { loadData(); }, []);
-    const loadData = async () => { setLoading(true); try { const s = await cloud.adminGetPayoutSettings(); setSettings(s); const h = await cloud.adminGetPayoutHistory(); setHistory(h || []); } catch (e) { console.error(e); } finally { setLoading(false); } };
-    const handleSaveSettings = async () => { if (!settings) return; setSaving(true); try { await cloud.adminUpdatePayoutSettings(settings); alert("Configurações de repasse atualizadas!"); } catch (e: any) { alert("Erro: " + e.message); } finally { setSaving(false); } };
+export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
+    switch (activeSubTab) {
+        case 'dashboard': return <AdminDashboard />;
+        case 'users': return <UserManagement />;
+        case 'validation': return <PartnerVerification />;
+        case 'notifications': return <AdminNotifications />;
+        case 'shop': return <AdminShopManagement />;
+        case 'support': return <AdminClaims />;
+        case 'claims': return <AdminClaims />;
+        case 'ai_config': return <AdminAIConfig />;
+        case 'api_keys': return <AdminApiKeysUnified />;
+        case 'asaas_webhook': return <AsaasWebhookManagement />;
+        case 'fees': return <AdminFees />;
+        case 'pwa': return <AdminPWASettings />;
+        case 'routing': return <AdminRoutingConfig />;
+        case 'cities': return <CityManagement />;
+        case 'ratings': return <AdminRatings />;
+        case 'security': return <SecurityManagement />;
+        case 'blacklist': return <AdminBlacklist />;
+        case 'referrals': return <AdminReferrals />;
+        case 'institutional': return <AdminInstitutionalContent />;
+        case 'platform_news': return <AdminPlatformNews />;
+        case 'store_finance': return <AdminStoreFinance />;
+        case 'wallet_control': return <AdminWalletControl />;
+        case 'maintenance': return <AdminMaintenance />;
+        case 'levels': return <AdminPartnerLevels />;
+        case 'payouts': return <AdminPayouts />;
+        case 'loan_config': return <AdminLoanConfig />;
+        case 'investments': return <AdminInvestments />;
+        case 'slides': return <AdminSlides />;
 
-    if (loading) return <Loader2 className="w-8 h-8 animate-spin mx-auto my-10 text-brand-500"/>;
-
-    return (
-        <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700"><h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500"/> Regras de Repasse</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><div><label className="text-xs font-bold text-gray-500 uppercase">Dia da Semana (1-7)</label><select value={settings?.weekday} onChange={e => setSettings(prev => prev ? {...prev, weekday: parseInt(e.target.value)} : null)} className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-lg mt-1"><option value="1">Segunda-feira</option><option value="2">Terça-feira</option><option value="3">Quarta-feira</option><option value="4">Quinta-feira</option><option value="5">Sexta-feira</option></select></div><div><label className="text-xs font-bold text-gray-500 uppercase">Horário (Ex: 10:00)</label><input type="time" value={settings?.hour} onChange={e => setSettings(prev => prev ? {...prev, hour: e.target.value} : null)} className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-lg mt-1"/></div><div><label className="text-xs font-bold text-gray-500 uppercase">Limite Saque Emergencial (%)</label><input type="number" value={settings?.emergency_percentage} onChange={e => setSettings(prev => prev ? {...prev, emergency_percentage: parseInt(e.target.value)} : null)} className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-lg mt-1"/></div><div><label className="text-xs font-bold text-gray-500 uppercase">Cooldown (Horas)</label><input type="number" value={settings?.emergency_cooldown_hours} onChange={e => setSettings(prev => prev ? {...prev, emergency_cooldown_hours: parseInt(e.target.value)} : null)} className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-lg mt-1"/></div></div><div className="flex items-center gap-2 mb-4"><input type="checkbox" checked={settings?.emergency_enabled} onChange={e => setSettings(prev => prev ? {...prev, emergency_enabled: e.target.checked} : null)} className="w-5 h-5 rounded text-brand-600"/><span className="text-sm font-bold dark:text-white">Permitir Saque Emergencial</span></div><Button onClick={handleSaveSettings} disabled={saving} fullWidth>{saving ? 'Salvando...' : 'Salvar Regras'}</Button></div>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700"><h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Banknote className="w-5 h-5 text-green-500"/> Histórico de Repasses</h3><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-700"><tr><th className="px-4 py-3">Parceiro</th><th className="px-4 py-3">Valor</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Data</th></tr></thead><tbody>{history.map(h => (<tr key={h.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"><td className="px-4 py-3 font-medium dark:text-white">{h.partner_email}</td><td className="px-4 py-3 font-bold text-green-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(h.amount)}</td><td className="px-4 py-3">{h.is_emergency ? <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-bold">EMERGÊNCIA</span> : <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-bold">SEMANAL</span>}</td><td className="px-4 py-3">{h.status}</td><td className="px-4 py-3 text-gray-500">{new Date(h.created_at).toLocaleDateString()}</td></tr>))}</tbody></table></div></div>
-        </div>
-    );
-};
-
-const PartnerLevelsManagement: React.FC = () => {
-    const [levels, setLevels] = useState<PartnerLevelBenefit[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => { loadLevels(); }, []);
-    const loadLevels = async () => { setLoading(true); try { const data = await cloud.adminGetPartnerLevels(); setLevels(data); } catch (e) { console.error(e); alert("Erro ao carregar níveis."); } finally { setLoading(false); } };
-    const handleUpdate = (levelName: string, field: keyof PartnerLevelBenefit, value: string) => { setLevels(prev => prev.map(l => { if (l.level === levelName) { if (field === 'display_name' || field === 'level') { return { ...l, [field]: value }; } else { return { ...l, [field]: parseFloat(value) || 0 }; } } return l; })); };
-    const handleSave = async () => { setSaving(true); try { await Promise.all(levels.map(level => cloud.adminUpdatePartnerLevel(level))); alert("Níveis de parceiro salvos com sucesso!"); } catch (e: any) { alert("Erro ao salvar: " + e.message); } finally { setSaving(false); } };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
-    return (
-        <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700">
-                <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Star className="w-5 h-5 text-yellow-400" /> Gerenciar Níveis</h3>
-                <div className="space-y-4">
-                    {levels.map(level => (
-                        <div key={level.level} className="p-4 border border-gray-100 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-700/30">
-                            <h4 className="font-bold text-md text-brand-600 dark:text-brand-400 mb-3">{level.level}</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="col-span-1 md:col-span-2"><label className="text-xs font-bold text-gray-500">Nome de Exibição</label><input type="text" value={level.display_name} onChange={e => handleUpdate(level.level, 'display_name', e.target.value)} className="w-full p-2 bg-white dark:bg-gray-700 border rounded-lg text-sm mt-1" /></div>
-                                <div><label className="text-xs font-bold text-gray-500">Mínimo Entregas</label><input type="number" value={level.min_deliveries} onChange={e => handleUpdate(level.level, 'min_deliveries', e.target.value)} className="w-full p-2 bg-white dark:bg-gray-700 border rounded-lg text-sm mt-1" /></div>
-                                <div><label className="text-xs font-bold text-gray-500">Mínimo Avaliação</label><input type="number" step="0.1" value={level.min_rating} onChange={e => handleUpdate(level.level, 'min_rating', e.target.value)} className="w-full p-2 bg-white dark:bg-gray-700 border rounded-lg text-sm mt-1" /></div>
-                                <div><label className="text-xs font-bold text-gray-500">Desconto Lojista (%)</label><input type="number" step="0.1" value={level.store_discount_percent} onChange={e => handleUpdate(level.level, 'store_discount_percent', e.target.value)} className="w-full p-2 bg-white dark:bg-gray-700 border rounded-lg text-sm mt-1" /></div>
-                                <div><label className="text-xs font-bold text-gray-500">Redução Taxa (%)</label><input type="number" step="0.1" value={level.service_fee_reduction_percent} onChange={e => handleUpdate(level.level, 'service_fee_reduction_percent', e.target.value)} className="w-full p-2 bg-white dark:bg-gray-700 border rounded-lg text-sm mt-1" /></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <Button onClick={handleSave} disabled={saving} className="w-full mt-6">{saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Alterações'}</Button>
-            </div>
-        </div>
-    );
-};
-
-const FeesManagement: React.FC = () => {
-    const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
-    useEffect(() => { cloud.adminGetFeeSettings().then(setFees); }, []);
-    const save = async () => { if(fees) { await cloud.adminUpdateFeeSettings(fees); alert('Taxas atualizadas'); } };
-    if (!fees) return <Loader2 className="animate-spin"/>;
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 space-y-4">
-            <h3 className="font-bold dark:text-white">Taxas Globais</h3>
-            <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-xs">Taxa Fixa (R$)</label><input type="number" value={fees.global_tax_fixed} onChange={e => setFees({...fees, global_tax_fixed: +e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/></div>
-                <div><label className="text-xs">Taxa Variável (%)</label><input type="number" value={fees.global_tax_percent} onChange={e => setFees({...fees, global_tax_percent: +e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/></div>
-                <div><label className="text-xs">Valor Base Entrega</label><input type="number" value={fees.base_delivery_value} onChange={e => setFees({...fees, base_delivery_value: +e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/></div>
-                <div><label className="text-xs">KM Base</label><input type="number" value={fees.base_delivery_km} onChange={e => setFees({...fees, base_delivery_km: +e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/></div>
-            </div>
-            <Button onClick={save} fullWidth>Salvar Taxas</Button>
-        </div>
-    );
-};
-
-const UserManagement: React.FC = () => {
-    const [users, setUsers] = useState<ManagedUser[]>([]);
-    const [search, setSearch] = useState('');
-    useEffect(() => { cloud.getAllUsers().then(setUsers); }, []);
-    const filtered = users.filter(u => u.name?.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()));
-    const handleRoleChange = async (id: string, role: string) => { await cloud.updateUserRole(id, role); alert('Papel atualizado'); };
-    return (
-        <div className="space-y-4">
-            <input placeholder="Buscar usuário..." value={search} onChange={e => setSearch(e.target.value)} className="w-full p-3 border rounded-xl dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
-            <div className="space-y-2">
-                {filtered.slice(0, 50).map(u => (
-                    <div key={u.id} className="p-4 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 flex justify-between items-center">
-                        <div><p className="font-bold dark:text-white">{u.name || 'Sem nome'}</p><p className="text-xs text-gray-500">{u.email} • {u.role}</p></div>
-                        <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)} className="p-2 border rounded dark:bg-gray-700 dark:text-white"><option value="USER">User</option><option value="STORE_PARTNER">Store</option><option value="DELIVERY_PARTNER">Driver</option><option value="ADMIN">Admin</option></select>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const BlacklistManagement: React.FC = () => {
-    const [list, setList] = useState<BlacklistEntry[]>([]);
-    const [newEntry, setNewEntry] = useState({ email: '', phone: '', reason: '' });
-    useEffect(() => { cloud.adminGetBlacklist().then(setList); }, []);
-    const add = async () => { if (!newEntry.reason) return; await cloud.adminAddToBlacklist(newEntry.email, newEntry.phone, newEntry.reason); setNewEntry({ email: '', phone: '', reason: '' }); setList(await cloud.adminGetBlacklist()); };
-    const remove = async (id: string) => { await cloud.adminRemoveFromBlacklist(id); setList(await cloud.adminGetBlacklist()); };
-    return (
-        <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700 space-y-3">
-                <h4 className="font-bold dark:text-white">Adicionar à Lista Negra</h4>
-                <input placeholder="Email" value={newEntry.email} onChange={e => setNewEntry({...newEntry, email: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                <input placeholder="Telefone" value={newEntry.phone} onChange={e => setNewEntry({...newEntry, phone: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                <input placeholder="Motivo" value={newEntry.reason} onChange={e => setNewEntry({...newEntry, reason: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/>
-                <Button onClick={add} fullWidth variant="danger">Bloquear</Button>
-            </div>
-            <div className="space-y-2">{list.map(l => (<div key={l.id} className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg flex justify-between items-center"><div><p className="font-bold text-red-700 dark:text-red-300">{l.email || l.phone_number}</p><p className="text-xs text-red-600">{l.reason}</p></div><button onClick={() => remove(l.id)}><Trash2 className="w-4 h-4 text-red-500"/></button></div>))}</div>
-        </div>
-    );
-};
-
-const SecurityMonitor: React.FC = () => {
-    const [alerts, setAlerts] = useState<FraudAlert[]>([]);
-    useEffect(() => { cloud.adminGetFraudAlerts().then(setAlerts); }, []);
-    return (
-        <div className="space-y-3">
-            {alerts.length === 0 && <p className="text-center text-gray-500">Nenhum alerta de segurança.</p>}
-            {alerts.map(a => (<div key={a.id} className="p-4 bg-white dark:bg-gray-800 border-l-4 border-red-500 rounded-r-xl shadow-sm"><p className="font-bold text-red-600">{a.type}</p><p className="text-sm dark:text-white">{a.description}</p><p className="text-xs text-gray-500 mt-1">{a.user_email} • {new Date(a.created_at).toLocaleString()}</p></div>))}
-        </div>
-    );
-};
-
-const RatingMonitor: React.FC = () => {
-    const [ratings, setRatings] = useState<PartnerRating[]>([]);
-    useEffect(() => { cloud.adminGetAllRatings().then(setRatings); }, []);
-    return (
-        <div className="space-y-3">
-            {ratings.map(r => (<div key={r.id} className="p-4 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700"><div className="flex justify-between"><span className="font-bold dark:text-white">{r.evaluator_name} -> {r.evaluated_name}</span><span className="text-yellow-500 font-bold flex items-center gap-1"><Star className="w-3 h-3 fill-current"/> {r.rating}</span></div>{r.comment && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">"{r.comment}"</p>}</div>))}
-        </div>
-    );
-};
-
-const ClaimsManagement: React.FC = () => {
-    const [claims, setClaims] = useState<Claim[]>([]);
-    useEffect(() => { cloud.adminGetClaims().then(setClaims); }, []);
-    const resolve = async (id: string) => { const resp = prompt("Resposta:"); if (resp) { await cloud.adminResolveClaim(id, resp); setClaims(await cloud.adminGetClaims()); } };
-    return (
-        <div className="space-y-3">
-            {claims.map(c => (<div key={c.id} className="p-4 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700"><div className="flex justify-between"><span className="font-bold dark:text-white">{c.type}</span><span className={`text-xs px-2 py-1 rounded ${c.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{c.status}</span></div><p className="text-sm mt-2 dark:text-gray-300">{c.description}</p><p className="text-xs text-gray-500 mt-1">{c.user_email}</p>{c.status === 'open' && <Button size="sm" onClick={() => resolve(c.id)} className="mt-2">Responder</Button>}</div>))}
-        </div>
-    );
-};
-
-const NewsManagement: React.FC = () => {
-    const [news, setNews] = useState<PlatformNews[]>([]);
-    const [form, setForm] = useState({ title: '', description: '', icon_name: 'Bell' });
-    useEffect(() => { cloud.adminGetPlatformNews().then(setNews); }, []);
-    const add = async () => { await cloud.adminUpsertPlatformNews({ ...form, is_active: true }); setNews(await cloud.adminGetPlatformNews()); setForm({ title: '', description: '', icon_name: 'Bell' }); };
-    const remove = async (id: string) => { await cloud.adminDeletePlatformNews(id); setNews(await cloud.adminGetPlatformNews()); };
-    return (
-        <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl space-y-3 border dark:border-gray-700"><input placeholder="Título" value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/><textarea placeholder="Descrição" value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/><Button onClick={add} fullWidth>Publicar Novidade</Button></div>
-            <div className="space-y-2">{news.map(n => (<div key={n.id} className="p-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg flex justify-between"><div><p className="font-bold dark:text-white">{n.title}</p><p className="text-sm text-gray-500">{n.description}</p></div><button onClick={() => remove(n.id)} className="text-red-500"><Trash2 className="w-4 h-4"/></button></div>))}</div>
-        </div>
-    );
-};
-
-const SupportThreads: React.FC = () => {
-    const [threads, setThreads] = useState<any[]>([]);
-    const [selectedUser, setSelectedUser] = useState<string | null>(null);
-    const [chatOpen, setChatOpen] = useState(false);
-    useEffect(() => { cloud.adminGetSupportThreads().then(setThreads); }, []);
-    const openChat = (userId: string) => { setSelectedUser(userId); setChatOpen(true); };
-    return (
-        <div className="space-y-2">
-            {threads.map(t => (<div key={t.userId} onClick={() => openChat(t.userId)} className="p-4 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"><p className="font-bold dark:text-white">{t.userName} <span className="text-xs font-normal text-gray-500">({t.userRole})</span></p><p className="text-sm text-gray-600 dark:text-gray-300 truncate">{t.lastMessage}</p><p className="text-xs text-gray-400 mt-1">{new Date(t.lastDate).toLocaleString()}</p></div>))}
-            {chatOpen && selectedUser && <ChatWindow type="SUPPORT" onClose={() => setChatOpen(false)} title="Suporte ao Usuário" adminTargetUserId={selectedUser}/>}
-        </div>
-    );
-};
-
-const InstitutionalManagement: React.FC = () => {
-    const [info, setInfo] = useState<CompanyInfo>({});
-    useEffect(() => { cloud.getShopSettings().then(s => setInfo(s?.company_info || {})); }, []);
-    const save = async () => { await cloud.adminUpdateShopSettings({ company_info: info }); alert('Salvo!'); };
-    return (
-        <div className="space-y-4 bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700">
-            <h3 className="font-bold dark:text-white">Dados Institucionais</h3>
-            <textarea placeholder="Sobre Nós" value={info.about_text || ''} onChange={e => setInfo({...info, about_text: e.target.value})} className="w-full p-2 border rounded h-24 dark:bg-gray-700"/>
-            <input placeholder="Email Contato" value={info.contact_support_email || ''} onChange={e => setInfo({...info, contact_support_email: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700"/>
-            <Button onClick={save} fullWidth>Salvar Informações</Button>
-        </div>
-    );
-};
-
-const AIConfig: React.FC = () => {
-    const [apiKey, setApiKey] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [isVisible, setIsVisible] = useState(false);
-
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            try {
-                const settings = await cloud.getShopSettings();
-                if (settings?.google_gemini_api_key) {
-                    setApiKey(settings.google_gemini_api_key);
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, []);
-
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await cloud.adminUpdateShopSettings({ google_gemini_api_key: apiKey });
-            alert("Configurações de IA salvas no banco de dados!");
-        } catch (e: any) {
-            alert("Erro: " + e.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold dark:text-white flex items-center gap-2"><Bot className="w-5 h-5 text-purple-500"/> Inteligência Artificial</h3>
-                <div className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-bold rounded-full">Gemini Powered</div>
-            </div>
-            
-            <div className="p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800/30 mb-4">
-                <p className="text-sm text-purple-800 dark:text-purple-300">
-                    O <strong>Chat Assistente</strong> utiliza a API do Google Gemini para responder dúvidas dos usuários. 
-                    A chave abaixo é armazenada de forma segura no banco de dados.
-                </p>
-            </div>
-
-            <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Google Gemini API Key</label>
-                <div className="relative">
-                    <input 
-                        type={isVisible ? "text" : "password"} 
-                        value={apiKey} 
-                        onChange={e => setApiKey(e.target.value)} 
-                        className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm pr-10"
-                        placeholder="sk-..."
-                    />
-                    <button 
-                        onClick={() => setIsVisible(!isVisible)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                        <Key className="w-4 h-4"/>
-                    </button>
-                </div>
-                <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">Obtenha sua chave no Google AI Studio.</p>
-            </div>
-
-            <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-                <Button onClick={handleSave} disabled={saving} fullWidth className="bg-purple-600 hover:bg-purple-700 text-white">
-                    {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Salvar Chave de API'}
-                </Button>
-            </div>
-        </div>
-    );
-};
-
-const PWASettingsPanel: React.FC = () => {
-    const [settings, setSettings] = useState<PWASettings>({
-        display_name: 'Zé Entregas',
-        short_name: 'Zé',
-        theme_color: '#ed2b05',
-        background_color: '#f9fafb',
-        start_url: '/',
-        orientation: 'portrait',
-        language: 'pt-BR',
-        app_version: 1
-    });
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            try {
-                const data = await cloud.adminGetPWASettings();
-                if (data) setSettings(data);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, []);
-
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await cloud.adminUpdatePWASettings(settings);
-            alert("Configurações do PWA atualizadas!");
-        } catch (e: any) {
-            alert("Erro: " + e.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in space-y-4">
-            <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-green-500"/> Configuração do App (PWA)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-gray-500 mb-1">Nome do App</label><input type="text" value={settings.display_name} onChange={e => setSettings({...settings, display_name: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/></div>
-                <div><label className="block text-xs font-bold text-gray-500 mb-1">Nome Curto (Ícone)</label><input type="text" value={settings.short_name} onChange={e => setSettings({...settings, short_name: e.target.value})} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"/></div>
-                <div><label className="block text-xs font-bold text-gray-500 mb-1">Cor do Tema (Hex)</label><div className="flex gap-2"><input type="color" value={settings.theme_color} onChange={e => setSettings({...settings, theme_color: e.target.value})} className="h-10 w-10 p-0 border-0 rounded"/><input type="text" value={settings.theme_color} onChange={e => setSettings({...settings, theme_color: e.target.value})} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"/></div></div>
-                <div><label className="block text-xs font-bold text-gray-500 mb-1">Cor de Fundo (Hex)</label><div className="flex gap-2"><input type="color" value={settings.background_color} onChange={e => setSettings({...settings, background_color: e.target.value})} className="h-10 w-10 p-0 border-0 rounded"/><input type="text" value={settings.background_color} onChange={e => setSettings({...settings, background_color: e.target.value})} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white uppercase"/></div></div>
-            </div>
-            <Button onClick={handleSave} disabled={saving} fullWidth>{saving ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Publicar Alterações'}</Button>
-        </div>
-    );
-};
-
-export const AdminPanel: React.FC<{ activeSubTab: AdminSubTab }> = ({ activeSubTab }) => {
-  const [activeTab, setActiveTab] = useState(activeSubTab);
-  
-  useEffect(() => {
-    setActiveTab(activeSubTab);
-  }, [activeSubTab]);
-
-  return (
-    <div className="space-y-4 pb-16">
-      {activeTab === 'dashboard' && <AdminDashboard />}
-      {activeTab === 'ai_config' && <AIConfig />}
-      {activeTab === 'shop' && <ShopManagement />}
-      {activeTab === 'support' && <SupportThreads />}
-      {activeTab === 'claims' && <ClaimsManagement />}
-      {activeTab === 'fees' && <FeesManagement />}
-      {activeTab === 'pwa' && <PWASettingsPanel />}
-      {activeTab === 'payouts' && <PayoutsManagement />}
-      {activeTab === 'cities' && <CityManagement />}
-      {activeTab === 'asaas_webhook' && <AsaasWebhookManagement />}
-      {activeTab === 'levels' && <PartnerLevelsManagement />}
-      {activeTab === 'ratings' && <RatingMonitor />}
-      {activeTab === 'security' && <SecurityMonitor />}
-      {activeTab === 'blacklist' && <BlacklistManagement />}
-      {activeTab === 'referrals' && <AdminReferrals />}
-      {activeTab === 'institutional' && <InstitutionalManagement />}
-      {activeTab === 'platform_news' && <NewsManagement />}
-      {activeTab === 'store_finance' && <div className="text-center text-gray-500">Financeiro Lojista (Use Controle de Saldo)</div>}
-      {activeTab === 'wallet_control' && <AdminWalletControl />}
-      {activeTab === 'users' && <UserManagement />}
-      {activeTab === 'validation' && <PartnerVerification />}
-      {activeTab === 'notifications' && <div className="text-center text-gray-500">Gestão de Notificações (Em Breve)</div>}
-    </div>
-  );
+        default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
+    }
 };

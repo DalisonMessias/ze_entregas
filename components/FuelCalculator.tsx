@@ -1,21 +1,11 @@
 import React, { useState } from 'react';
 import { Fuel, X } from 'lucide-react';
 import { Button } from './Button';
+import { CustomInput } from './CustomInput';
 
 interface FuelCalculatorProps {
   onClose: () => void;
 }
-
-const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
-  let value = e.target.value.replace(/\D/g, "");
-  if (!value) {
-    setter("");
-    return;
-  }
-  const amount = Number(value) / 100;
-  const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-  setter(formatted);
-};
 
 const parseCurrency = (val: string) => {
   if (!val) return 0;
@@ -34,7 +24,7 @@ export const FuelCalculator: React.FC<FuelCalculatorProps> = ({ onClose }) => {
   const avgConsumption = litersVal > 0 ? distVal / litersVal : 0;
   const totalCost = litersVal * priceVal;
   const costPerKm = distVal > 0 ? totalCost / distVal : 0;
-  
+
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
@@ -51,26 +41,27 @@ export const FuelCalculator: React.FC<FuelCalculatorProps> = ({ onClose }) => {
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Distância (KM)</label>
-            <input 
-              type="number" inputMode="decimal" value={distance} onChange={(e) => setDistance(e.target.value)}
+            <CustomInput
+              type="number" value={distance} onChange={(e) => setDistance(e.target.value)}
               placeholder="0" autoFocus
-              className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-lg font-bold outline-none dark:text-white"
+              className="text-lg font-bold"
             />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Litros Abastecidos</label>
-            <input 
-              type="number" inputMode="decimal" value={liters} onChange={(e) => setLiters(e.target.value)}
+            <CustomInput
+              type="number" value={liters} onChange={(e) => setLiters(e.target.value)}
               placeholder="0"
-              className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-lg font-bold outline-none dark:text-white"
+              className="text-lg font-bold"
             />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Preço por Litro</label>
-            <input 
-              type="tel" inputMode="numeric" value={price} onChange={(e) => handleCurrencyMask(e, setPrice)}
+            <CustomInput
+              mask="currency"
+              value={price} onChange={(e) => setPrice(e.target.value)}
               placeholder="0,00"
-              className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-lg font-bold outline-none dark:text-white"
+              className="text-lg font-bold"
             />
           </div>
 
@@ -79,11 +70,11 @@ export const FuelCalculator: React.FC<FuelCalculatorProps> = ({ onClose }) => {
               <span className="font-medium text-orange-600 dark:text-orange-300">Consumo Médio:</span>
               <span className="font-bold text-orange-800 dark:text-orange-200">{avgConsumption.toFixed(1)} km/L</span>
             </div>
-             <div className="flex justify-between items-center text-sm">
+            <div className="flex justify-between items-center text-sm">
               <span className="font-medium text-orange-600 dark:text-orange-300">Custo Total:</span>
               <span className="font-bold text-orange-800 dark:text-orange-200">{formatCurrency(totalCost)}</span>
             </div>
-             <div className="flex justify-between items-center text-sm">
+            <div className="flex justify-between items-center text-sm">
               <span className="font-medium text-orange-600 dark:text-orange-300">Custo por KM:</span>
               <span className="font-bold text-orange-800 dark:text-orange-200">{formatCurrency(costPerKm)}</span>
             </div>

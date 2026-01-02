@@ -1,18 +1,16 @@
 
-
-
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MessageCircle, FileQuestion, PenTool, ChevronDown, ChevronRight, Send, AlertCircle, CheckCircle, Clock, Headphones, ExternalLink, Loader2, MessageSquare, CalendarClock, Bot, Lock } from 'lucide-react';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
 import { Claim, ShopSettings } from '../types';
 import * as cloud from '../services/cloud';
 import { ChatWindow } from './ChatWindow';
+import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 interface SupportPageProps {
     onBack?: () => void;
-    onNavigateToChat?: () => void; // Optional prop to link to chat
+    onNavigateToChat?: (tab: 'assistant' | 'support_chat') => void; // Optional prop to link to chat
 }
 
 // Helper para verificar horário comercial (Local, Fallback)
@@ -76,6 +74,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
     // Live Chat State
     const [showLiveChat, setShowLiveChat] = useState(false);
 
+    const { alert } = useDialog(); // Use the custom dialog service
+
     useEffect(() => {
         const fetchSettings = async () => {
             try {
@@ -115,6 +115,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
     const fetchClaims = async () => {
         setLoadingClaims(true);
         try {
+            // FIX: Chamada da API para getMyClaims
             const data = await cloud.getMyClaims();
             setClaims(data || []);
         } catch (e) {
@@ -143,7 +144,10 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
     };
 
     const handleSubmitTicket = async (isScheduling: boolean = false) => {
-        if (!ticketDesc.trim()) return alert("Descreva o problema.");
+        if (!ticketDesc.trim()) {
+            await alert({ title: "Erro no Chamado", message: "Descreva o problema." });
+            return;
+        }
         setIsSubmitting(true);
         try {
             // Se for agendamento, adiciona tag na descrição
@@ -151,20 +155,21 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                 ? `[AGENDAMENTO FORA DE HORÁRIO] ${ticketDesc}` 
                 : ticketDesc;
 
+            // FIX: Chamada da API para createClaim
             await cloud.createClaim(ticketType, finalDesc);
             
             if (isScheduling) {
-                alert("Agendamento realizado! Nossa equipe responderá no próximo dia útil.");
+                await alert({ title: "Agendamento Confirmado", message: "Agendamento realizado! Nossa equipe responderá no próximo dia útil." });
                 setShowClosedModal(false);
                 setPendingAction(null);
             } else {
-                alert("Chamado aberto com sucesso!");
+                await alert({ title: "Chamado Enviado", message: "Chamado aberto com sucesso!" });
             }
             
             setTicketDesc('');
             setActiveTab('history');
         } catch (e: any) {
-            alert("Erro ao abrir chamado: " + e.message);
+            await alert({ title: "Erro", message: "Erro ao abrir chamado: " + e.message });
         } finally {
             setIsSubmitting(false);
         }
@@ -179,7 +184,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
     // Função para forçar navegação para o chat (simulada via DOM se prop não passada)
     const goToAssistant = () => {
         if (onNavigateToChat) {
-            onNavigateToChat();
+            onNavigateToChat('assistant'); // Chamar o Chat Assistant
         } else {
             // Fallback: Tenta encontrar o botão do menu mobile ou desktop
             const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Assistente') || b.textContent?.includes('Assistente Zé'));
@@ -396,13 +401,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
     );
 
     return (
-        <div className="relative">
-            {activeTab !== 'menu' && (
-                <button onClick={() => setActiveTab('menu')} className="flex items-center text-sm font-bold text-gray-500 hover:text-brand-600 mb-4">
-                    <ChevronDown className="w-4 h-4 rotate-90 mr-1" /> Voltar
-                </button>
-            )}
-
+        <div className="space-y-6">
             {activeTab === 'menu' && renderMenu()}
             {activeTab === 'ticket' && renderTicketForm()}
             {activeTab === 'faq' && renderFAQ()}

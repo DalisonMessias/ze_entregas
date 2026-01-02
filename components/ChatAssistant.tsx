@@ -6,6 +6,7 @@ import { ChatMessage, DailySummary, DailyTransaction, UserRole, StoreWallet } fr
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
 import { SparklesIcon } from './SparklesIcon';
+import { useDialog } from '../utils/dialogService';
 
 // Helper para verificar horário comercial (Mantido do original)
 const getBusinessStatus = () => {
@@ -24,6 +25,7 @@ const getBusinessStatus = () => {
         nextOpen: "Segunda a Sexta, das 09h às 18h"
     };
 };
+
 
 // --- ENGENHARIA DE PROMPT (Mantida do original) ---
 const getSystemInstruction = (
@@ -187,6 +189,8 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
     const [error, setError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
+
+    const { alert, confirm } = useDialog();
     
     // Config State
     const [apiKey, setApiKey] = useState<string | null>(null);
@@ -221,6 +225,9 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                 const settings = await cloud.getShopSettings();
                 if (settings?.google_gemini_api_key) {
                     setApiKey(settings.google_gemini_api_key);
+                } else {
+                    const envKey = (process as any)?.env?.GEMINI_API_KEY || (import.meta as any)?.env?.VITE_GEMINI_API_KEY;
+                    if (envKey) setApiKey(envKey);
                 }
             } catch (e) {
                 console.error("Failed to init chat", e);
@@ -313,16 +320,19 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
         }
     };
 
-    const handleClearHistory = () => {
-        if (confirm("Limpar todo o histórico da conversa?")) {
-            setMessages([]);
-            storage.clearAssistantHistory();
-        }
+    const handleClearHistory = async () => {
+        const ok = await confirm({ title: 'Limpar histórico', message: 'Limpar todo o histórico da conversa?' });
+        if (!ok) return;
+        setMessages([]);
+        storage.clearAssistantHistory();
     };
     
-    const handleVoiceInput = () => {
+    const handleVoiceInput = async () => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognition) return alert("Seu navegador não suporta voz.");
+        if (!SpeechRecognition) {
+            await alert({ title: 'Voz', message: 'Seu navegador não suporta voz.' });
+            return;
+        }
 
         const recognition = new SpeechRecognition();
         recognition.lang = 'pt-BR';

@@ -1,6 +1,6 @@
 {
-  "name": "Copy of Zé Entregas",
-  "description": "Aplicativo de rastreamento manual de entregas do Zé Entregas. Histórico diário e controle total offline.",
+  "name": "Zé Entregas",
+  "description": "Aplicativo de rastreamento manual de entregas do Zé Entregas. Histórico diário e gestão inteligente.",
   "requestFramePermissions": [
     "microphone",
     "geolocation",

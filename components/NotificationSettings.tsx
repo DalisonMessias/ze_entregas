@@ -6,17 +6,20 @@ import { NotificationPreferences } from '../types';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
 
+import { useNotification } from '../contexts/NotificationContext';
+
 interface NotificationSettingsProps {
     onClose: () => void;
 }
 
 export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ onClose }) => {
+    const { settings, updateSettings } = useNotification();
     const [prefs, setPrefs] = useState<NotificationPreferences>({
         new_orders: true,
         order_updates: true,
         system_alerts: true,
         marketing: true,
-        sound_enabled: true
+        sound_enabled: settings.enableSound
     });
     const [loading, setLoading] = useState(false);
 
@@ -101,21 +104,39 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ onCl
                         <Switch checked={prefs.marketing} onChange={c => update('marketing', c)} />
                     </div>
 
-                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-3">
                         <div className="flex items-center justify-between p-3">
                             <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-                                {prefs.sound_enabled ? <Volume2 className="w-5 h-5"/> : <VolumeX className="w-5 h-5"/>}
+                                {settings.enableSound ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
                                 <span className="text-sm font-bold">Sons</span>
                             </div>
-                            <Switch checked={prefs.sound_enabled} onChange={c => update('sound_enabled', c)} />
+                            <Switch checked={settings.enableSound} onChange={c => updateSettings({ enableSound: c })} />
+                        </div>
+                        <div className="flex items-center justify-between p-3">
+                            <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+                                <span className="text-sm font-bold">Vibração</span>
+                            </div>
+                            <Switch checked={settings.enableVibration} onChange={c => updateSettings({ enableVibration: c })} />
+                        </div>
+                        <div className="flex items-center justify-between p-3">
+                            <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+                                <span className="text-sm font-bold">Popups</span>
+                            </div>
+                            <Switch checked={settings.enablePopup} onChange={c => updateSettings({ enablePopup: c })} />
+                        </div>
+                        <div className="flex items-center justify-between p-3">
+                            <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+                                <span className="text-sm font-bold">Alto Contraste</span>
+                            </div>
+                            <Switch checked={settings.enableHighContrast || false} onChange={c => updateSettings({ enableHighContrast: c })} />
                         </div>
                     </div>
                 </div>
-
-                <Button fullWidth onClick={handleSave} disabled={loading}>
-                    {loading ? 'Salvando...' : 'Salvar Preferências'}
-                </Button>
             </div>
+
+            <Button fullWidth onClick={handleSave} disabled={loading}>
+                {loading ? 'Salvando...' : 'Salvar Preferências'}
+            </Button>
         </div>
     );
 };

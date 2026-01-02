@@ -18,3 +18,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1EcJRHV666vpjKFQh5Liyss
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Localization
+
+- The application targets Portuguese (Brazil) only and does not include a language selection control in the UI.

@@ -3,12 +3,14 @@ import { Wrench, X, Save, Plus, Trash2, AlertTriangle, CheckCircle } from 'lucid
 import { Button } from './Button';
 import * as storage from '../services/storage';
 import { MaintenanceData, MaintenanceItem } from '../types';
+import { useDialog } from '../utils/dialogService';
 
 interface MaintenanceProps {
   onClose: () => void;
 }
 
 export const Maintenance: React.FC<MaintenanceProps> = ({ onClose }) => {
+  const { confirm } = useDialog();
   const [data, setData] = useState<MaintenanceData>({
     currentKm: 0,
     items: [
@@ -56,13 +58,13 @@ export const Maintenance: React.FC<MaintenanceProps> = ({ onClose }) => {
     storage.saveMaintenanceData({ ...data, items: [...data.items, item] });
   };
 
-  const handleDeleteItem = (id: string) => {
-    if (window.confirm('Remover este item?')) {
-      const updated = data.items.filter(i => i.id !== id);
-      const newData = { ...data, items: updated };
-      setData(newData);
-      storage.saveMaintenanceData(newData);
-    }
+  const handleDeleteItem = async (id: string) => {
+    const ok = await confirm({ title: 'Remover Item', message: 'Remover este item?' });
+    if (!ok) return;
+    const updated = data.items.filter(i => i.id !== id);
+    const newData = { ...data, items: updated };
+    setData(newData);
+    storage.saveMaintenanceData(newData);
   };
 
   const updateItem = (id: string, field: keyof MaintenanceItem, value: any) => {
@@ -78,18 +80,18 @@ export const Maintenance: React.FC<MaintenanceProps> = ({ onClose }) => {
     // Here we rely on the main Save button for persistence of edits.
   };
 
-  const handleResetItem = (id: string) => {
-    if (window.confirm('Marcar como realizado agora? (Atualizará KM da última troca)')) {
-       const updated = data.items.map(item => {
-        if (item.id === id) {
-          return { ...item, lastChangedKm: data.currentKm };
-        }
-        return item;
-      });
-      const newData = { ...data, items: updated };
-      setData(newData);
-      storage.saveMaintenanceData(newData);
-    }
+  const handleResetItem = async (id: string) => {
+    const ok = await confirm({ title: 'Marcar como realizado', message: 'Marcar como realizado agora? (Atualizará KM da última troca)' });
+    if (!ok) return;
+    const updated = data.items.map(item => {
+      if (item.id === id) {
+        return { ...item, lastChangedKm: data.currentKm };
+      }
+      return item;
+    });
+    const newData = { ...data, items: updated };
+    setData(newData);
+    storage.saveMaintenanceData(newData);
   };
 
   return (

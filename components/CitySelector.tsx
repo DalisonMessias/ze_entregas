@@ -1,9 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Search, Plus, Loader2, X, Check } from 'lucide-react';
 import { City } from '../types';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
+import { CustomInput } from './CustomInput';
+import { useDialog } from '../utils/dialogService';
 
 interface CitySelectorProps {
     onSelect: (cityName: string, cityState: string) => void;
@@ -16,44 +18,56 @@ export const CitySelector: React.FC<CitySelectorProps> = ({ onSelect, selectedCi
     const [cities, setCities] = useState<City[]>([]);
     const [loading, setLoading] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
-    
+    const [error, setError] = useState<string | null>(null);
+    const didInitialLoad = useRef(false);
+
     // Request Modal
     const [showRequestModal, setShowRequestModal] = useState(false);
     const [reqCity, setReqCity] = useState('');
     const [reqState, setReqState] = useState('');
     const [reqLoading, setReqLoading] = useState(false);
 
-    // Debounce search
+    const { alert } = useDialog();
+
     useEffect(() => {
+        if (!didInitialLoad.current) {
+            didInitialLoad.current = true;
+            void fetchCities('');
+            return;
+        }
         const timer = setTimeout(() => {
-            fetchCities(search);
+            void fetchCities(search);
         }, 500);
         return () => clearTimeout(timer);
     }, [search]);
 
     const fetchCities = async (term: string) => {
         setLoading(true);
+        setError(null);
         try {
             const data = await cloud.getAvailableCities(term);
             setCities(data);
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            setError(e?.message ? String(e.message) : 'Falha ao carregar cidades');
         } finally {
             setLoading(false);
         }
     };
 
     const handleRequestCity = async () => {
-        if (!reqCity.trim() || !reqState.trim()) return alert("Preencha cidade e estado.");
+        if (!reqCity.trim() || !reqState.trim()) {
+            await alert({ title: 'Cidade', message: 'Preencha cidade e estado.' });
+            return;
+        }
         setReqLoading(true);
         try {
             await cloud.requestNewCity(reqCity, reqState, userEmail);
-            alert("Solicitação enviada! O admin analisará em breve.");
+            await alert({ title: 'Solicitação', message: 'Solicitação enviada! O admin analisará em breve.' });
             setShowRequestModal(false);
             setReqCity('');
             setReqState('');
         } catch (e: any) {
-            alert("Erro: " + e.message);
+            await alert({ title: 'Erro', message: 'Erro: ' + e.message });
         } finally {
             setReqLoading(false);
         }
@@ -64,21 +78,26 @@ export const CitySelector: React.FC<CitySelectorProps> = ({ onSelect, selectedCi
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
                 Cidade de Atuação
             </label>
-            
+
             <div className="relative">
-                <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-                <input 
-                    type="text" 
-                    placeholder="Buscar cidade..." 
+                <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400 z-10" />
+                <CustomInput
+                    type="text"
+                    placeholder="Buscar cidade..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none dark:text-white font-medium"
+                    className="pl-10"
                 />
             </div>
 
             <div className="max-h-60 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 custom-scrollbar">
                 {loading ? (
-                    <div className="flex justify-center p-4"><Loader2 className="w-5 h-5 animate-spin text-brand-500"/></div>
+                    <div className="flex justify-center p-4"><Loader2 className="w-5 h-5 animate-spin text-brand-500" /></div>
+                ) : error ? (
+                    <div className="p-4 text-center">
+                        <p className="text-xs text-red-600">{error}</p>
+                        <button onClick={() => fetchCities(search)} className="mt-2 text-xs font-bold text-brand-600 hover:underline">Tentar novamente</button>
+                    </div>
                 ) : cities.length > 0 ? (
                     cities.map(city => {
                         const cityStr = `${city.name} - ${city.state}`;
@@ -99,7 +118,7 @@ export const CitySelector: React.FC<CitySelectorProps> = ({ onSelect, selectedCi
                 ) : (
                     <div className="p-4 text-center">
                         <p className="text-xs text-gray-400 mb-2">Cidade não encontrada.</p>
-                        <button 
+                        <button
                             onClick={() => setShowRequestModal(true)}
                             className="text-xs font-bold text-brand-600 hover:underline flex items-center justify-center gap-1 mx-auto"
                         >
@@ -122,18 +141,16 @@ export const CitySelector: React.FC<CitySelectorProps> = ({ onSelect, selectedCi
                     <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-gray-900 dark:text-white">Solicitar Cidade</h3>
-                            <button onClick={() => setShowRequestModal(false)}><X className="w-5 h-5 text-gray-400"/></button>
+                            <button onClick={() => setShowRequestModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
                         </div>
                         <div className="space-y-3">
-                            <input 
-                                type="text" placeholder="Nome da Cidade" 
+                            <CustomInput
+                                type="text" placeholder="Nome da Cidade"
                                 value={reqCity} onChange={e => setReqCity(e.target.value)}
-                                className="w-full p-3 rounded-xl border dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
-                            <input 
+                            <CustomInput
                                 type="text" placeholder="Estado (UF)" maxLength={2}
                                 value={reqState} onChange={e => setReqState(e.target.value.toUpperCase())}
-                                className="w-full p-3 rounded-xl border dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
                             <Button fullWidth onClick={handleRequestCity} disabled={reqLoading}>
                                 {reqLoading ? 'Enviando...' : 'Enviar Solicitação'}

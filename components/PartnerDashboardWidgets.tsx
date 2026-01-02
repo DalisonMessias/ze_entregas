@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Truck, ShoppingBag, Wallet, BarChart3, History, Map, Flame } from 'lucide-react';
+import { Truck, ShoppingBag, Wallet, BarChart3, History } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { PartnerRequest, UserRole } from '../types';
 import { Skeleton } from './Skeleton';
@@ -8,6 +8,12 @@ interface PartnerDashboardWidgetsProps {
   onNavigate: (tab: any) => void;
   userRole: UserRole;
 }
+
+const PartnerDashboardWidgetsSkeleton = () => (
+  <div className="flex gap-3 overflow-x-auto pb-2">
+    {[1, 2].map(i => <Skeleton key={i} className="w-64 h-24 rounded-2xl flex-shrink-0" />)}
+  </div>
+);
 
 export const PartnerDashboardWidgets: React.FC<PartnerDashboardWidgetsProps> = ({ onNavigate, userRole }) => {
   const [requests, setRequests] = useState<PartnerRequest[]>([]);
@@ -45,9 +51,7 @@ export const PartnerDashboardWidgets: React.FC<PartnerDashboardWidgetsProps> = (
             </div>
             
             {loading ? (
-                <div className="flex gap-3 overflow-x-auto pb-2">
-                    {[1,2].map(i => <Skeleton key={i} className="w-64 h-24 rounded-2xl flex-shrink-0" />)}
-                </div>
+                <PartnerDashboardWidgetsSkeleton />
             ) : requests.length > 0 ? (
                 <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar snap-x">
                     {requests.map(req => (
@@ -101,28 +105,6 @@ export const PartnerDashboardWidgets: React.FC<PartnerDashboardWidgetsProps> = (
                         </div>
                     </button>
 
-                    <button onClick={() => onNavigate('heatmap')} className="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left shadow-sm border border-gray-100 dark:border-gray-700">
-                        <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-xl text-red-600 dark:text-red-400">
-                            <Flame className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="font-bold text-gray-900 dark:text-white text-sm">Mapa Calor</p>
-                            <p className="text-[10px] text-gray-500 dark:text-gray-400">Zonas Quentes</p>
-                        </div>
-                    </button>
-
-                    {/* NEW: Offline Map Button */}
-                    <button onClick={() => onNavigate('map')} className="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left shadow-sm border border-gray-100 dark:border-gray-700">
-                        <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-xl text-green-600 dark:text-green-400">
-                            <Map className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="font-bold text-gray-900 dark:text-white text-sm">Mapa Offline</p>
-                            <p className="text-[10px] text-gray-500 dark:text-gray-400">Rota Smart</p>
-                        </div>
-                    </button>
-
-                    {/* Partners can also see History (Cloud) */}
                     <button onClick={() => onNavigate('history')} className="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left shadow-sm border border-gray-100 dark:border-gray-700">
                         <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-xl text-purple-600 dark:text-purple-400">
                             <History className="w-5 h-5" />
@@ -136,7 +118,7 @@ export const PartnerDashboardWidgets: React.FC<PartnerDashboardWidgetsProps> = (
               )}
 
               {/* NORMAL USER OPTIONS */}
-              {userRole === 'user' && (
+              {userRole === 'delivery_person' && (
                   <>
                     <button onClick={() => onNavigate('history')} className="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left shadow-sm border border-gray-100 dark:border-gray-700">
                         <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-xl text-blue-600 dark:text-blue-400">
@@ -165,16 +147,6 @@ export const PartnerDashboardWidgets: React.FC<PartnerDashboardWidgetsProps> = (
                         <div>
                             <p className="font-bold text-gray-900 dark:text-white text-sm">Peças</p>
                             <p className="text-[10px] text-gray-500 dark:text-gray-400">Loja Oficial</p>
-                        </div>
-                    </button>
-
-                    <button onClick={() => onNavigate('map')} className="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left shadow-sm border border-gray-100 dark:border-gray-700">
-                        <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-xl text-green-600 dark:text-green-400">
-                            <Map className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="font-bold text-gray-900 dark:text-white text-sm">Mapa Offline</p>
-                            <p className="text-[10px] text-gray-500 dark:text-gray-400">Rota Smart</p>
                         </div>
                     </button>
                   </>

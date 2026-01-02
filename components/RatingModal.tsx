@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Star, X, Send, Loader2 } from 'lucide-react';
 import { Button } from './Button';
+import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 interface RatingModalProps {
     isOpen: boolean;
@@ -16,11 +17,18 @@ export const RatingModal: React.FC<RatingModalProps> = ({ isOpen, onClose, onSub
     const [hoverRating, setHoverRating] = useState(0);
     const [comment, setComment] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const { alert } = useDialog(); // Use the custom dialog service
 
     if (!isOpen) return null;
 
     const handleSubmit = async () => {
-        if (rating === 0) return alert("Selecione uma nota de 1 a 5 estrelas.");
+        if (rating === 0) {
+            await alert({
+                title: "Erro na Avaliação",
+                message: "Selecione uma nota de 1 a 5 estrelas."
+            });
+            return;
+        }
         setSubmitting(true);
         try {
             await onSubmit(rating, comment);

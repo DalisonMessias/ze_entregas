@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Cloud, Lock, LogIn, UploadCloud, DownloadCloud, AlertCircle, CheckCircle, LogOut, Eye, EyeOff } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { formatPhoneNumber } from '../utils/mapHelpers';
+import { useDialog } from '../utils/dialogService';
 
 export const CloudSync: React.FC = () => {
   const [auth, setAuth] = useState({ email: '', password: '', name: '', phone: '' });
@@ -15,8 +15,22 @@ export const CloudSync: React.FC = () => {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login'); 
   const [showPassword, setShowPassword] = useState(false);
 
+  const { alert } = useDialog();
+
   // Ref para verificar se o componente ainda está montado antes de atualizar o estado em callbacks assíncronos
   const isMountedRef = useRef(true);
+
+  // Helper para tradução de erros
+  const getErrorMessage = (error: any) => {
+      const msg = error?.message || '';
+      if (msg.includes("Invalid login credentials")) return "E-mail ou senha incorretos.";
+      if (msg.includes("User already registered")) return "Este e-mail já está cadastrado. Tente entrar.";
+      if (msg.includes("Password should be at least")) return "A senha deve ter pelo menos 6 caracteres.";
+      if (msg.includes("Anonymous")) return "Erro de configuração no servidor.";
+      if (msg.includes("rate limit")) return "Muitas tentativas. Aguarde um momento.";
+      if (msg.includes("network") || msg.includes("fetch")) return "Erro de conexão. Verifique sua internet.";
+      return "Erro na autenticação. Verifique seus dados.";
+  };
 
   useEffect(() => {
     isMountedRef.current = true; // Componente montado
@@ -83,15 +97,18 @@ export const CloudSync: React.FC = () => {
       return;
     }
 
+    const trimmedEmail = auth.email.trim();
+    const trimmedPhone = auth.phone.trim();
+
     // Validação para campos de email e senha (comuns a login e cadastro)
-    if (!auth.email || !auth.password) {
+    if (!trimmedEmail || !auth.password) {
       setMessage({ type: 'error', text: 'Preencha e-mail e senha.' });
       setLoading(false);
       return;
     }
 
     if (auth.password.length < 6) {
-      setMessage({ type: 'error', text: 'A senha deve ter no mínimo 6 caracteres.' });
+      setMessage({ type: 'error', text: 'A senha deve ter pelo menos 6 caracteres.' });
       setLoading(false);
       return;
     }
@@ -103,8 +120,14 @@ export const CloudSync: React.FC = () => {
             setLoading(false);
             return;
         }
-        if (!auth.phone.trim()) {
+        if (!trimmedPhone) {
             setMessage({ type: 'error', text: 'Por favor, preencha seu telefone.' });
+            setLoading(false);
+            return;
+        }
+        const phoneDigits = trimmedPhone.replace(/\D/g, '');
+        if (phoneDigits.length < 10) {
+            setMessage({ type: 'error', text: 'Informe um telefone válido com DDD.' });
             setLoading(false);
             return;
         }
@@ -113,12 +136,13 @@ export const CloudSync: React.FC = () => {
     try {
       const { error } = authMode === 'signup' 
         ? await (client.auth as any).signUp({ 
-            email: auth.email, 
+            email: trimmedEmail, 
             password: auth.password,
             options: {
                 data: {
                     name: auth.name,
-                    phone: auth.phone
+                    phone_number: trimmedPhone.replace(/\D/g, ''),
+                    role: 'delivery_person'
                 }
             }
           })
@@ -132,21 +156,16 @@ export const CloudSync: React.FC = () => {
 
     } catch (e: any) {
       console.error(e);
-      let errorMsg = e.message || 'Erro na autenticação';
-      
-      if (errorMsg.includes('Invalid login credentials')) {
-         setMessage({ type: 'info', text: 'Conta não encontrada ou senha incorreta. Verifique seus dados.' });
-      } else if (errorMsg.includes('Anonymous')) {
-         errorMsg = 'Erro de configuração. Verifique se o provedor de E-mail está ativo no Supabase.';
-         setMessage({ type: 'error', text: errorMsg });
-      } else if (errorMsg.includes('User already registered')) {
-         setMessage({ type: 'info', text: 'Este e-mail já está cadastrado. Tente entrar.' });
-         setAuthMode('login'); // Sugerir login se já cadastrado
-      } else if (errorMsg.includes('rate limit')) {
-         setMessage({ type: 'error', text: 'Muitas tentativas. Aguarde um pouco.' });
-      } else {
-          setMessage({ type: 'error', text: errorMsg });
+      let errorText = getErrorMessage(e);
+      let errorType: 'error' | 'info' = 'error';
+
+      if (errorText.includes("já está cadastrado")) {
+          errorType = 'info';
+          setAuthMode('login');
       }
+      
+      setMessage({ type: errorType, text: errorText });
+
     } finally {
       if (isMountedRef.current) { // Verificar se o componente ainda está montado
         setLoading(false);
@@ -159,6 +178,7 @@ export const CloudSync: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
+      // Chamada corrigida para a função de backup na nuvem
       await cloud.uploadBackup(user.id);
       setMessage({ type: 'success', text: 'Dados salvos na nuvem com sucesso!' });
     } catch (e: any) {
@@ -173,9 +193,10 @@ export const CloudSync: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
+      // Chamada corrigida para a função de download do backup
       const success = await cloud.downloadBackup(user.id);
       if (success) {
-        alert("Backup restaurado! O app será recarregado.");
+        await alert({ title: 'Backup', message: 'Backup restaurado! O app será recarregado.' });
         window.location.reload();
       } else {
         throw new Error("Falha ao restaurar dados locais");

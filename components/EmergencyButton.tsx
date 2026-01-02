@@ -39,6 +39,11 @@ export const EmergencyModal: React.FC<EmergencyModalProps> = ({ isOpen, onClose 
     }
   };
 
+  const handleGenericCall = () => {
+      window.location.href = 'tel:190';
+      onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -78,6 +83,20 @@ export const EmergencyModal: React.FC<EmergencyModalProps> = ({ isOpen, onClose 
                 </div>
               </button>
             ))}
+            
+            {/* Generic Call Button using Phone Icon */}
+            <button
+                onClick={handleGenericCall}
+                className="w-full flex items-center p-4 rounded-3xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+                <div className="p-3 bg-white dark:bg-gray-700 rounded-2xl mr-4">
+                    <Phone className="w-8 h-8" />
+                </div>
+                <div className="text-left flex-1">
+                    <div className="font-bold text-lg leading-none">Discar</div>
+                    <div className="text-xs font-medium opacity-70">Outro número</div>
+                </div>
+            </button>
           </div>
 
           <div className="mt-8 text-center">

@@ -1,4 +1,3 @@
-
 // Types
 export interface LatLng {
   lat: number;
@@ -21,25 +20,12 @@ export interface GeoJSONCollection {
 
 // 1. Deep Linking Logic
 export const openNavigation = (lat: number, lng: number, address?: string) => {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const isAndroid = /Android/.test(navigator.userAgent);
-  const encodedAddress = address ? encodeURIComponent(address) : '';
-
-  // Waze Deep Link
-  // Try Waze first if mobile, otherwise Google Maps
+  // O link universal waze.com/ul é a forma mais confiável de abrir o app se estiver instalado, 
+  // ou o site do Waze no navegador como fallback.
   const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
-  
-  // Google Maps Fallback
-  // api=1 ensures cross-platform compatibility
-  const googleUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${encodedAddress}`;
-
-  // Simple heuristic: Try to open Waze, user will choose app if multiple installed on Android.
-  // On iOS, it's harder to check installation without custom scheme failover logic which is complex in web.
-  // We'll prefer Waze URL which usually redirects to web waze if app missing, or prompts.
-  
   window.open(wazeUrl, '_blank');
-  // In a real production app, you might use a timeout to fallback to Google Maps if Waze fails to open custom scheme
 };
+
 
 // 2. Debounce Function
 export function debounce<T extends (...args: any[]) => void>(func: T, wait: number): T {
@@ -136,4 +122,49 @@ export const formatPhoneNumber = (value: string): string => {
     return `(${truncatedNums.slice(0, 2)}) ${truncatedNums.slice(2, 7)}`;
   }
   return `(${truncatedNums.slice(0, 2)}) ${truncatedNums.slice(2, 7)}-${truncatedNums.slice(7, 11)}`;
+};
+
+// 6. CPF Mask Helper
+export const formatCpf = (value: string): string => {
+  if (!value) return "";
+  const onlyNums = value.replace(/[^\d]/g, '');
+  const truncatedNums = onlyNums.slice(0, 11);
+
+  if (truncatedNums.length <= 3) {
+    return truncatedNums;
+  }
+  if (truncatedNums.length <= 6) {
+    return `${truncatedNums.slice(0, 3)}.${truncatedNums.slice(3)}`;
+  }
+  if (truncatedNums.length <= 9) {
+    return `${truncatedNums.slice(0, 3)}.${truncatedNums.slice(3, 6)}.${truncatedNums.slice(6)}`;
+  }
+  return `${truncatedNums.slice(0, 3)}.${truncatedNums.slice(3, 6)}.${truncatedNums.slice(6, 9)}-${truncatedNums.slice(9, 11)}`;
+};
+
+// 7. CNPJ/CPF Mask Helper
+export const formatCnpjCpf = (value: string): string => {
+  if (!value) return "";
+  const onlyNums = value.replace(/[^\d]/g, '');
+
+  if (onlyNums.length <= 11) {
+    // CPF formatting
+    return formatCpf(value);
+  } else {
+    // CNPJ formatting
+    const truncatedNums = onlyNums.slice(0, 14);
+    if (truncatedNums.length <= 2) {
+      return truncatedNums;
+    }
+    if (truncatedNums.length <= 5) {
+      return `${truncatedNums.slice(0, 2)}.${truncatedNums.slice(2)}`;
+    }
+    if (truncatedNums.length <= 8) {
+      return `${truncatedNums.slice(0, 2)}.${truncatedNums.slice(2, 5)}.${truncatedNums.slice(5)}`;
+    }
+    if (truncatedNums.length <= 12) {
+      return `${truncatedNums.slice(0, 2)}.${truncatedNums.slice(2, 5)}.${truncatedNums.slice(5, 8)}/${truncatedNums.slice(8)}`;
+    }
+    return `${truncatedNums.slice(0, 2)}.${truncatedNums.slice(2, 5)}.${truncatedNums.slice(5, 8)}/${truncatedNums.slice(8, 12)}-${truncatedNums.slice(12, 14)}`;
+  }
 };

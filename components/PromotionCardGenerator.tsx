@@ -7,20 +7,39 @@ import { Button } from './Button';
 import { formatPhoneNumber } from '../utils/mapHelpers';
 import { Logo } from './Logo';
 import html2canvas from 'html2canvas';
+import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 // Declare globals from CDN scripts
 declare const QRious: any;
 
+import { ImageUpload } from './ImageUpload';
+
+// Helper Component for Header Image
+const CardHeaderImage = ({ details, className = "", variant = 'default' }: { details: PromotionDetails, className?: string, variant?: any }) => {
+    if (details.photo_url) {
+        // Ensure class doesn't conflict with h-8 w-auto default of Logo if passed, but usually we want a square avatar
+        // We'll try to preserve the passed className dimensions if they exist, or default to a size
+        return (
+            <img
+                src={details.photo_url}
+                alt={details.name}
+                className={`object-cover rounded-full aspect-square ${className}`}
+            />
+        );
+    }
+    return <Logo className={className} variant={variant} />;
+};
+
 // --- HOOK PARA GERAR QR CODE ---
 const useQRCode = (phone: string, color: string = 'black') => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    
+
     useEffect(() => {
         const phoneDigits = phone.replace(/\D/g, '');
         const qrValue = `https://wa.me/55${phoneDigits}`;
 
         if (canvasRef.current && typeof QRious !== 'undefined' && phoneDigits.length > 9) {
-             new QRious({
+            new QRious({
                 element: canvasRef.current,
                 value: qrValue,
                 size: 256,
@@ -46,10 +65,12 @@ const DeliveryCardDesign = ({ details, id, className = "" }: { details: Promotio
                 <div className="absolute top-0 left-0 w-full h-full opacity-10" style={{ backgroundImage: 'radial-gradient(#fff 2px, transparent 2px)', backgroundSize: '12px 12px' }}></div>
                 <div className="flex flex-col items-center justify-center h-full pb-4">
                     <div className="bg-white p-3 rounded-2xl shadow-lg mb-2">
-                        <Logo className="h-8 w-auto text-brand-600" />
-                    </div>
-                    <div className="flex items-center gap-1 bg-brand-700/50 px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm border border-brand-500">
-                        <ShieldCheck className="w-3 h-3" /> Parceiro Verificado
+                        <div className="bg-white p-3 rounded-2xl shadow-lg mb-2 overflow-hidden">
+                            <CardHeaderImage details={details} className="h-12 w-12 text-brand-600" />
+                        </div>
+                        <div className="flex items-center gap-1 bg-brand-700/50 px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm border border-brand-500">
+                            <ShieldCheck className="w-3 h-3" /> Parceiro Verificado
+                        </div>
                     </div>
                 </div>
             </div>
@@ -61,7 +82,7 @@ const DeliveryCardDesign = ({ details, id, className = "" }: { details: Promotio
                         {details.name || "SEU NOME"}
                     </h2>
                     <div className="w-12 h-1 bg-brand-500 rounded-full mx-auto mb-4"></div>
-                    
+
                     <p className="text-center text-gray-500 text-sm mb-6 font-medium leading-relaxed">
                         {details.description || "Soluções ágeis com excelência e segurança."}
                     </p>
@@ -88,7 +109,7 @@ const DeliveryCardDesign = ({ details, id, className = "" }: { details: Promotio
                     </div>
                 </div>
             </div>
-            
+
             {/* Footer Decorativo */}
             <div className="h-4 bg-brand-600 w-full shrink-0"></div>
         </div>
@@ -106,14 +127,16 @@ const StoreCardDesign = ({ details, id, className = "" }: { details: PromotionDe
             <div className="bg-slate-900 text-white p-8 pt-10 text-center shrink-0 relative overflow-hidden">
                 <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-blue-500 rounded-full blur-[50px] opacity-20"></div>
                 <div className="relative z-10">
-                    <div className="flex justify-center mb-4">
-                        <Logo className="h-8 w-auto text-white" variant="full-white" />
-                    </div>
-                    <h2 className="text-2xl font-black mb-1 tracking-tight">{details.name || "NOME DA LOJA"}</h2>
-                    <div className="flex items-center justify-center gap-2 text-blue-200 text-xs font-medium">
-                        <Store className="w-3 h-3" /> Loja Oficial
-                        <span>•</span>
-                        <Star className="w-3 h-3 fill-current text-yellow-400" /> 5.0
+                    <div className="relative z-10">
+                        <div className="flex justify-center mb-4">
+                            <CardHeaderImage details={details} className="h-12 w-12 text-white" variant="full-white" />
+                        </div>
+                        <h2 className="text-2xl font-black mb-1 tracking-tight">{details.name || "NOME DA LOJA"}</h2>
+                        <div className="flex items-center justify-center gap-2 text-blue-200 text-xs font-medium">
+                            <Store className="w-3 h-3" /> Loja Oficial
+                            <span>•</span>
+                            <Star className="w-3 h-3 fill-current text-yellow-400" /> 5.0
+                        </div>
                     </div>
                 </div>
             </div>
@@ -166,15 +189,15 @@ const PremiumCardDesign = ({ details, id, className = "" }: { details: Promotion
         <div id={id} className={`w-[350px] min-h-[600px] h-auto bg-[#0a0a0a] relative overflow-hidden flex flex-col border border-gray-900 ${className}`}>
             {/* Background Texture */}
             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'linear-gradient(45deg, #1a1a1a 25%, transparent 25%, transparent 75%, #1a1a1a 75%, #1a1a1a), linear-gradient(45deg, #1a1a1a 25%, transparent 25%, transparent 75%, #1a1a1a 75%, #1a1a1a)', backgroundSize: '20px 20px', backgroundPosition: '0 0, 10px 10px' }}></div>
-            
+
             {/* Gold Accents */}
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent"></div>
             <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent"></div>
 
             <div className="relative z-10 flex flex-col h-full p-8">
                 <div className="text-center mb-8 pt-4">
-                    <div className="inline-block p-4 rounded-full border border-[#D4AF37]/30 mb-4 bg-black/50 backdrop-blur-sm">
-                        <Logo className="h-8 w-auto text-[#D4AF37]" variant="white" />
+                    <div className="inline-flex p-4 rounded-full border border-[#D4AF37]/30 mb-4 bg-black/50 backdrop-blur-sm overflow-hidden">
+                        <CardHeaderImage details={details} className="h-12 w-12 text-[#D4AF37]" variant="white" />
                     </div>
                     <h2 className="text-2xl font-serif text-white tracking-widest uppercase mb-2">
                         {details.name || "PREMIUM"}
@@ -227,7 +250,7 @@ const MinimalCardDesign = ({ details, id, className = "" }: { details: Promotion
             <div className="p-10 h-full flex flex-col items-center text-center">
                 {/* Logo Minimal */}
                 <div className="mb-8 opacity-80 pt-4">
-                    <Logo className="h-6 w-auto text-gray-900" />
+                    <CardHeaderImage details={details} className="h-12 w-12 text-gray-900" />
                 </div>
 
                 <h2 className="text-3xl font-bold text-gray-900 mb-2 tracking-tight">{details.name || "Seu Nome"}</h2>
@@ -268,12 +291,12 @@ const ModernDarkCardDesign = ({ details, id, className = "" }: { details: Promot
         <div id={id} className={`w-[350px] min-h-[600px] h-auto bg-slate-900 relative overflow-hidden flex flex-col ${className}`}>
             {/* Subtle Gradient */}
             <div className="absolute inset-0 bg-gradient-to-b from-slate-800 to-slate-900 pointer-events-none"></div>
-            
+
             <div className="relative z-10 p-8 flex flex-col h-full">
                 <div className="flex justify-between items-start mb-10 pt-4">
-                    <Logo className="h-6 w-auto" variant="white" />
+                    <CardHeaderImage details={details} className="h-10 w-10" variant="white" />
                     <div className="w-10 h-10 rounded-full border border-slate-600 flex items-center justify-center text-white bg-slate-800">
-                        <Briefcase className="w-5 h-5"/>
+                        <Briefcase className="w-5 h-5" />
                     </div>
                 </div>
 
@@ -317,11 +340,11 @@ const VibrantCardDesign = ({ details, id, className = "" }: { details: Promotion
     return (
         <div id={id} className={`w-[350px] min-h-[600px] h-auto bg-white relative overflow-hidden flex flex-col ${className}`}>
             <div className="absolute inset-0 bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 h-[300px]"></div>
-            
+
             <div className="relative z-10 flex flex-col h-full p-6">
                 <div className="bg-white/20 backdrop-blur-md rounded-2xl p-6 text-center mb-6 border border-white/30 shadow-lg mt-4">
                     <div className="flex justify-center mb-4">
-                        <Logo className="h-8 w-auto" variant="full-white" />
+                        <CardHeaderImage details={details} className="h-12 w-12" variant="full-white" />
                     </div>
                     <h2 className="text-2xl font-black text-white drop-shadow-sm leading-tight">{details.name || "Vibrante"}</h2>
                 </div>
@@ -330,7 +353,7 @@ const VibrantCardDesign = ({ details, id, className = "" }: { details: Promotion
                     <p className="text-center text-gray-500 text-sm mb-8 font-medium px-2">
                         {details.description || "Energia e rapidez para seu negócio."}
                     </p>
-                    
+
                     <div className="space-y-2.5 flex-1 mb-6">
                         {services.map((service, i) => (
                             <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
@@ -367,8 +390,8 @@ const LogisticCardDesign = ({ details, id, className = "" }: { details: Promotio
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-full border-r-2 border-dashed border-blue-200"></div>
 
             <div className="relative z-10 flex flex-col h-full">
-                <div className="bg-blue-900 text-white p-10 rounded-b-[40px] shadow-lg text-center mb-6 shrink-0">
-                    <Logo className="h-8 w-auto mb-4 mx-auto" variant="full-white" />
+                <div className="bg-blue-900 text-white p-10 rounded-b-[40px] shadow-lg text-center mb-6 shrink-0 flex flex-col items-center">
+                    <CardHeaderImage details={details} className="h-12 w-12 mb-4 mx-auto" variant="full-white" />
                     <h2 className="text-2xl font-black uppercase tracking-wider leading-tight">{details.name || "LOGÍSTICA"}</h2>
                     <p className="text-blue-200 text-xs mt-2 font-mono bg-blue-800/50 inline-block px-3 py-1 rounded-full">ROTA OTIMIZADA • ENTREGA SEGURA</p>
                 </div>
@@ -460,7 +483,7 @@ const RetroCardDesign = ({ details, id, className = "" }: { details: PromotionDe
     return (
         <div id={id} className={`w-[350px] min-h-[600px] h-auto bg-amber-50 relative overflow-hidden flex flex-col border-4 border-amber-900/10 ${className}`}>
             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#78350f 1.5px, transparent 1.5px)', backgroundSize: '16px 16px' }}></div>
-            
+
             <div className="relative z-10 flex flex-col h-full p-6">
                 <div className="border-b-2 border-dashed border-amber-900/20 pb-6 mb-6 text-center">
                     <div className="inline-block p-3 rounded-full border-2 border-amber-900/20 mb-3 text-amber-800">
@@ -552,7 +575,7 @@ const NightCardDesign = ({ details, id, className = "" }: { details: PromotionDe
         <div id={id} className={`w-[350px] min-h-[600px] h-auto bg-indigo-950 relative overflow-hidden flex flex-col ${className}`}>
             <div className="absolute top-10 right-10 w-20 h-20 bg-indigo-500 rounded-full blur-[60px] opacity-50"></div>
             <div className="absolute bottom-10 left-10 w-32 h-32 bg-purple-600 rounded-full blur-[80px] opacity-40"></div>
-            
+
             {/* Stars */}
             <div className="absolute top-20 left-10 w-1 h-1 bg-white rounded-full opacity-70"></div>
             <div className="absolute top-40 right-20 w-1 h-1 bg-white rounded-full opacity-50"></div>
@@ -655,6 +678,8 @@ export const PromotionCardGenerator: React.FC = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedStyle, setSelectedStyle] = useState<'delivery' | 'store' | 'premium' | 'minimal' | 'modern' | 'vibrant' | 'logistic' | 'eco' | 'retro' | 'street' | 'night' | 'friendly'>('delivery');
 
+    const { alert } = useDialog(); // Use the custom dialog service
+
     useEffect(() => {
         const savedDetails = storage.getPromotionDetails();
         if (savedDetails) {
@@ -668,7 +693,7 @@ export const PromotionCardGenerator: React.FC = () => {
             });
         }
     }, []);
-    
+
     useEffect(() => {
         storage.savePromotionDetails(details);
     }, [details]);
@@ -689,7 +714,7 @@ export const PromotionCardGenerator: React.FC = () => {
                 // Seleciona o template correto baseado no estilo escolhido
                 const templateId = `export-card-${selectedStyle}`;
                 const element = document.getElementById(templateId);
-                
+
                 if (!element) throw new Error("Template not found");
 
                 await document.fonts.ready;
@@ -708,7 +733,7 @@ export const PromotionCardGenerator: React.FC = () => {
                 link.click();
             } catch (error) {
                 console.error(error);
-                alert("Erro ao gerar a imagem. Tente novamente.");
+                await alert({ title: "Erro ao Gerar Imagem", message: "Erro ao gerar a imagem. Tente novamente." });
             } finally {
                 setIsGenerating(false);
             }
@@ -732,7 +757,7 @@ export const PromotionCardGenerator: React.FC = () => {
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Left Column: Controls */}
                 <div className="space-y-6">
@@ -748,103 +773,114 @@ export const PromotionCardGenerator: React.FC = () => {
                         </div>
                     </div>
 
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
+                        <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wide">Sua Foto ou Logo</label>
+                        <ImageUpload
+                            label="Enviar Foto"
+                            currentImageUrl={details.photo_url}
+                            onImageUploaded={(url) => setDetails(prev => ({ ...prev, photo_url: url }))}
+                            folderPath="marketing-users"
+                            bucketName="public-files"
+                        />
+                    </div>
+
                     {/* Style Selector */}
                     <div>
                         <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wide">Escolha o Modelo</label>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('delivery')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'delivery' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Bike className="w-5 h-5"/>
+                                <Bike className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Padrão</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('store')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'store' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Store className="w-5 h-5"/>
+                                <Store className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Loja</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('premium')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'premium' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Crown className="w-5 h-5"/>
+                                <Crown className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Gold</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('minimal')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'minimal' ? 'border-gray-400 bg-gray-100 text-gray-800' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Layout className="w-5 h-5"/>
+                                <Layout className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Clean</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('modern')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'modern' ? 'border-slate-600 bg-slate-800 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Briefcase className="w-5 h-5"/>
+                                <Briefcase className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Executivo</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('vibrant')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'vibrant' ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20 text-pink-600' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Palette className="w-5 h-5"/>
+                                <Palette className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Vibrante</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('logistic')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'logistic' ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Map className="w-5 h-5"/>
+                                <Map className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Logístico</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('eco')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'eco' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Leaf className="w-5 h-5"/>
+                                <Leaf className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Eco</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('retro')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'retro' ? 'border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-800' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Coffee className="w-5 h-5"/>
+                                <Coffee className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Retrô</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('street')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'street' ? 'border-yellow-400 bg-gray-900 text-yellow-400' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Zap className="w-5 h-5"/>
+                                <Zap className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Urbano</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('night')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'night' ? 'border-indigo-500 bg-indigo-950 text-indigo-300' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Moon className="w-5 h-5"/>
+                                <Moon className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Noite</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setSelectedStyle('friendly')}
                                 className={`p-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${selectedStyle === 'friendly' ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/20 text-rose-500' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
-                                <Heart className="w-5 h-5"/>
+                                <Heart className="w-5 h-5" />
                                 <span className="text-[9px] font-bold">Soft</span>
                             </button>
                         </div>
                     </div>
-                    
+
                     <div className="space-y-4">
-                         <div>
+                        <div>
                             <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">Nome em Destaque</label>
                             <input name="name" value={details.name} onChange={handleInputChange} className="ifood-input w-full p-3 text-sm font-bold" placeholder="Ex: João Entregas" />
                         </div>
-                         <div>
+                        <div>
                             <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">WhatsApp / Telefone</label>
                             <input name="phone" type="tel" maxLength={15} value={details.phone} onChange={handleInputChange} className="ifood-input w-full p-3 text-sm font-mono" placeholder="(00) 00000-0000" />
                         </div>
@@ -867,9 +903,9 @@ export const PromotionCardGenerator: React.FC = () => {
                 {/* Right Column: Live Preview */}
                 <div className="flex flex-col items-center justify-start bg-gray-100 dark:bg-gray-950 p-4 lg:p-8 rounded-3xl shadow-inner border border-gray-200 dark:border-gray-800 relative overflow-y-auto max-h-[800px] custom-scrollbar">
                     <p className="absolute top-4 left-6 text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 z-20">
-                        <Sparkles className="w-3 h-3"/> Pré-visualização
+                        <Sparkles className="w-3 h-3" /> Pré-visualização
                     </p>
-                    
+
                     {/* Live Card Render */}
                     <div className="scale-[0.80] sm:scale-90 lg:scale-100 origin-top transition-all duration-500 shadow-2xl rounded-none overflow-visible mt-12 lg:mt-8">
                         <ActiveCardComponent details={details} />

@@ -1,21 +1,12 @@
+
 import React, { useState } from 'react';
 import { Calculator, X } from 'lucide-react';
 import { Button } from './Button';
+import { CustomInput } from './CustomInput';
 
 interface RouteCalculatorProps {
   onClose: () => void;
 }
-
-const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
-  let value = e.target.value.replace(/\D/g, "");
-  if (!value) {
-    setter("");
-    return;
-  }
-  const amount = Number(value) / 100;
-  const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-  setter(formatted);
-};
 
 const parseCurrency = (val: string) => {
   if (!val) return 0;
@@ -43,14 +34,13 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onClose }) => 
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Distância (KM)</label>
             <div className="relative">
-              <input 
-                type="number" 
-                inputMode="decimal"
-                value={km} 
+              <CustomInput
+                type="number"
+                value={km}
                 onChange={(e) => setKm(e.target.value)}
                 placeholder="0"
                 autoFocus
-                className="w-full pl-3 pr-10 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none dark:text-white"
+                className="pl-3 pr-10 text-lg font-bold"
               />
               <span className="absolute right-3 top-3.5 text-gray-400 font-medium text-sm">km</span>
             </div>
@@ -59,14 +49,13 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onClose }) => 
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Valor por KM</label>
             <div className="relative">
-              <span className="absolute left-3 top-3.5 text-gray-400 font-medium text-sm">R$</span>
-              <input 
-                type="tel" 
-                inputMode="numeric"
-                value={rate} 
-                onChange={(e) => handleCurrencyMask(e, setRate)}
+              <span className="absolute left-3 top-3.5 text-gray-400 font-medium text-sm z-10">R$</span>
+              <CustomInput
+                mask="currency"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
                 placeholder="0,00"
-                className="w-full pl-10 pr-3 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none dark:text-white"
+                className="pl-10 pr-3 text-lg font-bold"
               />
             </div>
           </div>

@@ -1,7 +1,9 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, AlertTriangle, Flame } from 'lucide-react';
 import * as storage from '../services/storage';
-import { SavedAddress } from '../types';
+import { SavedAddress, UserRole } from '../types';
+import { ExclusiveLock } from './ExclusiveLock';
 
 declare const L: any;
 
@@ -29,7 +31,12 @@ const geocodeAddress = async (address: string): Promise<{ lat: number; lng: numb
     }
 };
 
-export const Heatmap: React.FC = () => {
+interface HeatmapProps {
+    userRole?: UserRole;
+}
+
+// Componente de Mapa de Calor - Versão com Geocodificação e Leaflet
+export const Heatmap: React.FC<HeatmapProps> = ({ userRole }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<any>(null);
     const [loading, setLoading] = useState(true);
@@ -37,11 +44,13 @@ export const Heatmap: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (userRole && userRole !== 'delivery_partner') return;
+
         if (!mapContainerRef.current || typeof L === 'undefined' || mapInstanceRef.current) return;
 
         const map = L.map(mapContainerRef.current, {
-            center: [-15.7801, -47.9292], // Centro do Brasil
-            zoom: 4,
+            center: [-23.5505, -46.6333], // Centro de São Paulo
+            zoom: 12,
             zoomControl: false,
             attributionControl: false
         });
@@ -60,7 +69,7 @@ export const Heatmap: React.FC = () => {
                 mapInstanceRef.current = null;
             }
         };
-    }, []);
+    }, [userRole]);
 
     const processDataForHeatmap = async () => {
         const addresses = storage.getAddresses().filter(a => a.visitCount && a.visitCount > 0);
@@ -103,6 +112,15 @@ export const Heatmap: React.FC = () => {
         setLoading(false);
     };
 
+    if (userRole && userRole !== 'delivery_partner') {
+        return (
+            <ExclusiveLock 
+                title="Mapa de Calor"
+                description="Visualize as zonas mais quentes da sua cidade e posicione-se estrategicamente para receber mais entregas."
+            />
+        );
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -132,5 +150,3 @@ export const Heatmap: React.FC = () => {
         </div>
     );
 };
-
-export default Heatmap;

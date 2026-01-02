@@ -4,66 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Zé Entregas</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
-    <!-- Leaflet Heatmap Plugin -->
-    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet.heat.js"></script>
-
     <!-- QR Code & Barcode Generators -->
     <script src="https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    
+    <!-- QR Code Reader -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                50: '#fff5f5',  /* Very Light Red-Orange */
-                100: '#ffeceb',
-                200: '#ffd9d6',
-                300: '#ffb3ad',
-                400: '#ff8075',
-                500: '#ff4d3d',
-                600: '#ed2b05', /* Primary Brand Color */
-                700: '#c22304',
-                800: '#9e200a',
-                900: '#82200f',
-                950: '#470d06',
-              },
-              gray: {
-                50: '#f9fafb',
-                100: '#f3f4f6', /* iFood Input BG */
-                200: '#e5e7eb',
-                300: '#d1d5db',
-                400: '#9ca3af',
-                500: '#6b7280',
-                600: '#4b5563',
-                700: '#374151',
-                800: '#1f2937',
-                900: '#111827',
-              }
-            },
-            boxShadow: {
-              'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
-              'float': '0 10px 40px -10px rgba(0, 0, 0, 0.1)',
-            },
-            borderRadius: {
-              '4xl': '2rem',
-            }
-          }
-        }
-      }
-    </script>
+    <!-- Leaflet Maps & Heatmap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+    
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#ed2b05" />
+    <meta name="theme-color" content="#e50039" />
     <meta name="description" content="Rastreador de entregas diárias - Zé Entregas" />
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -78,7 +35,7 @@
       }
       
       /* Headings keep the Brand Identity */
-      h1, h2, h3, h4, h5, h6, .brand-font {
+      h1, h2, h3, h4, h5, h6, .brand-font, font-bold {
         font-family: 'AmsiProUltra', ui-sans-serif, system-ui, sans-serif !important;
         letter-spacing: 0.02em;
       }
@@ -118,53 +75,6 @@
           background-color: #4b5563; /* gray-600 */
       }
 
-
-      /* Fix Leaflet Z-Index */
-      .leaflet-pane { z-index: 10 !important; }
-      .leaflet-top, .leaflet-bottom { z-index: 20 !important; }
-
-      /* Leaflet Smooth Marker Transitions */
-      .leaflet-marker-icon,
-      .leaflet-marker-shadow {
-        transition: transform 0.5s linear;
-        will-change: transform;
-      }
-      
-      /* Optimized Map Rendering */
-      .leaflet-container {
-        background: #e5e7eb; /* gray-200 placeholder */
-      }
-      .dark .leaflet-container {
-        background: #1f2937; /* gray-800 placeholder */
-      }
-
-      /* User Location Pulse */
-      .user-location-marker .pulse {
-        width: 20px;
-        height: 20px;
-        background: rgba(59, 130, 246, 0.4);
-        border-radius: 50%;
-        position: absolute;
-        top: 0;
-        left: 0;
-        animation: pulse-ring 2s infinite;
-      }
-      .user-location-marker .dot {
-        width: 12px;
-        height: 12px;
-        background: #3b82f6;
-        border: 2px solid white;
-        border-radius: 50%;
-        position: absolute;
-        top: 4px;
-        left: 4px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-      }
-      @keyframes pulse-ring {
-        0% { transform: scale(0.8); opacity: 1; }
-        100% { transform: scale(2.5); opacity: 0; }
-      }
-
       /* iFood Style Inputs */
       .ifood-input {
         background-color: #f3f4f6; /* gray-100 */
@@ -177,7 +87,7 @@
         color: white;
       }
       .ifood-input:focus {
-        outline: 2px solid #ed2b05; /* brand-600 */
+        outline: 2px solid #e50039; /* brand-600 */
         background-color: white;
       }
       .dark .ifood-input:focus {
@@ -224,20 +134,15 @@
         animation-duration: 0.7s;
         animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
       }
+
+      /* Override for space-y-6 requested by user */
+      .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+        --tw-space-y-reverse: 0;
+        margin-top: calc(calc(1 - var(--tw-space-y-reverse))) !important;
+        margin-bottom: calc(1.5rem * var(--tw-space-y-reverse)) !important;
+      }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.86.0"
-  }
-}
-</script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased selection:bg-brand-100 selection:text-brand-900 transition-colors duration-300">
     <div id="root"></div>

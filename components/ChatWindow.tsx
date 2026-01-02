@@ -4,6 +4,7 @@ import { Send, X, Loader2, MessageCircle, User } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { ChatMessageData } from '../types';
 import { Button } from './Button';
+import { useDialog } from '../utils/dialogService';
 
 interface ChatWindowProps {
     orderId?: string; // If null, it's a general support chat
@@ -21,26 +22,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ orderId, type, onClose, 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [userId, setUserId] = useState<string | null>(null);
 
+    const { alert } = useDialog();
+
     useEffect(() => {
+        let subscription: any = null;
+
         const init = async () => {
             const user = await cloud.getClient()?.auth.getUser();
             setUserId(user?.data.user?.id || null);
             await loadMessages();
             setLoading(false);
+
+            subscription = await cloud.subscribeToChat(orderId, type, (newMsg) => {
+                setMessages((prev) => {
+                    // Avoid duplicates
+                    if (prev.find(m => m.id === newMsg.id)) return prev;
+                    return [...prev, newMsg];
+                });
+                scrollToBottom();
+            }, adminTargetUserId);
         };
         init();
 
-        const subscription = cloud.subscribeToChat(orderId, type, (newMsg) => {
-            setMessages((prev) => {
-                // Avoid duplicates
-                if (prev.find(m => m.id === newMsg.id)) return prev;
-                return [...prev, newMsg];
-            });
-            scrollToBottom();
-        }, adminTargetUserId); // Pass target user for admin sub
-
         return () => {
-            subscription?.unsubscribe();
+            if (subscription && typeof subscription.unsubscribe === 'function') {
+                subscription.unsubscribe();
+            }
         };
     }, [orderId, type, adminTargetUserId]);
 
@@ -91,7 +98,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ orderId, type, onClose, 
             console.error(e);
             // Remove optimistic message on error or show error state
             setMessages(prev => prev.filter(m => m.id !== tempId));
-            alert("Erro ao enviar mensagem.");
+            await alert({ title: 'Chat', message: 'Erro ao enviar mensagem.' });
         } finally {
             setSending(false);
         }
@@ -122,6 +129,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ orderId, type, onClose, 
                     
                     {!loading && messages.length === 0 && (
                         <div className="text-center text-gray-400 py-10">
+                            <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-2">
+                                <User className="w-8 h-8 opacity-50" />
+                            </div>
                             <p className="text-sm">Nenhuma mensagem ainda.</p>
                             <p className="text-xs mt-1">Comece a conversa!</p>
                         </div>

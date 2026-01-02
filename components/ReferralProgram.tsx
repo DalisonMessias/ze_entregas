@@ -4,6 +4,8 @@ import { Share2, Users, Gift, Copy, ArrowRight, Loader2, Award, Zap } from 'luci
 import * as cloud from '../services/cloud';
 import { ReferralData, ReferralHistoryItem, UserRole } from '../types';
 import { Button } from './Button';
+import { CustomInput } from './CustomInput';
+import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 interface ReferralProgramProps {
     userRole: UserRole;
@@ -14,10 +16,12 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
     const [data, setData] = useState<ReferralData | null>(null);
     const [history, setHistory] = useState<ReferralHistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
-    
+
     // Redeem Form
     const [referralCodeInput, setReferralCodeInput] = useState('');
     const [redeeming, setRedeeming] = useState(false);
+
+    const { alert } = useDialog(); // Use the custom dialog service
 
     useEffect(() => {
         loadReferralData();
@@ -39,19 +43,19 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
         }
     };
 
-    const handleCopyCode = () => {
+    const handleCopyCode = async () => {
         if (data?.my_code) {
             navigator.clipboard.writeText(data.my_code);
-            alert("Código copiado!");
+            await alert({ title: "Copiado", message: "Código copiado!" });
         }
     };
 
     const handleShare = () => {
         if (!data?.my_code) return;
-        const msg = userRole === 'store_partner' 
+        const msg = userRole === 'store_partner'
             ? `Ei, lojista! Use meu código *${data.my_code}* no Zé Entregas e ganhe descontos nas taxas de entrega! 🚀`
             : `Fala parceiro! Use meu código *${data.my_code}* no Zé Entregas e ganhe prioridade no app! 🏍️💨`;
-            
+
         const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
     };
@@ -61,11 +65,11 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
         setRedeeming(true);
         try {
             await cloud.redeemReferralCode(referralCodeInput);
-            alert("Código resgatado! Você ganhou benefícios exclusivos.");
+            await alert({ title: "Código Resgatado", message: "Código resgatado! Você ganhou benefícios exclusivos." });
             loadReferralData(); // Refresh to see active status
             setReferralCodeInput('');
         } catch (e: any) {
-            alert("Erro: " + e.message);
+            await alert({ title: "Erro ao Resgatar", message: "Erro: " + e.message });
         } finally {
             setRedeeming(false);
         }
@@ -76,7 +80,7 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
         return new Date(date).toLocaleDateString('pt-BR');
     };
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600"/></div>;
+    if (loading) return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
 
     return (
         <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10">
@@ -85,7 +89,7 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
                 <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-black/20 text-white rounded-full hover:bg-black/30 transition-colors z-20">
                     <ArrowRight className="w-6 h-6 rotate-180" />
                 </button>
-                
+
                 <div className="absolute top-0 right-0 p-8 opacity-10">
                     <Gift className="w-48 h-48 text-white rotate-12" />
                 </div>
@@ -93,8 +97,8 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
                 <div className="relative z-10 text-center text-white">
                     <h2 className="text-3xl font-black mb-2">Indique e Ganhe</h2>
                     <p className="text-brand-100 font-medium">
-                        {userRole === 'store_partner' 
-                            ? 'Indique lojas e ganhe 50% de desconto nas taxas!' 
+                        {userRole === 'store_partner'
+                            ? 'Indique lojas e ganhe 50% de desconto nas taxas!'
                             : 'Indique parceiros e ganhe prioridade nas corridas!'}
                     </p>
                 </div>
@@ -102,7 +106,7 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
 
             <div className="flex-1 bg-gray-50 dark:bg-gray-900 -mt-10 rounded-t-[32px] overflow-y-auto relative z-20">
                 <div className="p-6 space-y-6">
-                    
+
                     {/* Status Card */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl -mt-16 text-center border border-gray-100 dark:border-gray-700">
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Seu Código Exclusivo</p>
@@ -111,10 +115,10 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <Button variant="outline" onClick={handleCopyCode}>
-                                <Copy className="w-4 h-4 mr-2"/> Copiar
+                                <Copy className="w-4 h-4 mr-2" /> Copiar
                             </Button>
                             <Button onClick={handleShare}>
-                                <Share2 className="w-4 h-4 mr-2"/> WhatsApp
+                                <Share2 className="w-4 h-4 mr-2" /> WhatsApp
                             </Button>
                         </div>
                     </div>
@@ -123,7 +127,7 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
                     {data?.is_reward_active ? (
                         <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg animate-pulse">
                             <div className="bg-white/20 p-2 rounded-xl">
-                                <Award className="w-8 h-8 text-white"/>
+                                <Award className="w-8 h-8 text-white" />
                             </div>
                             <div>
                                 <h4 className="font-bold text-lg">Benefício Ativo!</h4>
@@ -133,7 +137,7 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
                     ) : (
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
                             <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded-xl text-gray-400">
-                                <Zap className="w-8 h-8"/>
+                                <Zap className="w-8 h-8" />
                             </div>
                             <div>
                                 <h4 className="font-bold text-gray-500 dark:text-gray-400">Sem Benefícios Ativos</h4>
@@ -145,18 +149,18 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
                     {/* Redeem Section */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                            <Gift className="w-5 h-5 text-purple-500"/> Fui Indicado
+                            <Gift className="w-5 h-5 text-purple-500" /> Fui Indicado
                         </h3>
                         <div className="flex gap-2">
-                            <input 
-                                type="text" 
-                                placeholder="Insira o código aqui" 
+                            <CustomInput
+                                type="text"
+                                placeholder="Insira o código aqui"
                                 value={referralCodeInput}
                                 onChange={e => setReferralCodeInput(e.target.value.toUpperCase())}
-                                className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl outline-none border border-gray-200 dark:border-gray-600 text-center font-mono uppercase"
+                                className="flex-1 text-center font-mono uppercase"
                             />
                             <Button onClick={handleRedeem} disabled={redeeming || !referralCodeInput} className="bg-purple-600 hover:bg-purple-700">
-                                {redeeming ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Resgatar'}
+                                {redeeming ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Resgatar'}
                             </Button>
                         </div>
                     </div>

@@ -20,13 +20,13 @@ export const Switch: React.FC<SwitchProps> = ({ checked, onChange, disabled = fa
           disabled={disabled}
         />
         <div 
-          className={`block w-12 h-7 rounded-full transition-colors duration-200 ease-in-out ${
+          className={`block w-8 h-5 rounded-full transition-colors duration-200 ease-in-out ${
             checked ? 'bg-brand-600' : 'bg-gray-200 dark:bg-gray-600'
           }`}
         ></div>
         <div 
-          className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform duration-200 ease-in-out shadow-sm ${
-            checked ? 'translate-x-5' : 'translate-x-0'
+          className={`absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform duration-200 ease-in-out shadow-sm ${
+            checked ? 'translate-x-3' : 'translate-x-0'
           }`}
         ></div>
       </div>

@@ -1,59 +1,22 @@
 
 
-export type Theme = 'light' | 'dark';
-export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'user';
-export type UserStatus = 'active' | 'banned' | 'pending';
+
+export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator';
+export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found';
 export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION';
-export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH';
-export type DocumentType = 'CNH' | 'CRLV' | 'VEHICLE_PHOTO' | 'ADDRESS_PROOF' | 'SELFIE' | 'PERSONAL_ID';
+export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER';
+export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER'; // NOVO: Enum para tipo de método de repasse
 export type VehicleType = 'moto' | 'car' | 'bike' | 'other';
-export type PunishmentType = 'BAN' | 'SUSPENSION' | 'WARNING';
-export type RatingDirection = 'STORE_TO_PARTNER' | 'PARTNER_TO_STORE';
-export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'asaas_webhook' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'claims';
+export type DocumentType = 'CNH' | 'CRLV' | 'VEHICLE_PHOTO' | 'ADDRESS_PROOF' | 'SELFIE' | 'PERSONAL_ID';
+export type Theme = 'light' | 'dark';
 
-export interface ManualWaypoint {
-    id: string;
-    street: string;
-    number: string;
-    neighborhood: string;
-    city: string;
-    reference: string;
-    lat?: number;
-    lng?: number;
-}
-
-export interface SavedRoute {
+export interface SavedAddress {
     id: string;
     name: string;
-    waypoints: ManualWaypoint[];
-}
-
-export interface HistoryFilters {
-    startDate?: string;
-    endDate?: string;
-    status?: PartnerRequestStatus | 'ALL';
-    minPrice?: number;
-    maxPrice?: number;
-}
-
-export interface LiveLocationPayload {
-    lat: number;
-    lng: number;
-    heading?: number;
-    speed?: number;
-    status?: PartnerRequestStatus;
-    updated_at: string;
-}
-
-export interface DailyTransaction {
-    id: string;
-    type: 'standard' | 'extra' | 'expense';
-    value: number;
-    km?: number;
-    timestamp: number;
-    description?: string;
-    category?: string; // for expenses
-    paymentMethod?: 'cash' | 'digital';
+    fullAddress: string;
+    createdAt: number;
+    visitCount?: number;
+    lastVisited?: number;
 }
 
 export interface DeliveryRecord {
@@ -66,28 +29,40 @@ export interface DeliveryRecord {
     totalKm: number;
     timestamp: number;
     transactions?: DailyTransaction[];
-    paymentBreakdown?: { cash: number; digital: number };
     expenseBreakdown?: Record<string, number>;
+    paymentBreakdown?: { cash: number, digital: number };
 }
 
-export interface SavedAddress {
+export interface DailyTransaction {
     id: string;
-    name: string;
-    fullAddress: string;
-    createdAt: number;
-    visitCount?: number;
-    lastVisited?: number;
+    type: 'standard' | 'extra' | 'expense';
+    value: number;
+    km?: number;
+    timestamp: number;
+    description?: string;
+    paymentMethod?: 'cash' | 'digital';
+    category?: string;
+    isRefunded?: boolean;
+}
+
+export interface DailySummary {
+    profit: number;
+    deliveryCount: number;
+    km: number;
+    expenses: number;
+    goal: number | null;
+    location: { lat: number, lng: number } | null;
 }
 
 export interface UserBankDetails {
     fullName: string;
     pixKey: string;
-    pixType: 'cpf' | 'email' | 'phone' | 'random';
-    bankName?: string;
-    bankNumber?: string;
-    agency?: string;
-    account?: string;
-    accountType?: 'corrente' | 'poupanca';
+    pixType: string;
+    bankName: string;
+    bankNumber: string;
+    agency: string;
+    account: string;
+    accountType: 'corrente' | 'poupanca';
 }
 
 export interface MaintenanceItem {
@@ -103,12 +78,8 @@ export interface MaintenanceData {
 }
 
 export interface NavigationState {
-    destination: { lat: number; lng: number; name: string; fullAddress: string };
-    steps: any[];
-    currentStepIndex: number;
-    routeGeoJSON: any;
-    initialTotalDistance: number;
-    initialTotalDuration: number;
+    active: boolean;
+    destination?: { lat: number, lng: number, address: string };
 }
 
 export interface PromotionDetails {
@@ -116,6 +87,7 @@ export interface PromotionDetails {
     phone: string;
     description: string;
     services: string;
+    photo_url?: string;
 }
 
 export interface ChatMessage {
@@ -123,13 +95,23 @@ export interface ChatMessage {
     parts: { text: string }[];
 }
 
-export type StorageKey = 'delivery_today_transactions' | 'delivery_history' | 'saved_addresses' | 'custom_reminder_time' | 'delivery_fixed_value' | 'delivery_daily_goal' | 'user_bank_details' | 'vehicle_maintenance_v2' | 'promotion_details' | 'chat_assistant_history' | 'ai_reminders' | 'app_cookie_preferences' | 'saved_routes' | 'notification_preferences' | 'task_list';
+export interface ChatMessageData {
+    id: string;
+    sender_id: string;
+    receiver_id: string | null;
+    message: string;
+    type: 'ORDER' | 'SUPPORT';
+    is_read: boolean;
+    created_at: string;
+    pending?: boolean;
+}
+
+export type StorageKey = string;
 
 export interface Reminder {
     id: string;
     text: string;
-    date: string; // ISO
-    completed: boolean;
+    time: number;
 }
 
 export interface CookiePreferences {
@@ -138,8 +120,23 @@ export interface CookiePreferences {
     performance: boolean;
 }
 
+export interface NotificationSettings {
+    enableSound: boolean;
+    enableVibration: boolean;
+    enablePopup: boolean;
+    enableHighContrast?: boolean;
+}
+
+export interface SavedRoute {
+    id: string;
+    name: string;
+    waypoints: string[];
+    distance?: number;
+    duration?: number;
+    created_at?: string;
+}
+
 export interface NotificationPreferences {
-    user_id?: string;
     new_orders: boolean;
     order_updates: boolean;
     system_alerts: boolean;
@@ -153,26 +150,56 @@ export interface Task {
     completed: boolean;
 }
 
-export interface AppNotification {
+export interface RouteListItem {
     id: string;
-    user_id: string;
-    title: string;
-    message: string;
-    type: string;
-    is_read: boolean;
+    address: string;
+    name: string;
+    lat: number;
+    lng: number;
+    completed: boolean;
+}
+
+export interface Order {
+    id: string;
+    status: string;
+    items: { product_id: string, name: string, quantity: number, price: number }[];
+    total_price: number;
+    payment_method: PaymentMethod;
+    asaas_pix_copy_paste?: string;
+    asaas_bank_slip_url?: string;
+    shipping_address?: any;
+    payment_details?: any;
+    shipping_cost?: number;
+    discount?: number;
+    coupon_code?: string;
+
+    // Internal Orders fields
+    customer_name?: string;
+    customer_phone?: string;
+    observation?: string;
+    origin?: 'APP' | 'INTERNAL';
+    amount_paid?: number;
+    change_amount?: number;
+    custom_payment_label?: string;
+
     created_at: string;
 }
 
-export interface CartItem extends Product {
-    quantity: number;
-}
-
-export interface DailySummary {
-    profit: number;
-    deliveryCount: number;
-    km: number;
-    goal: number | null;
-    location: { lat: number; lng: number } | null;
+export interface ManagedUser {
+    id: string;
+    email: string;
+    role: UserRole;
+    status: UserStatus;
+    name?: string;
+    phone_number?: string;
+    cpf?: string;
+    city?: string;
+    avatar_url?: string;
+    created_at: string;
+    verification_status?: string;
+    partner_level?: string;
+    is_super_store?: boolean;
+    vehicle_type?: string;
 }
 
 export interface GlobalNotification {
@@ -182,77 +209,79 @@ export interface GlobalNotification {
     created_at: string;
 }
 
-export interface ManagedUser {
-    id: string;
-    email: string;
-    created_at: string;
-    role: UserRole;
-    status: UserStatus;
-    name?: string;
-    phone_number?: string;
-    cpf?: string;
-    city?: string;
-    user_type?: UserRole; // alias for role
-    verification_status?: string;
-    is_available?: boolean;
-    vehicle_type?: string;
-    average_rating?: number;
-}
-
 export interface Product {
     id: string;
     name: string;
-    description: string;
+    description?: string;
     price: number;
+    category_id: string;
     images?: string[];
-    stock_quantity: number | null;
     is_active: boolean;
-    category_id?: string;
+    stock_quantity: number | null;
+    internal_code?: string;
+    variations?: any[];
+    options?: any[];
+    availability?: any;
+    observations?: string;
+    origin_prefix?: string;
+    store_id?: string;
 }
 
-export interface CompanyInfo {
-    about_text?: string;
-    careers_email?: string;
-    careers_text?: string;
-    press_email?: string;
-    press_text?: string;
-    contact_address?: string;
-    contact_support_email?: string;
-    contact_commercial_email?: string;
+export interface StoreProduct {
+    id: string;
+    store_id: string;
+    name: string;
+    description?: string;
+    price: number;
+    category?: string;
+    image_url?: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    internal_code?: string;
+    variations?: any[];
+    options?: any[];
+    availability?: any;
+    observations?: string;
+    origin_prefix?: string;
+}
+
+
+export interface AdminOrder {
+    id: string;
+    total_price: number;
+    status: string;
 }
 
 export interface ShopSettings {
-    id: boolean;
+    id: string;
     is_shop_enabled?: boolean;
-    asaas_active?: boolean;
-    payment_methods?: { pix: boolean; boleto: boolean; credit_card: boolean };
-    asaas_api_key?: string;
-    social_media?: any;
-    company_info?: CompanyInfo;
-    support_phone?: string;
-    support_status_override?: 'AUTO' | 'OPEN' | 'CLOSED';
-    support_hours_start?: string;
-    support_hours_end?: string;
-    google_gemini_api_key?: string;
     shop_name?: string;
     shop_city?: string;
+    banner_title?: string;
+    banner_subtitle?: string;
+    banner_tag?: string;
+    shipping_origin_cep?: string;
+    free_shipping_threshold?: number;
+    payment_methods?: { pix: boolean, boleto: boolean, credit_card: boolean };
+    coupons?: ShopCoupon[];
+    social_media?: { instagram?: string, facebook?: string, linkedin?: string, twitter?: string };
+    company_info?: CompanyInfo;
+    support_phone?: string;
+    support_hours_start?: string;
+    support_hours_end?: string;
+    support_status_override?: 'AUTO' | 'OPEN' | 'CLOSED';
+    google_gemini_api_key?: string;
+    open_route_service_api_key?: string;
+    asaas_active?: boolean;
+    asaas_api_key?: string;
+    asaas_webhook_token?: string;
 }
 
-export interface Order {
-    id: string;
-    user_id: string;
-    items: { product_id: string; name: string; quantity: number; price: number }[];
-    total_price: number;
-    status: string;
-    payment_method: PaymentMethod;
-    created_at: string;
-    shipping_address?: any;
-    asaas_pix_copy_paste?: string;
-    asaas_bank_slip_url?: string;
-    payment_details?: any;
-}
-
-export interface AdminOrder extends Order {
+export interface ShopCoupon {
+    code: string;
+    discount_percent: number;
+    active: boolean;
 }
 
 export interface Category {
@@ -267,73 +296,79 @@ export interface Claim {
     type: string;
     description: string;
     status: 'open' | 'resolved' | 'closed';
+    created_at: string;
     admin_response?: string;
-    created_at: string;
-}
-
-export interface StoreWallet {
-    store_id: string;
-    balance: number;
-    balance_decimal: number;
-}
-
-export interface WalletTransaction {
-    id: string;
-    store_id: string;
-    amount: number;
-    type: string;
-    status: string;
-    created_at: string;
-    description?: string;
-}
-
-export interface PartnerRequest {
-    id: string;
-    store_id: string;
-    partner_id: string | null;
-    pickup_address: string;
-    delivery_address: string;
-    distance_km: number;
-    total_charged_store: number;
-    net_value_partner: number;
-    fee_fixed: number;
-    fee_percent_value: number;
-    status: PartnerRequestStatus;
-    created_at: string;
-    updated_at: string;
-    store?: { name?: string; phone_number?: string };
-    partner?: { name?: string; vehicle_plate?: string; phone_number?: string; vehicle_type?: string };
-    failure_reason?: string;
-    rated_by_store?: boolean;
-    rated_by_partner?: boolean;
 }
 
 export interface PartnerFeeSettings {
-    global_tax_fixed: number;
-    global_tax_percent: number;
-    base_delivery_value: number;
-    base_delivery_km: number;
-    extra_km_value: number;
+    global_tax_fixed?: number;
+    global_tax_percent?: number;
+    base_delivery_value?: number;
+    base_delivery_km?: number;
+    extra_km_value?: number;
     additional_stop_fee?: number;
-    super_store_monthly_fee?: number;
-    association_fee?: number;
+    weekday?: number;
+    hour?: string;
     emergency_percentage?: number;
     emergency_cooldown_hours?: number;
     emergency_enabled?: boolean;
-    hour?: string;
-    weekday?: number;
+    super_store_monthly_fee?: number;
+    association_fee?: number;
     emergency_message?: string;
+    pos_min_value?: number;
+    pos_max_value?: number;
 }
 
 export interface PWASettings {
-    display_name: string;
-    short_name: string;
-    theme_color: string;
-    background_color: string;
-    start_url: string;
-    orientation: string;
-    language: string;
-    app_version: number;
+    display_name?: string;
+    short_name?: string;
+    description?: string;
+    theme_color?: string;
+    background_color?: string;
+    start_url?: string;
+    orientation?: string;
+    language?: string;
+    app_version?: number;
+    scope?: string;
+    icons?: PWAIcon[];
+    screenshots?: PWAScreenshot[];
+    shortcuts?: PWAShortcut[];
+    categories?: string[];
+    iarc_rating_id?: string;
+    related_applications?: PWARelatedApplication[];
+    prefer_related_applications?: boolean;
+    custom_splash_screens?: PWASplashScreen[];
+    status_bar_color?: string;
+    display?: string;
+}
+
+export interface PWAScreenshot {
+    src: string;
+    sizes?: string;
+    type?: string;
+    form_factor?: 'wide' | 'narrow';
+    label?: string;
+}
+
+export interface PWAShortcut {
+    name: string;
+    short_name?: string;
+    description?: string;
+    url: string;
+    icons?: PWAIcon[];
+}
+
+export interface PWARelatedApplication {
+    platform: string;
+    url: string;
+    id?: string;
+}
+
+export interface PWASplashScreen {
+    src: string;
+    sizes: string;
+    type: string;
+    media?: string; // e.g. "(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)"
 }
 
 export interface PWAIcon {
@@ -342,18 +377,20 @@ export interface PWAIcon {
     type: string;
 }
 
-export interface PayoutSummary {
-    settings: PartnerFeeSettings;
-    max_emergency_value: number;
-    can_request_emergency: boolean;
+export type PayoutDayOfWeek = 'SUNDAY' | 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY';
+
+export interface PayoutSettings {
+    min_payout_amount?: number;
+    automatic_payouts_enabled?: boolean;
+    payout_day_of_week?: PayoutDayOfWeek; // Changed from string to PayoutDayOfWeek
+    payout_time?: string;
+    default_payout_method_type?: PayoutMethodType; // NEW
 }
 
-export interface PayoutSettings extends PartnerFeeSettings {
-    id?: boolean;
-}
+// moved definitions to single canonical declarations below to avoid duplication
 
 export interface City {
-    id: number;
+    id: string;
     name: string;
     state: string;
     is_active: boolean;
@@ -363,36 +400,8 @@ export interface CityRequest {
     id: string;
     city_name: string;
     state: string;
-    user_email?: string;
+    user_email: string;
     status: 'PENDING' | 'APPROVED' | 'REJECTED';
-    created_at: string;
-}
-
-export interface AsaasWebhookLog {
-    id: string;
-    event_type: string;
-    status: string;
-    created_at: string;
-    action_taken?: string;
-    payload?: any;
-}
-
-export interface PartnerProfile {
-    user_id: string;
-    is_active: boolean;
-    is_available: boolean;
-    city: string;
-    verification_status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'NOT_SUBMITTED';
-    vehicle_type: VehicleType;
-    vehicle_plate?: string;
-    vehicle_model?: string;
-    vehicle_year?: string;
-    asaas_wallet_id?: string;
-    partner_level?: string;
-    average_rating?: number;
-    completed_deliveries?: number;
-    association_code?: string;
-    share_phone_offline?: boolean;
 }
 
 export interface PartnerDocument {
@@ -405,8 +414,33 @@ export interface PartnerDocument {
     created_at: string;
 }
 
+export interface PartnerProfile {
+    id: string; // user_id
+    vehicle_type: VehicleType;
+    vehicle_plate?: string;
+    vehicle_model?: string;
+    vehicle_year?: string;
+    verification_status: 'NOT_SUBMITTED' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+    partner_level?: string;
+    is_active: boolean;
+    name?: string;
+    phone_number?: string;
+    email?: string;
+    contact_email?: string;
+    opening_hours?: string;
+    address_zip?: string;
+    address_street?: string;
+    address_number?: string;
+    address_district?: string;
+    address_state?: string;
+    city?: string;
+    association_code?: string;
+    is_super_store?: boolean;
+    share_phone_offline?: boolean;
+}
+
 export interface PartnerLevelBenefit {
-    level: string;
+    id: string;
     display_name: string;
     min_deliveries: number;
     min_rating: number;
@@ -414,135 +448,34 @@ export interface PartnerLevelBenefit {
     service_fee_reduction_percent: number;
 }
 
-export interface PartnerRequestLog {
-    id: string;
-}
-
-export interface PartnerPayment {
-    id: string;
-    partner_id: string;
-    partner_email?: string;
-    amount: number;
-    is_emergency: boolean;
-    status: string;
-    created_at: string;
-}
-
 export interface BlacklistEntry {
     id: string;
     email?: string;
     phone_number?: string;
     reason: string;
-    punishment_type: PunishmentType;
+    punishment_type: string;
     status: string;
     created_at: string;
-}
-
-export interface OfflineDriver {
-    id: string;
-    name: string;
-    phone_number: string;
-    vehicle_type: string;
-    average_rating: number;
-}
-
-export interface StoreDeliveryPartner {
-    id: string;
-    partner_id: string;
-    partner_name: string;
-    partner_phone: string;
-    partner_vehicle: string;
-}
-
-export interface PartnerRating {
-    id: string;
-    rating: number;
-    comment?: string;
-    evaluator_name?: string;
-    evaluated_name?: string;
-    created_at: string;
-}
-
-export interface WorkShift {
-    id: string;
-    partner_id: string;
-    start_time: string;
-    end_time?: string;
-    status: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
-    breaks?: WorkShiftBreak[];
-}
-
-export interface WorkShiftBreak {
-    start: string;
-    end?: string;
-}
-
-export interface FinancialStatementItem {
-    id: string;
-    date: string;
-    type: 'EARNING' | 'WITHDRAWAL' | 'DEPOSIT' | 'EXPENSE';
-    description: string;
-    amount: number;
-    status: string;
-    category?: string;
 }
 
 export interface IdentityVerification {
     id: string;
     user_id: string;
-    user_email?: string;
     photo_url: string;
-    confidence_score: number;
+    location_data?: { lat: number, lng: number, accuracy: number };
+    status: 'PENDING' | 'VERIFIED' | 'REJECTED';
     created_at: string;
+    admin_notes?: string;
 }
 
 export interface FraudAlert {
     id: string;
     user_id: string;
-    user_email?: string;
     type: string;
-    description: string;
-    severity: string;
+    description?: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH';
+    status: 'OPEN' | 'RESOLVED';
     created_at: string;
-}
-
-export interface ChatMessageData {
-    id: string;
-    sender_id: string;
-    receiver_id: string | null;
-    message: string;
-    type: 'ORDER' | 'SUPPORT';
-    is_read: boolean;
-    created_at: string;
-    order_id?: string;
-    pending?: boolean;
-}
-
-export interface AdminDashboardStats {
-    orders: { today: number; week: number; month: number; total: number; graphData: { date: string; count: number }[] };
-    finance: { gmv: number; platformRevenue: number; averageTicket: number };
-    users: { stores: { active: number; total: number }; drivers: { online: number; total: number } };
-}
-
-export interface ReferralData {
-    my_code: string;
-    total_referrals: number;
-    reward_active_until?: string;
-    is_reward_active: boolean;
-}
-
-export interface ReferralHistoryItem {
-    id: string;
-    status: string;
-    created_at: string;
-    referred_user_name: string;
-}
-
-export interface StoreReportData {
-    totalRequests: number;
-    totalValue: number;
-    peakHours: { hour: number; count: number }[];
-    driverPerformance: { partner_id: string; partner_name: string; count: number }[];
 }
 
 export interface PlatformNews {
@@ -551,16 +484,229 @@ export interface PlatformNews {
     description: string;
     icon_name: string;
     is_active: boolean;
-    sort_order?: number;
+    sort_order: number;
+    created_at: string;
+    image_url?: string;
+}
+
+export interface CofrinhoSettings {
+    yield_frequency: 'daily' | 'weekly' | 'monthly';
+    interest_type: 'simple' | 'compound';
+    rate_percent: number;
+    min_lock_days: number;
+    allow_early_withdrawal: boolean;
+    penalty_percent: number;
+    min_deposit: number;
+    formula_script?: string | null;
+    change_policy: 'keep_previous' | 'migrate_new';
+}
+
+export interface CofrinhoAccount {
+    user_id: string;
+    principal: number;
+    accrued_yield: number;
+    last_yield_applied: string;
+    lock_until?: string | null;
+}
+
+export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'asaas_webhook' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides';
+
+export interface AppNotification {
+    id: string;
+    title: string;
+    message: string;
+    is_read: boolean;
+    created_at: string;
+    user_id: string;
+    type?: 'success' | 'error' | 'warning' | 'info';
+}
+
+export interface StoreWallet {
+    balance_decimal: number;
+    store_id?: string;
+}
+
+export interface WalletTransaction {
+    id: string;
+    amount: number;
+    description: string;
+    type: 'CREDIT' | 'DEBIT';
+    created_at: string;
+}
+
+export interface PartnerRequest {
+    id: string;
+    store_id: string;
+    partner_id?: string;
+    pickup_address: string;
+    delivery_address: string;
+    distance_km: number;
+    total_charged_store: number;
+    net_value_partner: number;
+    status: PartnerRequestStatus;
+    created_at: string;
+    failure_reason?: string;
+    store?: { name: string, phone_number?: string };
+    partner?: { name: string, vehicle_plate?: string };
+    rated_by_store?: boolean;
+}
+
+export interface PayoutSummary {
+    total_earnings: number;
+    available_balance: number;
+    max_emergency_value: number;
+    settings?: { emergency_message: string };
+}
+
+export interface PartnerPayment {
+    id: string;
+    amount: number;
+    status: string;
+    created_at: string;
+}
+
+export interface WorkShift {
+    id: string;
+    user_id: string;
+    start_time: string;
+    end_time?: string;
+    status: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
+    breaks?: { start: string, end?: string }[];
+}
+
+export interface StoreReportData {
+    totalRequests: number;
+    totalValue: number;
+    peakHours: { hour: number, count: number }[];
+    driverPerformance: { partner_id: string, partner_name: string, count: number }[];
+    counts?: { completed: number; cancelled: number; failed: number };
+}
+
+export interface CartItem extends Product {
+    quantity: number;
 }
 
 export interface StoreShippingRule {
     id: string;
-    store_id: string;
     rule_type: 'free_above' | 'fixed_rate';
-    threshold?: number;
     value: number;
+    threshold?: number;
+}
+
+export interface CompanyInfo {
+    about_text?: string;
+    careers_text?: string;
+    careers_email?: string;
+    press_text?: string;
+    press_email?: string;
+    contact_support_email?: string;
+    contact_commercial_email?: string;
+    contact_address?: string;
+    loan_config?: LoanConfig;
+}
+
+export interface LoanConfig {
+    interest_rate_percent: number;
+    repayment_days: number;
+    credit_limit: number;
+    early_repayment_discount_percent?: number;
+}
+
+export interface AsaasWebhookLog {
+    id: string;
+    event_type: string;
+    status: string;
+    payload: any;
+    action_taken?: string;
+    created_at: string;
+}
+
+export type ContentStatus = 'draft' | 'published' | 'disabled';
+
+export type InstitutionalPageKey = 'faq' | 'solutions' | 'benefits' | 'about' | 'landing';
+
+export interface InstitutionalCategory {
+    id: string;
+    name: string;
+    slug: string;
+}
+
+export interface InstitutionalTag {
+    id: string;
+    name: string;
+    slug: string;
+}
+
+export interface InstitutionalContentImage {
+    id: number;
+    content_id: string;
+    storage_path: string;
+    alt_text?: string;
+    order_index?: number;
+}
+
+export interface InstitutionalContent {
+    id: string;
+    page_key: InstitutionalPageKey;
+    title: string;
+    description?: string;
+    slug: string;
+    status: ContentStatus;
     is_active: boolean;
+    category_id?: string | null;
+    author_id?: string | null;
+    metadata?: any;
+    order_index?: number;
+    created_at?: string;
+    updated_at?: string;
+    images?: InstitutionalContentImage[];
+    tags?: InstitutionalTag[];
+}
+
+export interface InstitutionalContentVersion {
+    id: number;
+    content_id: string;
+    version: number;
+    snapshot: any;
+    created_at: string;
+    created_by?: string | null;
+}
+
+export interface MaintenanceSettings {
+    is_active: boolean;
+    start_time: string;
+    end_time: string;
+    message: string;
+}
+
+export interface BlitzAlert {
+    id: string;
+    user_id: string;
+    type: 'BLITZ' | 'ACCIDENT' | 'TRAFFIC' | 'DANGER';
+    lat: number;
+    lng: number;
+    city?: string;
+    address?: string;
+    created_at: string;
+}
+
+export interface AdminDashboardStats {
+    orders: { today: number, week: number, month: number, total: number, graphData: { date: string, count: number }[] };
+    finance: { gmv: number, platformRevenue: number, averageTicket: number };
+    users: { stores: { active: number, total: number }, drivers: { online: number, total: number } };
+}
+
+export interface ReferralData {
+    my_code: string;
+    is_reward_active: boolean;
+    reward_active_until?: string;
+}
+
+export interface ReferralHistoryItem {
+    id: string;
+    referred_user_name: string;
+    status: 'PENDING' | 'REWARDED';
+    created_at: string;
 }
 
 export interface AdminWalletUser {
@@ -571,14 +717,297 @@ export interface AdminWalletUser {
     balance: number;
 }
 
-export interface BlitzAlert {
+export interface FinancialStatementItem {
     id: string;
-    user_id: string;
+    date: string;
+    type: 'EARNING' | 'WITHDRAWAL' | 'DEBIT' | 'REFUND';
+    description: string;
+    amount: number;
+    status: 'COMPLETED' | 'PENDING' | 'FAILED';
+    // FIX: Add missing optional 'payer' property to the FinancialStatementItem interface.
+    payer?: string;
+}
+
+export interface LiveLocationPayload {
     lat: number;
     lng: number;
-    type: 'BLITZ' | 'ACCIDENT' | 'TRAFFIC' | 'DANGER';
-    city: string;
-    address: string;
+    heading: number;
+    speed: number;
+    status: PartnerRequestStatus;
+    updated_at: string;
+}
+
+export interface ZePayData {
+    balance: number;
+    my_code: string;
+    cards: StoreVirtualCard[];
+    recent_transactions: ZePayTransaction[];
+}
+
+export interface ZePayTransaction {
+    id: string;
+    amount: number;
+    type: string;
+    description: string;
     created_at: string;
-    user_name?: string;
+}
+
+export interface StoreVirtualCard {
+    id: string;
+    name: string;
+    card_number: string; // Masked
+    spending_limit_percent: number;
+    status: 'ACTIVE' | 'BLOCKED';
+}
+
+export interface PartnerRating {
+    id: string;
+    rating: number;
+    comment: string;
+    direction: 'STORE_TO_PARTNER' | 'PARTNER_TO_STORE';
+    created_at: string;
+    evaluator_name?: string;
+    evaluated_name?: string;
+    evaluator_id: string;
+    evaluated_id: string;
+}
+
+export interface OfflineDriver {
+    id: string;
+    name: string;
+    phone: string;
+}
+
+export interface StoreDeliveryPartner {
+    id: string;
+    partner_id: string;
+    partner_name: string;
+    partner_phone: string;
+    partner_vehicle: string;
+    store_id: string;
+}
+
+export interface HistoryFilters {
+    startDate?: string;
+    endDate?: string;
+    status?: PartnerRequestStatus | 'ALL';
+}
+
+export interface UserTerminal {
+    id: string;
+    user_id: string;
+    terminal_id: string;
+    api_key: string;
+    status: 'ACTIVE' | 'INACTIVE';
+    activated_at: string;
+    deactivated_at?: string;
+    label?: string;
+    fee_payer?: 'MERCHANT' | 'CUSTOMER';
+    pin_code?: string;
+    // FIX: Add missing optional 'auto_lock_minutes' property to the UserTerminal interface.
+    auto_lock_minutes?: number;
+}
+
+export interface UserTerminalTransaction {
+    id: string;
+    terminal_id: string;
+    amount: number;
+    status: string;
+}
+
+export interface Collaborator {
+    id: string;
+    store_id: string;
+    username: string;
+    active: boolean;
+    created_at: string;
+}
+
+export interface CollaboratorOrder {
+    id: string;
+    store_id: string;
+    collaborator_id?: string;
+    table_identifier: string;
+    status: 'opened' | 'sent' | 'completed';
+    created_at: string;
+    items?: CollaboratorOrderItem[];
+}
+
+export interface CollaboratorOrderItem {
+    id: string;
+    order_id: string;
+    product_id: string;
+    additional: any[];
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+    product?: Product;
+}
+
+export interface UserTerminalHistoryItem {
+    id: string;
+    amount: number;
+    status: string;
+    created_at: string;
+    payer_name: string;
+}
+
+export interface ZebankData {
+    balance: number;
+    savings_balance: number;
+    my_code: string;
+    partner_level: string;
+    cards: ZebankCard[];
+    recent_transactions: ZebankTransaction[];
+    cofrinho_balance?: number;
+    cofrinho_accrued_yield?: number;
+    cofrinho_next_withdrawal_date?: string;
+    cofrinho_rate?: string;
+    cofrinho_rules?: string;
+}
+
+export interface ZebankCard {
+    id: string;
+    name: string;
+    card_number: string;
+    card_last_four: string;
+    expiration_date: string;
+    cvv: string;
+    card_holder: string;
+    status: 'ACTIVE' | 'BLOCKED';
+    spending_limit_percent?: number;
+}
+
+export interface ZebankTransaction {
+    id: string;
+    amount: number;
+    description: string;
+    direction: 'IN' | 'OUT';
+    created_at: string;
+    status: string;
+    payer_name?: string;
+}
+
+export interface AssociatedStore {
+    id: string;
+    name: string;
+    // Adicionar outros campos relevantes se necessário, como terminal_id da loja
+    // ou informações de contato do lojista.
+}
+
+export interface SalesSimulation {
+    id: string;
+    user_id: string;
+    sale_value: number;
+    fee_payer: 'seller' | 'buyer';
+    gross_value: number;
+    net_value: number;
+    fees: number;
+    created_at: string;
+}
+
+export interface DriverPaymentInfo {
+    id: string;
+    name: string;
+    email: string;
+    phone_number?: string;
+    role: UserRole;
+    bank_details?: UserBankDetails;
+    automatic_payouts_enabled?: boolean;
+    preferred_payout_method_type?: PayoutMethodType; // NOVO
+}
+
+export interface PendingPayoutSummary {
+    driver_id: string;
+    driver_name: string;
+    driver_email: string;
+    driver_automatic_payouts_enabled: boolean;
+    eligible_earnings: number;
+    next_payout_date?: string | null;
+    last_payout_date?: string | null;
+}
+
+export type LoanStatus = 'VENCIDO' | 'PAGO' | 'EM_DIA';
+
+export interface LoanItem {
+    id: string;
+    borrowerName: string;
+    amount: number;
+    startDate: string;
+    dueDate: string;
+    status: LoanStatus;
+    outstandingBalance: number;
+}
+
+export interface LoanSummary {
+    totalLoaned: number;
+    totalPaid: number;
+    totalOutstanding: number;
+    overdueCount: number;
+}
+
+export interface AppSlide {
+    id: string;
+    name: string;
+    image_url: string;
+    link?: string;
+    display_days: number;
+    target_audience: 'drivers' | 'merchants' | 'both';
+    is_active: boolean;
+    created_at: string;
+    expires_at?: string;
+}
+
+export interface MarketingTemplate {
+    id: string;
+    name: string;
+    category: string;
+    format: 'square' | 'story' | 'horizontal';
+    config: MarketingCanvasConfig;
+    thumbnail_url?: string;
+    is_active: boolean;
+}
+
+export interface MarketingDesign {
+    id: string;
+    user_id: string;
+    template_id?: string;
+    name: string;
+    config: MarketingCanvasConfig;
+    last_image_url?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface MarketingCanvasConfig {
+    backgroundColor: string;
+    backgroundImageUrl?: string; // Imagem de fundo opcional
+    textColor: string;
+    format: 'post' | 'story'; // Formato do canvas
+    elements: MarketingElement[];
+}
+
+export interface MarketingElement {
+    id: string;
+    type: 'text' | 'image' | 'icon';
+    // Posicionamento livre (obrigatórios)
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    zIndex?: number; // Controle de camadas
+    // Propriedades de texto
+    text?: string;
+    fontSize?: number;
+    fontWeight?: string;
+    fontFamily?: string; // Fonte do Google Fonts
+    color?: string;
+    // Propriedades de imagem
+    shape?: 'square' | 'circle';
+    imageUrl?: string;
+    iconName?: string;
+    // Bordas
+    borderColor?: string;
+    borderWidth?: number;
+    rotation?: number; // Rotação em graus (0-360)
 }

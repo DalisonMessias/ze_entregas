@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { MapPin, Mic, Bell, CheckCircle, AlertTriangle, Settings, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
+import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 interface PermissionModalProps {
   onClose: () => void;
@@ -12,6 +13,8 @@ export const PermissionModal: React.FC<PermissionModalProps> = ({ onClose }) => 
   const [geoStatus, setGeoStatus] = useState<PermissionStatusState>('unknown');
   const [micStatus, setMicStatus] = useState<PermissionStatusState>('unknown');
   const [notifStatus, setNotifStatus] = useState<PermissionStatusState>('unknown');
+
+  const { alert } = useDialog(); // Use the custom dialog service
 
   // Check initial statuses
   useEffect(() => {
@@ -111,7 +114,7 @@ export const PermissionModal: React.FC<PermissionModalProps> = ({ onClose }) => 
                 <CheckCircle className="w-4 h-4" /> OK
              </div>
            ) : isDenied ? (
-             <button onClick={() => alert('Esta permissão foi bloqueada. Por favor, acesse as configurações do seu navegador (ícone de cadeado na barra de endereço) e clique em "Redefinir permissões".')} className="flex items-center gap-1 text-red-500 font-bold text-xs bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg border border-red-100 dark:border-red-800">
+             <button onClick={async () => await alert({ title: "Permissão Bloqueada", message: "Esta permissão foi bloqueada. Por favor, acesse as configurações do seu navegador (ícone de cadeado na barra de endereço) e clique em \"Redefinir permissões\"." })} className="flex items-center gap-1 text-red-500 font-bold text-xs bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg border border-red-100 dark:border-red-800">
                 <Settings className="w-3 h-3" /> Ajustes
              </button>
            ) : (

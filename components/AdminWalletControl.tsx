@@ -4,13 +4,25 @@ import { Wallet, Search, Filter, RefreshCw, Loader2, Plus, Minus, DollarSign, X 
 import * as cloud from '../services/cloud';
 import { AdminWalletUser } from '../types';
 import { Button } from './Button';
+import { useDialog } from '../utils/dialogService';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+// Helper para tradução de roles
+const getRoleLabel = (role: string) => {
+    const map: Record<string, string> = {
+        'admin': 'Administrador',
+        'store_partner': 'Lojista Parceiro',
+        'delivery_partner': 'Entregador Parceiro',
+        'delivery_person': 'Entregador (App)'
+    };
+    return map[role] || role;
+};
 
 export const AdminWalletControl: React.FC = () => {
     const [wallets, setWallets] = useState<AdminWalletUser[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'ALL' | 'STORE_PARTNER' | 'DELIVERY_PARTNER'>('ALL');
+    const [filter, setFilter] = useState<'ALL' | 'store_partner' | 'delivery_partner'>('ALL'); // Alterado para usar os valores reais do enum
     const [search, setSearch] = useState('');
     
     // Modal State
@@ -19,6 +31,8 @@ export const AdminWalletControl: React.FC = () => {
     const [reason, setReason] = useState('');
     const [actionType, setActionType] = useState<'ADD' | 'REMOVE'>('ADD');
     const [processing, setProcessing] = useState(false);
+
+    const { alert } = useDialog();
 
     useEffect(() => {
         loadData();
@@ -51,20 +65,26 @@ export const AdminWalletControl: React.FC = () => {
     };
 
     const handleConfirmAdjustment = async () => {
-        if (!selectedUser || !amount || !reason) return alert("Preencha todos os campos.");
+        if (!selectedUser || !amount || !reason) {
+            await alert({ title: 'Ajuste', message: 'Preencha todos os campos.' });
+            return;
+        }
         const val = parseFloat(amount.replace(',', '.'));
-        if (isNaN(val) || val <= 0) return alert("Valor inválido.");
+        if (isNaN(val) || val <= 0) {
+            await alert({ title: 'Ajuste', message: 'Valor inválido.' });
+            return;
+        }
 
         const finalAmount = actionType === 'ADD' ? val : -val;
 
         setProcessing(true);
         try {
             await cloud.adminAdjustBalance(selectedUser.user_id, finalAmount, reason);
-            alert("Saldo ajustado com sucesso!");
+            await alert({ title: 'Ajuste', message: 'Saldo ajustado com sucesso!' });
             setSelectedUser(null);
             loadData();
         } catch (e: any) {
-            alert("Erro: " + e.message);
+            await alert({ title: 'Erro', message: 'Erro: ' + e.message });
         } finally {
             setProcessing(false);
         }
@@ -76,8 +96,8 @@ export const AdminWalletControl: React.FC = () => {
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
                 <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
                     <button onClick={() => setFilter('ALL')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'ALL' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Todos</button>
-                    <button onClick={() => setFilter('STORE_PARTNER')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'STORE_PARTNER' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojistas</button>
-                    <button onClick={() => setFilter('DELIVERY_PARTNER')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'DELIVERY_PARTNER' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregadores</button>
+                    <button onClick={() => setFilter('store_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'store_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojistas Parceiros</button>
+                    <button onClick={() => setFilter('delivery_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'delivery_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregadores Parceiros</button>
                 </div>
                 
                 <div className="flex gap-2 w-full md:w-auto">
@@ -118,8 +138,8 @@ export const AdminWalletControl: React.FC = () => {
                                         <p className="text-xs text-gray-500">{user.email}</p>
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${user.role === 'STORE_PARTNER' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                            {user.role === 'STORE_PARTNER' ? 'Lojista' : 'Entregador'}
+                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${user.role === 'store_partner' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                            {getRoleLabel(user.role)} {/* Usar getRoleLabel aqui */}
                                         </span>
                                     </td>
                                     <td className={`px-4 py-3 font-mono font-bold ${user.balance < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>

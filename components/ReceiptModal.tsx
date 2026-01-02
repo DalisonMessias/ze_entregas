@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { FinancialStatementItem } from '../types';
 import html2canvas from 'html2canvas';
 import { Logo } from './Logo';
+import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 interface ReceiptModalProps {
     transaction: FinancialStatementItem;
@@ -13,6 +14,7 @@ interface ReceiptModalProps {
 
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose, userName }) => {
     const receiptRef = useRef<HTMLDivElement>(null);
+    const { alert } = useDialog(); // Use the custom dialog service
 
     const handleDownload = async () => {
         if (!receiptRef.current) return;
@@ -28,7 +30,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose
             link.click();
         } catch (e) {
             console.error(e);
-            alert("Erro ao gerar imagem.");
+            await alert({ title: "Erro ao Gerar Imagem", message: "Erro ao gerar imagem." });
         }
     };
 

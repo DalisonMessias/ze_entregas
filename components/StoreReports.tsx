@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, BarChart3, Clock, Users } from 'lucide-react';
 import { StoreReportData } from '../types';
 import * as cloud from '../services/cloud';
+import { ExclusiveLock } from './ExclusiveLock';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -37,13 +38,25 @@ const PeakHoursChart = ({ data }: { data: { hour: number, count: number }[] }) =
 export const StoreReports: React.FC = () => {
     const [report, setReport] = useState<StoreReportData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSuperStore, setIsSuperStore] = useState(false);
 
     useEffect(() => {
         const loadReport = async () => {
             setLoading(true);
             try {
-                const data = await cloud.getStoreReportsData();
-                setReport(data);
+                // 1. Verificar se é Superlogista
+                const user = await cloud.getClient()?.auth.getUser();
+                if (user?.data.user) {
+                    const profileData = await cloud.getClient()?.from('user_profiles').select('is_super_store').eq('id', user.data.user.id).single();
+                    const isSuper = profileData?.data?.is_super_store || false;
+                    setIsSuperStore(isSuper);
+
+                    // 2. Se for Super, carregar dados. Se não, parar.
+                    if (isSuper) {
+                        const data = await cloud.getStoreReportsData();
+                        setReport(data);
+                    }
+                }
             } catch (e) {
                 console.error(e);
             } finally {
@@ -57,20 +70,38 @@ export const StoreReports: React.FC = () => {
         return <div className="flex justify-center items-center h-64"><Loader2 className="w-10 h-10 animate-spin text-brand-600"/></div>;
     }
 
+    // Bloqueio para Lojistas Normais
+    if (!isSuperStore) {
+        return (
+            <ExclusiveLock 
+                title="Relatórios Avançados" 
+                description="Recurso Exclusivo: Acesso disponível apenas para Superlogista. Visualize horários de pico, desempenho de entregadores e métricas financeiras detalhadas." 
+            />
+        );
+    }
+
     if (!report) {
         return <div className="text-center text-gray-400 py-10">Não foi possível carregar os relatórios.</div>;
     }
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
-                    <p className="text-xs text-gray-400 font-bold uppercase">Total de Entregas</p>
-                    <p className="text-3xl font-black text-gray-900 dark:text-white">{report.totalRequests}</p>
-                </div>
+            <div className="grid grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
                     <p className="text-xs text-gray-400 font-bold uppercase">Faturamento (Frete)</p>
                     <p className="text-3xl font-black text-green-600 dark:text-green-400">{formatCurrency(report.totalValue)}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <p className="text-xs text-gray-400 font-bold uppercase">Concluídas</p>
+                    <p className="text-3xl font-black text-blue-700 dark:text-blue-300">{report.counts?.completed || 0}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <p className="text-xs text-gray-400 font-bold uppercase">Canceladas</p>
+                    <p className="text-3xl font-black text-red-700 dark:text-red-300">{report.counts?.cancelled || 0}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <p className="text-xs text-gray-400 font-bold uppercase">Falhas</p>
+                    <p className="text-3xl font-black text-orange-700 dark:text-orange-300">{report.counts?.failed || 0}</p>
                 </div>
             </div>
             

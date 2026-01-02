@@ -20,10 +20,10 @@ export const Logo: React.FC<LogoProps> = ({ className = "", variant = 'default',
   const zeTextColor = (isWhite || isFullWhite) ? '#FFFFFF' : 'currentColor'; 
   
   // Cor dos elementos de marca (Caixa e "Entregas")
-  const brandElementsColor = isFullWhite ? '#FFFFFF' : '#ED2B05';
+  const brandElementsColor = isFullWhite ? '#FFFFFF' : '#e50039';
   
   // Cor do detalhe interno ("raio") - Inverte para vermelho se o logo for full-white (fundo branco sobre fundo vermelho)
-  const lightningColor = isFullWhite ? '#ED2B05' : '#FFFFFF';
+  const lightningColor = isFullWhite ? '#e50039' : '#FFFFFF';
 
   // Ajuste do ViewBox baseado no modo
   // Full: Mostra tudo (largura total ~77k)

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Gift, Share2, Award, Wand2, ChevronLeft, Megaphone, ChevronRight } from 'lucide-react';
+import { Gift, Share2, Award, Wand2, ChevronLeft, Megaphone, ChevronRight, Palette } from 'lucide-react';
 import { ReferralProgram } from './ReferralProgram';
 import { PromotionCardGenerator } from './PromotionCardGenerator';
+import { MarketingModule } from './MarketingModule';
 
 export const StoreMarketing: React.FC = () => {
     // Alterado o estado inicial para 'menu' para não abrir o Indique e Ganhe direto
-    const [currentView, setCurrentView] = useState<'menu' | 'referral' | 'digital_card'>('menu');
+    const [currentView, setCurrentView] = useState<'menu' | 'referral' | 'digital_card' | 'studio'>('menu');
 
     return (
         <div className="space-y-6 animate-in fade-in">
@@ -21,7 +22,7 @@ export const StoreMarketing: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Card: Indique e Ganhe */}
-                        <button 
+                        <button
                             onClick={() => setCurrentView('referral')}
                             className="flex flex-col items-start p-6 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-3xl text-white shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 relative overflow-hidden group w-full text-left"
                         >
@@ -41,7 +42,7 @@ export const StoreMarketing: React.FC = () => {
                         </button>
 
                         {/* Card: Cartão Digital */}
-                        <button 
+                        <button
                             onClick={() => setCurrentView('digital_card')}
                             className="flex flex-col items-start p-6 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-3xl shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1 w-full text-left group"
                         >
@@ -56,11 +57,28 @@ export const StoreMarketing: React.FC = () => {
                                 Criar Arte <ChevronRight className="w-3 h-3 ml-1" />
                             </div>
                         </button>
+
+                        {/* Card: Estúdio de Marketing (Canvas) */}
+                        <button
+                            onClick={() => setCurrentView('studio')}
+                            className="flex flex-col items-start p-6 bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800/50 rounded-3xl shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1 w-full text-left group"
+                        >
+                            <div className="bg-purple-600 p-3 rounded-2xl mb-4 text-white">
+                                <Palette className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-xl font-black text-gray-900 dark:text-white mb-1">Estúdio de Marketing</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 font-medium">
+                                Crie artes personalizadas com nosso editor avançado.
+                            </p>
+                            <div className="mt-auto flex items-center text-xs font-bold text-purple-600 dark:text-purple-400 group-hover:text-purple-500 transition-colors">
+                                Abrir Estúdio <ChevronRight className="w-3 h-3 ml-1" />
+                            </div>
+                        </button>
                     </div>
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <button 
+                    <button
                         onClick={() => setCurrentView('menu')}
                         className="flex items-center text-sm font-bold text-gray-500 hover:text-brand-600 transition-colors"
                     >
@@ -69,15 +87,21 @@ export const StoreMarketing: React.FC = () => {
 
                     <div className="animate-in slide-in-from-right-5 fade-in duration-300">
                         {currentView === 'referral' && (
-                            <ReferralProgram 
-                                userRole="store_partner" 
-                                onClose={() => setCurrentView('menu')} 
+                            <ReferralProgram
+                                userRole="store_partner"
+                                onClose={() => setCurrentView('menu')}
                             />
                         )}
 
                         {currentView === 'digital_card' && (
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700">
                                 <PromotionCardGenerator />
+                            </div>
+                        )}
+
+                        {currentView === 'studio' && (
+                            <div className="animate-in fade-in zoom-in-95 duration-500">
+                                <MarketingModule />
                             </div>
                         )}
                     </div>

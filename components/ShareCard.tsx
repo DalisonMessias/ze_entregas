@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Share2, X, Package, Gauge, Camera, Image as ImageIcon, Copy, Check } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { Logo } from './Logo';
+import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 interface ShareCardProps {
   data: {
@@ -86,6 +87,8 @@ export const ShareCard: React.FC<ShareCardProps> = ({ data, onClose }) => {
   
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
+  const { alert } = useDialog(); // Use the custom dialog service
+
   const getShareText = () => {
     return `🚀 *Resumo Zé Entregas* 🚀\n📅 ${data.date}\n\n💰 *Lucro:* ${formatCurrency(data.value)}\n📦 *Entregas:* ${data.count}\n🏍️ *Distância:* ${data.km.toFixed(1)} km\n\n_Gerado pelo app Zé Entregas_`;
   };
@@ -97,7 +100,7 @@ export const ShareCard: React.FC<ShareCardProps> = ({ data, onClose }) => {
       setHasCopied(true);
       setTimeout(() => setHasCopied(false), 3000);
     } catch (err) {
-      alert('Não foi possível copiar automaticamente.');
+      await alert({ title: "Erro ao Copiar", message: "Não foi possível copiar automaticamente." });
     }
   };
 
@@ -139,7 +142,7 @@ export const ShareCard: React.FC<ShareCardProps> = ({ data, onClose }) => {
       link.click();
     } catch (err) {
       console.error("Erro ao gerar imagem", err);
-      alert("Erro ao gerar a imagem. Tente novamente.");
+      await alert({ title: "Erro ao Gerar Imagem", message: "Erro ao gerar a imagem. Tente novamente." });
     } finally {
       setIsGenerating(false);
     }
