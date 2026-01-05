@@ -29,11 +29,7 @@ export const StatusPage: React.FC<StatusPageProps> = ({ onBack }) => {
             setUserRole(role);
             setLevels(l || []);
             setLastSync(new Date().toLocaleTimeString());
-<<<<<<< HEAD
 
-=======
-            
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             // Simulação de check de sistema
             const client = cloud.getClient();
             if (client) setSystemStatus('online');
@@ -65,19 +61,11 @@ export const StatusPage: React.FC<StatusPageProps> = ({ onBack }) => {
 
     const getStatusIcon = (status: string | undefined) => {
         switch (status) {
-<<<<<<< HEAD
             case 'active':
             case 'APPROVED': return <CheckCircle className="w-6 h-6" />;
             case 'pending':
             case 'PENDING_REVIEW': return <Clock className="w-6 h-6" />;
             case 'banned':
-=======
-            case 'active': 
-            case 'APPROVED': return <CheckCircle className="w-6 h-6" />;
-            case 'pending': 
-            case 'PENDING_REVIEW': return <Clock className="w-6 h-6" />;
-            case 'banned': 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             case 'REJECTED': return <XCircle className="w-6 h-6" />;
             default: return <AlertTriangle className="w-6 h-6" />;
         }
@@ -109,11 +97,7 @@ export const StatusPage: React.FC<StatusPageProps> = ({ onBack }) => {
 
     const getLevelDisplayName = (levelKey: string | undefined) => {
         if (!levelKey) return 'Iniciante';
-<<<<<<< HEAD
         const level = levels.find(l => l.id === levelKey);
-=======
-        const level = levels.find(l => l.level === levelKey);
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
         return level ? level.display_name : levelKey;
     };
 
@@ -132,17 +116,10 @@ export const StatusPage: React.FC<StatusPageProps> = ({ onBack }) => {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-<<<<<<< HEAD
                         <Server className="w-5 h-5 text-blue-500" /> Sistema
                     </h3>
                     <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${systemStatus === 'online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         <Wifi className="w-3 h-3" /> {systemStatus === 'online' ? 'Online' : 'Offline'}
-=======
-                        <Server className="w-5 h-5 text-blue-500"/> Sistema
-                    </h3>
-                    <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${systemStatus === 'online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        <Wifi className="w-3 h-3"/> {systemStatus === 'online' ? 'Online' : 'Offline'}
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                     </div>
                 </div>
                 <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">

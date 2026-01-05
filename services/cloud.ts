@@ -623,6 +623,13 @@ export const adminUpdatePWASettings = async (settings: Partial<PWASettings>) => 
     await sb.from('pwa_settings').upsert(settings); // Usually one row
 };
 
+export const getMaintenanceSettings = async (): Promise<MaintenanceData | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data } = await sb.from('maintenance_settings').select('*').single();
+    return data;
+};
+
 // --- SUPPORT CHAT ---
 
 export const adminGetSupportThreads = async (): Promise<any[]> => {

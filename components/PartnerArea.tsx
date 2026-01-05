@@ -18,14 +18,11 @@ import { FuelCalculator } from './FuelCalculator';
 import { RouteCalculator } from './RouteCalculator';
 import { Maintenance } from './Maintenance';
 import { ExclusiveLock } from './ExclusiveLock';
-<<<<<<< HEAD
 import { MerchantPOS } from './MerchantPOS';
 import { useDialog } from '../utils/dialogService';
 import { NotificationCenter } from './NotificationCenter';
 import { useNotification } from '../contexts/NotificationContext';
 import { PromoSlider } from './PromoSlider';
-=======
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -118,7 +115,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
     // Referral
     const [showReferral, setShowReferral] = useState(false);
 
-<<<<<<< HEAD
     // Upgrade Flow
     const [showUpgradeFlow, setShowUpgradeFlow] = useState(false);
 
@@ -136,20 +132,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
 
     const [bankDetails, setBankDetails] = useState<{ pixKey: string, pixType: string } | null>(null);
     const { alert } = useDialog();
-=======
-    // Live Tracking Ref
-    const watchIdRef = useRef<number | null>(null);
-
-    // Upgrade Flow
-    const [showUpgradeFlow, setShowUpgradeFlow] = useState(false);
-
-    // Utility Modals
-    const [showFuelCalc, setShowFuelCalc] = useState(false);
-    const [showRouteCalc, setShowRouteCalc] = useState(false);
-    const [showMaintenance, setShowMaintenance] = useState(false);
-
-    useEffect(() => { const l = async () => { try { const p = await cloud.getMyPartnerProfile(); setProfile(p); } catch (e) { console.error(e); } }; l(); }, []);
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -398,7 +380,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
 
     // --- CONDITIONAL RENDERS ---
 
-<<<<<<< HEAD
     if (loading) return <PartnerAreaSkeleton />;
 
     if (error) {
@@ -420,11 +401,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             </div>
         );
     }
-
-=======
-    if (!profile) return <PartnerAreaSkeleton />;
-    
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
     // Only block if role is PARTNER and verification is not APPROVED
     if (userRole === 'delivery_partner' && profile?.verification_status !== 'APPROVED') {
         return <PartnerDocumentation profile={profile} onProfileUpdate={setProfile} />;
@@ -508,26 +484,16 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
 
     return (
         <div className="space-y-6 pb-24 animate-in fade-in relative">
-<<<<<<< HEAD
-
             {/* Lock Overlay for Non-Partners */}
             {userRole !== 'delivery_partner' && (
                 <div className="absolute inset-0 z-10 bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
                     <ExclusiveLock
-=======
-            
-            {/* Lock Overlay for Non-Partners */}
-            {userRole !== 'delivery_partner' && (
-                <div className="absolute inset-0 z-50 bg-white/80 dark:bg-gray-900/90 backdrop-blur-sm flex items-center justify-center p-4">
-                    <ExclusiveLock 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         title="Painel de Corridas"
                         description="Área exclusiva para parceiros verificados. Receba pedidos de lojas, gerencie seus turnos e aumente seus ganhos."
                     />
                 </div>
             )}
 
-<<<<<<< HEAD
             <div className="flex justify-between items-center px-1">
                 <h1 className="text-xl font-bold dark:text-white">Painel do Parceiro</h1>
                 <button
@@ -539,15 +505,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                         <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
                     )}
                 </button>
-=======
-            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar">
-                <button onClick={() => setActiveTab('requests')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>
-                    Entregas
-                </button>
-                <button onClick={() => setActiveTab('finance')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'finance' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Financeiro</button>
-                <button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'history' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Histórico</button>
-                <button onClick={() => setActiveTab('stores')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'stores' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojas</button>
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             </div>
 
             <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar mb-2.5">
@@ -564,7 +521,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     <PromoSlider audience={userRole === 'store_partner' ? 'merchants' : 'drivers'} />
                     {renderShiftControl()}
 
-<<<<<<< HEAD
                     {/* Quick Access & Tools Sections for Partners */}
                     <div>
                         <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2 mt-6">Acessos Rápidos</h3>
@@ -641,50 +597,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                             </button>
                         </div>
                     </div>
-
-
-=======
-                    {/* Quick Tools Grid for Partners */}
-                    <div>
-                        <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2 mt-6">Ferramentas Rápidas</h3>
-                        <div className="grid grid-cols-4 gap-2">
-                            <button onClick={() => setShowFuelCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
-                                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
-                                    <Fuel className="w-5 h-5"/>
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Combustível</span>
-                            </button>
-                            <button onClick={() => setShowRouteCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
-                                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
-                                    <Calculator className="w-5 h-5"/>
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Calc. Rota</span>
-                            </button>
-                            <button onClick={() => setShowMaintenance(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
-                                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
-                                    <Wrench className="w-5 h-5"/>
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Manutenção</span>
-                            </button>
-                            <button onClick={() => onNavigate('map')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
-                                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
-                                    <Zap className="w-5 h-5 fill-current"/>
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Alertas</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="mt-4">
-                        <Button 
-                            onClick={() => setShowReferral(true)} 
-                            className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg border-none"
-                        >
-                            <Gift className="w-5 h-5 mr-2" /> Indique e Ganhe Prioridade
-                        </Button>
-                    </div>
-
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                     {/* Active Delivery Card */}
                     {activeDelivery && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl  border-2 border-brand-500 animate-in zoom-in-95 mt-6">
@@ -776,19 +688,10 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     )}
                 </>
             )}
-<<<<<<< HEAD
-
             {activeTab === 'finance' && (
                 <div className="space-y-6">
                     {/* Action Button for Emergency Withdraw (Only Partners) */}
                     {userRole === 'delivery_partner' && summary && summary.settings && (
-=======
-            
-            {activeTab === 'finance' && (
-                <div className="space-y-6">
-                    {/* Action Button for Emergency Withdraw (Only Partners) */}
-                    {userRole === 'delivery_partner' && summary && summary.can_request_emergency && (
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         <div className="mb-4">
                             <button onClick={() => setShowWithdrawConfirm(true)} className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 ">
                                 <Wallet className="w-4 h-4" /> Solicitar Saque Emergencial
@@ -809,95 +712,91 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 <AssociateDriver />
             )}
 
-<<<<<<< HEAD
-            {showWithdrawConfirm && summary && summary.settings && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6  text-center">
-                        <h3 className="text-xl font-bold dark:text-white mb-2">Saque Emergencial</h3>
-                        <p className="text-sm text-gray-500 mb-4">{summary.settings.emergency_message}<br />Receba <strong>{formatCurrency(summary.max_emergency_value)}</strong> agora.</p>
+            {
+                showWithdrawConfirm && summary && summary.settings && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6  text-center">
+                            <h3 className="text-xl font-bold dark:text-white mb-2">Saque Emergencial</h3>
+                            <p className="text-sm text-gray-500 mb-4">{summary.settings.emergency_message}<br />Receba <strong>{formatCurrency(summary.max_emergency_value)}</strong> agora.</p>
 
-                        {!bankDetails?.pixKey ? (
-                            <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl text-xs text-red-600 mb-4 font-bold flex flex-col items-center gap-2">
-                                <AlertTriangle className="w-6 h-6" />
-                                Você não possui uma chave PIX cadastrada.
-                                <Button onClick={() => onNavigate('profile')} size="sm" variant="outline" className="w-full mt-2 border-red-200 text-red-600 hover:bg-red-100">
-                                    <Edit2 className="w-3 h-3 mr-1" /> Cadastrar no Perfil
+                            {!bankDetails?.pixKey ? (
+                                <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl text-xs text-red-600 mb-4 font-bold flex flex-col items-center gap-2">
+                                    <AlertTriangle className="w-6 h-6" />
+                                    Você não possui uma chave PIX cadastrada.
+                                    <Button onClick={() => onNavigate('profile')} size="sm" variant="outline" className="w-full mt-2 border-red-200 text-red-600 hover:bg-red-100">
+                                        <Edit2 className="w-3 h-3 mr-1" /> Cadastrar no Perfil
+                                    </Button>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-green-600 dark:text-green-400 font-bold mb-4 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">
+                                    Enviaremos para o PIX: {bankDetails.pixKey}
+                                </p>
+                            )}
+
+                            <div className="flex gap-3">
+                                <Button variant="outline" onClick={() => setShowWithdrawConfirm(false)} fullWidth>Cancelar</Button>
+                                <Button onClick={handleRequestEmergency} disabled={processingWithdraw || !bankDetails?.pixKey} fullWidth>
+                                    {processingWithdraw ? <Loader2 className="animate-spin" /> : 'Confirmar'}
                                 </Button>
                             </div>
-                        ) : (
-                            <p className="text-xs text-green-600 dark:text-green-400 font-bold mb-4 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">
-                                Enviaremos para o PIX: {bankDetails.pixKey}
-                            </p>
-                        )}
-
-                        <div className="flex gap-3">
-                            <Button variant="outline" onClick={() => setShowWithdrawConfirm(false)} fullWidth>Cancelar</Button>
-                            <Button onClick={handleRequestEmergency} disabled={processingWithdraw || !bankDetails?.pixKey} fullWidth>
-                                {processingWithdraw ? <Loader2 className="animate-spin" /> : 'Confirmar'}
-                            </Button>
                         </div>
                     </div>
-                </div>
-=======
-            {showWithdrawConfirm && summary && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center"><h3 className="text-xl font-bold dark:text-white mb-2">Saque Emergencial</h3><p className="text-sm text-gray-500 mb-4">{summary.settings.emergency_message}<br/>Receba <strong>{formatCurrency(summary.max_emergency_value)}</strong> agora.</p><div className="flex gap-3"><Button variant="outline" onClick={() => setShowWithdrawConfirm(false)} fullWidth>Cancelar</Button><Button onClick={handleRequestEmergency} disabled={processingWithdraw} fullWidth>{processingWithdraw ? <Loader2 className="animate-spin"/> : 'Confirmar'}</Button></div></div></div>
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-            )}
-            {showFailureModal && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6"><h3 className="font-bold dark:text-white mb-4">Relatar Problema</h3><textarea className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl h-24 mb-4" placeholder="Motivo..." value={failureReason} onChange={e => setFailureReason(e.target.value)} /><div className="flex gap-2"><Button variant="outline" onClick={() => setShowFailureModal(false)} fullWidth>Cancelar</Button><Button onClick={handleReportFailure} disabled={!failureReason} fullWidth>Enviar</Button></div></div></div>
-            )}
 
-            {showSecurityCheck && (
-                <SecurityCheckModal
-                    onVerified={handleSecurityVerified}
-                    onClose={() => setShowSecurityCheck(false)}
-                />
-            )}
+                )
+            }
+            {
+                showFailureModal && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6"><h3 className="font-bold dark:text-white mb-4">Relatar Problema</h3><textarea className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl h-24 mb-4" placeholder="Motivo..." value={failureReason} onChange={e => setFailureReason(e.target.value)} /><div className="flex gap-2"><Button variant="outline" onClick={() => setShowFailureModal(false)} fullWidth>Cancelar</Button><Button onClick={handleReportFailure} disabled={!failureReason} fullWidth>Enviar</Button></div></div></div>
+                )
+            }
 
-            {ratingRequest && (
-                <RatingModal
-                    isOpen={!!ratingRequest}
-                    onClose={() => setRatingRequest(null)}
-                    onSubmit={handleRateStore}
-                    targetName={ratingRequest?.store?.name || 'Loja'}
-                    title="Avaliar Loja"
-                />
-            )}
+            {
+                showSecurityCheck && (
+                    <SecurityCheckModal
+                        onVerified={handleSecurityVerified}
+                        onClose={() => setShowSecurityCheck(false)}
+                    />
+                )
+            }
 
-            {showChat && activeDelivery && (
-                <ChatWindow
-                    orderId={activeDelivery.id}
-                    type="ORDER"
-                    onClose={() => setShowChat(false)}
-                    title={activeDelivery.store?.name || "Loja"}
-                />
-            )}
+            {
+                ratingRequest && (
+                    <RatingModal
+                        isOpen={!!ratingRequest}
+                        onClose={() => setRatingRequest(null)}
+                        onSubmit={handleRateStore}
+                        targetName={ratingRequest?.store?.name || 'Loja'}
+                        title="Avaliar Loja"
+                    />
+                )
+            }
 
-            {showReferral && (
-<<<<<<< HEAD
-                <ReferralProgram
-                    userRole={userRole}
-                    onClose={() => setShowReferral(false)}
-                />
-            )}
+            {
+                showChat && activeDelivery && (
+                    <ChatWindow
+                        orderId={activeDelivery.id}
+                        type="ORDER"
+                        onClose={() => setShowChat(false)}
+                        title={activeDelivery.store?.name || "Loja"}
+                    />
+                )
+            }
+
+            {
+                showReferral && (
+                    <ReferralProgram
+                        userRole={userRole}
+                        onClose={() => setShowReferral(false)}
+                    />
+                )
+            }
 
             {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
             {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
             {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
             {showMerchantPOS && <MerchantPOS onClose={() => setShowMerchantPOS(false)} />}
             {showNotifications && <NotificationCenter onClose={() => setShowNotifications(false)} />}
-=======
-                <ReferralProgram 
-                    userRole={userRole} 
-                    onClose={() => setShowReferral(false)} 
-                />
-            )}
 
-            {/* Utility Modals */}
-            {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
-            {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
-            {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-        </div>
+        </div >
     );
 };

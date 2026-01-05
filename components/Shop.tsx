@@ -25,11 +25,7 @@ const ShopSkeleton = () => (
     <div className="space-y-8 p-2">
         <div className="flex justify-between items-center">
             <Skeleton className="h-10 w-40 rounded-full" />
-<<<<<<< HEAD
             <Skeleton className="h-10 w-10" variant="circular" />
-=======
-            <Skeleton className="h-10 w-10 rounded-full" variant="circular" />
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
         </div>
         <Skeleton className="h-48 w-full rounded-3xl" />
         <div className="flex gap-4 overflow-hidden">
@@ -39,13 +35,8 @@ const ShopSkeleton = () => (
             {[1, 2, 3, 4, 5, 6].map(i => (
                 <div key={i} className="space-y-3">
                     <Skeleton className="h-40 w-full rounded-3xl" />
-<<<<<<< HEAD
                     <Skeleton variant="text" className="h-4 w-3/4" />
                     <Skeleton variant="text" className="h-4 w-1/2" />
-=======
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                 </div>
             ))}
         </div>
@@ -69,11 +60,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
     // Checkout State
     const [shippingAddress, setShippingAddress] = useState({ name: '', address: '', cep: '' });
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
     // Shipping Calculation
     const [calculatingShipping, setCalculatingShipping] = useState(false);
     const [shippingCost, setShippingCost] = useState<number | null>(null);
@@ -188,11 +175,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
         if (shippingCost !== null) t += shippingCost;
         return t;
     }, [subtotal, discountAmount, shippingCost]);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
     const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
 
     const handleCreditCardChange = (field: string, value: string) => {
@@ -216,11 +199,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
     const handleCepChange = (val: string) => {
         let v = val.replace(/\D/g, '').substring(0, 8);
-<<<<<<< HEAD
         if (v.length > 5) v = `${v.substring(0, 5)}-${v.substring(5, 8)}`;
-=======
-        if (v.length > 5) v = `${v.substring(0,5)}-${v.substring(5,8)}`;
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
         setShippingAddress(prev => ({ ...prev, cep: v }));
     };
 
@@ -232,11 +211,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
         }
         if (!settings?.shipping_origin_cep) {
             // Se a loja não configurou CEP, frete fixo ou a combinar
-<<<<<<< HEAD
             setShippingCost(15.00);
-=======
-            setShippingCost(15.00); 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             return;
         }
 
@@ -249,11 +224,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             const resUser = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
             if (!resUser.ok) throw new Error("CEP não encontrado");
             const dataUser = await resUser.json();
-<<<<<<< HEAD
 
-=======
-            
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             // Auto-fill address parts
             setShippingAddress(prev => ({
                 ...prev,
@@ -269,11 +240,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             // Geocode Origin
             const geoOriginRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${originCep}, Brazil&limit=1`);
             const geoOriginData = await geoOriginRes.json();
-<<<<<<< HEAD
 
-=======
-            
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             // Geocode Dest
             const geoDestRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${cep}, Brazil&limit=1`);
             const geoDestData = await geoDestRes.json();
@@ -288,27 +255,16 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 const R = 6371; // km
                 const dLat = (lat2 - lat1) * Math.PI / 180;
                 const dLon = (lon2 - lon1) * Math.PI / 180;
-<<<<<<< HEAD
                 const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
                     Math.sin(dLon / 2) * Math.sin(dLon / 2);
                 const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-=======
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                          Math.sin(dLon/2) * Math.sin(dLon/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                 const d = R * c; // Distance in km
 
                 // Pricing Logic (Simulation)
                 // Base cost R$ 10.00 + R$ 0.50 per km
                 let price = 10.00 + (d * 0.50);
-<<<<<<< HEAD
 
-=======
-                
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                 // Free shipping check
                 if (settings.free_shipping_threshold && subtotal >= settings.free_shipping_threshold) {
                     price = 0;
@@ -331,11 +287,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
     const applyCoupon = () => {
         if (!settings?.coupons) return;
         const coupon = settings.coupons.find(c => c.code === couponCode.toUpperCase() && c.active);
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
         if (coupon) {
             setAppliedDiscount(coupon.discount_percent);
             setCouponMessage(`Desconto de ${coupon.discount_percent}% aplicado!`);
@@ -351,19 +303,11 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             return;
         }
         if (!shippingAddress.name.trim() || !shippingAddress.address.trim() || !shippingAddress.cep) {
-<<<<<<< HEAD
             await alert({ title: "Endereço Incompleto", message: "Por favor, preencha o endereço de entrega completo." });
             return;
         }
         if (shippingCost === null) {
             await alert({ title: "Frete Não Calculado", message: "Calcule o frete antes de finalizar." });
-=======
-            alert("Por favor, preencha o endereço de entrega completo.");
-            return;
-        }
-        if (shippingCost === null) {
-            alert("Calcule o frete antes de finalizar.");
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             return;
         }
 
@@ -421,24 +365,14 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
     // LIST VIEW (HOME)
     if (view === 'list') return (
         <div className="animate-in fade-in duration-500 pb-28">
-<<<<<<< HEAD
 
-=======
-            
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             {/* Minimal Search Header */}
             <div className="sticky top-0 z-30 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-md pt-2 pb-2">
                 <div className="relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-<<<<<<< HEAD
                     <input
                         type="text"
                         placeholder="O que você procura hoje?"
-=======
-                    <input 
-                        type="text" 
-                        placeholder="O que você procura hoje?" 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-800 border-none rounded-3xl shadow-sm text-sm font-medium focus:ring-2 focus:ring-brand-500 dark:text-white outline-none"
@@ -452,31 +386,19 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                     {/* Background Image/Gradient */}
                     <div className="absolute inset-0 bg-gradient-to-br from-brand-600 via-brand-500 to-orange-400 opacity-90"></div>
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
-<<<<<<< HEAD
 
-=======
-                    
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                     {/* Floating Elements */}
                     <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-white/10 flex items-center gap-1">
                         <Zap className="w-3 h-3 fill-white" />
                         {settings?.banner_tag || 'Oferta'}
                     </div>
-<<<<<<< HEAD
 
-=======
-                    
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                     <div className="absolute -right-10 -top-10 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
 
                     <div className="relative z-10">
                         <h2 className="text-3xl font-black leading-none mb-2 tracking-tight">{settings?.banner_title || 'Novidades'}</h2>
                         <p className="text-base text-brand-100 font-medium max-w-xs leading-snug">{settings?.banner_subtitle || 'Confira os melhores produtos.'}</p>
-<<<<<<< HEAD
 
-=======
-                        
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         {settings?.free_shipping_threshold && (
                             <div className="mt-4 flex items-center gap-2 bg-white/10 w-fit px-3 py-1.5 rounded-xl border border-white/10 backdrop-blur-sm">
                                 <Truck className="w-4 h-4 text-white" />
@@ -489,22 +411,14 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
             {/* Sticky Categories */}
             <div className="sticky top-20 z-20 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm py-2 -mx-4 px-4 overflow-x-auto no-scrollbar flex gap-3 mb-6">
-<<<<<<< HEAD
                 <button
-=======
-                <button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                     onClick={() => setActiveCategory('all')}
                     className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 ${activeCategory === 'all' ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-700'}`}
                 >
                     Tudo
                 </button>
                 {categories.map(cat => (
-<<<<<<< HEAD
                     <button
-=======
-                    <button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         key={cat.id}
                         onClick={() => setActiveCategory(cat.id)}
                         className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 ${activeCategory === cat.id ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-700'}`}
@@ -513,11 +427,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                     </button>
                 ))}
             </div>
-<<<<<<< HEAD
 
-=======
-            
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             {/* Product Grid */}
             {filteredProducts.length === 0 ? (
                 <div className="text-center py-20">
@@ -537,11 +447,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                             {/* Image Container */}
                             <div className="aspect-square rounded-2xl bg-gray-100 dark:bg-gray-700 overflow-hidden relative mb-3">
                                 <img src={p.images?.[0] || 'https://via.placeholder.com/200'} alt={p.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-<<<<<<< HEAD
 
-=======
-                                
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                 {/* Heart / Favorite Button Simulation */}
                                 <button className="absolute top-2 right-2 p-1.5 bg-white/50 backdrop-blur rounded-full text-gray-500 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
                                     <Heart className="w-4 h-4" />
@@ -559,11 +465,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                                     </button>
                                 )}
                             </div>
-<<<<<<< HEAD
 
-=======
-                            
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                             {/* Info */}
                             <div>
                                 <h4 className="font-bold text-gray-900 dark:text-white text-sm leading-tight mb-1 line-clamp-2">{p.name}</h4>
@@ -584,11 +486,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             {/* Floating Cart Island */}
             {cartCount > 0 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-sm px-4 animate-in slide-in-from-bottom-20">
-<<<<<<< HEAD
                     <button
-=======
-                    <button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         onClick={() => setView('checkout')}
                         className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 p-2 pl-4 pr-2 rounded-full shadow-2xl flex items-center justify-between hover:scale-[1.02] transition-transform active:scale-95 border border-white/10 dark:border-gray-200"
                     >
@@ -611,21 +509,13 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             {selectedProduct && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setSelectedProduct(null)}>
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
-<<<<<<< HEAD
                     <div
-=======
-                    <div 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         className="relative bg-white dark:bg-gray-900 w-full max-w-md rounded-t-[40px] sm:rounded-[40px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-20 flex flex-col max-h-[90vh]"
                         onClick={e => e.stopPropagation()}
                     >
                         {/* Drag Handle */}
                         <div className="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full z-20"></div>
-<<<<<<< HEAD
 
-=======
-                        
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         <button onClick={() => setSelectedProduct(null)} className="absolute top-6 right-6 z-20 w-10 h-10 bg-white/50 dark:bg-black/50 backdrop-blur rounded-full flex items-center justify-center text-gray-900 dark:text-white hover:bg-white transition-colors">
                             <X className="w-5 h-5" />
                         </button>
@@ -634,20 +524,12 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                             <img src={selectedProduct.images?.[0]} className="w-full h-full object-cover" />
                             <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-white dark:from-gray-900 to-transparent"></div>
                         </div>
-<<<<<<< HEAD
 
-=======
-                        
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         <div className="px-8 pb-8 pt-2 overflow-y-auto bg-white dark:bg-gray-900">
                             <div className="flex justify-between items-start mb-2">
                                 <h2 className="text-3xl font-black text-gray-900 dark:text-white leading-tight">{selectedProduct.name}</h2>
                             </div>
-<<<<<<< HEAD
 
-=======
-                            
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                             <div className="flex items-center gap-2 mb-6">
                                 <span className="text-2xl font-medium text-brand-600 dark:text-brand-400">{formatCurrency(selectedProduct.price)}</span>
                                 {selectedProduct.stock_quantity && selectedProduct.stock_quantity < 5 && (
@@ -658,17 +540,9 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                             <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed mb-8 font-medium">
                                 {selectedProduct.description}
                             </p>
-<<<<<<< HEAD
-
                             <div className="flex items-center justify-between gap-6">
                                 <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-800 p-2 rounded-2xl">
                                     <button
-=======
-                            
-                            <div className="flex items-center justify-between gap-6">
-                                <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-800 p-2 rounded-2xl">
-                                    <button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                         onClick={() => setProductQuantity(q => Math.max(1, q - 1))}
                                         className={`w-12 h-12 flex items-center justify-center rounded-xl transition-colors ${productQuantity === 1 ? 'text-gray-300 dark:text-gray-600' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'}`}
                                         disabled={productQuantity === 1}
@@ -676,11 +550,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                                         <Minus className="w-5 h-5" />
                                     </button>
                                     <span className="font-black text-xl w-8 text-center dark:text-white">{productQuantity}</span>
-<<<<<<< HEAD
                                     <button
-=======
-                                    <button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                         onClick={() => setProductQuantity(q => Math.min(selectedProduct.stock_quantity || 99, q + 1))}
                                         className="w-12 h-12 flex items-center justify-center rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm hover:scale-105 transition-transform"
                                     >
@@ -688,11 +558,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                                     </button>
                                 </div>
 
-<<<<<<< HEAD
                                 <Button
-=======
-                                <Button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                     onClick={addToCart}
                                     disabled={!selectedProduct.is_active || (selectedProduct.stock_quantity !== null && selectedProduct.stock_quantity <= 0)}
                                     className="flex-1 py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
@@ -737,15 +603,9 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                                     <div className="flex items-center justify-between mt-2">
                                         <p className="text-xs text-gray-400">{formatCurrency(item.price)} un</p>
                                         <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-1">
-<<<<<<< HEAD
                                             <button onClick={() => updateCartQuantity(item.id, -1)} className="p-1 text-gray-500 hover:text-red-500"><Minus className="w-3 h-3" /></button>
                                             <span className="text-xs font-bold dark:text-white">{item.quantity}</span>
                                             <button onClick={() => updateCartQuantity(item.id, 1)} className="p-1 text-gray-500 hover:text-green-500"><Plus className="w-3 h-3" /></button>
-=======
-                                            <button onClick={() => updateCartQuantity(item.id, -1)} className="p-1 text-gray-500 hover:text-red-500"><Minus className="w-3 h-3"/></button>
-                                            <span className="text-xs font-bold dark:text-white">{item.quantity}</span>
-                                            <button onClick={() => updateCartQuantity(item.id, 1)} className="p-1 text-gray-500 hover:text-green-500"><Plus className="w-3 h-3"/></button>
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                         </div>
                                     </div>
                                 </div>
@@ -761,13 +621,8 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                         <div className="flex gap-3">
                             <div className="relative flex-1">
                                 <label className="absolute left-4 top-2 text-[10px] font-bold text-gray-400 uppercase">CEP</label>
-<<<<<<< HEAD
                                 <input
                                     type="tel"
-=======
-                                <input 
-                                    type="tel" 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                     value={shippingAddress.cep}
                                     onChange={e => handleCepChange(e.target.value)}
                                     className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all"
@@ -776,7 +631,6 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                                 />
                             </div>
                             <Button onClick={calculateShipping} disabled={calculatingShipping} className="rounded-2xl px-6 h-auto text-xs">
-<<<<<<< HEAD
                                 {calculatingShipping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Calcular'}
                             </Button>
                         </div>
@@ -788,19 +642,6 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                                 type="text"
                                 value={shippingAddress.name}
                                 onChange={e => setShippingAddress({ ...shippingAddress, name: e.target.value })}
-=======
-                                {calculatingShipping ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Calcular'}
-                            </Button>
-                        </div>
-                        {shippingError && <p className="text-xs text-red-500 font-medium px-2">{shippingError}</p>}
-                        
-                        <div className="relative">
-                            <label className="absolute left-4 top-2 text-[10px] font-bold text-gray-400 uppercase">Destinatário</label>
-                            <input 
-                                type="text" 
-                                value={shippingAddress.name}
-                                onChange={e => setShippingAddress({...shippingAddress, name: e.target.value})}
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                 className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                                 placeholder="Nome completo"
                             />
@@ -808,25 +649,25 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                         <div className="relative">
                             <label className="absolute left-4 top-2 text-[10px] font-bold text-gray-400 uppercase">Endereço</label>
 <<<<<<< HEAD
-                            <textarea
-                                value={shippingAddress.address}
-                                onChange={e => setShippingAddress({ ...shippingAddress, address: e.target.value })}
+    <textarea
+        value={shippingAddress.address}
+        onChange={e => setShippingAddress({ ...shippingAddress, address: e.target.value })}
 =======
-                            <textarea 
+                            <textarea
                                 value={shippingAddress.address}
                                 onChange={e => setShippingAddress({...shippingAddress, address: e.target.value})}
 >>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-                                className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all resize-none h-24"
-                                placeholder="Rua, Número, Bairro..."
-                            />
-                        </div>
-                    </div>
-                </section>
+        className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all resize-none h-24"
+        placeholder="Rua, Número, Bairro..."
+    />
+                        </div >
+                    </div >
+                </section >
 
-                {/* Coupon */}
-                <section>
-                    <div className="flex items-center gap-3 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
-                        <Ticket className="w-5 h-5 text-purple-500" />
+    {/* Coupon */ }
+    < section >
+    <div className="flex items-center gap-3 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+        <Ticket className="w-5 h-5 text-purple-500" />
 <<<<<<< HEAD
                         <input
                             type="text"
@@ -843,12 +684,12 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                         <button onClick={applyCoupon} className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline">
                             Aplicar
                         </button>
-                    </div>
-                    {couponMessage && <p className={`text-xs mt-2 px-4 font-bold ${appliedDiscount > 0 ? 'text-green-500' : 'text-red-500'}`}>{couponMessage}</p>}
-                </section>
+                    </div >
+    { couponMessage && <p className={`text-xs mt-2 px-4 font-bold ${appliedDiscount > 0 ? 'text-green-500' : 'text-red-500'}`}>{couponMessage}</p>}
+                </section >
 
-                {/* Payment */}
-                <section>
+    {/* Payment */ }
+    < section >
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Pagamento</h3>
                     <div className="grid grid-cols-3 gap-3 mb-6">
                         {settings?.payment_methods?.pix && (
@@ -892,8 +733,9 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                         )}
                     </div>
 
-                    {paymentMethod === 'CREDIT_CARD' && (
-                        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 space-y-4 animate-in fade-in">
+{
+    paymentMethod === 'CREDIT_CARD' && (
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 space-y-4 animate-in fade-in">
 <<<<<<< HEAD
                             <CustomInput type="tel" placeholder="Número do Cartão" maxLength={16} value={cardData.number} onChange={e => handleCreditCardChange('number', e.target.value)} />
                             <div className="grid grid-cols-2 gap-4">
@@ -917,64 +759,65 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                             </div>
                             <CustomSelect value={cardData.installments} onChange={(val: string) => setCardData({...cardData, installments: Number(val)})} options={[1,2,3,4].map(i => ({ label: `${i}x de ${formatCurrency(total/i)}`, value: String(i) }))} />
 >>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-                        </div>
-                    )}
-                </section>
-            </div>
+                        </div >
+                    )
+}
+                </section >
+            </div >
 
-            {/* Total Footer */}
-            <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 p-6 rounded-t-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-30">
-                <div className="max-w-2xl mx-auto space-y-4">
-                    <div className="flex justify-between text-sm text-gray-500">
-                        <span>Subtotal</span>
-                        <span>{formatCurrency(subtotal)}</span>
-                    </div>
-                    {shippingCost !== null && (
-                        <div className="flex justify-between text-sm text-gray-500">
-                            <span>Frete</span>
-                            <span className="text-gray-900 dark:text-white font-medium">{shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}</span>
-                        </div>
-                    )}
-                    {discountAmount > 0 && (
-                        <div className="flex justify-between text-sm text-green-500 font-bold">
-                            <span>Desconto</span>
-                            <span>- {formatCurrency(discountAmount)}</span>
-                        </div>
-                    )}
-                    <div className="flex justify-between items-center pt-2">
-                        <span className="text-lg font-black text-gray-900 dark:text-white">Total</span>
-                        <span className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(total)}</span>
-                    </div>
+    {/* Total Footer */ }
+    < div className = "fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 p-6 rounded-t-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-30" >
+        <div className="max-w-2xl mx-auto space-y-4">
+            <div className="flex justify-between text-sm text-gray-500">
+                <span>Subtotal</span>
+                <span>{formatCurrency(subtotal)}</span>
+            </div>
+            {shippingCost !== null && (
+                <div className="flex justify-between text-sm text-gray-500">
+                    <span>Frete</span>
+                    <span className="text-gray-900 dark:text-white font-medium">{shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}</span>
+                </div>
+            )}
+            {discountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-500 font-bold">
+                    <span>Desconto</span>
+                    <span>- {formatCurrency(discountAmount)}</span>
+                </div>
+            )}
+            <div className="flex justify-between items-center pt-2">
+                <span className="text-lg font-black text-gray-900 dark:text-white">Total</span>
+                <span className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(total)}</span>
+            </div>
 <<<<<<< HEAD
 
-                    <Button
-                        fullWidth
-                        onClick={handleFinalizeOrder}
-                        disabled={isSubmitting}
-                        className="py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
-                    >
-                        {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Compra'}
+<Button
+    fullWidth
+    onClick={handleFinalizeOrder}
+    disabled={isSubmitting}
+    className="py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
+>
+    {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Compra'}
 =======
-                    
-                    <Button 
-                        fullWidth 
-                        onClick={handleFinalizeOrder} 
-                        disabled={isSubmitting}
-                        className="py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
-                    >
-                        {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin"/> : 'Finalizar Compra'}
+
+                    <Button
+        fullWidth
+        onClick={handleFinalizeOrder}
+        disabled={isSubmitting}
+        className="py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
+    >
+        {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Compra'}
 >>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-                    </Button>
-                </div>
-            </div>
-        </div>
+    </Button>
+</div>
+            </div >
+        </div >
     );
 
-    // SUCCESS VIEW
-    if (view === 'success' && finalOrder) return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-6 animate-in zoom-in-95">
-            <div className="bg-white dark:bg-gray-900 p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-brand-500"></div>
+// SUCCESS VIEW
+if (view === 'success' && finalOrder) return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-6 animate-in zoom-in-95">
+        <div className="bg-white dark:bg-gray-900 p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-brand-500"></div>
 <<<<<<< HEAD
 
                 <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -985,53 +828,53 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">
                     Seu pedido <span className="font-mono font-bold text-gray-900 dark:text-white">#{finalOrder.id.substring(0, 8)}</span> foi recebido.
 =======
-                
-                <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Check className="w-10 h-10 text-green-600" />
-                </div>
-                
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Pedido Confirmado!</h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">
-                    Seu pedido <span className="font-mono font-bold text-gray-900 dark:text-white">#{finalOrder.id.substring(0,8)}</span> foi recebido.
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-                </p>
 
-                {finalOrder.payment_method === 'PIX' && finalOrder.asaas_pix_copy_paste ? (
-                    <div className="space-y-4 mb-8">
-                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl inline-block border border-gray-100 dark:border-gray-700">
-                            <canvas ref={qrCanvasRef} className="w-40 h-40"></canvas>
-                        </div>
-                        <button onClick={() => copyToClipboard(finalOrder.asaas_pix_copy_paste!)} className="w-full py-3 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm font-bold text-brand-600 dark:text-brand-400 flex items-center justify-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Check className="w-10 h-10 text-green-600" />
+        </div>
+
+        <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Pedido Confirmado!</h2>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">
+            Seu pedido <span className="font-mono font-bold text-gray-900 dark:text-white">#{finalOrder.id.substring(0, 8)}</span> foi recebido.
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
+        </p>
+
+        {finalOrder.payment_method === 'PIX' && finalOrder.asaas_pix_copy_paste ? (
+            <div className="space-y-4 mb-8">
+                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl inline-block border border-gray-100 dark:border-gray-700">
+                    <canvas ref={qrCanvasRef} className="w-40 h-40"></canvas>
+                </div>
+                <button onClick={() => copyToClipboard(finalOrder.asaas_pix_copy_paste!)} className="w-full py-3 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm font-bold text-brand-600 dark:text-brand-400 flex items-center justify-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
 <<<<<<< HEAD
-                            <Copy className="w-4 h-4" /> Copiar Código PIX
+<Copy className="w-4 h-4" /> Copiar Código PIX
 =======
                             <Copy className="w-4 h-4"/> Copiar Código PIX
 >>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-                        </button>
-                    </div>
+                        </button >
+                    </div >
                 ) : finalOrder.payment_method === 'BOLETO' ? (
-                    <div className="space-y-4 mb-8">
-                        <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-                            <svg ref={barcodeRef} className="w-full h-16"></svg>
-                        </div>
-                        {finalOrder.asaas_bank_slip_url && (
-                            <a href={finalOrder.asaas_bank_slip_url} target="_blank" rel="noreferrer" className="block w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity">
-                                Baixar Boleto PDF
-                            </a>
-                        )}
-                    </div>
-                ) : (
-                    <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl text-blue-800 dark:text-blue-300 text-sm font-medium">
-                        Pagamento em análise. Você será notificado assim que aprovado.
-                    </div>
-                )}
-
-                <Button onClick={() => { setView('list'); setCart([]); setFinalOrder(null); }} variant="outline" className="w-full py-4 rounded-2xl border-2">
-                    Voltar para Loja
-                </Button>
-            </div>
+    <div className="space-y-4 mb-8">
+        <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+            <svg ref={barcodeRef} className="w-full h-16"></svg>
         </div>
+        {finalOrder.asaas_bank_slip_url && (
+            <a href={finalOrder.asaas_bank_slip_url} target="_blank" rel="noreferrer" className="block w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity">
+                Baixar Boleto PDF
+            </a>
+        )}
+    </div>
+) : (
+    <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl text-blue-800 dark:text-blue-300 text-sm font-medium">
+        Pagamento em análise. Você será notificado assim que aprovado.
+    </div>
+)}
+
+<Button onClick={() => { setView('list'); setCart([]); setFinalOrder(null); }} variant="outline" className="w-full py-4 rounded-2xl border-2">
+    Voltar para Loja
+</Button>
+            </div >
+        </div >
     );
 
-    return null;
+return null;
 };
