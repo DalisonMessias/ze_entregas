@@ -1,8 +1,13 @@
-# Lista de Tarefas
+# Lista de Tarefas - Correção de Erros e Conflitos
 
-- [ ] Padronizar links e formatação em `task.md.resolved`
-- [ ] Substituir `task.md` pelo conteúdo corrigido
-- [ ] Remover arquivos temporários `task.md.resolved*`
-- [x] Implementar `getUserRole` em `services/cloud.ts`
-- [x] Validar correção de `ExclusiveLock.tsx`
-- [x] Corrigir erro "Failed to fetch" no Supabase (credenciais inválidas)
+- [x] Implementar `getMaintenanceSettings` em `services/cloud.ts`
+- [x] Resolver conflitos em `PartnerArea.tsx`
+- [x] Resolver conflitos em `RouteList.tsx`
+- [x] Resolver conflitos em `StoreRequest.tsx`
+- [x] Resolver conflitos em `StatusPage.tsx`
+- [x] Resolver conflitos em `Shop.tsx`
+- [x] Resolver conflitos em `ProfileData.tsx`
+- [x] Resolver conflitos em `OrderHistory.tsx`
+- [x] Resolver conflitos em `HistoryTable.tsx`
+- [x] Resolver conflitos em `service-worker.js`
+- [ ] Verificar persistência de erros (Aguardando execução do usuário)

@@ -597,43 +597,28 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                         className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 transition-all rounded-lg ${requestType === 'ASSOCIATE' ? 'bg-white dark:bg-gray-600 shadow' : ''}`}
                     >
                         <Users className="w-4 h-4" /> Entregador Fixo
-=======
-                    <button
-                            onClick={handleSelectPlatform}
-                            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 transition-all rounded-lg ${requestType === 'PLATFORM' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500 dark:text-gray-400'}`}
-                        >
-                            {isSuperStore ? <ShieldCheck className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                            Parceiro Zé
-                        </button>
-                        <button
-                            onClick={() => setRequestType('ASSOCIATE')}
-                            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 transition-all rounded-lg ${requestType === 'ASSOCIATE' ? 'bg-white dark:bg-gray-600 shadow' : ''}`}
-                        >
-                            <Users className="w-4 h-4" /> Entregador Fixo
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-                        </button>
+                    </button>
                 </div>
 
                 {requestType === 'PLATFORM' && (
                     <div className="space-y-4">
-<<<<<<< HEAD
-    {
-        notification && (
-            <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 mb-3 ${notification.type === 'success' ? 'bg-green-100 text-green-700' : notification.type === 'info' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                {notification.type === 'success' ? <Check className="w-5 h-5" /> : notification.type === 'info' ? <Info className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                <span className="font-bold text-sm">{notification.message}</span>
-                <button onClick={() => setNotification(null)} className="ml-auto"><X className="w-4 h-4" /></button>
-            </div>
-        )
-    }
-    { renderAddressInputs(pickup, true) }
-    {
-        deliveries.map(d => (
-            <React.Fragment key={d.id}>
-                {renderAddressInputs(d, false)}
-            </React.Fragment>
-        ))
-    }
+                        {
+                            notification && (
+                                <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 mb-3 ${notification.type === 'success' ? 'bg-green-100 text-green-700' : notification.type === 'info' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                    {notification.type === 'success' ? <Check className="w-5 h-5" /> : notification.type === 'info' ? <Info className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                                    <span className="font-bold text-sm">{notification.message}</span>
+                                    <button onClick={() => setNotification(null)} className="ml-auto"><X className="w-4 h-4" /></button>
+                                </div>
+                            )
+                        }
+                        {renderAddressInputs(pickup, true)}
+                        {
+                            deliveries.map(d => (
+                                <React.Fragment key={d.id}>
+                                    {renderAddressInputs(d, false)}
+                                </React.Fragment>
+                            ))
+                        }
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2"><Calculator className="w-4 h-4" /> Cálculo de Valores</h3>
@@ -697,31 +682,19 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     </div >
                 )}
 
-{
-    requestType === 'ASSOCIATE' && (
-        <div className="space-y-6">
-            {loadingAssociates ? <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /> :
-                associatedDrivers.length === 0 ? (
-                    <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-xl mb-4">
-                        <UserX className="w-8 h-8 text-red-400 mx-auto mb-2" />
-                        <p className="font-bold text-red-600 text-sm">Nenhum entregador associado.</p>
-                    </div>
-                ) : (
-                    <div>
-                        <h3 className="text-sm font-bold text-gray-500 mb-2">Selecione o(s) entregador(es)</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {associatedDrivers.map(d => (
-                                <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
-                                    {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
-                                    <div>
-                                        <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
-                                        <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
-                                    </div>
-                                </div>
-                            ))}
+                {associatedDrivers.map(d => (
+                    <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                        {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
+                        <div>
+                            <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
+                            <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
                         </div>
                     </div>
-                )}
+                ))}
+            </div>
+        </div>
+    )
+}
 
 
 
@@ -782,58 +755,8 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     </Button>
                 </div>
             </div>
-=======
-                       {renderAddressInputs(pickup, true)}
-            {deliveries.map(d => renderAddressInputs(d, false))}
-            <Button variant="outline" size="sm" onClick={addDelivery} fullWidth><Plus className="w-4 h-4 mr-1" /> Adicionar Parada</Button>
-            <Button fullWidth onClick={handleDispatch} disabled={isSubmitting} className="py-4 mt-4">
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Chamar Entregador Zé'}
-            </Button>
-        </div>
-    )
-}
 
-{
-    requestType === 'ASSOCIATE' && (
-        <div className="space-y-6">
-            {loadingAssociates ? <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /> :
-                associatedDrivers.length === 0 ? (
-                    <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-xl">
-                        <UserX className="w-8 h-8 text-red-400 mx-auto mb-2" />
-                        <p className="font-bold text-red-600 text-sm">Nenhum entregador associado.</p>
-                    </div>
-                ) : (
-                    <div>
-                        <h3 className="text-sm font-bold text-gray-500 mb-2">Selecione o(s) entregador(es)</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {associatedDrivers.map(d => (
-                                <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
-                                    {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
-                                    <div>
-                                        <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
-                                        <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-            <div className="space-y-4">
-                {renderAddressInputs(pickup, true)}
-                {deliveries.map(d => renderAddressInputs(d, false))}
-                <Button variant="outline" size="sm" onClick={addDelivery} fullWidth><Plus className="w-4 h-4 mr-1" /> Adicionar Parada</Button>
-            </div>
-
-            <Button fullWidth onClick={handleDispatch} disabled={isSubmitting || loadingAssociates || associatedDrivers.length === 0} className="py-4 mt-4">
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 mr-2" />}
-                Enviar para Selecionado(s)
-            </Button>
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-        </div>
-    )
-}
-            </div >
         </div >
-    );
-};
+    )
+}
+

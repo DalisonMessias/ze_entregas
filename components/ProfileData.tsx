@@ -219,13 +219,9 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                 }
             };
         };
-        fetchUserAndData(); // Fixed invocation
-    }, []);
-}
-            }
-        };
-fetchUserAndData();
-    }, []);
+    };
+    fetchUserAndData();
+}, []);
 
 const handleSaveAll = async () => {
     setIsLoading(true);

@@ -1,19 +1,12 @@
 
 
 
-<<<<<<< HEAD
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, Filter, Calendar, DollarSign, Download, Printer, ChevronDown, ChevronUp, MapPin, Truck, Store, X, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 
 import { PartnerRequest, HistoryFilters, PartnerRequestStatus } from '../types';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
-=======
-import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Filter, Calendar, DollarSign, Download, Printer, ChevronDown, ChevronUp, MapPin, Truck, Store, X, CheckCircle, Clock } from 'lucide-react';
-import { PartnerRequest, HistoryFilters, PartnerRequestStatus } from '../types';
-import * as cloud from '../services/cloud';
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 import { Button } from './Button';
 import { CustomDateInput } from './CustomDateInput';
 import { CustomSelect } from './CustomSelect';
@@ -89,7 +82,6 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
     const [hasMore, setHasMore] = useState(true);
     const [stats, setStats] = useState<any>(null);
     const [selectedOrder, setSelectedOrder] = useState<PartnerRequest | null>(null);
-<<<<<<< HEAD
     const [cancelLoading, setCancelLoading] = useState(false);
     const [actionMessage, setActionMessage] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
@@ -105,15 +97,12 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
 
         return { value, completed, cancelled };
     }, [requests, userRole]);
-=======
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 
     const loadData = useCallback(async (isRefresh = false) => {
         setLoading(true);
         try {
             const currentPage = isRefresh ? 0 : page;
             const res = await cloud.fetchPartnerRequestHistory(userRole, filters, currentPage);
-<<<<<<< HEAD
             const data = Array.isArray(res?.data) ? res.data : [];
             const statsRes = res?.stats ?? null;
 
@@ -122,17 +111,9 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                 setPage(1); // Next page
             } else {
                 setRequests(prev => [...prev, ...data]);
-=======
-            
-            if (isRefresh) {
-                setRequests(res.data);
-                setPage(1); // Next page
-            } else {
-                setRequests(prev => [...prev, ...res.data]);
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                 setPage(prev => prev + 1);
             }
-            
+
             if (res.data.length < 20) setHasMore(false);
             else setHasMore(true);
 
@@ -171,11 +152,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
             (userRole === 'store_partner' ? r.total_charged_store : r.net_value_partner).toFixed(2),
             r.distance_km
         ].join(','));
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n" + rows.join('\n');
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -187,13 +164,8 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
     };
 
     if (userRole === 'delivery_person' as any) {
-<<<<<<< HEAD
         return (
             <ExclusiveLock
-=======
-         return (
-            <ExclusiveLock 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                 title="Histórico da Plataforma"
                 description="O histórico de pedidos oficiais da plataforma é exclusivo para parceiros. Você pode usar o Histórico Pessoal para suas entregas manuais."
             />
@@ -335,17 +307,10 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
             {/* Details Modal */}
             {selectedOrder && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setSelectedOrder(null)}>
-<<<<<<< HEAD
                     <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="order-details-title">
                         <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
                             <h3 id="order-details-title" className="font-bold dark:text-white">Detalhes do Pedido</h3>
                             <button onClick={() => setSelectedOrder(null)}><X className="w-5 h-5 text-gray-400" /></button>
-=======
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                        <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
-                            <h3 className="font-bold dark:text-white">Detalhes do Pedido</h3>
-                            <button onClick={() => setSelectedOrder(null)}><X className="w-5 h-5 text-gray-400"/></button>
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                         </div>
 
                         <div className="p-6 overflow-y-auto space-y-6">
@@ -356,12 +321,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                                 </h2>
                                 <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(selectedOrder.status)}`}>
                                     {getStatusLabel(selectedOrder.status)}
-<<<<<<< HEAD
                                 </span>                            </div>
-=======
-                                </span>
-                            </div>
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 
                             <div className="space-y-4">
                                 <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
@@ -387,11 +347,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs">Horário</p>
-<<<<<<< HEAD
                                     <p className="font-bold dark:text-white">{new Date(selectedOrder.created_at).toLocaleTimeString().slice(0, 5)}</p>
-=======
-                                    <p className="font-bold dark:text-white">{new Date(selectedOrder.created_at).toLocaleTimeString().slice(0,5)}</p>
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs">Distância</p>
@@ -399,11 +355,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs">ID</p>
-<<<<<<< HEAD
                                     <p className="font-mono text-xs dark:text-white">{selectedOrder.id.substring(0, 8)}</p>
-=======
-                                    <p className="font-mono text-xs dark:text-white">{selectedOrder.id.substring(0,8)}</p>
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                 </div>
                             </div>
 
@@ -495,9 +447,4 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
             )}
         </div>
     );
-<<<<<<< HEAD
 };
-
-=======
-};
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507

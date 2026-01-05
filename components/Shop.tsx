@@ -648,35 +648,23 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                         </div>
                         <div className="relative">
                             <label className="absolute left-4 top-2 text-[10px] font-bold text-gray-400 uppercase">Endereço</label>
-<<<<<<< HEAD
-    <textarea
-        value={shippingAddress.address}
-        onChange={e => setShippingAddress({ ...shippingAddress, address: e.target.value })}
-=======
                             <textarea
                                 value={shippingAddress.address}
-                                onChange={e => setShippingAddress({...shippingAddress, address: e.target.value})}
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-        className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all resize-none h-24"
-        placeholder="Rua, Número, Bairro..."
-    />
+                                onChange={e => setShippingAddress({ ...shippingAddress, address: e.target.value })}
+                                className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all resize-none h-24"
+                                placeholder="Rua, Número, Bairro..."
+                            />
                         </div >
                     </div >
                 </section >
 
-    {/* Coupon */ }
-    < section >
-    <div className="flex items-center gap-3 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
-        <Ticket className="w-5 h-5 text-purple-500" />
-<<<<<<< HEAD
+                {/* Coupon */}
+                < section >
+                    <div className="flex items-center gap-3 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                        <Ticket className="w-5 h-5 text-purple-500" />
                         <input
                             type="text"
                             placeholder="Adicionar Cupom"
-=======
-                        <input 
-                            type="text" 
-                            placeholder="Adicionar Cupom" 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                             value={couponCode}
                             onChange={e => setCouponCode(e.target.value.toUpperCase())}
                             className="flex-1 bg-transparent text-sm font-bold outline-none uppercase placeholder:normal-case placeholder:font-medium text-gray-900 dark:text-white"
@@ -685,19 +673,15 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                             Aplicar
                         </button>
                     </div >
-    { couponMessage && <p className={`text-xs mt-2 px-4 font-bold ${appliedDiscount > 0 ? 'text-green-500' : 'text-red-500'}`}>{couponMessage}</p>}
+                    {couponMessage && <p className={`text-xs mt-2 px-4 font-bold ${appliedDiscount > 0 ? 'text-green-500' : 'text-red-500'}`}>{couponMessage}</p>}
                 </section >
 
-    {/* Payment */ }
-    < section >
+                {/* Payment */}
+                < section >
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Pagamento</h3>
                     <div className="grid grid-cols-3 gap-3 mb-6">
                         {settings?.payment_methods?.pix && (
-<<<<<<< HEAD
                             <button
-=======
-                            <button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                 onClick={() => setPaymentMethod('PIX')}
                                 className={`p-4 rounded-3xl flex flex-col items-center gap-2 transition-all border-2 ${paymentMethod === 'PIX' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-transparent bg-white dark:bg-gray-900 text-gray-400'}`}
                             >
@@ -706,11 +690,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                             </button>
                         )}
                         {settings?.payment_methods?.credit_card && (
-<<<<<<< HEAD
                             <button
-=======
-                            <button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                 onClick={() => setPaymentMethod('CREDIT_CARD')}
                                 className={`p-4 rounded-3xl flex flex-col items-center gap-2 transition-all border-2 ${paymentMethod === 'CREDIT_CARD' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-transparent bg-white dark:bg-gray-900 text-gray-400'}`}
                             >
@@ -719,11 +699,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                             </button>
                         )}
                         {settings?.payment_methods?.boleto && (
-<<<<<<< HEAD
                             <button
-=======
-                            <button 
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                                 onClick={() => setPaymentMethod('BOLETO')}
                                 className={`p-4 rounded-3xl flex flex-col items-center gap-2 transition-all border-2 ${paymentMethod === 'BOLETO' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-transparent bg-white dark:bg-gray-900 text-gray-400'}`}
                             >
@@ -733,120 +709,79 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                         )}
                     </div>
 
-{
-    paymentMethod === 'CREDIT_CARD' && (
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 space-y-4 animate-in fade-in">
-<<<<<<< HEAD
-                            <CustomInput type="tel" placeholder="Número do Cartão" maxLength={16} value={cardData.number} onChange={e => handleCreditCardChange('number', e.target.value)} />
-                            <div className="grid grid-cols-2 gap-4">
-                                <CustomInput type="text" placeholder="Nome no Cartão" value={cardData.holder} onChange={e => setCardData({ ...cardData, holder: e.target.value.toUpperCase() })} />
-                                <CustomInput type="text" placeholder="CPF do Titular" value={cardData.cpf} onChange={e => handleCreditCardChange('cpf', e.target.value)} mask="cpf" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <CustomInput type="tel" placeholder="MM/AA" maxLength={5} value={cardData.expiry} onChange={e => handleCreditCardChange('expiry', e.target.value)} />
-                                <CustomInput type="tel" placeholder="CVV" maxLength={4} value={cardData.cvv} onChange={e => handleCreditCardChange('cvv', e.target.value)} />
-                            </div>
-                            <CustomSelect value={cardData.installments} onChange={(val: string) => setCardData({ ...cardData, installments: Number(val) })} options={[1, 2, 3, 4].map(i => ({ label: `${i}x de ${formatCurrency(total / i)}`, value: String(i) }))} />
-=======
-                            <input type="tel" placeholder="Número do Cartão" maxLength={16} value={cardData.number} onChange={e => handleCreditCardChange('number', e.target.value)} className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm outline-none dark:text-white" />
-                            <div className="grid grid-cols-2 gap-4">
-                                <input type="text" placeholder="Nome no Cartão" value={cardData.holder} onChange={e => setCardData({...cardData, holder: e.target.value.toUpperCase()})} className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm outline-none dark:text-white" />
-                                <input type="text" placeholder="CPF do Titular" value={cardData.cpf} onChange={e => handleCreditCardChange('cpf', e.target.value)} className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm outline-none dark:text-white" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <input type="tel" placeholder="MM/AA" maxLength={5} value={cardData.expiry} onChange={e => handleCreditCardChange('expiry', e.target.value)} className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm outline-none dark:text-white" />
-                                <input type="tel" placeholder="CVV" maxLength={4} value={cardData.cvv} onChange={e => handleCreditCardChange('cvv', e.target.value)} className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm outline-none dark:text-white" />
-                            </div>
-                            <CustomSelect value={cardData.installments} onChange={(val: string) => setCardData({...cardData, installments: Number(val)})} options={[1,2,3,4].map(i => ({ label: `${i}x de ${formatCurrency(total/i)}`, value: String(i) }))} />
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-                        </div >
-                    )
-}
+                    {
+                        paymentMethod === 'CREDIT_CARD' && (
+                            <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 space-y-4 animate-in fade-in">
+                                <CustomInput type="tel" placeholder="Número do Cartão" maxLength={16} value={cardData.number} onChange={e => handleCreditCardChange('number', e.target.value)} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <CustomInput type="text" placeholder="Nome no Cartão" value={cardData.holder} onChange={e => setCardData({ ...cardData, holder: e.target.value.toUpperCase() })} />
+                                    <CustomInput type="text" placeholder="CPF do Titular" value={cardData.cpf} onChange={e => handleCreditCardChange('cpf', e.target.value)} mask="cpf" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <CustomInput type="tel" placeholder="MM/AA" maxLength={5} value={cardData.expiry} onChange={e => handleCreditCardChange('expiry', e.target.value)} />
+                                    <CustomInput type="tel" placeholder="CVV" maxLength={4} value={cardData.cvv} onChange={e => handleCreditCardChange('cvv', e.target.value)} />
+                                </div>
+                                <CustomSelect value={cardData.installments} onChange={(val: string) => setCardData({ ...cardData, installments: Number(val) })} options={[1, 2, 3, 4].map(i => ({ label: `${i}x de ${formatCurrency(total / i)}`, value: String(i) }))} />
+                            </div >
+                        )
+                    }
                 </section >
             </div >
 
-    {/* Total Footer */ }
-    < div className = "fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 p-6 rounded-t-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-30" >
-        <div className="max-w-2xl mx-auto space-y-4">
-            <div className="flex justify-between text-sm text-gray-500">
-                <span>Subtotal</span>
-                <span>{formatCurrency(subtotal)}</span>
-            </div>
-            {shippingCost !== null && (
-                <div className="flex justify-between text-sm text-gray-500">
-                    <span>Frete</span>
-                    <span className="text-gray-900 dark:text-white font-medium">{shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}</span>
-                </div>
-            )}
-            {discountAmount > 0 && (
-                <div className="flex justify-between text-sm text-green-500 font-bold">
-                    <span>Desconto</span>
-                    <span>- {formatCurrency(discountAmount)}</span>
-                </div>
-            )}
-            <div className="flex justify-between items-center pt-2">
-                <span className="text-lg font-black text-gray-900 dark:text-white">Total</span>
-                <span className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(total)}</span>
-            </div>
-<<<<<<< HEAD
-
-<Button
-    fullWidth
-    onClick={handleFinalizeOrder}
-    disabled={isSubmitting}
-    className="py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
->
-    {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Compra'}
-=======
-
+            {/* Total Footer */}
+            < div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 p-6 rounded-t-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-30" >
+                <div className="max-w-2xl mx-auto space-y-4">
+                    <div className="flex justify-between text-sm text-gray-500">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(subtotal)}</span>
+                    </div>
+                    {shippingCost !== null && (
+                        <div className="flex justify-between text-sm text-gray-500">
+                            <span>Frete</span>
+                            <span className="text-gray-900 dark:text-white font-medium">{shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}</span>
+                        </div>
+                    )}
+                    {discountAmount > 0 && (
+                        <div className="flex justify-between text-sm text-green-500 font-bold">
+                            <span>Desconto</span>
+                            <span>- {formatCurrency(discountAmount)}</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between items-center pt-2">
+                        <span className="text-lg font-black text-gray-900 dark:text-white">Total</span>
+                        <span className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(total)}</span>
+                    </div>
                     <Button
-        fullWidth
-        onClick={handleFinalizeOrder}
-        disabled={isSubmitting}
-        className="py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
-    >
-        {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Compra'}
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-    </Button>
-</div>
+                        fullWidth
+                        onClick={handleFinalizeOrder}
+                        disabled={isSubmitting}
+                        className="py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
+                    >
+                        {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Compra'}
+                    </Button>
+                </div>
             </div >
         </div >
     );
 
-// SUCCESS VIEW
-if (view === 'success' && finalOrder) return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-6 animate-in zoom-in-95">
-        <div className="bg-white dark:bg-gray-900 p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-brand-500"></div>
-<<<<<<< HEAD
-
-                <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Check className="w-10 h-10 text-green-600" />
-                </div>
-
+    // SUCCESS VIEW
+    if (view === 'success' && finalOrder) return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-6 animate-in zoom-in-95">
+            <div className="bg-white dark:bg-gray-900 p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-brand-500"></div>
                 <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Pedido Confirmado!</h2>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">
                     Seu pedido <span className="font-mono font-bold text-gray-900 dark:text-white">#{finalOrder.id.substring(0, 8)}</span> foi recebido.
-=======
+                </p>
 
-                <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Check className="w-10 h-10 text-green-600" />
-        </div>
-
-        <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Pedido Confirmado!</h2>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">
-            Seu pedido <span className="font-mono font-bold text-gray-900 dark:text-white">#{finalOrder.id.substring(0, 8)}</span> foi recebido.
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
-        </p>
-
-        {finalOrder.payment_method === 'PIX' && finalOrder.asaas_pix_copy_paste ? (
-            <div className="space-y-4 mb-8">
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl inline-block border border-gray-100 dark:border-gray-700">
-                    <canvas ref={qrCanvasRef} className="w-40 h-40"></canvas>
-                </div>
-                <button onClick={() => copyToClipboard(finalOrder.asaas_pix_copy_paste!)} className="w-full py-3 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm font-bold text-brand-600 dark:text-brand-400 flex items-center justify-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                {finalOrder.payment_method === 'PIX' && finalOrder.asaas_pix_copy_paste ? (
+                    <div className="space-y-4 mb-8">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl inline-block border border-gray-100 dark:border-gray-700">
+                            <canvas ref={qrCanvasRef} className="w-40 h-40"></canvas>
+                        </div>
+                        <button onClick={() => copyToClipboard(finalOrder.asaas_pix_copy_paste!)} className="w-full py-3 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm font-bold text-brand-600 dark:text-brand-400 flex items-center justify-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
 <<<<<<< HEAD
-<Copy className="w-4 h-4" /> Copiar Código PIX
+    <Copy className="w-4 h-4" /> Copiar Código PIX
 =======
                             <Copy className="w-4 h-4"/> Copiar Código PIX
 >>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507

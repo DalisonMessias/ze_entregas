@@ -507,6 +507,13 @@ export const adminUpdateFeeSettings = async (settings: Partial<PartnerFeeSetting
     await sb.from('fee_settings').update(settings).eq('id', true);
 };
 
+export const getPublicFeeSettings = async (): Promise<PartnerFeeSettings | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data } = await sb.from('fee_settings').select('*').single();
+    return data;
+};
+
 // --- LEVELS ---
 
 export const adminGetPartnerLevels = async (): Promise<PartnerLevelBenefit[]> => {
@@ -621,6 +628,24 @@ export const adminUpdatePWASettings = async (settings: Partial<PWASettings>) => 
     const sb = getClient();
     if (!sb) return;
     await sb.from('pwa_settings').upsert(settings); // Usually one row
+    const { data } = await sb.from('maintenance_settings').select('*').single();
+    return data;
+};
+
+export const getLoanConfig = async () => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data } = await sb.from('loan_configs').select('*').single();
+    return data;
+};
+
+export const getActiveStoreLoan = async () => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+    const { data } = await sb.from('store_loans').select('*').eq('store_id', user.id).eq('status', 'ACTIVE').single();
+    return data;
 };
 
 export const getMaintenanceSettings = async (): Promise<MaintenanceData | null> => {
@@ -782,23 +807,33 @@ export const partnerConfirmPickup = async (requestId: string) => {
     if (sb) await sb.from('partner_requests').update({ status: 'IN_TRANSIT' }).eq('id', requestId);
 };
 
-export const partnerConfirmDelivery = async (requestId: string) => {
+export const partnerConfirmDelivery = async (requestId: string, code?: string) => {
     const sb = getClient();
     if (sb) {
         // Should trigger payout logic on backend
+        // We can pass code to backend function or ignore for now if logic is client side check only
         await sb.from('partner_requests').update({ status: 'COMPLETED' }).eq('id', requestId);
     }
-};
-
-export const partnerReportDeliveryFailure = async (requestId: string, reason: string) => {
-    const sb = getClient();
-    if (sb) await sb.from('partner_requests').update({ status: 'AWAITING_STORE_DECISION', failure_reason: reason }).eq('id', requestId);
 };
 
 export const partnerConfirmReturn = async (requestId: string) => {
     const sb = getClient();
     if (sb) await sb.from('partner_requests').update({ status: 'RETURNING' }).eq('id', requestId);
 };
+
+export const storeCancelPartnerRequest = async (requestId: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    await sb.from('partner_requests').update({ status: 'CANCELLED' }).eq('id', requestId);
+};
+
+export const autoCancelUnacceptedRequest = async (requestId: string) => {
+    // Only cancel if still pending
+    const sb = getClient();
+    if (!sb) return;
+    await sb.from('partner_requests').update({ status: 'CANCELLED' }).eq('id', requestId).eq('status', 'PENDING');
+};
+
 
 export const storeDecideFailedDelivery = async (requestId: string, decision: 'RETURN' | 'DISCARD') => {
     const sb = getClient();
@@ -849,7 +884,7 @@ export const getStoreAssociatedPartners = async (): Promise<StoreDeliveryPartner
 export const associatePartnerToStore = async (partnerId: string, fee: number) => {
     const sb = getClient();
     if (!sb) return;
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } = {} } = await sb.auth.getUser();
     if (!user) return;
     // Charge wallet
     // Insert association
@@ -881,10 +916,10 @@ export const createRechargeCharge = async (amount: number, method: string) => {
     return data;
 };
 
-export const requestEmergencyPayoutAsaas = async () => {
+export const requestEmergencyPayoutAsaas = async (data?: { pixKey: string, pixType: string }) => {
     const sb = getClient();
     if (!sb) throw new Error("No client");
-    await sb.functions.invoke('request-emergency-payout');
+    await sb.functions.invoke('request-emergency-payout', { body: data });
 };
 
 export const getWebhookUrl = () => {
@@ -1145,7 +1180,7 @@ export const submitRating = async (id: string, rating: number, comment: string, 
 
 // --- SLIDES PROMOCIONAIS ---
 
-export const broadcastLocation = (id: string, payload: LiveLocationPayload) => {
+export const broadcastLocation = (id: string, payload: any) => {
     const sb = getClient();
     if (!sb) return;
     sb.channel(`tracking:${id}`).send({

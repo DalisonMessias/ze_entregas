@@ -6,15 +6,11 @@ const MAP_CACHE_NAME = 'delivery-tracker-maps-v1';
 const ASSETS = [
   '/',
   '/index.html',
-<<<<<<< HEAD
-  '/manifest.json'
-=======
   '/manifest.json',
   'https://cdn.tailwindcss.com',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', // Adicionado Supabase ao Cache
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js',
   'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js'
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 ];
 
 // Utility: network with timeout
@@ -41,7 +37,7 @@ self.addEventListener('install', (event) => {
       // If some assets fail, attempt individual caching to avoid blocking install
       console.warn('service-worker: addAll failed, attempting per-item cache', err);
       for (const asset of ASSETS) {
-        try { await cache.add(asset); } catch(e) { console.warn('service-worker: failed to cache', asset, e); }
+        try { await cache.add(asset); } catch (e) { console.warn('service-worker: failed to cache', asset, e); }
       }
     }
     await self.skipWaiting();
@@ -50,7 +46,6 @@ self.addEventListener('install', (event) => {
 
 // Activate Event - Clean old caches and take control
 self.addEventListener('activate', (event) => {
-<<<<<<< HEAD
   event.waitUntil((async () => {
     const keyList = await caches.keys();
     await Promise.all(keyList.map((key) => {
@@ -61,19 +56,6 @@ self.addEventListener('activate', (event) => {
     }));
     await self.clients.claim();
   })());
-=======
-  event.waitUntil(
-    caches.keys().then((keyList) => {
-      return Promise.all(
-        keyList.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    })
-  );
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 });
 
 // Allow pages to trigger skipWaiting via postMessage
@@ -84,7 +66,6 @@ self.addEventListener('message', (event) => {
   }
 });
 
-<<<<<<< HEAD
 // Fetch Event - strategies: navigation, API (network-first with timeout), static assets (cache-first)
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -143,7 +124,7 @@ self.addEventListener('fetch', (event) => {
         // Update cache in background
         networkTimeout(req, 7000).then(async (resp) => {
           if (resp && resp.ok) await cache.put(req, resp.clone());
-        }).catch(() => {});
+        }).catch(() => { });
         return cached;
       }
       try {
@@ -168,24 +149,15 @@ self.addEventListener('fetch', (event) => {
       return cached || new Response('Offline', { status: 503 });
     }
   })());
-=======
-  // Estratégia Padrão: Network First, fall back to Cache
-  event.respondWith(
-    fetch(event.request)
-      .catch(() => {
-        return caches.match(event.request);
-      })
-  );
->>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 });
 
 // Push Notification Event (Handles backend pushes)
-self.addEventListener('push', function(event) {
+self.addEventListener('push', function (event) {
   let data = {};
   if (event.data) {
     try {
       data = event.data.json();
-    } catch(e) {
+    } catch (e) {
       data = { title: 'Nova Notificação', body: event.data.text() };
     }
   } else {
