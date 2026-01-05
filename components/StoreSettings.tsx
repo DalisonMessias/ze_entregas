@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Info, CheckCircle, AlertTriangle, X } from 'lucide-react';
 import { Button } from './Button';
@@ -115,6 +116,7 @@ export const StoreSettings: React.FC = () => {
                 address_state: form.address_state,
                 city: cityFull
             });
+
             setToast({ type: 'success', message: "Dados da loja atualizados com sucesso!" });
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao salvar: " + e.message });

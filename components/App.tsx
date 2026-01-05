@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { UserRole, AppNotification, DailySummary, DailyTransaction, MaintenanceSettings, PartnerProfile } from '../types';
 import * as cloud from '../services/cloud';
 import * as storage from '../services/storage';
@@ -11,7 +11,7 @@ import TourComponent from './Tour/Tour';
 import { tourSteps } from './Tour/tourSteps';
 
 // Icons
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus } from 'lucide-react';
 
 // Components
 import { Logo } from './Logo';
@@ -24,9 +24,7 @@ import { NotificationSettings } from './NotificationSettings';
 import { MaintenancePage } from './MaintenancePage';
 import { PartnerDocumentation } from './PartnerDocumentation';
 
-import { HistoryTable } from './HistoryTable';
-
-
+// Lazy Loaded Components
 const AdminPanel = React.lazy(() => import('./AdminPanel').then(module => ({ default: module.AdminPanel })));
 const PartnerArea = React.lazy(() => import('./PartnerArea').then(module => ({ default: module.PartnerArea })));
 const StoreWalletModule = React.lazy(() => import('./StoreWallet').then(module => ({ default: module.StoreWalletModule })));
@@ -40,7 +38,8 @@ const StoreMarketing = React.lazy(() => import('./StoreMarketing').then(module =
 const StoreIntegrations = React.lazy(() => import('./StoreIntegrations').then(module => ({ default: module.StoreIntegrations })));
 const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => ({ default: module.StoreSettings })));
 const StoreProductImport = React.lazy(() => import('./ProductImportExport').then(module => ({ default: module.ProductImportExport })));
-const FinancialPanel = React.lazy(() => import('./FinancialPanel').then(module => ({ default: module.FinancialPanel })));
+const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => ({ default: module.ZePayStore })));
+
 const DriverMarketing = React.lazy(() => import('./DriverMarketing').then(module => ({ default: module.DriverMarketing })));
 const Reports = React.lazy(() => import('./Reports').then(module => ({ default: module.Reports })));
 const TaskList = React.lazy(() => import('./TaskList').then(module => ({ default: module.TaskList })));
@@ -58,14 +57,16 @@ const DailyPanel = React.lazy(() => import('./DailyPanel').then(module => ({ def
 const ToolsPage = React.lazy(() => import('./ToolsPage').then(module => ({ default: module.ToolsPage })));
 const StatusPage = React.lazy(() => import('./StatusPage').then(module => ({ default: module.StatusPage })));
 const Heatmap = React.lazy(() => import('./Heatmap').then(module => ({ default: module.Heatmap })));
-const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => ({ default: module.ZePayStore })));
 const LocalHistoryPage = React.lazy(() => import('./LocalHistoryPage').then(module => ({ default: module.LocalHistoryPage })));
 const SettingsPage = React.lazy(() => import('./SettingsPage').then(module => ({ default: module.SettingsPage })));
 const InstallApp = React.lazy(() => import('./InstallApp').then(module => ({ default: module.InstallApp })));
 const ChatAssistant = React.lazy(() => import('./ChatAssistant').then(module => ({ default: module.ChatAssistant })));
 const PrivacyPolicy = React.lazy(() => import('./PrivacyPolicy').then(module => ({ default: module.PrivacyPolicy })));
 const StreetsNeighborhoods = React.lazy(() => import('../src/pages/StreetsNeighborhoods'));
-const MarketingModule = React.lazy(() => import('./MarketingModule').then(module => ({ default: module.MarketingModule })));
+
+// Additional Components from Remote
+const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
+const RouteList = React.lazy(() => import('./RouteList').then(module => ({ default: module.RouteList })));
 
 // Hooks
 import { useDialog } from '../utils/dialogService';
@@ -77,6 +78,7 @@ export type ActiveTab =
     | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_asaas_webhook' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
+    | 'admin_slides'
     | 'profile'
     | 'support'
     | 'shop'
@@ -95,7 +97,8 @@ export type ActiveTab =
     | 'daily_panel'
     | 'driver_marketing'
     | 'route_tools'
-    | 'local_history' // Renamed for clarity
+    | 'route_list'
+    | 'local_history'
     | 'reports'
     | 'tasks'
     | 'zebank'
@@ -109,14 +112,13 @@ export type ActiveTab =
     | 'associate_driver'
     | 'status'
     | 'heatmap'
+    | 'addresses'
     | 'privacy'
     | 'zepay_store'
     | 'upgrade_to_partner'
     | 'install_app'
     | 'internal_orders'
-    | 'admin_slides'
     | 'streets_neighborhoods';
-
 
 
 interface AppProps {
@@ -473,6 +475,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 console.error("Erro ao compartilhar:", err);
             }
         } else {
+            // Fallback for desktop or non-supported browsers
             await alert({ title: 'Compartilhar', message: 'Compartilhe este link: ' + shareData.url });
         }
     };
@@ -496,16 +499,21 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     };
 
     const allowedTabs: Record<UserRole, Set<ActiveTab>> = {
-        admin: new Set<ActiveTab>([...generalTabs]),
+        admin: new Set<ActiveTab>([...generalTabs,
+            'admin_dashboard', 'admin_users', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
+            'admin_ai_config', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_asaas_webhook',
+            'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
+            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides'
+        ]),
         store_partner: new Set<ActiveTab>([
             'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
-            'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'tasks', 'reports', 'heatmap'
+            'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses'
         ]),
         delivery_person: new Set<ActiveTab>([
-            'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'tasks', 'reports', 'heatmap'
+            'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses'
         ]),
         collaborator: new Set<ActiveTab>(['shop'])
     };
@@ -586,12 +594,14 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             case 'daily_panel': return <DailyPanel onNavigate={navigate} />;
             case 'driver_marketing': return <DriverMarketing userRole={effectiveRole} />;
             case 'route_tools': return <ToolsPage userRole={effectiveRole} />;
+            case 'route_list': return <RouteList userRole={effectiveRole} onNavigate={() => alert({ title: 'Info', message: 'Funcionalidade desativada temporariamente.' })} />;
             case 'reports': return <Reports history={storage.getHistory()} todayStats={{ value: 0, count: 0, km: 0 }} />;
             case 'tasks': return <TaskList />;
             case 'zebank': return <Zebank userRole={effectiveRole} />;
             case 'associate_driver': return <AssociateDriver onBack={() => navigate('daily_panel')} />;
             case 'heatmap': return <Heatmap userRole={effectiveRole} />;
             case 'local_history': return <LocalHistoryPage />;
+            case 'addresses': return <AddressBook onClose={() => { }} />;
 
             case 'about': return <AboutApp />;
             case 'faq': return <FaqPage />;
@@ -712,44 +722,92 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     {/* --- ADMIN MENU --- */}
                     {isAdmin && (
                         <>
-                            <MenuSection title="Admin" />
-                            <MenuButton icon={LayoutDashboard} label="Dashboard" tab="admin_dashboard" id="admin-dashboard-link" />
+                            <MenuSection title="Visão Geral" />
+                            <MenuButton icon={LayoutDashboard} label="Dashboard BI" tab="admin_dashboard" id="admin-dashboard-link" />
+                            <MenuButton icon={ShoppingBag} label="Acessar Loja" tab="shop" />
+
+                            <MenuSection title="Gestão de Usuários" />
+                            <MenuButton icon={Users} label="Todos os Usuários" tab="admin_users" />
+                            <MenuButton icon={FileCheck} label="Validação de Parceiros" tab="admin_validation" />
+                            <MenuButton icon={Wallet} label="Controle de Saldos" tab="admin_wallet_control" />
+                            <MenuButton icon={ShieldAlert} label="Segurança & Fraude" tab="admin_security" />
+                            <MenuButton icon={UserX} label="Lista Negra" tab="admin_blacklist" />
+
+                            <MenuSection title="Operacional" />
+                            <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
+                            <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
+                            <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
+                            <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
+                            <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
                             <MenuButton icon={Layout} label="Banners/Slides" tab="admin_slides" />
                             <MenuButton icon={Construction} label="Manutenção" tab="admin_maintenance" />
+
+                            <MenuSection title="Financeiro" />
+                            <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
+                            <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
+                            <MenuButton icon={Link2} label="Webhooks (Asaas)" tab="admin_asaas_webhook" />
+
+                            <MenuSection title="Marketing & Conteúdo" />
+                            <MenuButton icon={Megaphone} label="Indicações" tab="admin_referrals" />
+                            <MenuButton icon={Bell} label="Notificações Globais" tab="admin_notifications" />
+                            <MenuButton icon={FileText} label="Institucional" tab="admin_institutional" />
+                            <MenuButton icon={Newspaper} label="Novidades da Plataforma" tab="admin_platform_news" />
+
+                            <MenuSection title="Configurações do Sistema" />
+                            <MenuButton icon={Bot} label="Inteligência Artificial" tab="admin_ai_config" />
+                            <MenuButton icon={Smartphone} label="App PWA" tab="admin_pwa" />
                         </>
                     )}
 
                     {/* --- STORE PARTNER MENU --- */}
                     {isStore && (
                         <>
-                            <MenuSection title="Loja" />
+                            <MenuSection title="Minha Loja" />
                             <MenuButton icon={LayoutDashboard} label="Painel" tab="wallet" id="store-wallet-link" />
                             <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
+                            <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
+                            <MenuButton icon={Users} label="Entregadores Fixos" tab="store_team" />
+
+                            <MenuSection title="Gestão" />
+                            <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
+                            <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
+                            <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
+                            <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
                         </>
                     )}
 
-                    {isPartner && (
+                    {/* --- SHARED DRIVER MENU (PARTNER + NORMAL) --- */}
+                    {(isPartner || isNormalDriver) && (
                         <>
-                            <MenuSection title="Entregas" />
-                            <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
+                            <MenuSection title="Plataforma Zé" />
                             <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
-                            <MenuButton icon={Megaphone} label="Marketing (Entregadores)" tab="driver_marketing" />
+                            <MenuButton icon={Wallet} label="Zebank" tab="zebank" />
+                            <MenuButton icon={History} label="Histórico App" tab="history" />
+                            <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
+
+                            <MenuSection title="Meu Controle" />
+                            <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
+
+                            <MenuSection title="Crescimento" />
+                            <MenuButton icon={Store} label="Lojas Vinculadas" tab="associate_driver" />
+
+                            <MenuSection title="Ferramentas" />
+                            <MenuButton icon={ListPlus} label="Lista de Rotas" tab="route_list" />
+                            <MenuButton icon={MapPin} label="Agenda de Endereços" tab="addresses" />
+                            <MenuButton icon={FileCheck} label="Tarefas" tab="tasks" />
+                            <MenuButton icon={BarChart3} label="Relatórios Pessoais" tab="reports" />
                         </>
                     )}
-                    {isNormalDriver && (
-                        <>
-                            <MenuSection title="Entregas" />
-                            <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
-                            <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
-                            <MenuButton icon={Megaphone} label="Marketing (Entregadores)" tab="driver_marketing" />
-                        </>
-                    )}
+
 
                     {/* --- GENERAL MENU (ALL USERS) --- */}
                     <MenuSection title="Geral" />
+                    <MenuButton icon={ShoppingBag} label="Loja de Peças" tab="shop" />
                     <MenuButton icon={User} label="Meu Perfil" tab="profile" />
                     <MenuButton icon={Headphones} label="Suporte" tab="support" />
                     <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
+                    <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
+                    <MenuButton icon={Info} label="Sobre o App" tab="about" />
                     <MenuButton icon={HelpCircle} label="Ver Tour da Página" onClick={runCurrentPageTour} />
 
                     {/* --- FOOTER ACTIONS --- */}

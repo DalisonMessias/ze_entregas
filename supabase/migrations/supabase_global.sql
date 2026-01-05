@@ -2807,9 +2807,15 @@ DECLARE
     v_savings_balance NUMERIC;
     v_cards JSONB;
     v_transactions JSONB;
+    v_my_code TEXT;
+    v_partner_level TEXT;
 BEGIN
     SELECT COALESCE(balance_decimal, 0) INTO v_balance FROM public.driver_wallets WHERE driver_id = v_user_id;
     v_savings_balance := 0; -- Lógica do cofrinho a ser implementada
+
+    SELECT association_code, partner_level 
+    INTO v_my_code, v_partner_level
+    FROM public.user_profiles WHERE id = v_user_id;
 
     SELECT jsonb_agg(t) INTO v_cards FROM (
         SELECT id, name, card_last_four, expiration_date, status, spending_limit_percent FROM public.zebank_cards WHERE user_id = v_user_id
@@ -2822,8 +2828,12 @@ BEGIN
     RETURN jsonb_build_object(
         'balance', COALESCE(v_balance, 0),
         'savings_balance', COALESCE(v_savings_balance, 0),
+        'my_code', COALESCE(v_my_code, ''),
+        'partner_level', COALESCE(v_partner_level, 'BRONZE'),
         'cards', COALESCE(v_cards, '[]'::jsonb),
-        'transactions', COALESCE(v_transactions, '[]'::jsonb)
+        'recent_transactions', COALESCE(v_transactions, '[]'::jsonb),
+        'cofrinho_balance', 0,
+        'cofrinho_accrued_yield', 0
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -30,7 +30,7 @@ export const openNavigation = (lat: number, lng: number, address?: string) => {
 // 2. Debounce Function
 export function debounce<T extends (...args: any[]) => void>(func: T, wait: number): T {
   let timeout: number | null = null;
-  return function(this: any, ...args: any[]) {
+  return function (this: any, ...args: any[]) {
     if (timeout) clearTimeout(timeout);
     timeout = window.setTimeout(() => {
       func.apply(this, args);
@@ -67,7 +67,7 @@ export const exportAreasToGeoJSON = (areas: LatLng[][]): string => {
 
 // 4. Speech Recognition Helper
 export const startSpeechRecognition = (
-  onResult: (text: string) => void, 
+  onResult: (text: string) => void,
   onError: (error: string) => void,
   onEnd: () => void
 ) => {
@@ -78,7 +78,7 @@ export const startSpeechRecognition = (
 
   const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
   const recognition = new SpeechRecognition();
-  
+
   recognition.lang = 'pt-BR';
   recognition.continuous = false;
   recognition.interimResults = false;
@@ -108,7 +108,7 @@ export const startSpeechRecognition = (
 // 5. Phone Mask Helper
 export const formatPhoneNumber = (value: string): string => {
   if (!value) return "";
-  
+
   // Strip all non-digit characters
   const onlyNums = value.replace(/[^\d]/g, '');
 
@@ -168,3 +168,4 @@ export const formatCnpjCpf = (value: string): string => {
     return `${truncatedNums.slice(0, 2)}.${truncatedNums.slice(2, 5)}.${truncatedNums.slice(5, 8)}/${truncatedNums.slice(8, 12)}-${truncatedNums.slice(12, 14)}`;
   }
 };
+

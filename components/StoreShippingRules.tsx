@@ -12,6 +12,19 @@ const parseCurrency = (val: string) => {
     return parseFloat(val.replace(/\./g, '').replace(',', '.'));
 };
 
+const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    let value = e.target.value.replace(/\D/g, "");
+    if (!value) {
+        setter("");
+        return;
+    }
+    const amount = Number(value) / 100;
+    const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setter(formatted);
+};
+
+
+
 export const StoreShippingRules: React.FC = () => {
     const [rules, setRules] = useState<StoreShippingRule[]>([]);
     const [loading, setLoading] = useState(true);
@@ -52,6 +65,8 @@ export const StoreShippingRules: React.FC = () => {
 
         const valFloat = parseCurrency(value);
         const thresholdFloat = threshold ? parseCurrency(threshold) : undefined;
+
+
 
         setSaving(true);
         try {
@@ -117,6 +132,7 @@ export const StoreShippingRules: React.FC = () => {
                                     onChange={e => setThreshold(e.target.value)}
                                     className="mt-1"
                                 />
+                                />
                             </div>
                         )}
                         <div>
@@ -129,6 +145,7 @@ export const StoreShippingRules: React.FC = () => {
                                 value={value}
                                 onChange={e => setValue(e.target.value)}
                                 className="mt-1"
+                            />
                             />
                         </div>
                     </div>

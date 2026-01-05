@@ -440,7 +440,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 </div>
             </div>
 
-            {/* Main Actions (MOVED UP) */}
+            {/* Main Actions */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                     onClick={handleAddStandard}
@@ -515,6 +515,12 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">ZéBank</span>
                     </button>
+                    <button onClick={() => onNavigate('addresses')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                        <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-full text-cyan-600 dark:text-cyan-400">
+                            <MapPin className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Endereços</span>
+                    </button>
                     <button onClick={() => onNavigate('profile')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
                             <User className="w-5 h-5" />
@@ -575,7 +581,6 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                     </button>
                 </div>
             </div>
-
 
 
             {/* Transactions List */}

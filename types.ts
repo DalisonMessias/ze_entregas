@@ -1,14 +1,34 @@
 
-
-
+export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator';
 export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found';
 export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION';
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER';
-export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER'; // NOVO: Enum para tipo de método de repasse
+export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
 export type VehicleType = 'moto' | 'car' | 'bike' | 'other';
 export type DocumentType = 'CNH' | 'CRLV' | 'VEHICLE_PHOTO' | 'ADDRESS_PROOF' | 'SELFIE' | 'PERSONAL_ID';
-export type Theme = 'light' | 'dark';
+export type RatingDirection = 'STORE_TO_PARTNER' | 'PARTNER_TO_STORE';
+
+export interface ManualWaypoint {
+    id: string;
+    street: string;
+    number: string;
+    neighborhood: string;
+    city: string;
+    reference: string;
+    lat?: number;
+    lng?: number;
+}
+
+export interface RouteListItem {
+    id: string;
+    address: string;
+    lat: number;
+    lng: number;
+    name: string;
+    notes?: string;
+    completed: boolean;
+}
 
 export interface SavedAddress {
     id: string;
@@ -95,6 +115,7 @@ export interface ChatMessage {
     parts: { text: string }[];
 }
 
+
 export interface ChatMessageData {
     id: string;
     sender_id: string;
@@ -152,6 +173,33 @@ export interface Task {
 
 export interface RouteListItem {
     id: string;
+    user_id: string;
+    title: string;
+    message: string;
+    type: string;
+    is_read: boolean;
+    created_at: string;
+}
+
+
+
+export interface CartItem extends Product {
+    quantity: number;
+}
+
+export interface OrderItem {
+    product_id: string;
+    name: string;
+    quantity: number;
+    price: number;
+}
+
+export interface DailySummary {
+    profit: number;
+    deliveryCount: number;
+    km: number;
+    goal: number | null;
+    location: { lat: number; lng: number } | null;
     address: string;
     name: string;
     lat: number;
@@ -195,11 +243,30 @@ export interface ManagedUser {
     cpf?: string;
     city?: string;
     avatar_url?: string;
+    user_metadata?: any;
+    bank_details?: UserBankDetails;
+    user_type?: UserRole;
     created_at: string;
     verification_status?: string;
     partner_level?: string;
     is_super_store?: boolean;
     vehicle_type?: string;
+    average_rating?: number;
+    vehicle_plate?: string;
+    completed_deliveries?: number;
+    association_code?: string;
+    balance?: number;
+}
+
+export interface CompanyInfo {
+    about_text?: string;
+    careers_email?: string;
+    careers_text?: string;
+    press_email?: string;
+    press_text?: string;
+    contact_address?: string;
+    contact_support_email?: string;
+    contact_commercial_email?: string;
 }
 
 export interface GlobalNotification {
@@ -253,6 +320,12 @@ export interface AdminOrder {
     status: string;
 }
 
+export interface ShopCoupon {
+    code: string;
+    discount_percent: number;
+    active: boolean;
+}
+
 export interface ShopSettings {
     id: string;
     is_shop_enabled?: boolean;
@@ -278,53 +351,121 @@ export interface ShopSettings {
     asaas_webhook_token?: string;
 }
 
-export interface ShopCoupon {
-    code: string;
-    discount_percent: number;
-    active: boolean;
-}
-
 export interface Category {
     id: string;
     name: string;
 }
 
+// Consolidated Order Interface
+export interface Order {
+    id: string;
+    user_id: string;
+    status: string;
+    items: OrderItem[];
+    total_price: number;
+    payment_method: PaymentMethod;
+    asaas_pix_copy_paste?: string;
+    asaas_bank_slip_url?: string;
+    shipping_address?: any;
+    payment_details?: any;
+    shipping_cost?: number;
+    discount?: number;
+    coupon_code?: string;
+
+    // Internal constants
+    customer_name?: string;
+    customer_phone?: string;
+    observation?: string;
+    origin?: 'APP' | 'INTERNAL';
+    amount_paid?: number;
+    change_amount?: number;
+    custom_payment_label?: string;
+
+    store?: any;
+    partner?: any;
+
+    created_at: string;
+}
+
+// Removed duplicate ShopCoupon and Category
+
+
 export interface Claim {
     id: string;
     user_id: string;
-    user_email?: string;
     type: string;
     description: string;
     status: 'open' | 'resolved' | 'closed';
     created_at: string;
     admin_response?: string;
+    user_email?: string;
+}
+
+// Consolidated StoreWallet and WalletTransaction
+export interface StoreWallet {
+    store_id: string;
+    balance: number;
+    balance_decimal: number;
+    updated_at: string;
+}
+
+export interface WalletTransaction {
+    id: string;
+    store_id: string;
+    amount: number;
+    type: 'CREDIT' | 'DEBIT' | string; // Allow string for flexibility or strict union
+    status: string;
+    created_at: string;
+    description?: string;
+}
+
+export interface PartnerRequest {
+    id: string;
+    store_id: string;
+    partner_id?: string;
+    pickup_address: string;
+    delivery_address: string;
+    distance_km: number;
+    total_charged_store: number;
+    net_value_partner: number;
+    fee_fixed: number;
+    fee_percent_value: number;
+    status: PartnerRequestStatus;
+    created_at: string;
+    updated_at: string;
+    store?: { name: string; phone_number: string };
+    partner?: { name: string; vehicle_plate: string; phone_number: string; vehicle_type: string };
+    failure_reason?: string;
+    rated_by_store?: boolean;
+    rated_by_partner?: boolean;
 }
 
 export interface PartnerFeeSettings {
-    global_tax_fixed?: number;
-    global_tax_percent?: number;
-    base_delivery_value?: number;
-    base_delivery_km?: number;
-    extra_km_value?: number;
-    additional_stop_fee?: number;
+    global_tax_fixed: number;
+    global_tax_percent: number;
+    super_store_monthly_fee: number;
+    association_fee: number;
+    base_delivery_value: number;
+    base_delivery_km: number;
+    extra_km_value: number;
+    additional_stop_fee: number;
     weekday?: number;
     hour?: string;
     emergency_percentage?: number;
     emergency_cooldown_hours?: number;
     emergency_enabled?: boolean;
-    super_store_monthly_fee?: number;
-    association_fee?: number;
     emergency_message?: string;
     pos_min_value?: number;
     pos_max_value?: number;
 }
 
 export interface PWASettings {
+    name: string;
+    short_name: string;
+    theme_color: string;
+    background_color: string;
+    description: string;
     display_name?: string;
-    short_name?: string;
-    description?: string;
-    theme_color?: string;
-    background_color?: string;
     start_url?: string;
     orientation?: string;
     language?: string;
@@ -377,14 +518,27 @@ export interface PWAIcon {
     type: string;
 }
 
+export interface PayoutSummary {
+    total_earnings: number;
+    available_balance: number;
+    settings: PartnerFeeSettings;
+    max_emergency_value: number;
+    can_request_emergency: boolean;
+}
+
 export type PayoutDayOfWeek = 'SUNDAY' | 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY';
 
 export interface PayoutSettings {
+    weekday?: number;
+    hour?: string;
+    emergency_percentage?: number;
+    emergency_cooldown_hours?: number;
+    emergency_enabled?: boolean;
     min_payout_amount?: number;
     automatic_payouts_enabled?: boolean;
-    payout_day_of_week?: PayoutDayOfWeek; // Changed from string to PayoutDayOfWeek
+    payout_day_of_week?: PayoutDayOfWeek;
     payout_time?: string;
-    default_payout_method_type?: PayoutMethodType; // NEW
+    default_payout_method_type?: PayoutMethodType;
 }
 
 // moved definitions to single canonical declarations below to avoid duplication
@@ -404,28 +558,38 @@ export interface CityRequest {
     status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
-export interface PartnerDocument {
+export interface AsaasWebhookLog {
     id: string;
-    user_id: string;
-    document_type: DocumentType;
-    file_url: string;
-    status: 'PENDING' | 'APPROVED' | 'REJECTED';
-    admin_notes?: string;
+    event_type: string;
+    payload: any;
+    status: string;
+    action_taken?: string;
     created_at: string;
 }
 
+// Consolidated PartnerProfile
 export interface PartnerProfile {
     id: string; // user_id
+    user_id?: string; // Backwards compatibility if needed
+    name?: string;
+    email?: string;
+    phone_number?: string;
+    is_active: boolean;
+    is_available?: boolean;
+    city?: string;
+    verification_status: 'NOT_SUBMITTED' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
     vehicle_type: VehicleType;
     vehicle_plate?: string;
     vehicle_model?: string;
     vehicle_year?: string;
-    verification_status: 'NOT_SUBMITTED' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+    asaas_wallet_id?: string;
     partner_level?: string;
-    is_active: boolean;
-    name?: string;
-    phone_number?: string;
-    email?: string;
+    average_rating?: number;
+    completed_deliveries?: number;
+    association_code?: string;
+    share_phone_offline?: boolean;
+
+    // Contact & Address
     contact_email?: string;
     opening_hours?: string;
     address_zip?: string;
@@ -433,10 +597,17 @@ export interface PartnerProfile {
     address_number?: string;
     address_district?: string;
     address_state?: string;
-    city?: string;
-    association_code?: string;
+
     is_super_store?: boolean;
-    share_phone_offline?: boolean;
+}
+
+export interface PartnerDocument {
+    id: string;
+    document_type: DocumentType;
+    file_url: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    admin_notes?: string;
+    created_at: string;
 }
 
 export interface PartnerLevelBenefit {
@@ -448,21 +619,92 @@ export interface PartnerLevelBenefit {
     service_fee_reduction_percent: number;
 }
 
-export interface BlacklistEntry {
+export interface PartnerRequestLog {
     id: string;
-    email?: string;
-    phone_number?: string;
-    reason: string;
-    punishment_type: string;
+    request_id: string;
+    status_from: string;
+    status_to: string;
+    created_at: string;
+}
+
+export interface EmergencyWithdrawalRequest {
+    id: string;
+    partner_id: string;
+    amount: number;
     status: string;
     created_at: string;
 }
 
-export interface IdentityVerification {
+export interface PartnerPayment {
+    id: string;
+    partner_id: string;
+    amount: number;
+    is_emergency: boolean;
+    status: string;
+    created_at: string;
+    partner_email?: string; // joined
+}
+
+export interface BlacklistEntry {
+    id: string;
+    user_id: string;
+    reason: string;
+    admin_id: string;
+    created_at: string;
+    email?: string;
+    phone_number?: string;
+    punishment_type: string;
+    status: string;
+}
+
+export interface OfflineDriver {
+    id: string;
+    name: string;
+    phone_number: string;
+    vehicle_type: string;
+    average_rating: number;
+}
+
+export interface StoreDeliveryPartner {
+    id: string;
+    store_id: string;
+    partner_id: string;
+    partner_name: string;
+    partner_phone: string;
+    partner_vehicle: string;
+    created_at: string;
+}
+
+export interface PartnerRating {
+    id: string;
+    rating: number;
+    comment: string;
+    direction: RatingDirection;
+    created_at: string;
+}
+
+export interface WorkShift {
+    id: string;
+    partner_id: string;
+    start_time: string;
+    end_time?: string;
+    status: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
+    breaks?: { start: string, end?: string }[];
+}
+
+export interface WorkShiftBreak {
+    start: string;
+    end?: string;
+}
+
+// Consolidated FinancialStatementItem below
+
+
+export interface LiveLocationPayload {
     id: string;
     user_id: string;
     photo_url: string;
-    location_data?: { lat: number, lng: number, accuracy: number };
+    location_data: { lat: number, lng: number, accuracy: number };
     status: 'PENDING' | 'VERIFIED' | 'REJECTED';
     created_at: string;
     admin_notes?: string;
@@ -471,9 +713,10 @@ export interface IdentityVerification {
 export interface FraudAlert {
     id: string;
     user_id: string;
+    reason: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH';
     type: string;
     description?: string;
-    severity: 'LOW' | 'MEDIUM' | 'HIGH';
     status: 'OPEN' | 'RESOLVED';
     created_at: string;
 }
@@ -513,56 +756,44 @@ export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications'
 
 export interface AppNotification {
     id: string;
-    title: string;
+    user_id: string;
     message: string;
+    type: 'success' | 'error' | 'warning' | 'info';
     is_read: boolean;
     created_at: string;
-    user_id: string;
-    type?: 'success' | 'error' | 'warning' | 'info';
+    pending?: boolean;
 }
 
-export interface StoreWallet {
-    balance_decimal: number;
-    store_id?: string;
+export type Notification = AppNotification;
+
+
+// Consolidated AdminDashboardStats below
+
+
+
+
+// Removed duplicate WalletTransaction
+
+
+// Removed duplicate PartnerRequest
+
+
+export interface ReferralData {
+    my_code: string;
+    total_referrals: number;
+    is_reward_active: boolean;
+    reward_active_until?: string;
 }
 
-export interface WalletTransaction {
+// Removed duplicate PayoutSummary
+
+
+export interface ReferralBonusPayment {
     id: string;
-    amount: number;
-    description: string;
-    type: 'CREDIT' | 'DEBIT';
+    referred_user_name: string;
     created_at: string;
-}
-
-export interface PartnerRequest {
-    id: string;
-    store_id: string;
-    partner_id?: string;
-    pickup_address: string;
-    delivery_address: string;
-    distance_km: number;
-    total_charged_store: number;
-    net_value_partner: number;
-    status: PartnerRequestStatus;
-    created_at: string;
-    failure_reason?: string;
-    store?: { name: string, phone_number?: string };
-    partner?: { name: string, vehicle_plate?: string };
-    rated_by_store?: boolean;
-}
-
-export interface PayoutSummary {
-    total_earnings: number;
-    available_balance: number;
-    max_emergency_value: number;
-    settings?: { emergency_message: string };
-}
-
-export interface PartnerPayment {
-    id: string;
-    amount: number;
     status: string;
-    created_at: string;
+    amount: number;
 }
 
 export interface WorkShift {
@@ -579,6 +810,25 @@ export interface StoreReportData {
     totalValue: number;
     peakHours: { hour: number, count: number }[];
     driverPerformance: { partner_id: string, partner_name: string, count: number }[];
+}
+
+export interface StoreShippingRule {
+    id: string;
+    store_id: string;
+    rule_type: 'free_above' | 'fixed_rate';
+    value: number;
+    threshold?: number;
+}
+
+export interface PlatformNews {
+    id: string;
+    title: string;
+    description: string;
+    icon_name: string;
+    is_active: boolean;
+    created_at: string;
+    peakHours: { hour: number, count: number }[];
+    driverPerformance: { partner_id: string, partner_name: string, count: number }[];
     counts?: { completed: number; cancelled: number; failed: number };
 }
 
@@ -586,12 +836,7 @@ export interface CartItem extends Product {
     quantity: number;
 }
 
-export interface StoreShippingRule {
-    id: string;
-    rule_type: 'free_above' | 'fixed_rate';
-    value: number;
-    threshold?: number;
-}
+
 
 export interface CompanyInfo {
     about_text?: string;
@@ -696,11 +941,7 @@ export interface AdminDashboardStats {
     users: { stores: { active: number, total: number }, drivers: { online: number, total: number } };
 }
 
-export interface ReferralData {
-    my_code: string;
-    is_reward_active: boolean;
-    reward_active_until?: string;
-}
+
 
 export interface ReferralHistoryItem {
     id: string;
@@ -720,21 +961,32 @@ export interface AdminWalletUser {
 export interface FinancialStatementItem {
     id: string;
     date: string;
-    type: 'EARNING' | 'WITHDRAWAL' | 'DEBIT' | 'REFUND';
+    type: 'EARNING' | 'WITHDRAWAL' | 'FEE' | 'ADJUSTMENT' | 'DEBIT' | 'REFUND';
     description: string;
     amount: number;
     status: 'COMPLETED' | 'PENDING' | 'FAILED';
-    // FIX: Add missing optional 'payer' property to the FinancialStatementItem interface.
     payer?: string;
 }
 
 export interface LiveLocationPayload {
     lat: number;
     lng: number;
-    heading: number;
-    speed: number;
-    status: PartnerRequestStatus;
-    updated_at: string;
+    type: 'BLITZ' | 'ACCIDENT' | 'TRAFFIC' | 'DANGER';
+    address?: string;
+    city?: string;
+    created_at: string;
+    expires_at: string;
+}
+
+export interface ZebankTransaction {
+    id: string;
+    type: 'TRANSFER_P2P' | 'TRANSFER_STORE' | 'WITHDRAWAL_EMERGENCY' | 'SAVINGS_DEPOSIT' | 'SAVINGS_RETRIEVE' | 'EARNING' | 'PAYMENT' | 'INTERNAL_TRANSFER';
+    amount: number;
+    description: string;
+    status: 'COMPLETED' | 'PENDING' | 'FAILED';
+    direction: 'IN' | 'OUT';
+    created_at: string;
+    payer_name?: string;
 }
 
 export interface ZePayData {
@@ -764,28 +1016,19 @@ export interface PartnerRating {
     id: string;
     rating: number;
     comment: string;
-    direction: 'STORE_TO_PARTNER' | 'PARTNER_TO_STORE';
+    direction: RatingDirection; // used alias
     created_at: string;
     evaluator_name?: string;
     evaluated_name?: string;
-    evaluator_id: string;
-    evaluated_id: string;
+    evaluator_id?: string;
+    evaluated_id?: string;
 }
 
-export interface OfflineDriver {
-    id: string;
-    name: string;
-    phone: string;
-}
+// Removed duplicate OfflineDriver
 
-export interface StoreDeliveryPartner {
-    id: string;
-    partner_id: string;
-    partner_name: string;
-    partner_phone: string;
-    partner_vehicle: string;
-    store_id: string;
-}
+
+// Removed duplicate StoreDeliveryPartner
+
 
 export interface HistoryFilters {
     startDate?: string;
@@ -864,6 +1107,7 @@ export interface ZebankData {
     cofrinho_next_withdrawal_date?: string;
     cofrinho_rate?: string;
     cofrinho_rules?: string;
+    next_payout_date?: string;
 }
 
 export interface ZebankCard {
@@ -876,17 +1120,12 @@ export interface ZebankCard {
     card_holder: string;
     status: 'ACTIVE' | 'BLOCKED';
     spending_limit_percent?: number;
+    type?: 'VIRTUAL' | 'PHYSICAL';
+    brand?: 'mastercard' | 'visa';
 }
 
-export interface ZebankTransaction {
-    id: string;
-    amount: number;
-    description: string;
-    direction: 'IN' | 'OUT';
-    created_at: string;
-    status: string;
-    payer_name?: string;
-}
+// Removed duplicate ZebankTransaction
+
 
 export interface AssociatedStore {
     id: string;
@@ -976,8 +1215,10 @@ export interface MarketingDesign {
     config: MarketingCanvasConfig;
     last_image_url?: string;
     created_at: string;
-    updated_at: string;
+    related_user_id?: string;
 }
+
+
 
 export interface MarketingCanvasConfig {
     backgroundColor: string;

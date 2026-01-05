@@ -1,19 +1,18 @@
 
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-// FIX: Corrigindo a importação do ícone Edit2
-import { Shield, Search, MoreVertical, Edit2, UserX, Trash2, Loader2, UserCheck, UserCog, Send, ListOrdered, Settings, Package, Power, PowerOff, X, CheckCircle, AlertTriangle, CreditCard, QrCode, Barcode, Plus, Grid, Tag, Headphones, MessageSquare, Phone, Key, Bot, Wallet, Smartphone, Upload, RefreshCw, Banknote, MapPin, Link2, FileCheck, FileX, ShieldCheck, ShieldOff, Star, FileText, Newspaper, Globe, Palette, User, Filter, Eye, ShoppingBag, Bell, Award, ClipboardList, Gauge, Construction } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Search, Edit2, UserX, Loader2, UserCheck, UserCog, CheckCircle, AlertTriangle, Power, PowerOff, X, MapPin, Phone, ShieldCheck, ShieldOff, Plus, Settings, Banknote, Star } from 'lucide-react';
 import * as cloud from '../services/cloud';
-import { ManagedUser, UserRole, UserStatus, GlobalNotification, Product, AdminOrder, ShopSettings, Category, Claim, PartnerFeeSettings, PWASettings, PWAIcon, PayoutSettings, City, CityRequest, PartnerDocument, PartnerProfile, PartnerLevelBenefit, BlacklistEntry, IdentityVerification, FraudAlert, PlatformNews, AdminSubTab } from '../types';
+import { ManagedUser, UserRole, UserStatus, PartnerProfile, PartnerDocument, City, CityRequest, AdminSubTab, PartnerLevelBenefit } from '../types';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
 import { useDialog } from '../utils/dialogService';
+import { Switch } from './Switch';
+
+// Imported Modules (from Common/HEAD)
 import { AdminDashboard } from './AdminDashboard';
 import { AdminWalletControl } from './AdminWalletControl';
 import { AdminReferrals } from './AdminReferrals';
-import { Switch } from './Switch';
 import { SecurityManagement } from './SecurityManagement';
-import { FinancialPanel } from './FinancialPanel';
 import { AdminNotifications } from './AdminNotifications';
 import { AdminShopManagement } from './AdminShopManagement';
 import { AdminClaims } from './AdminClaims';
@@ -29,14 +28,11 @@ import { AdminApiKeysUnified } from './AdminApiKeysUnified';
 import { AdminAIConfig } from './AdminAIConfig';
 import { AdminRoutingConfig } from './AdminRoutingConfig';
 import { AdminPartnerLevels } from './AdminPartnerLevels';
-import { AdminMaintenance } from './AdminMaintenance'; // NEW: Maintenance Module
+import { AdminMaintenance } from './AdminMaintenance';
 import { AdminLoanConfig } from './AdminLoanConfig';
 import { AdminInvestments } from './AdminInvestments';
 import { AdminSlides } from './AdminSlides';
-
-
 import { AdminPayouts } from './AdminPayouts';
-
 
 // --- HELPERS ---
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -47,12 +43,6 @@ const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val
     setter(formatted);
 };
 
-const parseCurrency = (val: string): number => {
-    if (!val) return 0;
-    return parseFloat(val.replace(/\./g, '').replace(',', '.'));
-};
-
-// Tradução de Enums para UI
 const getRoleLabel = (role: string) => {
     const map: Record<string, string> = {
         'admin': 'Administrador',
@@ -152,7 +142,10 @@ const UserManagement: React.FC = () => {
         try {
             const data = await cloud.getAllUsers();
             setUsers(data);
-        } catch (e) { console.error(e); } finally { setLoading(false); }
+        } catch (e) {
+            console.error(e);
+            setToast({ type: 'error', message: 'Erro ao carregar usuários.' });
+        } finally { setLoading(false); }
     };
 
     const handleEditClick = (user: ManagedUser) => {
@@ -175,7 +168,6 @@ const UserManagement: React.FC = () => {
         if (!selectedUser) return;
         setIsSaving(true);
         try {
-            // Mapeamento correto para as colunas do banco de dados (user_profiles)
             const rawPhone = (editForm.phone || '').replace(/\D/g, '');
             const rawCpf = (editForm.cpf || '').replace(/\D/g, '');
 
@@ -245,11 +237,7 @@ const UserManagement: React.FC = () => {
                         <div key={user.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all hover:border-brand-200 dark:hover:border-brand-900 hover:shadow-md">
                             <div className="flex items-center gap-4 w-full md:w-auto">
                                 <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-600">
-                                    {user.avatar_url ? (
-                                        <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <User className="w-6 h-6 text-gray-400" />
-                                    )}
+                                    <UserCheck className="w-6 h-6 text-gray-400" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
@@ -312,7 +300,7 @@ const UserManagement: React.FC = () => {
                                         />
                                     </div>
                                     <div className="md:col-span-2">
-                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Email (Apenas visual</label>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Email (Apenas visualização)</label>
                                         <input type="text" value={editForm.email} disabled className="w-full p-3 bg-gray-100 dark:bg-gray-700/50 border-none rounded-xl text-gray-500 cursor-not-allowed" />
                                     </div>
                                     <div>
@@ -333,7 +321,7 @@ const UserManagement: React.FC = () => {
                                             className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                                         />
                                     </div>
-                                    <div>
+                                    <div className="md:col-span-2">
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Cidade</label>
                                         <input
                                             type="text"
@@ -425,7 +413,6 @@ const UserManagement: React.FC = () => {
     );
 };
 
-
 // --- PARTNER VERIFICATION MODULE ---
 const PartnerVerification: React.FC = () => {
     const [partners, setPartners] = useState<ManagedUser[]>([]);
@@ -507,6 +494,7 @@ const PartnerVerification: React.FC = () => {
                                 <td className="px-4 py-3 text-right"><Button onClick={() => openPartnerDetails(p)} className="py-1 px-3 text-xs">Analisar</Button></td>
                             </tr>
                         ))}
+                        {!loading && partners.length === 0 && <tr><td colSpan={4} className="text-center p-6 text-gray-500">Nenhum parceiro pendente.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -537,8 +525,8 @@ const PartnerVerification: React.FC = () => {
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className={`text-xs font-bold px-2 py-1 rounded-full ${doc.status === 'APPROVED' ? 'bg-green-100 text-green-600' : doc.status === 'REJECTED' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>{doc.status}</span>
-                                                <button onClick={() => handleUpdateDocStatus(doc.id, 'APPROVED')} className="p-2 bg-green-100 hover:bg-green-200 rounded"><FileCheck className="w-4 h-4 text-green-600" /></button>
-                                                <button onClick={() => handleUpdateDocStatus(doc.id, 'REJECTED')} className="p-2 bg-red-100 hover:bg-red-200 rounded"><FileX className="w-4 h-4 text-red-600" /></button>
+                                                <button onClick={() => handleUpdateDocStatus(doc.id, 'APPROVED')} className="p-2 bg-green-100 hover:bg-green-200 rounded"><CheckCircle className="w-4 h-4 text-green-600" /></button>
+                                                <button onClick={() => handleUpdateDocStatus(doc.id, 'REJECTED')} className="p-2 bg-red-100 hover:bg-red-200 rounded"><X className="w-4 h-4 text-red-600" /></button>
                                             </div>
                                         </div>
                                     ))}
@@ -551,7 +539,6 @@ const PartnerVerification: React.FC = () => {
         </div>
     );
 };
-
 
 // --- CITY MANAGEMENT MODULE ---
 const CityManagement: React.FC = () => {

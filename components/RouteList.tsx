@@ -6,7 +6,10 @@ import * as cloud from '../services/cloud';
 import { Button } from './Button';
 import { ExclusiveLock } from './ExclusiveLock';
 import { openNavigation } from '../utils/mapHelpers';
+<<<<<<< HEAD
 import { useDialog } from '../utils/dialogService';
+=======
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 
 interface RouteListProps {
     userRole: UserRole;
@@ -15,6 +18,7 @@ interface RouteListProps {
 
 export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) => {
     const [items, setItems] = useState<RouteListItem[]>([]);
+<<<<<<< HEAD
     
     // Form States
     const [search, setSearch] = useState(''); // Street
@@ -22,6 +26,9 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
     const [newItemNumber, setNewItemNumber] = useState('');
     const [newItemNeighborhood, setNewItemNeighborhood] = useState('');
 
+=======
+    const [search, setSearch] = useState('');
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
     const [isSearching, setIsSearching] = useState(false);
     
     // Edit State
@@ -31,12 +38,16 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
     // New state for city and feedback
     const [userCity, setUserCity] = useState<string>('');
     const [feedback, setFeedback] = useState<{type: 'error' | 'success', message: string} | null>(null);
+<<<<<<< HEAD
     const [isProfileLoading, setIsProfileLoading] = useState(true);
+=======
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 
 
     useEffect(() => {
         setItems(storage.getRouteListItems());
         const fetchProfile = async () => {
+<<<<<<< HEAD
             setIsProfileLoading(true);
             if (userRole !== 'delivery_partner' && userRole !== 'delivery_person') {
                 setIsProfileLoading(false);
@@ -46,14 +57,25 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                 const profile = await cloud.getMyPartnerProfile();
                 if (profile?.city) {
                     setUserCity(profile.city.trim());
+=======
+            if (userRole !== 'delivery_partner' && userRole !== 'delivery_person') return;
+            try {
+                const profile = await cloud.getMyPartnerProfile();
+                if (profile?.city) {
+                    // Extrai apenas o nome da cidade, ex: "São Paulo - SP" -> "São Paulo"
+                    setUserCity(profile.city.split(' - ')[0].trim());
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                 } else {
                     setFeedback({ type: 'error', message: 'Sua cidade de atuação não está configurada no perfil.' });
                 }
             } catch (e) {
                 console.error("Failed to fetch profile for city", e);
                 setFeedback({ type: 'error', message: 'Erro ao carregar dados do seu perfil.' });
+<<<<<<< HEAD
             } finally {
                 setIsProfileLoading(false);
+=======
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             }
         };
         fetchProfile();
@@ -65,11 +87,15 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
     };
 
     const handleAddAddress = async () => {
+<<<<<<< HEAD
         // search is street, number and neighborhood are also required. Name is optional.
         if (!search.trim() || !newItemNumber.trim() || !newItemNeighborhood.trim()) {
             setFeedback({ type: 'error', message: 'Preencha a rua, número e bairro para adicionar um endereço.' });
             return;
         }
+=======
+        if (!search.trim()) return;
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
         if (!userCity) {
             setFeedback({ type: 'error', message: 'Sua cidade não está configurada no perfil. Não é possível adicionar endereços.' });
             return;
@@ -78,13 +104,19 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
         setIsSearching(true);
         setFeedback(null);
 
+<<<<<<< HEAD
         const query = `${search.trim()} ${userCity}`;
         try {
             const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}`);
+=======
+        try {
+            const response = await fetch(`https://api.geocode.br/search?q=${encodeURIComponent(search)}&municipio=${encodeURIComponent(userCity)}`);
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
             if (!response.ok) throw new Error("Falha na comunicação com a API de endereços.");
             
             const data = await response.json();
 
+<<<<<<< HEAD
             if (data && data.length > 0) {
                 const result = data[0];
                 
@@ -104,16 +136,39 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     name: newItemName.trim() || search.trim(), // Use provided name or fallback to street name
                     lat: parseFloat(result.lat),
                     lng: parseFloat(result.lon),
+=======
+            if (data.features && data.features.length > 0) {
+                const result = data.features[0];
+                const properties = result.properties;
+                
+                // Validação estrita da cidade
+                if (properties.city.toLowerCase() !== userCity.toLowerCase()) {
+                    setFeedback({ type: 'error', message: "Endereço inválido. O endereço informado não pertence à sua cidade cadastrada." });
+                    setIsSearching(false);
+                    return;
+                }
+                
+                const newItem: RouteListItem = {
+                    id: crypto.randomUUID(),
+                    address: properties.label, // Endereço completo retornado pela API
+                    name: search.split(',')[0].trim(), // Nome curto baseado na busca
+                    lat: result.geometry.coordinates[1], // Latitude
+                    lng: result.geometry.coordinates[0], // Longitude
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                     completed: false
                 };
                 
                 saveAndSetItems([newItem, ...items]);
+<<<<<<< HEAD
                 // Clear all inputs
                 setSearch('');
                 setNewItemName('');
                 setNewItemNumber('');
                 setNewItemNeighborhood('');
 
+=======
+                setSearch('');
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                 setFeedback({ type: 'success', message: 'Endereço adicionado com sucesso!' });
                 setTimeout(() => setFeedback(null), 4000);
 
@@ -128,9 +183,14 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
     };
 
 
+<<<<<<< HEAD
     const handleDelete = async (id: string) => {
         const ok = await confirm({ title: 'Remover endereço', message: 'Remover este endereço da lista?' });
         if (!ok) return;
+=======
+    const handleDelete = (id: string) => {
+        if (!confirm("Remover este endereço da lista?")) return;
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
         const newItems = items.filter(i => i.id !== id);
         saveAndSetItems(newItems);
     };
@@ -165,8 +225,11 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
         setEditName('');
     };
 
+<<<<<<< HEAD
     const { confirm } = useDialog();
 
+=======
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
     // Access Control for Non-Partners
     if (userRole !== 'delivery_partner' && userRole !== 'delivery_person') {
         return (
@@ -186,6 +249,7 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     <h1 className="text-xl font-black text-gray-900 dark:text-white">Minhas Listas</h1>
                 </div>
 
+<<<<<<< HEAD
                 <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                     <input
                         type="text"
@@ -226,6 +290,22 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                         className="h-[50px] w-[100px] bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-sm"
                     >
                         {isSearching ? <Loader2 className="w-5 h-5 animate-spin"/> : "Adicionar"}
+=======
+                <div className="flex gap-2">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            onKeyPress={e => e.key === 'Enter' && handleAddAddress()}
+                            placeholder="Adicionar: Rua, Número, Bairro..."
+                            className="w-full pl-9 p-3 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all"
+                        />
+                    </div>
+                    <Button onClick={handleAddAddress} disabled={isSearching} className="px-4 bg-purple-600 hover:bg-purple-700">
+                        {isSearching ? <Loader2 className="w-5 h-5 animate-spin"/> : <Plus className="w-5 h-5"/>}
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
                     </Button>
                 </div>
                 

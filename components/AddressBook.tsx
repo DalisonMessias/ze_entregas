@@ -8,7 +8,7 @@ import { useDialog } from '../utils/dialogService';
 
 interface AddressBookProps {
   onClose: () => void;
-  onNavigateInternal?: (destination: {lat: number, lng: number, name: string, fullAddress: string}) => void;
+  onNavigateInternal?: (destination: { lat: number, lng: number, name: string, fullAddress: string }) => void;
   isSelectionMode?: boolean;
   onSelectionComplete?: (addresses: SavedAddress[]) => void;
 }
@@ -22,19 +22,19 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [nameInput, setNameInput] = useState('');
   const [addrInput, setAddrInput] = useState('');
-  
+
   const [listeningField, setListeningField] = useState<'name' | 'addr' | null>(null);
-  
+
   const [expandedIds, setExpandedIds] = useState(new Set<string>());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
-  
+
   const [showToast, setShowToast] = useState(false);
   const [deletedItem, setDeletedItem] = useState<SavedAddress | null>(null);
   const toastTimerRef = useRef<number | null>(null);
-  
+
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
-  
+
   // Sort State
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showMap, setShowMap] = useState(false);
@@ -43,7 +43,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   useEffect(() => {
     let loaded = storage.getAddresses();
     // Default sort by visit count/time
-    loaded.sort((a,b) => (b.visitCount || 0) - (a.visitCount || 0));
+    loaded.sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0));
     setAddresses(loaded);
   }, []);
 
@@ -80,7 +80,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
       if (field === 'name') {
-        setNameInput(transcript); 
+        setNameInput(transcript);
       } else {
         setAddrInput(transcript);
       }
@@ -110,7 +110,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
 
     const normalizedNew = addrInput.trim().toLowerCase();
     const isDuplicate = addresses.some(addr => addr.fullAddress.toLowerCase() === normalizedNew);
-    
+
     if (isDuplicate) {
       (async () => {
         const confirmAdd = await confirm({ title: 'Endereço duplicado', message: 'Este endereço parece já estar cadastrado. Deseja adicionar mesmo assim?' });
@@ -143,7 +143,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
     const updated = [newAddress, ...addresses];
     setAddresses(updated);
     storage.saveAddresses(updated);
-    
+
     handleClearForm();
   };
 
@@ -195,7 +195,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   };
 
   const registerVisit = (id: string) => {
-    const updatedAddresses = addresses.map(a => 
+    const updatedAddresses = addresses.map(a =>
       a.id === id ? { ...a, visitCount: (a.visitCount || 0) + 1, lastVisited: Date.now() } : a
     );
     setAddresses(updatedAddresses);
@@ -205,7 +205,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   const handleSystemNavigation = async (addressToNavigate: SavedAddress) => {
     if (!addressToNavigate || !onNavigateInternal) return;
     setIsGeocoding(true);
-    
+
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressToNavigate.fullAddress)}&limit=1`);
       const data = await response.json();
@@ -214,7 +214,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
         const result = data[0];
         const lat = parseFloat(result.lat);
         const lon = parseFloat(result.lon);
-        
+
         registerVisit(addressToNavigate.id);
         onNavigateInternal({ lat, lng: lon, name: addressToNavigate.name, fullAddress: addressToNavigate.fullAddress });
       } else {
@@ -254,80 +254,80 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   };
 
   const toggleSort = () => {
-      const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-      setSortOrder(newOrder);
-      const sorted = [...addresses].sort((a,b) => {
-          const nameA = a.name.toLowerCase();
-          const nameB = b.name.toLowerCase();
-          return newOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
-      });
-      setAddresses(sorted);
+    const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortOrder(newOrder);
+    const sorted = [...addresses].sort((a, b) => {
+      const nameA = a.name.toLowerCase();
+      const nameB = b.name.toLowerCase();
+      return newOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+    });
+    setAddresses(sorted);
   };
 
   return (
     <div className="space-y-6">
-      
+
       {!isSelectionMode && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <button onClick={onClose} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors">
-                    <ArrowLeft className="w-5 h-5" />
-                </button>
-                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-brand-600" />
-                    Agenda
-                </h2>
-              </div>
-              
-              <div className="flex gap-2">
-                  <button onClick={() => setShowMap(!showMap)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
-                      <Map className="w-5 h-5" />
-                  </button>
-                  <button onClick={toggleSort} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
-                      {sortOrder === 'asc' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                  </button>
-              </div>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <button onClick={onClose} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors">
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-brand-600" />
+                Agenda
+              </h2>
             </div>
-            
-            <div className="space-y-4">
-              <div className="relative">
-                  <input 
-                    type="text" value={nameInput} onChange={(e) => setNameInput(e.target.value)}
-                    className="w-full pl-3 pr-10 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none dark:text-white text-sm font-bold"
-                    placeholder="Nome (Opcional)"
-                  />
-                   <button onClick={() => handleVoiceInput('name')} className={`absolute right-2 top-2.5 p-1.5 rounded-full ${listeningField === 'name' ? 'bg-red-100 text-red-500' : 'text-gray-400'}`}>
-                    <Mic className="w-4 h-4" />
-                  </button>
-              </div>
-              <div className="relative">
-                  <input 
-                    type="text" value={addrInput} onChange={(e) => setAddrInput(e.target.value)}
-                    className="w-full pl-3 pr-10 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none dark:text-white text-sm"
-                    placeholder="Endereço Completo (Obrigatório)"
-                  />
-                   <button onClick={() => handleVoiceInput('addr')} className={`absolute right-2 top-2.5 p-1.5 rounded-full ${listeningField === 'addr' ? 'bg-red-100 text-red-500' : 'text-gray-400'}`}>
-                    <Mic className="w-4 h-4" />
-                  </button>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button variant="outline" onClick={handleClearForm} className="px-4"><Eraser className="w-5 h-5" /></Button>
-                <div className="flex-1">
-                  <Button onClick={handleAddAddress} fullWidth disabled={!addrInput}>
-                    <Plus className="w-5 h-5 mr-2" /> Salvar
-                  </Button>
-                </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => setShowMap(!showMap)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
+                <Map className="w-5 h-5" />
+              </button>
+              <button onClick={toggleSort} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
+                {sortOrder === 'asc' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="relative">
+              <input
+                type="text" value={nameInput} onChange={(e) => setNameInput(e.target.value)}
+                className="w-full pl-3 pr-10 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none dark:text-white text-sm font-bold"
+                placeholder="Nome (Opcional)"
+              />
+              <button onClick={() => handleVoiceInput('name')} className={`absolute right-2 top-2.5 p-1.5 rounded-full ${listeningField === 'name' ? 'bg-red-100 text-red-500' : 'text-gray-400'}`}>
+                <Mic className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type="text" value={addrInput} onChange={(e) => setAddrInput(e.target.value)}
+                className="w-full pl-3 pr-10 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none dark:text-white text-sm"
+                placeholder="Endereço Completo (Obrigatório)"
+              />
+              <button onClick={() => handleVoiceInput('addr')} className={`absolute right-2 top-2.5 p-1.5 rounded-full ${listeningField === 'addr' ? 'bg-red-100 text-red-500' : 'text-gray-400'}`}>
+                <Mic className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" onClick={handleClearForm} className="px-4"><Eraser className="w-5 h-5" /></Button>
+              <div className="flex-1">
+                <Button onClick={handleAddAddress} fullWidth disabled={!addrInput}>
+                  <Plus className="w-5 h-5 mr-2" /> Salvar
+                </Button>
               </div>
             </div>
           </div>
+        </div>
       )}
 
       {/* Map Placeholder */}
       {showMap && (
-          <div className="bg-gray-200 dark:bg-gray-800 rounded-2xl h-48 flex items-center justify-center text-gray-500 animate-in fade-in">
-              <p className="text-sm">Mapa de endereços em breve...</p>
-          </div>
+        <div className="bg-gray-200 dark:bg-gray-800 rounded-2xl h-48 flex items-center justify-center text-gray-500 animate-in fade-in">
+          <p className="text-sm">Mapa de endereços em breve...</p>
+        </div>
       )}
 
       {/* Tools Bar */}
@@ -350,53 +350,53 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
             const isExpanded = expandedIds.has(addr.id);
             const isSelected = selectedIds.has(addr.id);
             return (
-              <div 
-                key={addr.id} 
+              <div
+                key={addr.id}
                 onClick={() => isSelectionMode ? toggleSelection(addr.id) : null}
                 className={`bg-white dark:bg-gray-800 p-4 rounded-xl border shadow-sm transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''} ${isSelected ? 'border-brand-500 ring-2 ring-brand-500' : 'border-gray-100 dark:border-gray-700'}`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-3">
-                     {isSelectionMode && (
-                        <div className="text-brand-600">
-                           {isSelected ? <CheckSquare className="w-5 h-5"/> : <Square className="w-5 h-5 text-gray-300"/>}
-                        </div>
-                     )}
-                     <div>
-                        <div className="font-bold text-gray-900 dark:text-white text-lg leading-tight">{addr.name}</div>
-                        {addr.visitCount !== undefined && addr.visitCount > 0 && (
-                          <div className="text-[10px] text-gray-400 font-bold mt-0.5">{addr.visitCount} visitas</div>
-                        )}
-                     </div>
+                    {isSelectionMode && (
+                      <div className="text-brand-600">
+                        {isSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 text-gray-300" />}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-bold text-gray-900 dark:text-white text-lg leading-tight">{addr.name}</div>
+                      {addr.visitCount !== undefined && addr.visitCount > 0 && (
+                        <div className="text-[10px] text-gray-400 font-bold mt-0.5">{addr.visitCount} visitas</div>
+                      )}
+                    </div>
                   </div>
-                  
+
                   {!isSelectionMode && (
                     <button onClick={(e) => { e.stopPropagation(); handleRemove(addr.id); }} className="p-1.5 text-gray-300 hover:text-rose-500">
-                        <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                 </div>
 
-                <div className={`rounded-lg p-2.5 mb-3 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/30 ${!isExpanded ? 'line-clamp-2' : ''}`} onClick={(e) => { if (!isSelectionMode) { e.stopPropagation(); toggleExpand(addr.id); }}}>
-                   {addr.fullAddress}
+                <div className={`rounded-lg p-2.5 mb-3 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/30 ${!isExpanded ? 'line-clamp-2' : ''}`} onClick={(e) => { if (!isSelectionMode) { e.stopPropagation(); toggleExpand(addr.id); } }}>
+                  {addr.fullAddress}
                 </div>
-                
+
                 {!isSelectionMode && (
-                    <div className="flex gap-2">
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); handleCopyToClipboard(addr.fullAddress, addr.id); }}
-                        className="flex-none p-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-400 hover:text-brand-500"
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleCopyToClipboard(addr.fullAddress, addr.id); }}
+                      className="flex-none p-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-400 hover:text-brand-500"
                     >
-                        {copiedId === addr.id ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                      {copiedId === addr.id ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                     </button>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); handleSystemNavigation(addr); }}
-                        disabled={isGeocoding}
-                        className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50"
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSystemNavigation(addr); }}
+                      disabled={isGeocoding}
+                      className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50"
                     >
-                        {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Iniciar Rota'}
+                      {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Iniciar Rota'}
                     </button>
-                    </div>
+                  </div>
                 )}
               </div>
             );

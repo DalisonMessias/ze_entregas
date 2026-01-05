@@ -1,20 +1,40 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Shield, Zap, Star, Instagram, Facebook, Twitter, Linkedin, ChevronLeft, ChevronRight, ArrowRight, Activity, DollarSign, Users, BarChart } from 'lucide-react';
+import { Shield, Zap, Star, Instagram, Facebook, Twitter, Linkedin, ChevronLeft, ChevronRight, ArrowRight, Activity, DollarSign, Users, BarChart, Store, Bike, CheckCircle, Smartphone, Download, BarChart3, MessageCircle, Gift, Bell, Map, Headphones, Newspaper, Wallet, Megaphone, ShoppingBag, Bot, Navigation } from 'lucide-react';
 import { Button } from './Button';
 import { TermsOfService } from './TermsOfService';
 import { PrivacyPolicy } from './PrivacyPolicy';
 import { CookiePreferencesModal } from './CookiePreferencesModal';
 import { CompanyModal } from './CompanyModals';
 import { Logo } from './Logo';
+import { Footer } from './Footer';
 import * as cloud from '../services/cloud';
 import { ShopSettings } from '../types';
 
-// #region --- Hooks ---
+// Interfaces
+interface LandingPageProps {
+    onLoginClick: () => void;
+    onSignupClick: (type: 'STORE_PARTNER' | 'DELIVERY_PARTNER') => void;
+}
 
-/**
- * Hook customizado para o carrossel.
- * Gerencia o estado do slide, navegação e autoplay.
- */
+// Dummy Data
+const heroSlides = [
+    {
+        title: "Revolucione sua Logística",
+        subtitle: "A plataforma completa para lojas e entregadores."
+    },
+    {
+        title: "Entregas em Tempo Recorde",
+        subtitle: "Otimização de rotas e gestão inteligente."
+    },
+    {
+        title: "Cresça seu Negócio",
+        subtitle: "Ferramentas financeiras e insights detalhados."
+    }
+];
+
+const platformNews: any[] = []; // Empty to hide news section for now
+
+// Hooks
 const useCarousel = (totalSlides: number, autoplayInterval: number = 5000) => {
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
@@ -51,10 +71,6 @@ const useCarousel = (totalSlides: number, autoplayInterval: number = 5000) => {
     return { currentSlide, nextSlide, prevSlide, goToSlide, pause, resume, isPaused };
 };
 
-/**
- * Hook customizado para observar a interseção de um elemento.
- * Anima elementos quando entram na viewport.
- */
 const useIntersectionObserver = (options: IntersectionObserverInit) => {
     const [ref, setRef] = useState<HTMLElement | null>(null);
     const [isVisible, setIsVisible] = useState(false);
@@ -77,355 +93,64 @@ const useIntersectionObserver = (options: IntersectionObserverInit) => {
         }
 
         return () => {
-            if (ref) {
-                observer.unobserve(ref);
-            }
+            if (ref) observer.unobserve(ref);
         };
     }, [ref, options]);
 
     return [setRef, isVisible] as const;
 };
 
-// #endregion
+// Components
+const Header: React.FC<{ onLoginClick: () => void }> = ({ onLoginClick }) => {
+    const [scrolled, setScrolled] = useState(false);
 
-// #region --- New Block Components ---
-
-const slideData = [
-    {
-        image: 'https://images.unsplash.com/photo-1579621970795-87facc2f976d?q=80&w=2070&auto=format&fit=crop', // Placeholder for "Painel de Controle"
-        title: 'Painel de Controle Intuitivo',
-        description: 'Gerencie todas as suas entregas, frotas e finanças em um dashboard unificado e poderoso.',
-    },
-    {
-        image: 'https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?q=80&w=1887&auto=format&fit=crop', // Placeholder for "Rastreamento em Tempo Real"
-        title: 'Rastreamento em Tempo Real',
-        description: 'Acompanhe cada etapa da entrega com geolocalização precisa e atualizações instantâneas.',
-    },
-    {
-        image: 'https://images.unsplash.com/photo-1604357209793-f5d928be2742?q=80&w=1974&auto=format&fit=crop', // Placeholder for "Otimização de Rotas"
-        title: 'Otimização de Rotas Inteligente',
-        description: 'Economize tempo e combustível com nosso algoritmo que calcula as rotas mais eficientes.',
-    },
-];
-
-const HeroCarousel: React.FC = () => {
-    const { currentSlide, nextSlide, prevSlide, goToSlide, pause, resume } = useCarousel(slideData.length);
+    useEffect(() => {
+        const handleScroll = () => setScrolled(window.scrollY > 20);
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     return (
-        <section 
-            id="home" 
-            className="relative h-screen w-full overflow-hidden bg-gray-900"
-            onMouseEnter={pause}
-            onMouseLeave={resume}
-        >
-            <div className="absolute inset-0">
-                {slideData.map((slide, index) => (
-                    <div
-                        key={index}
-                        className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100' : 'opacity-0'}`}
-                    >
-                        <img
-                            src={slide.image}
-                            alt={slide.title}
-                            className="h-full w-full object-cover"
-                            loading={index === 0 ? 'eager' : 'lazy'} // Carrega a primeira imagem imediatamente
-                        />
-                        <div className="absolute inset-0 bg-black/60"></div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="relative z-10 flex h-full flex-col items-center justify-center text-center text-white p-6">
-                <div className="w-full">
-                    <div className="relative h-24 overflow-hidden mb-4">
-                        {slideData.map((slide, index) => (
-                             <div
-                                key={index}
-                                className={`absolute inset-0 transition-all duration-700 ease-in-out ${index === currentSlide ? 'opacity-100 transform-none' : 'opacity-0 transform translate-y-4'}`}
-                            >
-                                <h1 className="text-4xl font-black tracking-tight sm:text-6xl lg:text-7xl">
-                                    {slide.title}
-                                </h1>
-                             </div>
-                        ))}
-                    </div>
-                    <div className="relative h-16 overflow-hidden mb-8">
-                         {slideData.map((slide, index) => (
-                             <p
-                                key={index}
-                                className={`absolute inset-0 text-lg leading-8 text-gray-300 transition-all duration-700 ease-in-out delay-100 ${index === currentSlide ? 'opacity-100 transform-none' : 'opacity-0 transform -translate-y-4'}`}
-                             >
-                                 {slide.description}
-                             </p>
-                        ))}
-                    </div>
-                   
-                    <a href="#cta" className="inline-block">
-                        <Button size="lg" className="rounded-full group">
-                            Comece a usar
-                            <ArrowRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1" />
-                        </Button>
-                    </a>
-                </div>
-            </div>
-            
-            {/* Navegação */}
-            <button onClick={prevSlide} className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
-                <ChevronLeft className="h-6 w-6 text-white"/>
-            </button>
-            <button onClick={nextSlide} className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
-                <ChevronRight className="h-6 w-6 text-white"/>
-            </button>
-
-            {/* Paginação */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex space-x-2">
-                {slideData.map((_, index) => (
-                    <button
-                        key={index}
-                        onClick={() => goToSlide(index)}
-                        className={`h-2 w-2 rounded-full transition-all duration-300 ${index === currentSlide ? 'w-6 bg-brand-500' : 'bg-white/50 hover:bg-white'}`}
-                    />
-                ))}
-            </div>
-        </section>
-    );
-};
-
-const AnimatedSection: React.FC<{children: React.ReactNode; className?: string}> = ({ children, className }) => {
-    const [ref, isVisible] = useIntersectionObserver({ threshold: 0.1, rootMargin: '0px 0px -100px 0px' });
-    return (
-        <section
-            ref={ref}
-            className={`transition-all duration-1000 ease-out ${className} ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-        >
-            {children}
-        </section>
-    );
-};
-
-const SectionHeader: React.FC<{title: string; subtitle: string}> = ({ title, subtitle }) => (
-    <div className="mb-16 text-center max-w-4xl mx-auto">
-        <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white mb-4 tracking-tight">
-            {title}
-        </h2>
-        <p className="text-lg text-gray-500 dark:text-gray-400 leading-relaxed">
-            {subtitle}
-        </p>
-    </div>
-);
-
-const featureItems = [
-  { icon: Activity, title: 'Dashboard Centralizado', description: 'Visão completa das operações, com relatórios e métricas em tempo real.' },
-  { icon: BarChart, title: 'Relatórios Avançados', description: 'Gere insights valiosos para otimizar suas finanças, desempenho e logística.' },
-  { icon: Users, title: 'Gestão de Equipe', description: 'Controle entregadores, parceiros e administradores com permissões flexíveis.' },
-  { icon: DollarSign, title: 'Controle Financeiro', description: 'Gerencie taxas, comissões, pagamentos e a carteira digital de forma integrada.' },
-];
-
-const AdminPanelSection: React.FC = () => (
-    <AnimatedSection className="py-24 px-6 bg-white dark:bg-gray-950/50">
-        <div className="max-w-7xl mx-auto">
-            <SectionHeader 
-                title="Painel Administrativo Robusto"
-                subtitle="Controle total sobre a sua operação logística com ferramentas poderosas e fáceis de usar."
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {featureItems.map(item => (
-                    <div key={item.title} className="text-center p-6">
-                        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-6 bg-brand-50 dark:bg-gray-800 text-brand-600 dark:text-brand-400 mx-auto">
-                           <item.icon className="w-8 h-8" />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">{item.title}</h3>
-                        <p className="text-gray-600 dark:text-gray-400">{item.description}</p>
-                    </div>
-                ))}
-            </div>
-        </div>
-    </AnimatedSection>
-);
-
-const benefits = [
-  { icon: Zap, title: 'Performance PWA', description: 'App ultrarrápido, funciona offline e consome poucos dados e bateria.' },
-  { icon: Shield, title: 'Segurança de Ponta', description: 'Dados criptografados, validação de identidade e transações seguras.' },
-  { icon: Star, title: 'Ecossistema Justo', description: 'Taxas competitivas para lojistas e as melhores recompensas para entregadores.' },
-];
-
-const BenefitsSection: React.FC = () => (
-     <AnimatedSection className="py-24 px-6 bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto">
-            <div className="grid md:grid-cols-2 gap-16 items-center">
-                <div className="space-y-8">
-                    <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tight">
-                        Diferenciais que impulsionam o seu negócio
-                    </h2>
-                    <p className="text-lg text-gray-500 dark:text-gray-400 leading-relaxed">
-                        Nossa plataforma foi construída sobre pilares de tecnologia, segurança e justiça, criando um ambiente onde todos prosperam.
-                    </p>
-                    <div className="space-y-6">
-                        {benefits.map(benefit => (
-                            <div key={benefit.title} className="flex items-start gap-4">
-                                <div className="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center bg-white dark:bg-gray-800 text-brand-600 dark:text-brand-400 shadow-md">
-                                    <benefit.icon className="w-6 h-6" />
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-lg text-gray-900 dark:text-white">{benefit.title}</h4>
-                                    <p className="text-gray-600 dark:text-gray-400">{benefit.description}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div className="hidden md:block">
-                     <img 
-                        src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?q=80&w=1887&auto=format&fit=crop" // placeholder
-                        alt="Time colaborando" 
-                        className="rounded-3xl shadow-2xl"
-                        loading="lazy"
-                    />
-                </div>
-            </div>
-        </div>
-     </AnimatedSection>
-);
-
-const UseCasesSection: React.FC = () => (
-    <AnimatedSection className="py-24 px-6 bg-white dark:bg-gray-950/50">
-        <div className="max-w-7xl mx-auto">
-            <SectionHeader 
-                title="Para Todos os Tipos de Negócio"
-                subtitle="Seja você um restaurante, e-commerce ou farmácia, nossa plataforma se adapta às suas necessidades."
-            />
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="relative p-8 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                    <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Restaurantes</h3>
-                    <p className="text-gray-600 dark:text-gray-400">Entregas rápidas para garantir que a comida chegue quente e fresca ao cliente.</p>
-                </div>
-                <div className="relative p-8 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                     <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">E-commerce</h3>
-                    <p className="text-gray-600 dark:text-gray-400">Logística de same-day-delivery para encantar seus clientes e aumentar a conversão.</p>
-                </div>
-                <div className="relative p-8 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                    <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Serviços</h3>
-                    <p className="text-gray-600 dark:text-gray-400">Coleta e entrega de documentos, produtos ou equipamentos com agilidade e segurança.</p>
-                </div>
-             </div>
-        </div>
-    </AnimatedSection>
-);
-
-
-const CtaSection: React.FC<Pick<LandingPageProps, 'onLoginClick' | 'onSignupClick'>> = ({ onLoginClick, onSignupClick }) => (
-    <AnimatedSection className="py-24 px-6">
-        <div
-            className="max-w-5xl mx-auto bg-gray-900 rounded-[32px] p-12 md:p-20 text-center relative overflow-hidden">
-            <div
-                className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.05),_transparent)]"></div>
-            <div className="relative z-10">
-                <h2 className="text-4xl md:text-5xl font-black text-white mb-6 tracking-tight">
-                    Transforme sua logística hoje mesmo
-                </h2>
-                <p className="text-lg text-brand-50 mb-10 max-w-2xl mx-auto font-medium">
-                    Junte-se a centenas de empresas que já estão economizando tempo e dinheiro.
-                </p>
-                <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-                    <Button onClick={() => onSignupClick('STORE_PARTNER')}
-                        className="bg-brand-600 text-white hover:bg-brand-500 py-4 px-10 text-lg rounded-full shadow-2xl hover:scale-105 transition-transform duration-300">
-                        Quero ser parceiro
-                    </Button>
-                    <Button onClick={() => onSignupClick('DELIVERY_PARTNER')}
-                        className="bg-brand-600 text-white hover:bg-brand-500 py-4 px-10 text-lg rounded-full shadow-2xl hover:scale-105 transition-transform duration-300">
-                        Quero ser entregador
-                    </Button>
-                    <Button onClick={onLoginClick} 
-                        className="bg-brand-600 text-white hover:bg-brand-500 py-4 px-10 text-lg rounded-full shadow-2xl hover:scale-105 transition-transform duration-300">
-                        Acessar minha conta
-                    </Button>
-                </div>
-            </div>
-        </div>
-    </AnimatedSection>
-);
-
-// #endregion
-
-// #region --- Main Components ---
-
-const NavBar: React.FC<{ onLoginClick: () => void; isScrolled: boolean }> = ({ onLoginClick, isScrolled }) => (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-white/80 dark:bg-gray-950/80 backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-6'}`}>
-        <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
-            <a href="#home" className="group flex items-center gap-2">
-                <Logo className="h-8 md:h-10 w-auto text-brand-600 transition-transform group-hover:scale-105" mode="full" />
-            </a>
-            <div className="hidden md:flex gap-6 items-center">
-                <a href="#features" className={`text-sm font-semibold transition-colors hover:text-brand-500 ${!isScrolled ? 'text-brand-600' : 'text-gray-600 dark:text-gray-300'}`}>Funcionalidades</a>
-                <a href="#solutions" className={`text-sm font-semibold transition-colors hover:text-brand-500 ${!isScrolled ? 'text-brand-600' : 'text-gray-600 dark:text-gray-300'}`}>Soluções</a>
-                <a href="#use-cases" className={`text-sm font-semibold transition-colors hover:text-brand-500 ${!isScrolled ? 'text-brand-600' : 'text-gray-600 dark:text-gray-300'}`}>Casos de Uso</a>
-            </div>
-            <div className="flex items-center gap-4">
-                <Button onClick={onLoginClick} className="rounded-full px-6 shadow-lg shadow-brand-500/20">
+        <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'}`}>
+            <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
+                <Logo className={`h-8 w-auto ${scrolled ? 'text-brand-600' : 'text-white'}`} />
+                <Button onClick={onLoginClick} variant="ghost" className={`${scrolled ? 'text-gray-700 dark:text-gray-200' : 'text-white'} hover:bg-white/10`}>
                     Entrar
                 </Button>
             </div>
-        </div>
-    </nav>
+        </nav>
+    );
+};
+
+const SectionTitle = ({ title, subtitle }: { title: string, subtitle: string }) => (
+    <div className="text-center mb-16 px-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white mb-4 tracking-tight leading-tight">{title}</h2>
+        <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">{subtitle}</p>
+    </div>
 );
 
-const Footer: React.FC<{
-    shopSettings: ShopSettings | null;
-    setShowTerms: (show: boolean) => void;
-    setShowPrivacy: (show: boolean) => void;
-    setShowCookiePrefs: (show: boolean) => void;
-    setCompanyModal: (modal: 'about' | 'careers' | 'press' | 'contact' | null) => void;
-    onLoginClick: () => void;
-}> = ({ shopSettings, setShowTerms, setShowPrivacy, setShowCookiePrefs, setCompanyModal, onLoginClick }) => (
-    <footer className="bg-white dark:bg-gray-950/50 border-t border-gray-100 dark:border-gray-800/50 pt-20 pb-10 px-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
-            <div className="col-span-1 md:col-span-1">
-                <Logo className="h-8 w-auto text-brand-600 mb-6" mode="full" />
-                <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed mb-6">Plataforma completa para logística urbana inteligente, conectando lojistas a entregadores de elite.</p>
-                <div className="flex gap-4">
-                    {shopSettings?.social_media?.instagram && <a href={shopSettings.social_media.instagram} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-brand-600 transition-colors"><Instagram /></a>}
-                    {shopSettings?.social_media?.facebook && <a href={shopSettings.social_media.facebook} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-brand-600 transition-colors"><Facebook /></a>}
-                    {shopSettings?.social_media?.linkedin && <a href={shopSettings.social_media.linkedin} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-brand-600 transition-colors"><Linkedin /></a>}
-                    {shopSettings?.social_media?.twitter && <a href={shopSettings.social_media.twitter} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-brand-600 transition-colors"><Twitter /></a>}
-                </div>
-            </div>
-            <div>
-                <h4 className="font-bold text-gray-900 dark:text-white mb-6">Empresa</h4>
-                <ul className="space-y-4 text-sm text-gray-500 dark:text-gray-400">
-                    <li><button onClick={() => setCompanyModal('about')} className="hover:text-brand-600 transition-colors">Sobre Nós</button></li>
-                    <li><button onClick={() => setCompanyModal('careers')} className="hover:text-brand-600 transition-colors">Carreiras</button></li>
-                    <li><button onClick={() => setCompanyModal('press')} className="hover:text-brand-600 transition-colors">Imprensa</button></li>
-                    <li><button onClick={() => setCompanyModal('contact')} className="hover:text-brand-600 transition-colors">Contato</button></li>
-                </ul>
-            </div>
-            <div>
-                <h4 className="font-bold text-gray-900 dark:text-white mb-6">Legal</h4>
-                <ul className="space-y-4 text-sm text-gray-500 dark:text-gray-400">
-                    <li><button onClick={() => setShowTerms(true)} className="hover:text-brand-600 transition-colors">Termos de Uso</button></li>
-                    <li><button onClick={() => setShowPrivacy(true)} className="hover:text-brand-600 transition-colors">Política de Privacidade</button></li>
-                    <li><button onClick={() => setShowCookiePrefs(true)} className="hover:text-brand-600 transition-colors">Cookies</button></li>
-                </ul>
-            </div>
-            <div>
-                <h4 className="font-bold text-gray-900 dark:text-white mb-6">Acesso</h4>
-                <Button onClick={onLoginClick} variant='outline' className="w-full">Área do Cliente</Button>
-            </div>
+const BenefitCard = ({ icon, title, description, colorClass }: { icon: React.ReactNode, title: string, description: string, colorClass: string }) => (
+    <div className="group bg-white dark:bg-gray-800 p-8 rounded-[32px] border border-gray-100 dark:border-gray-700 shadow-soft hover:shadow-xl hover:-translate-y-2 transition-all duration-300 relative overflow-hidden">
+        <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colorClass} opacity-10 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500`}></div>
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-sm ${colorClass} text-white`}>
+            {icon}
         </div>
-        <div className="border-t border-gray-100 dark:border-gray-800/50 pt-8 text-center text-sm text-gray-400">
-            <p>© {new Date().getFullYear()} Zé Entregas. Todos os direitos reservados.</p>
-        </div>
-    </footer>
+        <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-3">{title}</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{description}</p>
+    </div>
 );
 
-interface LandingPageProps {
-    onLoginClick: () => void;
-    onSignupClick: (type: 'STORE_PARTNER' | 'DELIVERY_PARTNER') => void;
-}
+const NewsCard = ({ item, index }: { item: any; index: number }) => (
+    <div>{/* Implement if news needed */}</div>
+);
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }) => {
     const [scrolled, setScrolled] = useState(false);
     const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
-    
+    const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
+    const [installPrompt, setInstallPrompt] = useState<any>(null);
+    const [installFeedback, setInstallFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
     // Modals State
     const [showTerms, setShowTerms] = useState(false);
     const [showPrivacy, setShowPrivacy] = useState(false);
@@ -449,55 +174,193 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Smooth scroll for anchor links
+    // Helper for hero carousel auto-play
     useEffect(() => {
-        const handleAnchorClick = (event: MouseEvent) => {
-            const target = event.target as HTMLAnchorElement;
-            const href = target.getAttribute('href');
-            if (href && href.startsWith('#')) {
-                event.preventDefault();
-                const element = document.getElementById(href.substring(1));
-                if (element) {
-                     const offset = 80; // Navbar height
-                     const elementPosition = element.getBoundingClientRect().top;
-                     const offsetPosition = elementPosition + window.pageYOffset - offset;
-                     window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
-                }
-            }
-        };
-
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', handleAnchorClick);
-        });
-
-        return () => {
-            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-                anchor.removeEventListener('click', handleAnchorClick);
-            });
-        };
+        const interval = setInterval(() => {
+            setCurrentHeroSlide(prev => (prev + 1) % heroSlides.length);
+        }, 5000);
+        return () => clearInterval(interval);
     }, []);
 
-    return (
-        <div className="bg-gray-50 dark:bg-gray-950 min-h-screen font-sans text-gray-800 dark:text-white selection:bg-brand-100 selection:text-brand-900">
-            <NavBar onLoginClick={onLoginClick} isScrolled={scrolled} />
+    const handleInstallApp = async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        const { outcome } = await installPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setInstallFeedback({ type: 'success', text: 'App instalado com sucesso!' });
+        }
+        setInstallPrompt(null);
+    };
 
-            <main>
-                <HeroCarousel />
-                <div id="features">
-                    <AdminPanelSection />
-                </div>
-                <div id="solutions">
-                    <BenefitsSection />
-                </div>
-                 <div id="use-cases">
-                    <UseCasesSection />
-                </div>
-                <div id="cta">
-                <CtaSection onLoginClick={onLoginClick} onSignupClick={onSignupClick} />
-            </div>
+    return (
+        <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950 flex flex-col font-sans">
+            <Header onLoginClick={onLoginClick} />
+
+            <main className="flex-1">
+                {/* Hero Section */}
+                <header id="hero" className="relative pt-32 pb-24 md:pt-48 md:pb-36 px-4 overflow-hidden bg-brand-600 text-white">
+                    {/* Background Pattern */}
+                    <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#ffffff 2px, transparent 2px)', backgroundSize: '32px 32px' }}></div>
+
+                    {/* Background Blobs (White/Glow) */}
+                    <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] bg-white/10 rounded-full blur-[120px] animate-pulse"></div>
+                    <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-orange-500/20 rounded-full blur-[100px] delay-1000 animate-pulse"></div>
+
+                    <div className="max-w-5xl mx-auto text-center relative z-10 min-h-[300px] flex flex-col justify-center">
+
+                        {/* Carousel Content */}
+                        {heroSlides.map((slide, index) => (
+                            <div
+                                key={index}
+                                className={`transition-all duration-700 absolute inset-0 flex flex-col items-center justify-center ${index === currentHeroSlide ? 'opacity-100 translate-x-0 relative' : 'opacity-0 translate-x-10 absolute pointer-events-none'}`}
+                            >
+                                <h1 className="text-5xl md:text-7xl font-black mb-8 leading-[1.1] tracking-tighter drop-shadow-sm">
+                                    {slide.title}
+                                </h1>
+
+                                <p className="text-lg md:text-2xl text-brand-50 mb-10 max-w-3xl mx-auto leading-relaxed font-medium">
+                                    {slide.subtitle}
+                                </p>
+                            </div>
+                        ))}
+
+                        {/* Carousel Indicators */}
+                        <div className="flex justify-center gap-3 mt-8 absolute bottom-0 left-0 right-0">
+                            {heroSlides.map((_, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => setCurrentHeroSlide(idx)}
+                                    className={`h-2 rounded-full transition-all duration-300 ${currentHeroSlide === idx ? 'w-8 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'}`}
+                                    aria-label={`Ir para slide ${idx + 1}`}
+                                />
+                            ))}
+                        </div>
+
+                    </div>
+                </header>
+
+                {/* Solutions Section (Cards) */}
+                <section id="solutions" className="py-24 px-4 relative">
+                    <div className="max-w-6xl mx-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Card Lojista */}
+                            <div className="group bg-white dark:bg-gray-800 rounded-[40px] p-8 md:p-12 shadow-2xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-800 relative overflow-hidden transition-all hover:-translate-y-1">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-brand-500/20 transition-colors"></div>
+                                <div className="relative z-10">
+                                    <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 rounded-2xl flex items-center justify-center text-brand-600 mb-6">
+                                        <Store className="w-8 h-8" />
+                                    </div>
+                                    <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-4">Para Lojas</h3>
+                                    <p className="text-gray-500 dark:text-gray-400 mb-8 text-lg">
+                                        Centralize seus pedidos, encontre entregadores em segundos e tenha controle total financeiro.
+                                    </p>
+                                    <ul className="space-y-4 mb-8">
+                                        <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-medium"><div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="w-4 h-4 text-green-600" /></div> Gestão de pedidos simplificada</li>
+                                        <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-medium"><div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="w-4 h-4 text-green-600" /></div> Radar de entregadores próximos</li>
+                                        <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-medium"><div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="w-4 h-4 text-green-600" /></div> Relatórios financeiros detalhados</li>
+                                    </ul>
+                                    <Button onClick={() => onSignupClick('STORE_PARTNER')} className="bg-brand-600 text-white hover:bg-brand-700 w-full py-4 rounded-2xl text-lg shadow-lg shadow-gray-200/50">
+                                        Cadastrar Minha Loja
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Card Entregador */}
+                            <div className="group bg-white dark:bg-gray-800 rounded-[40px] p-8 md:p-12 shadow-2xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-800 relative overflow-hidden transition-all hover:-translate-y-1">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-green-500/20 transition-colors"></div>
+                                <div className="relative z-10">
+                                    <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center text-green-600 mb-6">
+                                        <Bike className="w-8 h-8" />
+                                    </div>
+                                    <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-4">Para Entregadores</h3>
+                                    <p className="text-gray-500 dark:text-gray-400 mb-8 text-lg">
+                                        Receba as melhores corridas, otimize sua rota e receba seus ganhos com transparência.
+                                    </p>
+                                    <ul className="space-y-4 mb-8">
+                                        <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-medium"><div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="w-4 h-4 text-green-600" /></div> Mapa de calor e rotas inteligentes</li>
+                                        <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-medium"><div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="w-4 h-4 text-green-600" /></div> Ganhos em tempo real</li>
+                                        <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-medium"><div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="w-4 h-4 text-green-600" /></div> Suporte dedicado ao parceiro</li>
+                                    </ul>
+                                    <Button onClick={() => onSignupClick('DELIVERY_PARTNER')} className="bg-green-600 hover:bg-green-700 text-white w-full py-4 rounded-2xl text-lg shadow-lg shadow-green-500/20">
+                                        Cadastrar Veículo
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* Benefits Section */}
+                <section id="benefits" className="py-24 px-4 bg-white dark:bg-gray-900">
+                    <div className="max-w-6xl mx-auto">
+                        <SectionTitle title="Por que escolher o Zé?" subtitle="Vantagens pensadas para quem precisa de agilidade e confiança." />
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <BenefitCard
+                                icon={<Zap className="w-8 h-8" />}
+                                title="Ultra Rápido"
+                                description="Conexão instantânea entre lojas e entregadores. Otimização de rotas para entregas em tempo recorde."
+                                colorClass="from-yellow-400 to-orange-500"
+                            />
+                            <BenefitCard
+                                icon={<Shield className="w-8 h-8" />}
+                                title="Segurança Total"
+                                description="Verificação rigorosa de parceiros, monitoramento em tempo real e suporte dedicado para qualquer imprevisto."
+                                colorClass="from-blue-500 to-cyan-500"
+                            />
+                            <BenefitCard
+                                icon={<Wallet className="w-8 h-8" />}
+                                title="Taxas Justas"
+                                description="Modelo de negócio transparente. Sem surpresas no final do mês, com repasses rápidos e claros."
+                                colorClass="from-green-500 to-emerald-500"
+                            />
+                        </div>
+                    </div>
+                </section>
+
+                {/* News Section */}
+                {platformNews.length > 0 && (
+                    <section className="py-24 px-4 bg-gray-50 dark:bg-gray-950">
+                        <div className="max-w-6xl mx-auto">
+                            <SectionTitle title="Novidades" subtitle="Fique por dentro das últimas atualizações da plataforma." />
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {platformNews.map((item, index) => (
+                                    <NewsCard key={item.id} item={item} index={index} />
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+                )}
+
+                {/* CTA Section */}
+                <section id="cadastro" className="py-24 px-4 bg-brand-600 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    <div className="max-w-4xl mx-auto text-center relative z-10">
+                        <h2 className="text-4xl md:text-5xl font-black text-white mb-8">Pronto para começar?</h2>
+                        <p className="text-xl text-brand-100 mb-12 max-w-2xl mx-auto">
+                            Junte-se a milhares de lojas e entregadores que já estão transformando a logística urbana.
+                        </p>
+                        <div className="flex flex-col sm:flex-row justify-center gap-6">
+                            <Button
+                                onClick={() => onSignupClick('STORE_PARTNER')}
+                                className="!bg-white !text-brand-600 !hover:bg-gray-50 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-gray-200/50 transform hover:-translate-y-1 transition-all border-none"
+                            >
+                                <Store className="w-6 h-6 mr-3" />
+                                Cadastrar Minha Loja
+                            </Button>
+                            <Button
+                                onClick={() => onSignupClick('DELIVERY_PARTNER')}
+                                className="!bg-gray-900 !text-white !hover:bg-gray-800 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-gray-900/20 transform hover:-translate-y-1 transition-all border-none"
+                            >
+                                <Bike className="w-6 h-6 mr-3" />
+                                Quero Entregar
+                            </Button>
+                        </div>
+                    </div>
+                </section>
             </main>
-            
-            <Footer 
+
+            <Footer
                 shopSettings={shopSettings}
                 setShowTerms={setShowTerms}
                 setShowPrivacy={setShowPrivacy}
@@ -513,4 +376,3 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
         </div>
     );
 };
-// #endregion

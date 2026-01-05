@@ -159,11 +159,17 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({ history, onClear, on
             <Filter className="w-4 h-4 text-gray-400" />
             <h3 className="font-bold text-gray-500 text-sm">Filtros</h3>
           </div>
+<<<<<<< HEAD
           {onAdd && (
             <button onClick={onAdd} className="mt-2 text-white bg-brand-700 hover:bg-brand-800 flex items-center gap-1 text-xs font-bold bg-brand-50 dark:bg-brand-900/20 px-3 py-1.5 rounded-full">
               <Plus className="w-3 h-3" /> Novo Registro
             </button>
           )}
+=======
+          <button onClick={() => alert("Função de adicionar registro manual em desenvolvimento")} className="text-brand-600 hover:text-brand-700 flex items-center gap-1 text-xs font-bold">
+             <Plus className="w-3 h-3" /> Novo Registro
+          </button>
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
         </div>
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 min-w-[150px]">

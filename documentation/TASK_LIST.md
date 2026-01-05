@@ -1,8 +1,8 @@
-# Lista de Tarefas: Migração de Imagens para Supabase Storage
+# Lista de Tarefas
 
-- [x] Identificar campos de inputs de imagens no projeto
-- [x] Verificar/Criar utilitário de upload para o Supabase Storage
-- [x] Refatorar componentes para usar upload de imagem (AdminSlides)
-- [x] Implementar upload de imagem no Marketing do Entregador (PromotionCardGenerator)
-- [x] Atualizar checklist.txt
-- [x] Validar alterações
+- [ ] Padronizar links e formatação em `task.md.resolved`
+- [ ] Substituir `task.md` pelo conteúdo corrigido
+- [ ] Remover arquivos temporários `task.md.resolved*`
+- [x] Implementar `getUserRole` em `services/cloud.ts`
+- [x] Validar correção de `ExclusiveLock.tsx`
+- [x] Corrigir erro "Failed to fetch" no Supabase (credenciais inválidas)

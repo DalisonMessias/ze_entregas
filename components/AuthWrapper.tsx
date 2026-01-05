@@ -3,16 +3,16 @@ import { TourProvider } from './Tour/TourContext';
 import * as cloud from '../services/cloud';
 import * as logger from '../services/logger';
 import { useDialog } from '../utils/dialogService';
-import { Logo } from './Logo';
-import { Button } from './Button';
-import { CitySelector } from './CitySelector';
 import { App } from './App';
-import { CollaboratorModule } from './CollaboratorModule';
-import { LandingPage } from './LandingPage';
-import { ArrowLeft, Ban, CheckCircle, EyeOff, Eye, Loader2, MapPin } from 'lucide-react';
-import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
 import { UserRole } from '../types';
+import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin } from 'lucide-react';
+import { Button } from './Button';
+import { LandingPage } from './LandingPage';
+import { CitySelector } from './CitySelector';
+import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
+import { Logo } from './Logo';
 import { CustomInput } from './CustomInput';
+import { CollaboratorModule } from './CollaboratorModule';
 
 type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_password';
 
@@ -417,7 +417,15 @@ export const AuthWrapper: React.FC = () => {
         userData.address_state = state;
       }
 
-      const res = await cloud.registerUserWithType(trimmedEmail, password, userData);
+      const res = await cloud.registerUserWithType(
+        trimmedEmail,
+        password,
+        trimmedName,
+        phoneDigits,
+        cpfDigits || '',
+        roleToSend,
+        city
+      );
       logger.info('AUTH_SIGNUP_SUCCESS', {
         type: signupType,
         email,
@@ -602,11 +610,6 @@ export const AuthWrapper: React.FC = () => {
                 (Mudar)
               </button>
             </div>
-
-            <div className={`p-3 rounded-xl text-xs font-bold mb-2 ${signupType === 'STORE_PARTNER' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300' : 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300'}`}>
-              {signupType === 'STORE_PARTNER' ? 'Cadastro Lojista' : 'Cadastro Entregador'}
-            </div>
-            <p className="text-sm font-bold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">Dados Pessoais</p>
 
             <CustomInput
               type="text"

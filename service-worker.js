@@ -6,7 +6,15 @@ const MAP_CACHE_NAME = 'delivery-tracker-maps-v1';
 const ASSETS = [
   '/',
   '/index.html',
+<<<<<<< HEAD
   '/manifest.json'
+=======
+  '/manifest.json',
+  'https://cdn.tailwindcss.com',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', // Adicionado Supabase ao Cache
+  'https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js',
+  'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js'
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 ];
 
 // Utility: network with timeout
@@ -42,6 +50,7 @@ self.addEventListener('install', (event) => {
 
 // Activate Event - Clean old caches and take control
 self.addEventListener('activate', (event) => {
+<<<<<<< HEAD
   event.waitUntil((async () => {
     const keyList = await caches.keys();
     await Promise.all(keyList.map((key) => {
@@ -52,6 +61,19 @@ self.addEventListener('activate', (event) => {
     }));
     await self.clients.claim();
   })());
+=======
+  event.waitUntil(
+    caches.keys().then((keyList) => {
+      return Promise.all(
+        keyList.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    })
+  );
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 });
 
 // Allow pages to trigger skipWaiting via postMessage
@@ -62,6 +84,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
+<<<<<<< HEAD
 // Fetch Event - strategies: navigation, API (network-first with timeout), static assets (cache-first)
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -145,6 +168,15 @@ self.addEventListener('fetch', (event) => {
       return cached || new Response('Offline', { status: 503 });
     }
   })());
+=======
+  // Estratégia Padrão: Network First, fall back to Cache
+  event.respondWith(
+    fetch(event.request)
+      .catch(() => {
+        return caches.match(event.request);
+      })
+  );
+>>>>>>> 04096c9171b59e53d616aa9a098ef9923be45507
 });
 
 // Push Notification Event (Handles backend pushes)

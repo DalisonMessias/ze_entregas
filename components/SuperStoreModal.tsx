@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Crown, Check, Loader2, X, AlertCircle, Copy, Wallet, QrCode } from 'lucide-react';
 import { Button } from './Button';
@@ -32,7 +31,7 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
         const loadData = async () => {
             try {
                 const [settings, walletData] = await Promise.all([
-                    cloud.getPublicFeeSettings(),
+                    cloud.adminGetFeeSettings(),
                     cloud.getMyWallet()
                 ]);
                 setFees(settings);

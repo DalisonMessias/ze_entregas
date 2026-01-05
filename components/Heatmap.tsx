@@ -17,7 +17,7 @@ const geocodeAddress = async (address: string): Promise<{ lat: number; lng: numb
     try {
         const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=br`);
         if (!response.ok) return null;
-        
+
         const data = await response.json();
         if (data && data.length > 0) {
             const result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
@@ -55,7 +55,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ userRole }) => {
             attributionControl: false
         });
         mapInstanceRef.current = map;
-        
+
         const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         L.tileLayer(isDark ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 19
@@ -81,7 +81,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ userRole }) => {
 
         const heatData: [number, number, number][] = [];
         const bounds: [number, number][] = [];
-        
+
         for (let i = 0; i < addresses.length; i++) {
             const address = addresses[i];
             setMessage(`Processando endereço ${i + 1} de ${addresses.length}...`);
@@ -99,7 +99,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ userRole }) => {
                 maxZoom: 17,
                 gradient: { 0.4: 'blue', 0.65: 'lime', 1: 'red' }
             }).addTo(mapInstanceRef.current);
-            
+
             if (bounds.length > 1) {
                 mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
             } else if (bounds.length === 1) {
@@ -114,7 +114,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ userRole }) => {
 
     if (userRole && userRole !== 'delivery_partner') {
         return (
-            <ExclusiveLock 
+            <ExclusiveLock
                 title="Mapa de Calor"
                 description="Visualize as zonas mais quentes da sua cidade e posicione-se estrategicamente para receber mais entregas."
             />
@@ -141,7 +141,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ userRole }) => {
                     </div>
                 )}
                 {!loading && error && (
-                     <div className="absolute inset-0 bg-red-50/70 dark:bg-red-900/70 flex flex-col items-center justify-center gap-4 z-20">
+                    <div className="absolute inset-0 bg-red-50/70 dark:bg-red-900/70 flex flex-col items-center justify-center gap-4 z-20">
                         <AlertTriangle className="w-10 h-10 text-red-500" />
                         <p className="font-bold text-red-700 dark:text-red-300 text-center max-w-sm">{error}</p>
                     </div>

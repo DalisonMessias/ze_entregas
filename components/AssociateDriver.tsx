@@ -25,7 +25,7 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ onBack }) => {
                     cloud.getMyPartnerProfile(),
                     cloud.getPartnerAssociatedStores()
                 ]);
-                
+
                 setProfile(p);
                 setAssociatedStores(s);
             } catch (e: any) {
@@ -54,11 +54,11 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ onBack }) => {
     if (loading) {
         return (
             <div className="flex justify-center p-10">
-                <Loader2 className="w-8 h-8 animate-spin text-brand-600"/>
+                <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
             </div>
         );
     }
-    
+
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center p-10 text-center bg-red-50 dark:bg-red-900/20 rounded-2xl">
@@ -71,8 +71,8 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ onBack }) => {
     return (
         <div className="space-y-6 animate-in fade-in">
             {onBack && (
-                <button 
-                    onClick={onBack} 
+                <button
+                    onClick={onBack}
                     className="flex items-center text-sm font-bold text-gray-500 hover:text-brand-600 mb-2 transition-colors"
                 >
                     <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
@@ -91,21 +91,21 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ onBack }) => {
                 </div>
 
                 <p className="text-brand-100 text-sm font-bold uppercase mb-4 tracking-wider">Seu Código Exclusivo</p>
-                
+
                 <div className="bg-white/20 p-4 rounded-2xl mb-6 backdrop-blur-sm border border-white/20 inline-block w-full max-w-xs">
                     <h2 className="text-4xl font-black tracking-widest font-mono">{profile?.association_code || '---'}</h2>
                 </div>
-                
+
                 <p className="text-sm text-white/90 mb-6 max-w-sm mx-auto leading-relaxed">
                     Envie este código para o lojista. Assim que ele inserir no sistema, vocês estarão conectados para entregas exclusivas.
                 </p>
-                
+
                 <div className="flex justify-center gap-3">
                     <button onClick={copyCode} className="bg-white text-brand-700 px-6 py-3 rounded-xl font-bold text-sm shadow-lg flex items-center gap-2 hover:bg-gray-50 transition-colors">
-                        <Copy className="w-4 h-4"/> Copiar
+                        <Copy className="w-4 h-4" /> Copiar
                     </button>
                     <button onClick={handleShareCode} className="bg-green-500 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg flex items-center gap-2 hover:bg-green-400 transition-colors">
-                        <Share2 className="w-4 h-4"/> Enviar no Zap
+                        <Share2 className="w-4 h-4" /> Enviar no Zap
                     </button>
                 </div>
             </div>
@@ -116,7 +116,7 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ onBack }) => {
                 </h3>
                 {associatedStores.length === 0 ? (
                     <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
-                        <Store className="w-10 h-10 text-gray-300 mx-auto mb-2"/>
+                        <Store className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                         <p className="text-sm text-gray-400">Você ainda não está vinculado a nenhuma loja.</p>
                     </div>
                 ) : (

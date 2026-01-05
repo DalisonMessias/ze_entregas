@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Gift, ChevronLeft, Megaphone, ChevronRight, IdCard, Palette } from 'lucide-react';
 import { ReferralProgram } from './ReferralProgram';

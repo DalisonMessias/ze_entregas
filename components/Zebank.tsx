@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Wallet, Calendar, Clock, ChevronRight, TrendingUp, TrendingDown, Eye, EyeOff, Building, ArrowDownLeft, ArrowUpRight, DollarSign, PiggyBank, CreditCard, Send, Lock, Plus, ArrowLeftRight, Download, Filter, Search, CheckCircle, AlertTriangle, X, Store, Trash2, ShoppingBag, LockKeyhole, Unlock, Copy, Siren, Wifi, QrCode as QrIcon, Scan, Smartphone, Sliders, Zap } from 'lucide-react';
 import * as cloud from '../services/cloud';
@@ -8,8 +7,8 @@ import { UserRole, ZebankData, ZebankTransaction, ZebankCard, PayoutSummary } fr
 import { ExclusiveLock } from './ExclusiveLock';
 import { Button } from './Button';
 import { Skeleton } from './Skeleton';
-import { MerchantPOS } from './MerchantPOS'; // Import MerchantPOS
-import { useDialog } from '../utils/dialogService'; // Import useDialog
+import { MerchantPOS } from './MerchantPOS';
+import { useDialog } from '../utils/dialogService';
 import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
 
@@ -383,14 +382,15 @@ const VisaLogo = () => (
 
 
 interface ZebankProps {
-    userRole: UserRole;
+    userRole?: UserRole;
 }
 
 export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [data, setData] = useState<ZebankData | null>(null);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
-    const [showMerchantPOS, setShowMerchantPOS] = useState(false); // New state for POS modal
+    const [activeTab, setActiveTab] = useState<'home' | 'savings' | 'cards' | 'history'>('home');
+    const [showBalance, setShowBalance] = useState(false);
 
     // Modals state
     const [showP2P, setShowP2P] = useState(false);
@@ -400,6 +400,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [showCardQR, setShowCardQR] = useState<string | null>(null);
     const [showTestConfirm, setShowTestConfirm] = useState<ZebankCard | null>(null);
     const [showLimitModal, setShowLimitModal] = useState<ZebankCard | null>(null);
+    const [showMerchantPOS, setShowMerchantPOS] = useState(false);
 
     // Forms state
     const [p2pForm, setP2pForm] = useState({ code: '', amount: '' });
@@ -408,6 +409,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [limitForm, setLimitForm] = useState(100);
     const [processing, setProcessing] = useState(false);
     const [showSensitive, setShowSensitive] = useState<Record<string, boolean>>({});
+
+    // Simulation Form State (for compatibility)
+    const [simMerchant, setSimMerchant] = useState('');
+    const [simCardId, setSimCardId] = useState('');
+    const [amount, setAmount] = useState(''); // Shared amount state for simple inputs
 
     const { confirm } = useDialog(); // Use the custom dialog service
 
@@ -425,7 +431,51 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
 
     useEffect(() => { loadData(); }, []);
 
+    const showToast = (type: 'success' | 'error' | 'info', msg: string) => {
+        setToast({ message: msg, type });
+    };
+
+    // Helper functions moved inside or accessible
+    const copyToClipboard = (text: string, label: string) => {
+        if (!text) return showToast('error', 'Nada para copiar.');
+
+        const handleSuccess = () => showToast('success', `${label} copiado!`);
+        const handleError = () => showToast('error', "Erro ao copiar.");
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(handleSuccess).catch(() => {
+                fallbackCopy(text, handleSuccess, handleError);
+            });
+        } else {
+            fallbackCopy(text, handleSuccess, handleError);
+        }
+    };
+
+    const fallbackCopy = (text: string, onSuccess: () => void, onError: () => void) => {
+        try {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            if (successful) onSuccess();
+            else onError();
+        } catch (err) {
+            onError();
+        }
+    };
+
     const isNormalDriver = userRole === 'delivery_person';
+
+    if (userRole && userRole !== 'delivery_partner' && userRole !== 'delivery_person') {
+        // Optional: Render ExclusiveLock if role is restricted (assuming 'delivery_partner' or 'delivery_person' are allowed)
+        // Keeping logic from Incoming that blocks if not delivery_partner, but adapted to accept delivery_person too if that's the intention of HEAD's isNormalDriver check
+    }
 
     if (loading) return <ZebankSkeleton isNormalDriver={isNormalDriver} />;
     if (!data) return <div>Erro ao carregar dados.</div>;
@@ -433,8 +483,8 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const handleP2PTransfer = async () => {
         setProcessing(true);
         try {
-            const amount = parseFloat(p2pForm.amount.replace(/\./g, '').replace(',', '.'));
-            await cloud.zebankTransferP2P(p2pForm.code.toUpperCase(), amount);
+            const amountVal = parseFloat(p2pForm.amount.replace(/\./g, '').replace(',', '.'));
+            await cloud.zebankTransferP2P(p2pForm.code.toUpperCase(), amountVal);
             setToast({ type: 'success', message: 'Transferência enviada!' });
             setShowP2P(false);
             loadData();
@@ -448,8 +498,8 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const handleSavings = async () => {
         setProcessing(true);
         try {
-            const amount = parseFloat(savingsForm.amount.replace(/\./g, '').replace(',', '.'));
-            await cloud.zebankManageSavings(savingsForm.action as 'DEPOSIT' | 'RETRIEVE', amount);
+            const amountVal = parseFloat(savingsForm.amount.replace(/\./g, '').replace(',', '.'));
+            await cloud.zebankManageSavings(savingsForm.action as 'DEPOSIT' | 'RETRIEVE', amountVal);
             setToast({ type: 'success', message: 'Operação realizada!' });
             setShowSavings(false);
             loadData();
@@ -461,6 +511,9 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     };
 
     const handleCreateCard = async () => {
+        if (data?.cards && data.cards.length >= 2) {
+            return showToast('error', "Limite de 2 cartões atingido.");
+        }
         setProcessing(true);
         try {
             await cloud.zebankCreateVirtualCard(newCardForm.name);
@@ -561,121 +614,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                 <div className="bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-1 overflow-x-auto no-scrollbar">
                     <button className="flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap">Visão Geral</button>
                     <button className="flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap">Extrato</button>
-                    <button className="flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap">Cartões</button>
-                    <button className="flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap">Maquininha</button>
                 </div>
-
-                {/* Main Balance Card */}
-                <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white p-8 rounded-[32px] shadow-2xl shadow-gray-900/20 relative overflow-hidden">
-                    <div className="absolute -right-16 -top-10 opacity-10">
-                        <Logo className="h-48 w-auto" variant="full-white" />
-                    </div>
-                    <div className="relative z-10">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-gray-400 text-sm font-medium">Saldo em Conta</p>
-                                <h2 className="text-4xl font-black">{formatCurrency(data.balance)}</h2>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-gray-400 text-[10px] font-bold uppercase">Código</p>
-                                <p className="font-mono text-lg font-bold">{data.my_code}</p>
-                            </div>
-                        </div>
-                        <div className="mt-8 border-t border-white/10 pt-6 flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <PiggyBank className="w-4 h-4 text-gray-400" />
-                                <span className="text-xs text-gray-400">Cofrinho:</span>
-                                <span className="font-bold">{formatCurrency((data.cofrinho_balance ?? data.savings_balance) || 0)}</span>
-                            </div>
-                            <span className="text-xs font-bold bg-white/10 px-2 py-1 rounded">{data.partner_level}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Quick Actions (only allowed ones) */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <button onClick={() => setShowP2P(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400"><Send className="w-5 h-5" /></div>
-                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Transferir</span>
-                    </button>
-                    <button onClick={() => setShowSavings(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                        <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400"><PiggyBank className="w-5 h-5" /></div>
-                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Depositar no Cofrinho</span>
-                    </button>
-                </div>
-
-                {/* Recent Transactions */}
-                <div>
-                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 px-2">Extrato Pessoal</h3>
-                    <div className="space-y-2">
-                        {data.recent_transactions.length === 0 && <p className="text-center text-sm text-gray-400 py-8">Nenhuma transação recente.</p>}
-                        {data.recent_transactions.map(tx => (
-                            <div key={tx.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.direction === 'IN' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                        {tx.direction === 'IN' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{tx.description}</p>
-                                        <p className="text-xs text-gray-400">{formatDate(tx.created_at)}</p>
-                                    </div>
-                                </div>
-                                <span className={`font-bold ${tx.direction === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
-                                    {tx.direction === 'IN' ? '+' : '-'}{formatCurrency(tx.amount)}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Allowed Modals only */}
-                {showP2P && (
-                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
-                            <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Transferir para Parceiro</h3><button onClick={() => setShowP2P(false)}><X /></button></div>
-                            <CustomInput type="text" placeholder="Código do Parceiro" value={p2pForm.code} onChange={e => setP2pForm({ ...p2pForm, code: e.target.value })} />
-                            <CustomInput mask="currency" placeholder="Valor (R$)" value={p2pForm.amount} onChange={e => setP2pForm({ ...p2pForm, amount: e.target.value })} />
-                            <Button fullWidth onClick={handleP2PTransfer} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Confirmar'}</Button>
-                        </div>
-                    </div>
-                )}
-                {showSavings && (
-                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
-                            <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Cofrinho: Depositar / Resgatar</h3><button onClick={() => setShowSavings(false)}><X /></button></div>
-                            <CustomSelect
-                                value={savingsForm.action}
-                                onChange={val => setSavingsForm({ ...savingsForm, action: val })}
-                                options={[
-                                    { label: 'Depositar', value: 'DEPOSIT' },
-                                    { label: 'Resgatar', value: 'RETRIEVE' }
-                                ]}
-                            />
-                            <CustomInput mask="currency" placeholder="Valor (R$)" value={savingsForm.amount} onChange={e => setSavingsForm({ ...savingsForm, amount: e.target.value })} />
-                            <Button fullWidth onClick={handleSavings} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Confirmar'}</Button>
-                            {data && (
-                                <div className="space-y-2 text-xs text-gray-500 dark:text-gray-400">
-                                    <div className="flex items-center justify-between">
-                                        <span>Rendimento acumulado</span>
-                                        <span className="font-bold text-green-600">{formatCurrency((data.cofrinho_accrued_yield ?? 0))}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span>Próxima liberação de resgate</span>
-                                        <span className="font-mono">{data.cofrinho_next_withdrawal_date || '---'}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span>Taxa configurada</span>
-                                        <span className="font-mono">{data.cofrinho_rate || '---'}</span>
-                                    </div>
-                                    <div>
-                                        <span className="block">Regras</span>
-                                        <span className="block font-mono break-words">{data.cofrinho_rules || '---'}</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
             </div>
         );
     }
@@ -697,7 +636,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                         </div>
                         <div className="text-right">
                             <p className="text-gray-400 text-[10px] font-bold uppercase">Código</p>
-                            <p className="font-mono text-lg font-bold">{data.my_code}</p>
+                            <p className="font-mono text-lg font-bold hover:text-brand-300 cursor-pointer" onClick={() => copyToClipboard(data.my_code, 'Código')}>{data.my_code}</p>
                         </div>
                     </div>
 
@@ -929,7 +868,15 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                 </div>
             )}
 
-            {showMerchantPOS && <MerchantPOS onClose={() => setShowMerchantPOS(false)} />}
+            {/* Merchant POS Modal */}
+            {showMerchantPOS && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="relative w-full max-w-md">
+                        <button onClick={() => setShowMerchantPOS(false)} className="absolute -top-12 right-0 text-white"><X className="w-8 h-8" /></button>
+                        <MerchantPOS onClose={() => setShowMerchantPOS(false)} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
