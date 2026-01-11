@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     vehicle_plate text,
     vehicle_model text,
     vehicle_year text,
-    asaas_wallet_id text,
+
     partner_level text DEFAULT 'BRONZE'::text,
     average_rating numeric DEFAULT 0.0,
     completed_deliveries integer DEFAULT 0,
@@ -337,10 +337,7 @@ ALTER TABLE public.payout_settings ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS public.shop_settings (
     id boolean PRIMARY KEY DEFAULT true,
     is_shop_enabled boolean DEFAULT false,
-    asaas_active boolean DEFAULT false,
-    payment_methods jsonb DEFAULT '{"pix": false, "boleto": false, "credit_card": false}'::jsonb,
-    asaas_api_key text,
-    social_media jsonb DEFAULT '{"instagram": null, "facebook": null, "twitter": null, "linkedin": null}'::jsonb,
+
     company_info jsonb DEFAULT '{}'::jsonb,
     support_phone text,
     support_status_override text DEFAULT 'AUTO'::text,
@@ -365,22 +362,7 @@ CREATE TABLE IF NOT EXISTS public.pwa_settings (
 );
 ALTER TABLE public.pwa_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.asaas_webhook_settings (
-    id boolean PRIMARY KEY DEFAULT true,
-    webhook_secret text DEFAULT gen_random_uuid()::text NOT NULL,
-    active_events text[] DEFAULT '{}'::text[] NOT NULL
-);
-ALTER TABLE public.asaas_webhook_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.asaas_webhook_logs (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    event_type text NOT NULL,
-    status text NOT NULL,
-    payload jsonb,
-    action_taken text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
-);
-ALTER TABLE public.asaas_webhook_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.platform_news (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -428,8 +410,6 @@ CREATE TABLE IF NOT EXISTS public.orders (
     payment_method public.payment_method_enum NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     shipping_address jsonb,
-    asaas_pix_copy_paste text,
-    asaas_bank_slip_url text,
     payment_details jsonb
 );
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
@@ -2012,13 +1992,7 @@ DROP POLICY IF EXISTS "Admins can manage PWA settings" ON public.pwa_settings;
 CREATE POLICY "Admins can manage PWA settings" ON public.pwa_settings
     FOR ALL USING (public.is_admin());
 
-DROP POLICY IF EXISTS "Admins can manage Asaas webhook settings" ON public.asaas_webhook_settings;
-CREATE POLICY "Admins can manage Asaas webhook settings" ON public.asaas_webhook_settings
-    FOR ALL USING (public.is_admin());
 
-DROP POLICY IF EXISTS "Admins can view Asaas webhook logs" ON public.asaas_webhook_logs;
-CREATE POLICY "Admins can view Asaas webhook logs" ON public.asaas_webhook_logs
-    FOR SELECT USING (public.is_admin());
 
 DROP POLICY IF EXISTS "All users can view platform news" ON public.platform_news;
 CREATE POLICY "All users can view platform news" ON public.platform_news
@@ -2140,7 +2114,7 @@ INSERT INTO public.payout_settings (id, global_tax_fixed, global_tax_percent, ba
 VALUES (true, 2.0, 0.15, 6.0, 5.0, 1.5, 2.0, 5, '10:00', 50.0, 24, true, 49.90, 10.0)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.shop_settings (id, is_shop_enabled, asaas_active, payment_methods, social_media, company_info, support_phone, support_status_override, support_hours_start, support_hours_end, google_gemini_api_key, shop_name, shop_city)
+INSERT INTO public.shop_settings (id, is_shop_enabled, payment_methods, social_media, company_info, support_phone, support_status_override, support_hours_start, support_hours_end, google_gemini_api_key, shop_name, shop_city)
 VALUES (true, true, false, '{"pix": true, "boleto": false, "credit_card": false}', '{"instagram": "https://instagram.com/zeentregas", "facebook": "https://facebook.com/zeentregas", "twitter": null, "linkedin": null}', '{"about_text": "O Zé Entregas nasceu com a missão de revolucionar a logística urbana, conectando entregadores e lojistas de forma eficiente, justa e tecnológica.", "careers_email": "vagas@zeentregas.com", "careers_text": "Estamos sempre em busca de talentos que queiram fazer a diferença!", "press_email": "imprensa@zeentregas.com", "press_text": "Olá, jornalista! Aqui você encontra nossos releases e materiais de mídia.", "contact_address": "Av. Paulista, 1000 - São Paulo, SP", "contact_support_email": "suporte@zeentregas.com", "contact_commercial_email": "comercial@zeentregas.com"}', '5511999999999', 'AUTO', '09:00', '18:00', null, 'Zé Entregas Loja', null)
 ON CONFLICT (id) DO NOTHING;
 
@@ -2148,9 +2122,6 @@ INSERT INTO public.pwa_settings (id, display_name, short_name, theme_color, back
 VALUES (true, 'Zé Entregas', 'Zé Entregas', '#ed2b05', '#f9fafb', '/', 'portrait', 'pt-BR', 1)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.asaas_webhook_settings (id, webhook_secret, active_events)
-VALUES (true, gen_random_uuid()::text, ARRAY['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'TRANSFER_DONE', 'TRANSFER_FAILED'])
-ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.partner_levels (level, display_name, min_deliveries, min_rating, store_discount_percent, service_fee_reduction_percent) VALUES
 ('BRONZE', 'Iniciante Zé', 0, 0.0, 0.0, 0.0),

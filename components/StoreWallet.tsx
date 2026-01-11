@@ -55,10 +55,7 @@ const RechargeModal = ({ onClose, onRecharge }: { onClose: () => void, onRecharg
         }
         setProcessing(true);
         try {
-            const res = await onRecharge(value, 'PIX');
-            if (res.asaas_pix_copy_paste) {
-                setPixDetails({ copyPaste: res.asaas_pix_copy_paste });
-            }
+
         } catch (e: any) {
             await alert({ title: "Erro ao Gerar PIX", message: "Erro: " + e.message });
         } finally {
@@ -242,7 +239,7 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
                 />
             )}
 
-            {/* Recharge removed as Asaas is deprecated. Needs InfinitePay implementation */}
+
 
             {!isSuperStore && fees && (
                 <div

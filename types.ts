@@ -205,8 +205,6 @@ export interface Order {
     items: { product_id: string, name: string, quantity: number, price: number }[];
     total_price: number;
     payment_method: PaymentMethod;
-    asaas_pix_copy_paste?: string;
-    asaas_bank_slip_url?: string;
     shipping_address?: any;
     payment_details?: any;
     shipping_cost?: number;
@@ -552,7 +550,7 @@ export interface CityRequest {
     status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
-// AsaasWebhookLog removed
+
 
 
 // Consolidated PartnerProfile
@@ -570,7 +568,6 @@ export interface PartnerProfile {
     vehicle_plate?: string;
     vehicle_model?: string;
     vehicle_year?: string;
-    // asaas_wallet_id removido
     partner_level?: string;
     average_rating?: number;
     completed_deliveries?: number;
@@ -854,15 +851,6 @@ export interface LoanConfig {
     repayment_days: number;
     credit_limit: number;
     early_repayment_discount_percent?: number;
-}
-
-export interface AsaasWebhookLog {
-    id: string;
-    event_type: string;
-    status: string;
-    payload: any;
-    action_taken?: string;
-    created_at: string;
 }
 
 export type ContentStatus = 'draft' | 'published' | 'disabled';

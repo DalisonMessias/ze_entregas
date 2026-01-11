@@ -70,11 +70,7 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
 
             if (currentBalance < fee) {
                 // Insufficient funds
-                // Automatic recharge via Asaas deprecated.
-                // const charge = await cloud.createRechargeCharge(fee, 'PIX');
-                // if (charge && charge.asaas_pix_copy_paste) { ... }
-
-                throw new Error("Saldo insuficiente. A recarga automática está temporariamente indisponível. Entre em contato com o suporte.");
+                throw new Error("Saldo insuficiente. Por favor, recarregue sua carteira antes de assinar.");
             }
 
             // If balance sufficient, process subscription

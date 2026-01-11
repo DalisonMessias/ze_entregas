@@ -19,7 +19,7 @@ Serviços/RPCs:
 - Maquininha POS (Superlojista)
 - Cartões virtuais da loja (Superlojista)
 - Transferências entre lojas
-- Integrações de pagamento (Asaas)
+- Integrações de pagamento (InfinitePay)
 
 Componentes/Rotas:
 - `components/ZePayStore.tsx` (App: `zepay_store` em components/App.tsx:342)
@@ -35,4 +35,4 @@ Serviços/RPCs:
 - Carteira da loja: saldo/recarregar via `create_recharge_charge`
 
 ## Admin (fora do escopo dos módulos de usuário)
-- `AdminAsaasConfig.tsx`, `AdminPayouts.tsx`, `AdminFees.tsx`, `AdminStoreFinance.tsx` permanecem sob módulo Admin.
+- `AdminPayouts.tsx`, `AdminFees.tsx`, `AdminStoreFinance.tsx` permanecem sob módulo Admin.

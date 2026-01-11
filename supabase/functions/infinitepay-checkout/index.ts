@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -12,6 +13,21 @@ serve(async (req) => {
     }
 
     try {
+        // 1. Auth Check
+        const supabaseClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+            { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+        )
+
+        const {
+            data: { user },
+        } = await supabaseClient.auth.getUser()
+
+        if (!user) {
+            throw new Error('Unauthorized')
+        }
+
         const { amount, order_id, handle, items, redirect_url, webhook_url } = await req.json()
 
         if (!amount || !order_id || !handle) {
@@ -19,29 +35,9 @@ serve(async (req) => {
         }
 
         // Convert amount to cents (InfinitePay uses cents)
-        // Assuming amount comes as float (e.g. 10.50), multiply by 100 and round
         const amountInCents = Math.round(amount * 100)
 
-        const payload = {
-            handle: handle,
-            redirect_url: redirect_url,
-            webhook_url: webhook_url,
-            order_nsu: order_id,
-            items: items.map((item: any) => ({
-                ...item,
-                price: Math.round(item.price * 100) // Ensure items are also in cents if passed as float, or assume passed as float
-            })),
-            metadata: {
-                order_id: order_id
-            }
-        }
-
-        // Adjust payload items price if they are already in cents or not. 
-        // The implementation plan says "items": [{ "quantity": 1, "price": 1000, "description": "Pedido #123" }]
-        // Usually frontend sends float. Let's make sure we handle it.
-        // If we just construct a single item "Pedido" with total amount, it's safer.
-
-        // Simplification: use the passed items or create a default one if items structure is complex
+        // Simplification: use the passed items or create a default one
         const finalItems = items && items.length > 0 ? items.map((i: any) => ({
             quantity: i.quantity,
             price: Math.round(i.price * 100),
@@ -59,7 +55,10 @@ serve(async (req) => {
             redirect_url,
             webhook_url,
             order_nsu: order_id,
-            items: finalItems
+            items: finalItems,
+            metadata: {
+                user_id: user.id
+            }
         };
 
         console.log('Sending payload to InfinitePay:', JSON.stringify(finalPayload));
@@ -68,6 +67,7 @@ serve(async (req) => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('INFINITEPAY_API_KEY')}` // Ensure API Key Use
             },
             body: JSON.stringify(finalPayload),
         })

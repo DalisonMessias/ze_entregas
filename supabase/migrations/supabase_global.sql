@@ -903,8 +903,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
     items JSONB[] NOT NULL DEFAULT ARRAY[]::JSONB[], -- [{ product_id, name, quantity, price }]
     total_price NUMERIC(10, 2) NOT NULL,
     payment_method public.payment_method NOT NULL,
-    asaas_pix_copy_paste TEXT,
-    asaas_bank_slip_url TEXT,
+
     shipping_address JSONB, -- Endereço de entrega
     payment_details JSONB, -- Detalhes adicionais do pagamento
     shipping_cost NUMERIC(10, 2),
@@ -1122,9 +1121,7 @@ CREATE TABLE IF NOT EXISTS public.shop_settings (
     support_hours_start VARCHAR(5),
     support_hours_end VARCHAR(5),
     support_status_override public.support_status_override_type,
-    asaas_active BOOLEAN DEFAULT FALSE,
-    asaas_api_key TEXT,
-    asaas_webhook_token TEXT,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -1148,6 +1145,51 @@ CREATE POLICY "Admins can manage shop_settings" ON public.shop_settings FOR ALL 
 );
 
 INSERT INTO public.shop_settings (id) VALUES ('1') ON CONFLICT (id) DO NOTHING;
+
+
+
+
+-- ==================================================================
+-- WALLET FUNCTIONS
+-- ==================================================================
+
+CREATE OR REPLACE FUNCTION public.credit_store_wallet(
+    p_store_id UUID,
+    p_amount NUMERIC,
+    p_description TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- Update Wallet Balance
+    UPDATE public.store_wallets
+    SET 
+        balance = balance + (p_amount * 100)::BIGINT, -- Presuming legacy balance is in cents integer
+        balance_decimal = balance_decimal + p_amount,
+        updated_at = NOW()
+    WHERE store_id = p_store_id;
+
+    -- Create Transaction Record
+    INSERT INTO public.wallet_transactions (
+        store_id,
+        amount,
+        type,
+        status,
+        description,
+        created_at
+    ) VALUES (
+        p_store_id,
+        p_amount,
+        'CREDIT',
+        'COMPLETED',
+        p_description,
+        NOW()
+    );
+END;
+$$;
+
 
 
 -- Tabela de requisições de parceiros (entregas);
@@ -1996,8 +2038,8 @@ CREATE TABLE IF NOT EXISTS public.partner_payments (
     partner_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     amount NUMERIC(10, 2) NOT NULL,
     status public.payment_status NOT NULL,
-    transaction_details JSONB, -- Detalhes da transação, ex: asaas_response
-    asaas_transaction_id TEXT,
+    transaction_details JSONB, -- Detalhes da transação
+    external_transaction_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -2054,47 +2096,6 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage all store wallet transactions' AND tablename = 'store_wallet_transactions') THEN
         CREATE POLICY "Admins can manage all store wallet transactions" ON public.store_wallet_transactions FOR ALL USING (public.is_admin());
 
-
--- Tabela de configurações de webhooks Asaas;
-    END IF;
-END $$;
-CREATE TABLE IF NOT EXISTS public.asaas_webhook_settings (
-    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma única linha
-    active_events TEXT[] DEFAULT ARRAY[]::TEXT[],
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-DROP TRIGGER IF EXISTS handle_asaas_webhook_settings_updated_at ON public.asaas_webhook_settings;
-CREATE TRIGGER handle_asaas_webhook_settings_updated_at BEFORE UPDATE ON public.asaas_webhook_settings
-FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-ALTER TABLE public.asaas_webhook_settings ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Admins can manage asaas webhook settings" ON public.asaas_webhook_settings;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage asaas webhook settings' AND tablename = 'asaas_webhook_settings') THEN
-        CREATE POLICY "Admins can manage asaas webhook settings" ON public.asaas_webhook_settings FOR ALL USING (public.is_admin());
-INSERT INTO public.asaas_webhook_settings (id) VALUES ('1') ON CONFLICT (id) DO NOTHING;
-
-
--- Tabela de logs de webhooks Asaas;
-    END IF;
-END $$;
-CREATE TABLE IF NOT EXISTS public.asaas_webhook_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    event_type VARCHAR(255) NOT NULL,
-    status VARCHAR(50) NOT NULL,
-    payload JSONB NOT NULL,
-    action_taken TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS asaas_webhook_logs_event_type_idx ON public.asaas_webhook_logs (event_type);
-CREATE INDEX IF NOT EXISTS asaas_webhook_logs_status_idx ON public.asaas_webhook_logs (status);
-ALTER TABLE public.asaas_webhook_logs ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Admins can read asaas webhook logs" ON public.asaas_webhook_logs;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can read asaas webhook logs' AND tablename = 'asaas_webhook_logs') THEN
-        CREATE POLICY "Admins can read asaas webhook logs" ON public.asaas_webhook_logs FOR SELECT USING (public.is_admin());
 
 -- Tabela para cartões virtuais de loja;
     END IF;
@@ -2344,12 +2345,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.create_recharge_charge(amount NUMERIC, method TEXT)
 RETURNS JSONB AS $$
 BEGIN
-  -- A lógica real que chama a API do Asaas deve ser em uma Edge Function por segurança.
-  -- Esta função pode registrar a intenção e retornar um ID para a Edge Function.
   RETURN jsonb_build_object(
-    'message', 'Not implemented: Asaas API calls should be handled via Edge Functions for security.',
-    'asaas_pix_copy_paste', 'mock_pix_key_123',
-    'asaas_bank_slip_url', 'https://mock.asaas.com/boleto/123'
+    'message', 'Not implemented: Payment API calls should be handled via Edge Functions for security.',
+    'pix_copy_paste', 'mock_pix_key_123',
+    'bank_slip_url', 'https://mock.bank.com/boleto/123'
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -3223,28 +3222,6 @@ BEGIN
   DELETE FROM public.sales_simulations WHERE user_id = auth.uid();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Tabela de Logs de Webhook do Asaas (Novo Recurso)
-CREATE TABLE IF NOT EXISTS public.asaas_webhook_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    event TEXT NOT NULL,
-    payment_id TEXT,
-    payload JSONB,
-    processed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    status TEXT DEFAULT 'RECEIVED', -- 'RECEIVED', 'PROCESSED', 'ERROR'
-    error_message TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-ALTER TABLE public.asaas_webhook_logs ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Admins can view asaas webhook logs" ON public.asaas_webhook_logs;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can view asaas webhook logs' AND tablename = 'asaas_webhook_logs') THEN
-        CREATE POLICY "Admins can view asaas webhook logs" ON public.asaas_webhook_logs FOR ALL USING (public.is_admin());
-    END IF;
-END $$;
 
 
 -- Função: save_route

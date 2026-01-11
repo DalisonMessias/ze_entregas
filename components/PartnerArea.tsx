@@ -293,23 +293,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             await alert({ title: "Erro de PIX", message: "Erro: Chave PIX não encontrada." });
             return;
         }
-
-        /* Emergency payout via Asaas deprecated.
-        setProcessingWithdraw(true);
-        try {
-            await cloud.requestEmergencyPayoutAsaas({
-                pixKey: bankDetails.pixKey,
-                pixType: bankDetails.pixType
-            });
-            await alert({ title: "Saque Solicitado", message: `Sucesso! O valor foi enviado para sua chave PIX.` });
-            setShowWithdrawConfirm(false);
-        } catch (e: any) {
-            await alert({ title: "Erro ao Solicitar Saque", message: "Erro: " + e.message });
-        } finally {
-            setProcessingWithdraw(false);
-        }
-        */
-        await alert({ title: "Indisponível", message: "Saque emergencial temporariamente indisponível durante migração de sistema." });
+        await alert({ title: "Indisponível", message: "Saque emergencial indisponível durante migração." });
         setShowWithdrawConfirm(false);
     };
 

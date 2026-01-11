@@ -16,3 +16,17 @@
 - [x] Atualizar `AdminNotifications.tsx`
 - [x] Integrar `notificationService.ts` com Realtime
 - [x] Adicionar botão de Refresh no menu superior direito (ao lado das notificações)
+
+## Remoção Asaas & Integração InfinitePay (Wallet)
+- [x] Identificar e mapear referências ao Asaas (SQL e Code)
+- [x] Renomear colunas do Asaas no banco para `deprecated_asaas_*`
+- [x] Remover campos Asaas das interfaces TypeScript (`types.ts`)
+- [x] Limpar componentes frontend (`StoreWallet`, `SuperStoreModal`) de referências ao Asaas
+- [x] Validar fluxo de recarga via InfinitePay (apenas link/modal novo)
+- [x] Verificar integridade do sistema (build check)
+
+## Integração Backend InfinitePay (Próximos Passos)
+- [x] Implementar Cloud Function para gerar link de pagamento Real (`createInfinitePayCheckout`)
+- [x] Configurar Webhook para receber confirmação de pagamento
+- [x] Implementar lógica de crédito automático na carteira (`handleInfinitePayWebhook`)
+- [ ] Configurar credenciais de produção no Supabase Secrets
