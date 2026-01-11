@@ -2,6 +2,11 @@
 [x] Corrigido bug de renderização no Shop.tsx e removido fluxo Asaas (2026-01-08)
 [x] Implementar Loading no AdminDashboard substituindo a tela de erro inicial (2026-01-11)
 [x] Implementar sistema completo de "Dica do Dia" com CRUD no AdminPanel e exibição rotativa em todos os dashboards (2026-01-11)
+[x] Criar sistema de notificações individuais no Admin (SEND_INDIVIDUAL_NOTIFICATION)
+[x] Adicionar tabela app_notifications (DEPRECATED - Unificado com user_notifications)
+[x] Atualizar tabela user_notifications com colunas type e updated_at
+[x] Refatorar serviços para usar user_notifications
+[x] Exibir notificações no sino (tempo real via user_notifications)
 [x] Adicionar tabelas `fraud_alerts` e `identity_verifications` com RLS em `supabase_global.sql` para corrigir erro 42501 (2026-01-11)
 [x] Implementar sistema de rotas (URL Sync) para corrigir loops e navegação (2026-01-11)
 [x] Corrigir persistência da API de Rotas usando tabela `api_keys` (2026-01-11)
@@ -10,3 +15,4 @@
 [x] Implementadas tendências reais no Dashboard Administrativo, removendo simulações estáticas (2026-01-11)
 [x] Corrigido redirecionamento inicial: O sistema agora respeita a URL atual ao atualizar e não força a abertura em /perfil (2026-01-11)
 [x] Implementada funcionalidade de notificações específicas para usuários e busca detalhada no Painel Administrativo (2026-01-11)
+[x] Adicionado botão de recarregamento manual (F5) no menu superior para sincronização de dados (2026-01-11)

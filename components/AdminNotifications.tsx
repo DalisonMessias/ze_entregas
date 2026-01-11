@@ -60,6 +60,10 @@ export const AdminNotifications: React.FC = () => {
                 await cloud.adminSendIndividualNotification(selectedUser.id, title, message);
                 setFeedback({ type: 'success', text: `Notificação enviada para ${selectedUser.name}!` });
             }
+
+            // Força o App a recarregar a lista de notificações localmente se o admin for o próprio destinatário
+            window.dispatchEvent(new CustomEvent('refreshNotifications'));
+
             setTitle('');
             setMessage('');
             if (activeType === 'individual') {

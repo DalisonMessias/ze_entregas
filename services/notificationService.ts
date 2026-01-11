@@ -30,7 +30,7 @@ const sendLocalNotification = (title: string, body: string, soundEnabled: boolea
             } as any);
         });
     }
-    
+
     // Som
     if (soundEnabled) {
         playNotificationSound();
@@ -125,33 +125,36 @@ export const initNotificationService = async (userId: string, role: UserRole) =>
     // NOVO: Listener para Notificações Gerais do App (Financeiro, Sistema, etc)
     // Isso garante que transferências e pagamentos gerem feedback imediato
     appNotifSubscription = client
-        .channel('public:app_notifications')
+        .channel('public:user_notifications')
         .on(
             'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'app_notifications', filter: `user_id=eq.${userId}` },
+            { event: 'INSERT', schema: 'public', table: 'user_notifications', filter: `user_id=eq.${userId}` },
             (payload) => {
                 const notif = payload.new as AppNotification;
                 // Dispara o alerta visual e sonoro imediato
                 sendLocalNotification(notif.title, notif.message, prefs.sound_enabled);
+
+                // Força o componente App a recarregar a lista para atualizar o "unreadCount" e o sino
+                window.dispatchEvent(new CustomEvent('refreshNotifications'));
             }
         )
         .subscribe();
-        
+
     console.log("Notification Service Initialized for", role, "City:", userCity);
 };
 
 const handleRequestUpdate = (
-    newReq: PartnerRequest, 
-    oldReq: PartnerRequest, 
-    userId: string, 
-    role: UserRole, 
+    newReq: PartnerRequest,
+    oldReq: PartnerRequest,
+    userId: string,
+    role: UserRole,
     prefs: NotificationPreferences
 ) => {
     // Ignorar se status não mudou
     if (newReq.status === oldReq.status) return;
 
     // Lógica Inteligente de Roteamento de Notificação
-    
+
     // LOJA
     if (role === 'store_partner' && newReq.store_id === userId) {
         if (!prefs.order_updates) return;
@@ -170,7 +173,7 @@ const handleRequestUpdate = (
     // ENTREGADOR
     if (role === 'delivery_partner' && newReq.partner_id === userId) {
         if (!prefs.order_updates) return;
-        
+
         if (newReq.status === 'CANCELLED') {
             sendLocalNotification('Corrida Cancelada', 'A loja cancelou a solicitação.', prefs.sound_enabled);
         }

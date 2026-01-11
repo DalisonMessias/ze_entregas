@@ -1363,8 +1363,8 @@ export const getNotifications = async (): Promise<AppNotification[]> => {
             .order('created_at', { ascending: false })
             .limit(10);
 
-        // 2. Busca notificações individuais (app_notifications)
-        const { data: individual, error: indivError } = await sb.from('app_notifications')
+        // 2. Busca notificações individuais (user_notifications)
+        const { data: individual, error: indivError } = await sb.from('user_notifications')
             .select('*')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
@@ -1395,7 +1395,7 @@ export const getNotifications = async (): Promise<AppNotification[]> => {
                     user_id: i.user_id,
                     title: i.title,
                     message: i.message,
-                    type: i.type as any,
+                    type: i.type as 'success' | 'error' | 'warning' | 'info',
                     is_read: i.is_read,
                     created_at: i.created_at
                 });
@@ -1446,7 +1446,7 @@ export const markNotificationRead = async (notificationId: string) => {
     if (!sb) return;
 
     // Tenta marcar na tabela de notificações individuais
-    await sb.from('app_notifications').update({ is_read: true }).eq('id', notificationId);
+    await sb.from('user_notifications').update({ is_read: true }).eq('id', notificationId);
 };
 
 export const adminSearchUsers = async (query: string): Promise<any[]> => {
@@ -1480,7 +1480,7 @@ export const adminSendGlobalNotification = async (title: string, message: string
 export const adminSendIndividualNotification = async (userId: string, title: string, message: string) => {
     const sb = getClient();
     if (!sb) throw new Error("Client not initialized");
-    const { error } = await sb.from('app_notifications').insert({
+    const { error } = await sb.from('user_notifications').insert({
         user_id: userId,
         title,
         message,

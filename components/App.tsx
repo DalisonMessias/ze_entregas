@@ -11,7 +11,7 @@ import TourComponent from './Tour/Tour';
 import { tourSteps } from './Tour/tourSteps';
 
 // Icons
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw } from 'lucide-react';
 
 // Components
 import { Logo } from './Logo';
@@ -342,7 +342,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
     useEffect(() => {
         initNotificationService(userId, effectiveRole);
-        const interval = setInterval(async () => {
+
+        const fetchNotifs = async () => {
             try {
                 const notifs = await cloud.getNotifications();
                 if (mounted.current) {
@@ -351,7 +352,17 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             } catch (error) {
                 console.error("Erro ao buscar notificações:", error);
             }
-        }, 30000);
+        };
+
+        fetchNotifs();
+
+        const interval = setInterval(fetchNotifs, 30000);
+
+        // Listener para recarregamento imediato de notificações (ex: após envio admin ou realtime)
+        const handleRefreshNotifs = () => {
+            void fetchNotifs();
+        };
+        window.addEventListener('refreshNotifications', handleRefreshNotifs);
 
         // Check Maintenance Status
         const checkMaintenance = async () => {
@@ -378,6 +389,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             stopNotificationService();
             clearInterval(interval);
             clearInterval(maintInterval);
+            window.removeEventListener('refreshNotifications', handleRefreshNotifs);
         };
     }, [userId, effectiveRole]);
 
@@ -791,6 +803,13 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     <div id="header-notifications-bell">
                         <NotificationsBell unreadCount={unreadCount} onClick={() => setShowNotifications(true)} />
                     </div>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="p-2 text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                        title="Recarregar dados"
+                    >
+                        <RefreshCw className="w-5 h-5" />
+                    </button>
                 </div>
             </header>
 

@@ -977,10 +977,17 @@ CREATE TABLE IF NOT EXISTS public.user_notifications (
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    type TEXT DEFAULT 'info', -- 'success' | 'error' | 'warning' | 'info'
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS user_notifications_user_id_idx ON public.user_notifications (user_id);
 CREATE INDEX IF NOT EXISTS user_notifications_is_read_idx ON public.user_notifications (is_read);
+
+DROP TRIGGER IF EXISTS handle_user_notifications_updated_at ON public.user_notifications;
+CREATE TRIGGER handle_user_notifications_updated_at BEFORE UPDATE ON public.user_notifications
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
 ALTER TABLE public.user_notifications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can manage their own notifications" ON public.user_notifications;
 DO $$
@@ -1305,7 +1312,8 @@ DROP TRIGGER IF EXISTS handle_platform_news_updated_at ON public.platform_news;
 CREATE TRIGGER handle_platform_news_updated_at BEFORE UPDATE ON public.platform_news
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.platform_news ENABLE ROW LEVEL SECURITY;
-GRANT SELECT ON public.platform_news TO anon, authenticated;
+GRANT SELECT ON public.platform_news TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.platform_news TO authenticated;
 DROP POLICY IF EXISTS "Public can read active platform news" ON public.platform_news;
 DO $$
 BEGIN
@@ -3033,7 +3041,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Função: send_global_notification
-CREATE OR REPLACE FUNCTION public.send_global_notification(p_title TEXT, p_message TEXT)
+CREATE OR REPLACE FUNCTION public.send_global_notification(p_title TEXT, p_message TEXT, p_type TEXT DEFAULT 'info')
 RETURNS VOID AS $$
 DECLARE
     all_users CURSOR FOR SELECT id FROM public.user_profiles;
@@ -3047,8 +3055,8 @@ BEGIN
     LOOP
         FETCH all_users INTO user_id;
         EXIT WHEN NOT FOUND;
-        INSERT INTO public.user_notifications (user_id, title, message)
-        VALUES (user_id, p_title, p_message);
+        INSERT INTO public.user_notifications (user_id, title, message, type)
+        VALUES (user_id, p_title, p_message, p_type);
     END LOOP;
     CLOSE all_users;
 END;
@@ -4344,6 +4352,6 @@ DROP POLICY IF EXISTS "Admins can manage all notifications" ON public.app_notifi
 CREATE POLICY "Admins can manage all notifications" ON public.app_notifications
     FOR ALL USING (public.is_admin());
 
-GRANT SELECT, UPDATE ON public.app_notifications TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.app_notifications TO authenticated;
 GRANT ALL ON public.app_notifications TO service_role;
 

@@ -759,6 +759,7 @@ export interface AppNotification {
     type: 'success' | 'error' | 'warning' | 'info';
     is_read: boolean;
     created_at: string;
+    updated_at?: string; // Opcional pois notificações antigas podem não ter na pratica se migração falhar (mas SQL garante default)
     pending?: boolean;
 }
 
