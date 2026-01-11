@@ -790,15 +790,64 @@ GRANT ALL ON public.maintenance_settings TO authenticated;
 
 -- View de compatibilidade esperada pelo frontend: system_maintenance
 -- Mapeia os campos usados na UI para os nomes presentes na tabela
-CREATE OR REPLACE VIEW public.system_maintenance AS
-SELECT
-  is_enabled AS is_active,
-  COALESCE(to_char(scheduled_downtime, 'HH24:MI'), '') AS start_time,
-  COALESCE(to_char(estimated_recovery_time, 'HH24:MI'), '') AS end_time,
-  message
-FROM public.maintenance_settings
-ORDER BY updated_at DESC
-LIMIT 1;
+-- Tabela de sistema para manutenção (Compatibilidade com Realtime)
+-- Substitui VIEW antiga para permitir publicação no Supabase Realtime e evitar erro 22023
+DROP VIEW IF EXISTS public.system_maintenance;
+
+CREATE TABLE IF NOT EXISTS public.system_maintenance (
+    id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    is_active BOOLEAN,
+    start_time TEXT,
+    end_time TEXT,
+    message TEXT
+);
+
+-- Habilitar RLS
+ALTER TABLE public.system_maintenance ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.system_maintenance TO anon, authenticated;
+
+DROP POLICY IF EXISTS "Public read system_maintenance" ON public.system_maintenance;
+CREATE POLICY "Public read system_maintenance" ON public.system_maintenance FOR SELECT USING (true);
+
+-- Função e Trigger para sincronizar
+CREATE OR REPLACE FUNCTION public.sync_system_maintenance()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM public.system_maintenance;
+    INSERT INTO public.system_maintenance (id, is_active, start_time, end_time, message)
+    SELECT
+        1,
+        is_enabled,
+        COALESCE(to_char(scheduled_downtime, 'HH24:MI'), ''),
+        COALESCE(to_char(estimated_recovery_time, 'HH24:MI'), ''),
+        message
+    FROM public.maintenance_settings
+    ORDER BY updated_at DESC
+    LIMIT 1;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_sync_maintenance ON public.maintenance_settings;
+CREATE TRIGGER trigger_sync_maintenance
+AFTER INSERT OR UPDATE OR DELETE ON public.maintenance_settings
+FOR EACH STATEMENT EXECUTE FUNCTION public.sync_system_maintenance();
+
+-- Inicializar dados imediatamente
+DO $$
+BEGIN
+    DELETE FROM public.system_maintenance;
+    INSERT INTO public.system_maintenance (id, is_active, start_time, end_time, message)
+    SELECT
+        1,
+        is_enabled,
+        COALESCE(to_char(scheduled_downtime, 'HH24:MI'), ''),
+        COALESCE(to_char(estimated_recovery_time, 'HH24:MI'), ''),
+        message
+    FROM public.maintenance_settings
+    ORDER BY updated_at DESC
+    LIMIT 1;
+END $$;
 
 GRANT SELECT ON public.system_maintenance TO anon, authenticated;
 
