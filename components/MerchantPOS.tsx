@@ -14,7 +14,7 @@ import { useDynamicFont } from '../hooks/useDynamicFont';
 import { SummaryReportModal } from './SummaryReportModal';
 import { QrCodeLogsModal } from './QrCodeLogsModal';
 import { backupService } from '../services/backupService';
-import ReactJoyride, { Step as JoyrideStep } from 'react-joyride';
+import ReactJoyride, { Step as JoyrideStep } from '@list-labs/react-joyride';
 
 
 // Declare globals from CDN scripts
