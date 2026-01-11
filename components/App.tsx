@@ -11,7 +11,7 @@ import TourComponent from './Tour/Tour';
 import { tourSteps } from './Tour/tourSteps';
 
 // Icons
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb } from 'lucide-react';
 
 // Components
 import { Logo } from './Logo';
@@ -23,12 +23,14 @@ import { EmergencyModal } from './EmergencyButton';
 import { NotificationSettings } from './NotificationSettings';
 import { MaintenancePage } from './MaintenancePage';
 import { PartnerDocumentation } from './PartnerDocumentation';
+import { SectionErrorBoundary } from './SectionErrorBoundary';
 
 // Lazy Loaded Components
 const AdminPanel = React.lazy(() => import('./AdminPanel').then(module => ({ default: module.AdminPanel })));
 const PartnerArea = React.lazy(() => import('./PartnerArea').then(module => ({ default: module.PartnerArea })));
 const StoreWalletModule = React.lazy(() => import('./StoreWallet').then(module => ({ default: module.StoreWalletModule })));
 const InternalOrders = React.lazy(() => import('./InternalOrders').then(module => ({ default: module.InternalOrders })));
+const StoreCatalog = React.lazy(() => import('./StoreCatalog').then(module => ({ default: module.StoreCatalog })));
 
 const StoreRequest = React.lazy(() => import('./StoreRequest').then(module => ({ default: module.StoreRequest })));
 const OrderHistory = React.lazy(() => import('./OrderHistory').then(module => ({ default: module.OrderHistory })));
@@ -39,6 +41,7 @@ const StoreIntegrations = React.lazy(() => import('./StoreIntegrations').then(mo
 const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => ({ default: module.StoreSettings })));
 const StoreProductImport = React.lazy(() => import('./ProductImportExport').then(module => ({ default: module.ProductImportExport })));
 const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => ({ default: module.ZePayStore })));
+const StoreApiDocs = React.lazy(() => import('./StoreApiDocs').then(module => ({ default: module.StoreApiDocs })));
 
 const DriverMarketing = React.lazy(() => import('./DriverMarketing').then(module => ({ default: module.DriverMarketing })));
 const Reports = React.lazy(() => import('./Reports').then(module => ({ default: module.Reports })));
@@ -70,15 +73,16 @@ const RouteList = React.lazy(() => import('./RouteList').then(module => ({ defau
 
 // Hooks
 import { useDialog } from '../utils/dialogService';
+import { getTabFromUrl, syncUrlWithTab } from '../utils/routeMap';
 
 
 // Expanded type to include specific admin routes
 export type ActiveTab =
     | 'admin_dashboard' | 'admin_users' | 'admin_validation' | 'admin_notifications' | 'admin_shop' | 'admin_support'
-    | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_asaas_webhook' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
+    | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides'
+    | 'admin_slides' | 'admin_tips'
     | 'profile'
     | 'support'
     | 'shop'
@@ -118,6 +122,8 @@ export type ActiveTab =
     | 'upgrade_to_partner'
     | 'install_app'
     | 'internal_orders'
+    | 'store_catalog'
+    | 'store_api_docs'
     | 'streets_neighborhoods';
 
 
@@ -161,7 +167,38 @@ const UpgradeToPartnerPage: React.FC = () => {
             try {
                 let p = await cloud.getMyPartnerProfile();
 
-                // Se o perfil existe mas não tem os campos de parceiro, inicializa
+                // Se não existir perfil, cria um novo
+                if (!p) {
+                    try {
+                        await cloud.updateMyPartnerProfile({
+                            vehicle_type: 'moto',
+                            vehicle_plate: '',
+                            vehicle_model: '',
+                            verification_status: 'NOT_SUBMITTED'
+                        });
+                        // Tenta carregar novamente após criar
+                        p = await cloud.getMyPartnerProfile();
+                    } catch (createErr) {
+                        console.error("Failed to auto-create partner profile", createErr);
+                    }
+                }
+
+                // Se mesmo após tentar criar, ainda for null (ex: erro de RLS ou latência)
+                // Criamos um objeto em memória para não travar a UI
+                if (!p) {
+                    console.warn("Profile creation pending/failed, using in-memory fallback");
+                    p = {
+                        id: 'temp_id',
+                        user_id: 'current_user',
+                        is_active: true,
+                        verification_status: 'NOT_SUBMITTED',
+                        vehicle_type: 'moto',
+                        name: '',
+                        is_super_store: false
+                    } as PartnerProfile;
+                }
+
+                // Se o perfil existe mas está incompleto (migração antiga)
                 if (p && !p.vehicle_type) {
                     await cloud.updateMyPartnerProfile({
                         vehicle_type: 'moto',
@@ -176,6 +213,17 @@ const UpgradeToPartnerPage: React.FC = () => {
                 setLoading(false);
             } catch (err) {
                 console.error("Failed to load profile for upgrade", err);
+
+                // FINAL FALLBACK: Em caso de erro catastrófico, força um perfil vazio
+                setProfile({
+                    id: 'temp_id_err',
+                    user_id: 'current_user',
+                    is_active: true,
+                    verification_status: 'NOT_SUBMITTED',
+                    vehicle_type: 'moto',
+                    name: '',
+                    is_super_store: false
+                } as PartnerProfile);
                 setLoading(false);
             }
         };
@@ -222,7 +270,7 @@ const UpgradeToPartnerPage: React.FC = () => {
 
 
 export const App: React.FC<AppProps> = ({ userId, userRole }) => {
-    const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
+    const [activeTab, setActiveTab] = useState<ActiveTab>(() => getTabFromUrl(window.location.pathname) || 'shop'); // Fallback temporário, será ajustado no useEffect
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(true); // Default open on desktop
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -310,7 +358,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             try {
                 const settings = await cloud.getMaintenanceSettings();
                 if (mounted.current) {
-                    setMaintenance(settings);
+                    setMaintenance(settings as unknown as MaintenanceSettings);
                 }
             } catch (error) {
                 console.error("Erro ao verificar status de manutenção:", error);
@@ -378,15 +426,37 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
         logger.info('ROLE_PROP_UPDATE', { userRole });
     }, [userRole]);
 
+    // Lógica principal de Roteamento / Aba Inicial
     useEffect(() => {
-        if (effectiveRole === 'admin') { setActiveTab('admin_dashboard'); logger.info('ACTIVE_TAB_DEFAULT', { role: effectiveRole, tab: 'admin_dashboard' }); }
-        else if (effectiveRole === 'store_partner') { setActiveTab('wallet'); logger.info('ACTIVE_TAB_DEFAULT', { role: effectiveRole, tab: 'wallet' }); }
-        else if (effectiveRole === 'delivery_partner') { setActiveTab('partner'); logger.info('ACTIVE_TAB_DEFAULT', { role: effectiveRole, tab: 'partner' }); }
-        else if (effectiveRole === 'delivery_person') { setActiveTab('daily_panel'); logger.info('ACTIVE_TAB_DEFAULT', { role: effectiveRole, tab: 'daily_panel' }); }
-        else { setActiveTab('shop'); logger.info('ACTIVE_TAB_DEFAULT', { role: effectiveRole, tab: 'shop' }); }
-    }, [effectiveRole]);
+        // 1. Tenta recuperar aba da URL
+        const tabFromUrl = getTabFromUrl(window.location.pathname);
 
-    // NEW: Global navigation event listener
+        if (tabFromUrl) {
+            // Se a URL tem uma aba válida, usamos ela e ignoramos o default do role
+            // Mas precisamos verificar se o usuário tem acesso (canAccessTab simplificado aqui)
+            // Por enquanto confiamos no mapping, se o usuário não puder ver, o render vai bloquear ou mostrar erro
+            setActiveTab(tabFromUrl);
+            logger.info('ACTIVE_TAB_FROM_URL', { tab: tabFromUrl });
+        } else {
+            // 2. Se não tem URL válida, usa o default do Role
+            if (effectiveRole === 'admin') { setActiveTab('admin_dashboard'); }
+            else if (effectiveRole === 'store_partner') { setActiveTab('wallet'); }
+            else if (effectiveRole === 'delivery_partner') { setActiveTab('partner'); }
+            else if (effectiveRole === 'delivery_person') { setActiveTab('daily_panel'); }
+            else { setActiveTab('shop'); }
+
+            logger.info('ACTIVE_TAB_DEFAULT_ROLE', { role: effectiveRole });
+        }
+    }, [effectiveRole]); // Roda quando o role é definido/alterado (login inicial)
+
+    // Sincroniza URL quando a aba muda
+    useEffect(() => {
+        if (activeTab) {
+            syncUrlWithTab(activeTab);
+        }
+    }, [activeTab]);
+
+    // NEW: Global navigation event listener & History support
     useEffect(() => {
         const handleNavigate = (event: CustomEvent) => {
             if (event.detail && event.detail.tab) {
@@ -396,10 +466,22 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             }
         };
 
+        const handlePopState = (event: PopStateEvent) => {
+            // Quando o usuário clica em Voltar/Avançar
+            const tabFromUrl = getTabFromUrl(window.location.pathname);
+            if (tabFromUrl) {
+                setActiveTab(tabFromUrl);
+            } else if (event.state && event.state.tab) {
+                setActiveTab(event.state.tab);
+            }
+        };
+
         window.addEventListener('navigateToTab', handleNavigate as EventListener);
+        window.addEventListener('popstate', handlePopState);
 
         return () => {
             window.removeEventListener('navigateToTab', handleNavigate as EventListener);
+            window.removeEventListener('popstate', handlePopState);
         };
     }, []);
 
@@ -501,12 +583,12 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     const allowedTabs: Record<UserRole, Set<ActiveTab>> = {
         admin: new Set<ActiveTab>([...generalTabs,
             'admin_dashboard', 'admin_users', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
-            'admin_ai_config', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_asaas_webhook',
+            'admin_ai_config', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
-            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides'
+            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips'
         ]),
         store_partner: new Set<ActiveTab>([
-            'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders'
+            'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
@@ -557,65 +639,97 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 );
             }
             const subTab = activeTab.replace('admin_', '') as any;
-            return <AdminPanel activeSubTab={subTab} />;
+            return (
+                <SectionErrorBoundary componentName="Admin Panel">
+                    <AdminPanel activeSubTab={subTab} />
+                </SectionErrorBoundary>
+            );
         }
 
-        switch (activeTab) {
-            case 'profile': return <ProfileData onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
-            case 'status': return <StatusPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
-            case 'support': return <SupportPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} onNavigateToChat={() => navigate('assistant')} />;
-            case 'shop': return <Shop cart={cart} setCart={setCart} userLoggedIn={true} />;
-            case 'assistant':
-                return <ChatAssistant
-                    dailySummary={{ profit: 0, deliveryCount: 0, km: 0, expenses: 0, goal: null, location: null }}
-                    transactions={[]}
-                    userId={userId}
-                    userRole={effectiveRole}
-                    onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')}
-                />;
+        const content = (() => {
+            switch (activeTab) {
+                case 'profile': return <ProfileData onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
+                case 'status': return <StatusPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
+                case 'support': return <SupportPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} onNavigateToChat={() => navigate('assistant')} />;
+                case 'shop': return <Shop cart={cart} setCart={setCart} userLoggedIn={true} />;
+                case 'assistant':
+                    return <ChatAssistant
+                        dailySummary={{
+                            profit: 0,
+                            deliveryCount: 0,
+                            km: 0,
+                            expenses: 0,
+                            goal: null,
+                            location: null,
+                            address: '',
+                            name: 'N/A',
+                            lat: 0,
+                            lng: 0,
+                            completed: false
+                        }}
+                        transactions={[]}
+                        userId={userId}
+                        userRole={effectiveRole}
+                        onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')}
+                    />;
 
-            // Store Specific
-            case 'wallet': return <StoreWalletModule onNavigate={navigate} />;
-            case 'new_request': return <StoreRequest onNavigate={navigate} />;
-            case 'history': return <OrderHistory userRole={effectiveRole as 'store_partner' | 'delivery_partner'} />;
-            case 'store_team': return <StoreTeam />;
-            case 'store_reports': return <StoreReports />;
-            case 'store_marketing': return <StoreMarketing />;
-            case 'store_integrations': return <StoreIntegrations />;
-            case 'store_settings': return <StoreSettings />;
-            case 'store_product_import': return <StoreProductImport />;
-            case 'store_finance_panel': return <ZePayStore />;
-            case 'zepay_store': return <ZePayStore />; // ZéPay Module
-            case 'internal_orders': return <InternalOrders />;
+                // Store Specific
+                case 'wallet': return <StoreWalletModule onNavigate={navigate} />;
+                case 'new_request': return <StoreRequest onNavigate={navigate} />;
+                case 'history': return <OrderHistory userRole={effectiveRole as 'store_partner'} />;
+                case 'store_team': return <StoreTeam />;
+                case 'store_reports': return <StoreReports />;
+                case 'store_marketing': return <StoreMarketing />;
+                case 'store_integrations': return <StoreIntegrations onNavigate={navigate} />;
+                case 'store_settings': return <StoreSettings />;
+                case 'store_product_import': return <StoreProductImport />;
+                case 'store_finance_panel': return <ZePayStore />;
+                case 'zepay_store': return <ZePayStore />; // ZéPay Module
+                case 'internal_orders': return <InternalOrders />;
+                case 'store_catalog': return <StoreCatalog />;
+                case 'store_api_docs': return <StoreApiDocs onNavigate={navigate} />;
 
 
-            // Partner & Delivery Person Specific
-            case 'partner': return <PartnerArea userRole={effectiveRole} onNavigate={navigate} />;
-            case 'daily_panel': return <DailyPanel onNavigate={navigate} />;
-            case 'driver_marketing': return <DriverMarketing userRole={effectiveRole} />;
-            case 'route_tools': return <ToolsPage userRole={effectiveRole} />;
-            case 'route_list': return <RouteList userRole={effectiveRole} onNavigate={() => alert({ title: 'Info', message: 'Funcionalidade desativada temporariamente.' })} />;
-            case 'reports': return <Reports history={storage.getHistory()} todayStats={{ value: 0, count: 0, km: 0 }} />;
-            case 'tasks': return <TaskList />;
-            case 'zebank': return <Zebank userRole={effectiveRole} />;
-            case 'associate_driver': return <AssociateDriver onBack={() => navigate('daily_panel')} />;
-            case 'heatmap': return <Heatmap userRole={effectiveRole} />;
-            case 'local_history': return <LocalHistoryPage />;
-            case 'addresses': return <AddressBook onClose={() => { }} />;
+                // Partner & Delivery Person Specific
+                case 'partner': return <PartnerArea userRole={effectiveRole} onNavigate={navigate} />;
+                case 'daily_panel': return <DailyPanel onNavigate={navigate} />;
+                case 'driver_marketing': return <DriverMarketing userRole={effectiveRole} />;
+                case 'route_tools': return <ToolsPage userRole={effectiveRole} />;
+                case 'route_list': return <RouteList userRole={effectiveRole} />;
+                case 'reports': return <Reports history={storage.getHistory()} todayStats={{ value: 0, count: 0, km: 0 }} />;
+                case 'tasks': return <TaskList />;
+                case 'zebank': return <Zebank userRole={effectiveRole} />;
+                case 'associate_driver': return <AssociateDriver onBack={() => navigate('daily_panel')} />;
+                case 'heatmap': return <Heatmap userRole={effectiveRole} />;
+                case 'local_history': return <LocalHistoryPage />;
+                case 'addresses': return <AddressBook onClose={() => { }} />;
 
-            case 'about': return <AboutApp />;
-            case 'faq': return <FaqPage />;
-            case 'solutions': return <SolutionsPage />;
-            case 'benefits': return <BenefitsPage />;
-            case 'install_app': return <InstallApp onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
-            case 'cloud': return <CloudSync />;
-            case 'privacy': return <PrivacyPolicy onClose={() => { }} />; // Direct access to privacy policy
-            case 'upgrade_to_partner': return <UpgradeToPartnerPage />;
-            case 'settings': return <SettingsPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
-            case 'streets_neighborhoods': return <StreetsNeighborhoods />;
+                case 'about': return <AboutApp />;
+                case 'faq': return <FaqPage />;
+                case 'solutions': return <SolutionsPage />;
+                case 'benefits': return <BenefitsPage />;
+                case 'install_app': return <InstallApp onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
+                case 'cloud': return <CloudSync />;
+                case 'privacy': return <PrivacyPolicy onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')} />; // Direct access to privacy policy
+                case 'upgrade_to_partner': return <UpgradeToPartnerPage />;
+                case 'settings': return <SettingsPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
+                case 'streets_neighborhoods': return <StreetsNeighborhoods />;
 
-            default: return <div className="p-10 text-center text-gray-500">Etapa não implementada: {activeTab}</div>;
-        }
+                default: return <div className="p-10 text-center text-gray-500">Etapa não implementada: {activeTab}</div>;
+            }
+        })();
+
+        return (
+            <React.Suspense fallback={
+                <div className="flex items-center justify-center p-20">
+                    <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
+                </div>
+            }>
+                <SectionErrorBoundary key={activeTab} componentName={activeTab}>
+                    {content}
+                </SectionErrorBoundary>
+            </React.Suspense>
+        );
     };
 
     // Helper to render sidebar button
@@ -696,7 +810,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 ${isMenuOpen ? 'inset-y-0 left-0 translate-x-0' : '-translate-x-full'} 
                 
                 /* Desktop Styles: Persistent Rail, driven by isSidebarExpanded */
-                md:translate-x-0 md:top-16 md:left-0 md:bottom-0 md:border-r md:shadow-none
+                md:translate-x-0 md:top-16 md:left-0 md:bottom-0 shadow-sm
                 ${isSidebarExpanded ? 'md:w-80' : 'md:w-20'}
                 
                 bg-white dark:bg-gray-900 shadow-2xl transition-all duration-300 flex flex-col
@@ -738,6 +852,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                             <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
                             <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
+
+                            <MenuSection title="Conteúdo & App" />
+                            <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
+                            {/* <MenuButton icon={Newspaper} label="Notícias" tab="admin_platform_news" /> */}
                             <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
                             <MenuButton icon={Layout} label="Banners/Slides" tab="admin_slides" />
                             <MenuButton icon={Construction} label="Manutenção" tab="admin_maintenance" />
@@ -745,7 +863,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuSection title="Financeiro" />
                             <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
                             <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
-                            <MenuButton icon={Link2} label="Webhooks (Asaas)" tab="admin_asaas_webhook" />
+                            <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
 
                             <MenuSection title="Marketing & Conteúdo" />
                             <MenuButton icon={Megaphone} label="Indicações" tab="admin_referrals" />
@@ -755,6 +873,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
                             <MenuSection title="Configurações do Sistema" />
                             <MenuButton icon={Bot} label="Inteligência Artificial" tab="admin_ai_config" />
+                            <MenuButton icon={Cloud} label="APIs & Integrações" tab="admin_api_keys" />
                             <MenuButton icon={Smartphone} label="App PWA" tab="admin_pwa" />
                         </>
                     )}
@@ -766,13 +885,15 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuButton icon={LayoutDashboard} label="Painel" tab="wallet" id="store-wallet-link" />
                             <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
                             <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
-                            <MenuButton icon={Users} label="Entregadores Fixos" tab="store_team" />
+                            <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
 
                             <MenuSection title="Gestão" />
                             <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
                             <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
                             <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
                             <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
+                            <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
+                            <MenuButton icon={FileText} label="Comanda" tab="internal_orders" />
                         </>
                     )}
 
@@ -780,20 +901,16 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     {(isPartner || isNormalDriver) && (
                         <>
                             <MenuSection title="Plataforma Zé" />
+                            <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
                             <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
                             <MenuButton icon={Wallet} label="Zebank" tab="zebank" />
-                            <MenuButton icon={History} label="Histórico App" tab="history" />
                             <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
-
-                            <MenuSection title="Meu Controle" />
-                            <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
 
                             <MenuSection title="Crescimento" />
                             <MenuButton icon={Store} label="Lojas Vinculadas" tab="associate_driver" />
 
                             <MenuSection title="Ferramentas" />
                             <MenuButton icon={ListPlus} label="Lista de Rotas" tab="route_list" />
-                            <MenuButton icon={MapPin} label="Agenda de Endereços" tab="addresses" />
                             <MenuButton icon={FileCheck} label="Tarefas" tab="tasks" />
                             <MenuButton icon={BarChart3} label="Relatórios Pessoais" tab="reports" />
                         </>
@@ -808,13 +925,12 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
                     <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
                     <MenuButton icon={Info} label="Sobre o App" tab="about" />
-                    <MenuButton icon={HelpCircle} label="Ver Tour da Página" onClick={runCurrentPageTour} />
 
                     {/* --- FOOTER ACTIONS --- */}
                     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
                         {/* Idioma removido: app opera exclusivamente em PT-BR */}
                         <MenuButton icon={Share2} label="Compartilhar App" onClick={handleShareApp} />
-                        <MenuButton icon={Lock} label="Política de Privacidade" tab="privacy" /> {/* DIRECT ACCESS */}
+                        <MenuButton icon={Lock} label="Política de Privacidade" onClick={() => setShowPrivacy(true)} /> {/* DIRECT ACCESS */}
                         <MenuButton icon={UserCheck} label="Verificar Status" onClick={() => navigate('status')} />
                     </div>
                 </div>

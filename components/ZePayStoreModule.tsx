@@ -94,7 +94,10 @@ export const ZePayStore: React.FC = () => {
             const isSuper = !!profile?.is_super_store;
             setIsSuperStore(isSuper);
             if (isSuper) {
-                const dashboardData = await cloud.getZePayDashboardData();
+                const dashboardData = await cloud.getZebankDashboardData();
+                if (!dashboardData.my_code && profile?.association_code) {
+                    dashboardData.my_code = profile.association_code;
+                }
                 setData(dashboardData);
             } else {
                 setData(null);
@@ -112,7 +115,7 @@ export const ZePayStore: React.FC = () => {
         setProcessing(true);
         try {
             const amount = parseFloat(transferForm.amount.replace(/\./g, '').replace(',', '.'));
-            await cloud.zepayTransfer(transferForm.code.toUpperCase(), amount);
+            await cloud.zebankTransferP2P(transferForm.code.toUpperCase(), amount);
             setToast({ type: 'success', message: 'Transferência realizada com sucesso!' });
             setShowTransfer(false);
             setTransferForm({ code: '', amount: '' });
@@ -128,7 +131,7 @@ export const ZePayStore: React.FC = () => {
         if (!cardForm.name) return;
         setProcessing(true);
         try {
-            await cloud.zepayCreateVirtualCard(cardForm.name);
+            await cloud.zebankCreateVirtualCard(cardForm.name);
             setToast({ type: 'success', message: 'Cartão virtual criado!' });
             setShowNewCard(false);
             setCardForm({ name: '' });
@@ -351,14 +354,7 @@ export const ZePayStore: React.FC = () => {
                                     value={rechargeAmount}
                                     onChange={e => setRechargeAmount(e.target.value)}
                                 />
-                                <Button fullWidth onClick={async () => {
-                                    try {
-                                        const value = parseFloat(rechargeAmount.replace(/\./g, '').replace(',', '.'));
-                                        if (!value || value <= 0) return;
-                                        const res = await cloud.createRechargeCharge(value, 'PIX');
-                                        if (res.asaas_pix_copy_paste) setPixDetails({ copyPaste: res.asaas_pix_copy_paste });
-                                    } catch (e: any) { setToast({ type: 'error', message: e?.message || 'Erro ao gerar PIX' }); }
-                                }}>
+                                <Button fullWidth onClick={() => setToast({ type: 'error', message: "Recarga indisponível temporariamente." })}>
                                     Gerar Cobrança PIX
                                 </Button>
                             </>

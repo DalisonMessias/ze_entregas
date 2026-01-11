@@ -1,7 +1,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { Shield, Search, Edit2, UserX, Loader2, UserCheck, UserCog, CheckCircle, AlertTriangle, Power, PowerOff, X, MapPin, Phone, ShieldCheck, ShieldOff, Plus, Settings, Banknote, Star } from 'lucide-react';
-import * as cloud from '../services/cloud';
+import {
+    getAllUsers,
+    adminUpdateUserProfile,
+    adminGetPendingPartners,
+    adminGetPartnerDetails,
+    adminUpdateDocumentStatus,
+    adminUpdatePartnerStatus,
+    adminGetCities,
+    adminGetCityRequests,
+    adminAddCity,
+    adminUpdateCityStatus,
+    adminEditCity,
+    adminProcessCityRequest
+} from '../services/cloud';
 import { ManagedUser, UserRole, UserStatus, PartnerProfile, PartnerDocument, City, CityRequest, AdminSubTab, PartnerLevelBenefit } from '../types';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
@@ -15,6 +28,7 @@ import { AdminReferrals } from './AdminReferrals';
 import { SecurityManagement } from './SecurityManagement';
 import { AdminNotifications } from './AdminNotifications';
 import { AdminShopManagement } from './AdminShopManagement';
+import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { AdminClaims } from './AdminClaims';
 import { AdminFees } from './AdminFees';
 import { AdminPWASettings } from './AdminPWASettings';
@@ -23,7 +37,7 @@ import { AdminBlacklist } from './AdminBlacklist';
 import { AdminInstitutionalContent } from './AdminInstitutionalContent';
 import { AdminPlatformNews } from './AdminPlatformNews';
 import { AdminStoreFinance } from './AdminStoreFinance';
-import { AsaasWebhookManagement } from './AdminAsaasConfig';
+import { AdminInfinitePayConfig } from './AdminInfinitePayConfig';
 import { AdminApiKeysUnified } from './AdminApiKeysUnified';
 import { AdminAIConfig } from './AdminAIConfig';
 import { AdminRoutingConfig } from './AdminRoutingConfig';
@@ -33,6 +47,7 @@ import { AdminLoanConfig } from './AdminLoanConfig';
 import { AdminInvestments } from './AdminInvestments';
 import { AdminSlides } from './AdminSlides';
 import { AdminPayouts } from './AdminPayouts';
+import { AdminTips } from './AdminTips';
 
 // --- HELPERS ---
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -140,7 +155,7 @@ const UserManagement: React.FC = () => {
     const loadUsers = async () => {
         setLoading(true);
         try {
-            const data = await cloud.getAllUsers();
+            const data = await getAllUsers();
             setUsers(data);
         } catch (e) {
             console.error(e);
@@ -183,7 +198,7 @@ const UserManagement: React.FC = () => {
                 is_super_store: editForm.is_super_store
             };
 
-            await cloud.adminUpdateUserProfile(selectedUser.id, updates);
+            await adminUpdateUserProfile(selectedUser.id, updates);
             setToast({ type: 'success', message: "Dados do usuário atualizados com sucesso!" });
             setSelectedUser(null);
             loadUsers();
@@ -430,7 +445,7 @@ const PartnerVerification: React.FC = () => {
     const loadPendingPartners = async () => {
         setLoading(true);
         try {
-            const data = await cloud.adminGetPendingPartners();
+            const data = await adminGetPendingPartners();
             setPartners(data);
         } catch (e) { console.error(e); } finally { setLoading(false); }
     };
@@ -439,7 +454,7 @@ const PartnerVerification: React.FC = () => {
         setSelectedPartner(partner);
         setDetailLoading(true);
         try {
-            const details = await cloud.adminGetPartnerDetails(partner.id);
+            const details = await adminGetPartnerDetails(partner.id);
             setPartnerDetails(details);
         } catch (e) { console.error(e); } finally { setDetailLoading(false); }
     };
@@ -453,7 +468,7 @@ const PartnerVerification: React.FC = () => {
         }
 
         try {
-            await cloud.adminUpdateDocumentStatus(docId, status, notes || '');
+            await adminUpdateDocumentStatus(docId, status, notes || '');
             // Refresh details
             if (selectedPartner) openPartnerDetails(selectedPartner);
             setToast({ type: 'success', message: "Documento atualizado!" });
@@ -464,7 +479,7 @@ const PartnerVerification: React.FC = () => {
         const ok = await dialogConfirm({ title: 'Confirmar alteração', message: `Tem certeza que deseja alterar o status deste parceiro para ${status}?` });
         if (!ok) return;
         try {
-            await cloud.adminUpdatePartnerStatus(userId, status);
+            await adminUpdatePartnerStatus(userId, status);
             setToast({ type: 'success', message: "Status do parceiro atualizado!" });
             if (selectedPartner) openPartnerDetails(selectedPartner); // Refresh
             loadPendingPartners(); // Refresh list in case status changes
@@ -566,10 +581,10 @@ const CityManagement: React.FC = () => {
         setLoading(true);
         try {
             if (activeTab === 'cities') {
-                const data = await cloud.adminGetCities();
+                const data = await adminGetCities();
                 setCities(data);
             } else {
-                const data = await cloud.adminGetCityRequests();
+                const data = await adminGetCityRequests();
                 setRequests(data);
             }
         } catch (e) {
@@ -582,7 +597,7 @@ const CityManagement: React.FC = () => {
     const handleAddCity = async () => {
         if (!newName || !newState) return setToast({ type: 'error', message: "Preencha nome e estado." });
         try {
-            await cloud.adminAddCity(newName, newState);
+            await adminAddCity(newName, newState);
             setNewName('');
             setNewState('');
             loadData();
@@ -597,7 +612,7 @@ const CityManagement: React.FC = () => {
         const ok = await dialogConfirm({ title: 'Confirmar ação', message: `Tem certeza que deseja ${action} a cidade ${city.name}?` });
         if (!ok) return;
         try {
-            await cloud.adminUpdateCityStatus(city.id, !city.is_active);
+            await adminUpdateCityStatus(city.id, !city.is_active);
             loadData();
             setToast({ type: 'success', message: `Cidade ${action === 'ativar' ? 'ativada' : 'desativada'}!` });
         } catch (e: any) {
@@ -614,7 +629,7 @@ const CityManagement: React.FC = () => {
     const handleSaveChanges = async () => {
         if (!editingCity || !editName || !editState) return;
         try {
-            await cloud.adminEditCity(editingCity.id, editName, editState);
+            await adminEditCity(editingCity.id, editName, editState);
             setEditingCity(null);
             loadData();
             setToast({ type: 'success', message: "Cidade editada com sucesso!" });
@@ -625,7 +640,7 @@ const CityManagement: React.FC = () => {
 
     const handleProcessRequest = async (id: string, status: 'APPROVED' | 'REJECTED') => {
         try {
-            await cloud.adminProcessCityRequest(id, status);
+            await adminProcessCityRequest(id, status);
             loadData();
             setToast({ type: 'success', message: `Solicitação ${status === 'APPROVED' ? 'aprovada' : 'rejeitada'}!` });
         } catch (e: any) {
@@ -743,41 +758,52 @@ const CityManagement: React.FC = () => {
     );
 };
 
+
+
 interface AdminPanelProps {
     activeSubTab: AdminSubTab;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
-    switch (activeSubTab) {
-        case 'dashboard': return <AdminDashboard />;
-        case 'users': return <UserManagement />;
-        case 'validation': return <PartnerVerification />;
-        case 'notifications': return <AdminNotifications />;
-        case 'shop': return <AdminShopManagement />;
-        case 'support': return <AdminClaims />;
-        case 'claims': return <AdminClaims />;
-        case 'ai_config': return <AdminAIConfig />;
-        case 'api_keys': return <AdminApiKeysUnified />;
-        case 'asaas_webhook': return <AsaasWebhookManagement />;
-        case 'fees': return <AdminFees />;
-        case 'pwa': return <AdminPWASettings />;
-        case 'routing': return <AdminRoutingConfig />;
-        case 'cities': return <CityManagement />;
-        case 'ratings': return <AdminRatings />;
-        case 'security': return <SecurityManagement />;
-        case 'blacklist': return <AdminBlacklist />;
-        case 'referrals': return <AdminReferrals />;
-        case 'institutional': return <AdminInstitutionalContent />;
-        case 'platform_news': return <AdminPlatformNews />;
-        case 'store_finance': return <AdminStoreFinance />;
-        case 'wallet_control': return <AdminWalletControl />;
-        case 'maintenance': return <AdminMaintenance />;
-        case 'levels': return <AdminPartnerLevels />;
-        case 'payouts': return <AdminPayouts />;
-        case 'loan_config': return <AdminLoanConfig />;
-        case 'investments': return <AdminInvestments />;
-        case 'slides': return <AdminSlides />;
+    const renderContent = () => {
+        switch (activeSubTab) {
+            case 'dashboard': return <AdminDashboard />;
+            case 'users': return <UserManagement />;
+            case 'validation': return <PartnerVerification />;
+            case 'notifications': return <AdminNotifications />;
+            case 'shop': return <AdminShopManagement />;
+            case 'support': return <AdminClaims />;
+            case 'claims': return <AdminClaims />;
+            case 'ai_config': return <AdminAIConfig />;
+            case 'api_keys': return <AdminApiKeysUnified />;
+            case 'infinitepay': return <AdminInfinitePayConfig />;
+            case 'fees': return <AdminFees />;
+            case 'pwa': return <AdminPWASettings />;
+            case 'routing': return <AdminRoutingConfig />;
+            case 'cities': return <CityManagement />;
+            case 'ratings': return <AdminRatings />;
+            case 'security': return <SecurityManagement />;
+            case 'blacklist': return <AdminBlacklist />;
+            case 'referrals': return <AdminReferrals />;
+            case 'institutional': return <AdminInstitutionalContent />;
+            case 'platform_news': return <AdminPlatformNews />;
+            case 'store_finance': return <AdminStoreFinance />;
+            case 'wallet_control': return <AdminWalletControl />;
+            case 'maintenance': return <AdminMaintenance />;
+            case 'levels': return <AdminPartnerLevels />;
+            case 'payouts': return <AdminPayouts />;
+            case 'loan_config': return <AdminLoanConfig />;
+            case 'investments': return <AdminInvestments />;
+            case 'slides': return <AdminSlides />;
+            case 'tips': return <AdminTips />;
 
-        default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
-    }
+            default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
+        }
+    };
+
+    return (
+        <SectionErrorBoundary key={activeSubTab} componentName={`Admin - ${activeSubTab}`}>
+            {renderContent()}
+        </SectionErrorBoundary>
+    );
 };

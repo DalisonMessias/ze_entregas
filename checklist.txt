@@ -1,5 +1,11 @@
-- [x] Adicionada função `getUserRole` em `services/cloud.ts` para corrigir erro de tipo em `ExclusiveLock.tsx`.
-- [x] Corrigido erro de "Failed to fetch" definindo credenciais do Supabase diretamente em `services/cloud.ts`.
-- [x] Diagnóstico e instrução de correção para erro de cache do Vite (dependência corrompida).
-- [x] Cache do Vite (node_modules/.vite) removido com sucesso para forçar recriação.
-- [x] Removida configuração restrita de HMR no `vite.config.ts` que causava erro de WebSocket.
+[x] Adicionada função `getUserRole` em `services/cloud` para verificar permissões de admin (2025-01-08)
+[x] Corrigido bug de renderização no Shop.tsx e removido fluxo Asaas (2026-01-08)
+[x] Implementar Loading no AdminDashboard substituindo a tela de erro inicial (2026-01-11)
+[x] Implementar sistema completo de "Dica do Dia" com CRUD no AdminPanel e exibição rotativa em todos os dashboards (2026-01-11)
+[x] Adicionar tabelas `fraud_alerts` e `identity_verifications` com RLS em `supabase_global.sql` para corrigir erro 42501 (2026-01-11)
+[x] Implementar sistema de rotas (URL Sync) para corrigir loops e navegação (2026-01-11)
+[x] Corrigir persistência da API de Rotas usando tabela `api_keys` (2026-01-11)
+[x] Implementada resiliência e isolamento de erros com SectionErrorBoundaries e melhoria na Auth (2026-01-11)
+[x] Implementada independência de carregamento de dados e tratamento de erros local com retry em todos os perfis (2026-01-11)
+[x] Implementadas tendências reais no Dashboard Administrativo, removendo simulações estáticas (2026-01-11)
+[x] Corrigido redirecionamento inicial: O sistema agora respeita a URL atual ao atualizar e não força a abertura em /perfil (2026-01-11)

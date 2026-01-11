@@ -132,7 +132,6 @@ export const StoreShippingRules: React.FC = () => {
                                     onChange={e => setThreshold(e.target.value)}
                                     className="mt-1"
                                 />
-                                />
                             </div>
                         )}
                         <div>
@@ -145,7 +144,6 @@ export const StoreShippingRules: React.FC = () => {
                                 value={value}
                                 onChange={e => setValue(e.target.value)}
                                 className="mt-1"
-                            />
                             />
                         </div>
                     </div>

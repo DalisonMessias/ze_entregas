@@ -1,6 +1,36 @@
 -- ==================================================================
 -- 0.x EXTENSIONS E CONFIGURAÇÕES GERAIS
 -- ==================================================================
+
+-- Tabela de Dicas do Dia (Adicionada 11/01/2026)
+CREATE TABLE IF NOT EXISTS public.system_tips (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    message text NOT NULL,
+    target_role text NOT NULL, -- admin, store_partner, delivery_partner, all
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- Migração segura para alterar tipo da coluna caso já exista como enum
+DO $$
+BEGIN
+    ALTER TABLE public.system_tips ALTER COLUMN target_role TYPE text;
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
+
+ALTER TABLE public.system_tips ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read access to system_tips" ON public.system_tips;
+CREATE POLICY "Public read access to system_tips" ON public.system_tips FOR SELECT USING (is_active = true OR public.is_admin());
+
+DROP POLICY IF EXISTS "Admin full access to system_tips" ON public.system_tips;
+CREATE POLICY "Admin full access to system_tips" ON public.system_tips FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.system_tips TO anon, authenticated;
+GRANT ALL ON public.system_tips TO authenticated;
+
+-- ==================================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "postgis";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -290,14 +320,22 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, UPDATE ON public.user_profiles TO authenticated;
 
--- Função para verificar se o usuário é administrador
+-- Função para verificar se o usuário é administrador (Com SECURITY DEFINER para evitar recursão)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
-  SELECT COALESCE(
-    (current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'role') = 'admin',
-    false
-  )
-$$ LANGUAGE sql STABLE;
+DECLARE
+  v_role public.user_role;
+BEGIN
+  -- 1. Tentar via JWT (Meta-dados do usuário)
+  IF (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' THEN
+    RETURN TRUE;
+  END IF;
+
+  -- 2. Fallback via Banco de Dados (Bypassa RLS por ser SECURITY DEFINER)
+  SELECT role INTO v_role FROM public.user_profiles WHERE id = auth.uid();
+  RETURN v_role = 'admin';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.user_profiles;
 CREATE POLICY "Users can view their own profile" ON public.user_profiles
@@ -309,11 +347,13 @@ DROP POLICY IF EXISTS "Admins can manage user profiles" ON public.user_profiles;
 CREATE POLICY "Admins can manage user profiles" ON public.user_profiles
     FOR ALL USING (public.is_admin());
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_profiles TO authenticated;
+
 -- Trigger para criar perfil de usuário após AUTH
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user_profiles (id, email, name, avatar_url, role, phone_number, cpf, city, store_name, store_document, address_street, address_number, address_district, address_zip, address_state)
+    INSERT INTO public.user_profiles (id, email, name, avatar_url, role, phone_number, cpf, city, store_name, store_document, address_street, address_number, address_district, address_zip, address_state, association_code)
   VALUES (
     NEW.id,
     NEW.email,
@@ -329,11 +369,12 @@ BEGIN
     NEW.raw_user_meta_data->>'address_number',
     NEW.raw_user_meta_data->>'address_district',
     NEW.raw_user_meta_data->>'address_zip',
-    NEW.raw_user_meta_data->>'address_state'
+    NEW.raw_user_meta_data->>'address_state',
+    upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6))
   );
 
-  -- Se for lojista, criar carteira
-  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') = 'store_partner' THEN
+  -- Se for lojista ou entregador, criar carteira (Unificado em store_wallets)
+  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('store_partner', 'delivery_partner', 'delivery_person') THEN
       INSERT INTO public.store_wallets (store_id, balance_decimal)
       VALUES (NEW.id, 0)
       ON CONFLICT (store_id) DO NOTHING;
@@ -441,30 +482,44 @@ BEGIN
 END $$;
 CREATE TABLE IF NOT EXISTS public.categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Garantir que a coluna store_id exista (caso a tabela já existisse sem ela)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'categories' AND column_name = 'store_id') THEN
+        ALTER TABLE public.categories ADD COLUMN store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+-- Remover UNIQUE antigo se existir para permitir nomes iguais em lojas diferentes
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'categories' AND constraint_name = 'categories_name_key') THEN
+        ALTER TABLE public.categories DROP CONSTRAINT categories_name_key;
+    END IF;
+END $$;
+
 DROP TRIGGER IF EXISTS handle_categories_updated_at ON public.categories;
 CREATE TRIGGER handle_categories_updated_at BEFORE UPDATE ON public.categories
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Public can read categories" ON public.categories;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public can read categories' AND tablename = 'categories') THEN
-        CREATE POLICY "Public can read categories" ON public.categories FOR SELECT USING (true);
-    END IF;
-END $$;
-DROP POLICY IF EXISTS "Admins can manage categories" ON public.categories;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage categories' AND tablename = 'categories') THEN
-        CREATE POLICY "Admins can manage categories" ON public.categories FOR ALL USING (public.is_admin());
 
--- Tabela de produtos;
-    END IF;
-END $$;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de Categorias
+DROP POLICY IF EXISTS "Public can read categories" ON public.categories;
+CREATE POLICY "Public can read categories" ON public.categories FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage categories" ON public.categories;
+CREATE POLICY "Admins can manage categories" ON public.categories FOR ALL USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Lojistas gerenciam categorias" ON public.categories;
+CREATE POLICY "Lojistas gerenciam categorias" ON public.categories 
+    FOR ALL USING (store_id = auth.uid() OR public.is_admin());
 CREATE TABLE IF NOT EXISTS public.products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
@@ -493,15 +548,11 @@ BEGIN
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage products" ON public.products;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage products' AND tablename = 'products') THEN
-        CREATE POLICY "Admins can manage products" ON public.products FOR ALL USING (
-            public.is_admin() OR 
-            EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
-        );
-    END IF;
-END $$;
+CREATE POLICY "Admins can manage products" ON public.products FOR ALL USING (
+    public.is_admin() OR 
+    (store_id = auth.uid()) OR
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
 
 
 -- Tabela para logs de erro do cliente;
@@ -730,6 +781,9 @@ CREATE POLICY "Public can read maintenance settings" ON public.maintenance_setti
 DROP POLICY IF EXISTS "Admins can manage maintenance settings" ON public.maintenance_settings;
 CREATE POLICY "Admins can manage maintenance settings" ON public.maintenance_settings
     FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.maintenance_settings TO anon, authenticated;
+GRANT ALL ON public.maintenance_settings TO authenticated;
 
 -- View de compatibilidade esperada pelo frontend: system_maintenance
 -- Mapeia os campos usados na UI para os nomes presentes na tabela
@@ -1529,6 +1583,7 @@ DROP TRIGGER IF EXISTS handle_zebank_cards_updated_at ON public.zebank_cards;
 CREATE TRIGGER handle_zebank_cards_updated_at BEFORE UPDATE ON public.zebank_cards
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.zebank_cards ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.zebank_cards TO authenticated;
 DROP POLICY IF EXISTS "Users can manage their own Zebank cards" ON public.zebank_cards;
 DO $$
 BEGIN
@@ -2067,6 +2122,7 @@ CREATE POLICY "Admins can manage all store virtual cards" ON public.store_virtua
 CREATE TABLE IF NOT EXISTS public.driver_wallets (
     driver_id UUID PRIMARY KEY REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     balance_decimal NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    savings_balance_decimal NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -2125,13 +2181,34 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.api_keys (
   id uuid NOT NULL DEFAULT gen_random_uuid (),
   service_name character varying(100) NOT NULL,
+  name TEXT,
+  key_token TEXT,
   encrypted_key text NOT NULL,
+  permissions JSONB DEFAULT '{}'::jsonb,
   is_active boolean NULL DEFAULT true,
+  user_id UUID REFERENCES public.user_profiles(id),
   created_at timestamp with time zone NULL DEFAULT now(),
   updated_at timestamp with time zone NULL DEFAULT now(),
   constraint api_keys_pkey primary key (id),
   constraint api_keys_service_name_key unique (service_name)
 );
+
+-- Garantir colunas extras e unicidade
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'key_token') THEN
+        ALTER TABLE public.api_keys ADD COLUMN key_token TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'name') THEN
+        ALTER TABLE public.api_keys ADD COLUMN name TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'permissions') THEN
+        ALTER TABLE public.api_keys ADD COLUMN permissions JSONB DEFAULT '{}'::jsonb;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'api_keys_service_name_key') THEN
+        ALTER TABLE public.api_keys ADD CONSTRAINT api_keys_service_name_key UNIQUE (service_name);
+    END IF;
+END $$;
 -- RLS para api_keys
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Admins can manage API keys" ON public.api_keys;
@@ -2145,7 +2222,7 @@ DROP TRIGGER IF EXISTS handle_api_keys_updated_at ON public.api_keys;
 CREATE TRIGGER handle_api_keys_updated_at BEFORE UPDATE ON public.api_keys
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 GRANT SELECT, INSERT, UPDATE ON public.support_claims TO authenticated;
-GRANT SELECT ON public.api_keys TO authenticated;
+GRANT ALL ON public.api_keys TO authenticated;
 GRANT SELECT ON public.api_keys TO anon;
 
 -- ==================================================================
@@ -3850,4 +3927,391 @@ CREATE POLICY "Public Access Marketing Assets" ON storage.objects
 DROP POLICY IF EXISTS "Auth Upload Marketing Assets" ON storage.objects;
 CREATE POLICY "Auth Upload Marketing Assets" ON storage.objects
     FOR INSERT WITH CHECK (bucket_id = 'marketing-assets' AND auth.role() = 'authenticated');
+
+
+-- ==================================================================
+-- BACKFILL: Generate association_code for existing users
+-- ==================================================================
+DO $$
+BEGIN
+    UPDATE public.user_profiles
+    SET association_code = upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6))
+    WHERE association_code IS NULL;
+END $$;
+
+-- Garantir colunas para produtos e pedidos de lojista
+DO $$
+BEGIN
+    -- Coluna store_id na tabela products (se não existir)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'store_id') THEN
+        ALTER TABLE public.products ADD COLUMN store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+    END IF;
+
+    -- Coluna origin na tabela orders (se não existir)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'origin') THEN
+        ALTER TABLE public.orders ADD COLUMN origin VARCHAR(50) DEFAULT 'APP';
+    END IF;
+
+    -- Colunas de troco e pagamento personalizado na tabela orders
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'amount_paid') THEN
+        ALTER TABLE public.orders ADD COLUMN amount_paid DECIMAL(10,2);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'change_amount') THEN
+        ALTER TABLE public.orders ADD COLUMN change_amount DECIMAL(10,2);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'custom_payment_label') THEN
+        ALTER TABLE public.orders ADD COLUMN custom_payment_label VARCHAR(100);
+    END IF;
+
+    -- Coluna category na tabela products (se não existir, para compatibilidade com o frontend)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'category') THEN
+        ALTER TABLE public.products ADD COLUMN category VARCHAR(255);
+    END IF;
+
+    -- Coluna image_url na tabela products (se não existir, para compatibilidade com o frontend)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'image_url') THEN
+        ALTER TABLE public.products ADD COLUMN image_url TEXT;
+    END IF;
+END $$;
+
+-- ==================================================================
+-- STORAGE CONFIGURATION: Products Bucket
+-- ==================================================================
+
+-- Create bucket: products
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('products', 'products', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Policy: Public access (View)
+DROP POLICY IF EXISTS "Public View Products" ON storage.objects;
+CREATE POLICY "Public View Products" ON storage.objects
+    FOR SELECT USING (bucket_id = 'products');
+
+-- Policy: Authenticated upload (Insert)
+DROP POLICY IF EXISTS "Auth Upload Products" ON storage.objects;
+CREATE POLICY "Auth Upload Products" ON storage.objects
+    FOR INSERT WITH CHECK (bucket_id = 'products' AND auth.role() = 'authenticated');
+
+-- Policy: Authenticated update (Update)
+DROP POLICY IF EXISTS "Auth Update Products" ON storage.objects;
+CREATE POLICY "Auth Update Products" ON storage.objects
+    FOR UPDATE WITH CHECK (bucket_id = 'products' AND auth.role() = 'authenticated');
+
+-- Policy: Authenticated delete (Delete)
+DROP POLICY IF EXISTS "Auth Delete Products" ON storage.objects;
+CREATE POLICY "Auth Delete Products" ON storage.objects
+    FOR DELETE USING (bucket_id = 'products' AND auth.role() = 'authenticated');
+
+-- ==================================================================
+-- 3.x API / INTEGRAÇÃO (Adicionado em 2026-01-07)
+-- ==================================================================
+
+-- Tabela de Chaves de API
+CREATE TABLE IF NOT EXISTS public.api_keys (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    key_token TEXT UNIQUE NOT NULL, -- O token em si (sk_...)
+    permissions JSONB DEFAULT '{"all": true}'::jsonb,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ,
+    last_used_at TIMESTAMPTZ
+);
+
+-- Garantir colunas em api_keys (Migração Segura)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'user_id') THEN
+        ALTER TABLE public.api_keys ADD COLUMN user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'permissions') THEN
+        ALTER TABLE public.api_keys ADD COLUMN permissions JSONB DEFAULT '{"all": true}'::jsonb;
+    END IF;
+     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'key_token') THEN
+        ALTER TABLE public.api_keys ADD COLUMN key_token TEXT UNIQUE NOT NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'name') THEN
+        ALTER TABLE public.api_keys ADD COLUMN name VARCHAR(255) DEFAULT 'Chave API';
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON public.api_keys (user_id);
+CREATE INDEX IF NOT EXISTS api_keys_key_token_idx ON public.api_keys (key_token);
+
+-- Correção de Constraints (Fix para duplicidade global)
+DO $$
+BEGIN
+    -- Remover constraint antiga incorreta (que forçava service_name único globalmente)
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'api_keys_service_name_key') THEN
+        ALTER TABLE public.api_keys DROP CONSTRAINT api_keys_service_name_key;
+    END IF;
+
+    -- Adicionar constraint correta (único por usuário e serviço)
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'api_keys_user_service_key') THEN
+        ALTER TABLE public.api_keys ADD CONSTRAINT api_keys_user_service_key UNIQUE (user_id, service_name);
+    END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS handle_api_keys_updated_at ON public.api_keys;
+CREATE TRIGGER handle_api_keys_updated_at BEFORE UPDATE ON public.api_keys
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
+
+-- Permissions
+GRANT ALL ON TABLE public.api_keys TO authenticated;
+GRANT ALL ON TABLE public.api_keys TO service_role;
+
+-- Policies api_keys
+DROP POLICY IF EXISTS "Users can manage their own api keys" ON public.api_keys;
+CREATE POLICY "Users can manage their own api keys" ON public.api_keys
+    FOR ALL
+    TO authenticated
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can manage all api keys" ON public.api_keys;
+CREATE POLICY "Admins can manage all api keys" ON public.api_keys
+    FOR ALL
+    TO authenticated
+    USING (public.is_admin());
+
+-- Tabela de Logs de API
+CREATE TABLE IF NOT EXISTS public.api_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    api_key_id UUID REFERENCES public.api_keys(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    endpoint TEXT NOT NULL,
+    method TEXT NOT NULL,
+    status_code INT NOT NULL,
+    ip_address TEXT,
+    duration_ms INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Garantir colunas em api_logs (Migração Segura)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_logs' AND column_name = 'user_id') THEN
+        ALTER TABLE public.api_logs ADD COLUMN user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_logs' AND column_name = 'api_key_id') THEN
+        ALTER TABLE public.api_logs ADD COLUMN api_key_id UUID REFERENCES public.api_keys(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_logs' AND column_name = 'status_code') THEN
+        ALTER TABLE public.api_logs ADD COLUMN status_code INT;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS api_logs_user_id_idx ON public.api_logs (user_id);
+CREATE INDEX IF NOT EXISTS api_logs_api_key_id_idx ON public.api_logs (api_key_id);
+CREATE INDEX IF NOT EXISTS api_logs_created_at_idx ON public.api_logs (created_at DESC);
+
+ALTER TABLE public.api_logs ENABLE ROW LEVEL SECURITY;
+
+-- Policies api_logs
+DROP POLICY IF EXISTS "Users can view their own api logs" ON public.api_logs;
+CREATE POLICY "Users can view their own api logs" ON public.api_logs
+    FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can view all api logs" ON public.api_logs;
+CREATE POLICY "Admins can view all api logs" ON public.api_logs
+    FOR SELECT USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Authenticated users can insert api logs" ON public.api_logs;
+CREATE POLICY "Authenticated users can insert api logs" ON public.api_logs
+    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+-- Garantir colunas da InfinitePay em shop_settings (Migração Segura)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shop_settings' AND column_name = 'infinitepay_handle') THEN
+        ALTER TABLE public.shop_settings ADD COLUMN infinitepay_handle TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shop_settings' AND column_name = 'infinitepay_webhook_secret') THEN
+        ALTER TABLE public.shop_settings ADD COLUMN infinitepay_webhook_secret TEXT;
+    END IF;
+END $$;
+
+-- Garantir colunas da InfinitePay em orders (Migração Segura)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'infinitepay_id') THEN
+        ALTER TABLE public.orders ADD COLUMN infinitepay_id TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'infinitepay_url') THEN
+        ALTER TABLE public.orders ADD COLUMN infinitepay_url TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'infinitepay_status') THEN
+        ALTER TABLE public.orders ADD COLUMN infinitepay_status TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'infinitepay_metadata') THEN
+        ALTER TABLE public.orders ADD COLUMN infinitepay_metadata JSONB DEFAULT '{}'::jsonb;
+    END IF;
+END $$;
+
+-- ==================================================================
+-- 7.x CARTEIRAS E CONTROLE FINANCEIRO (Adicionado em 2026-01-08)
+-- ==================================================================
+
+-- Tabela de Carteira Unificada (Antiga store_wallets, agora para todos)
+-- Mantemos o nome 'store_wallets' para evitar migrações destrutivas, mas conceitualmente é 'user_wallets'
+CREATE TABLE IF NOT EXISTS public.store_wallets (
+    store_id UUID PRIMARY KEY REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    balance_decimal NUMERIC(10, 2) DEFAULT 0.00,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Trigger para updated_at em store_wallets
+DROP TRIGGER IF EXISTS handle_store_wallets_updated_at ON public.store_wallets;
+CREATE TRIGGER handle_store_wallets_updated_at BEFORE UPDATE ON public.store_wallets
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS para store_wallets
+ALTER TABLE public.store_wallets ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage store wallets' AND tablename = 'store_wallets') THEN
+        CREATE POLICY "Admins can manage store wallets" ON public.store_wallets FOR ALL USING (public.is_admin());
+    END IF;
+    
+    -- Política ajustada para permitir que qualquer usuário veja SUAS PRÓPRIA carteira (seja loja ou entregador)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view own wallet' AND tablename = 'store_wallets') THEN
+        CREATE POLICY "Users can view own wallet" ON public.store_wallets FOR SELECT USING (auth.uid() = store_id);
+    END IF;
+    
+    -- Remover política antiga restrita se existir (opcional, mas boa prática manter limpo)
+    -- DROP POLICY IF EXISTS "Stores can view own wallet" ON public.store_wallets;
+END $$;
+
+-- Remover courier_wallets se foi criada anteriormente (Reversão)
+DROP TABLE IF EXISTS public.courier_wallets CASCADE;
+
+-- Conceder permissões para a role authenticated
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO service_role;
+
+-- Garantir criação automática de carteiras para TODOS usuários relevantes
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    -- Unificado: Para Lojistas E Entregadores
+    FOR r IN SELECT id FROM public.user_profiles WHERE role IN ('store_partner', 'delivery_partner', 'delivery_person')
+    LOOP
+        INSERT INTO public.store_wallets (store_id, balance_decimal)
+        VALUES (r.id, 0)
+        ON CONFLICT (store_id) DO NOTHING;
+    END LOOP;
+END $$;
+
+-- Função RPC para Ajuste de Saldo (ZeBank)
+-- Permite saldos negativos conforme solicitado (representando dívida)
+CREATE OR REPLACE FUNCTION public.adjust_wallet_balance(
+    p_user_id UUID,
+    p_amount NUMERIC(10, 2),
+    p_reason TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_new_balance NUMERIC(10, 2);
+BEGIN
+    -- 1. Verificar se é admin
+    IF NOT public.is_admin() THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem ajustar saldos.';
+    END IF;
+
+    -- 2. Atualizar ou Criar Carteira
+    INSERT INTO public.store_wallets (store_id, balance_decimal)
+    VALUES (p_user_id, p_amount)
+    ON CONFLICT (store_id) DO UPDATE
+    SET balance_decimal = public.store_wallets.balance_decimal + p_amount,
+        updated_at = now()
+    RETURNING balance_decimal INTO v_new_balance;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'new_balance', v_new_balance,
+        'message', 'Saldo ajustado com sucesso.'
+    );
+EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object(
+        'success', false,
+        'message', SQLERRM
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.adjust_wallet_balance(UUID, NUMERIC, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.adjust_wallet_balance(UUID, NUMERIC, TEXT) TO service_role;
+
+-- ==================================================================
+-- 3.x SECURITY MODULE TABLES (Adicionado 11/01/2026)
+-- ==================================================================
+
+-- Tabela de Verificação de Identidade
+CREATE TABLE IF NOT EXISTS public.identity_verifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    status VARCHAR(50) DEFAULT 'PENDING', -- VERIFIED, REJECTED, PENDING
+    photo_url TEXT,
+    location_data JSONB,
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS handle_identity_verifications_updated_at ON public.identity_verifications;
+CREATE TRIGGER handle_identity_verifications_updated_at BEFORE UPDATE ON public.identity_verifications
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.identity_verifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage identity verifications" ON public.identity_verifications;
+CREATE POLICY "Admins can manage identity verifications" ON public.identity_verifications
+    FOR ALL USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can create their own identity verification" ON public.identity_verifications;
+CREATE POLICY "Users can create their own identity verification" ON public.identity_verifications
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can view their own identity verification" ON public.identity_verifications;
+CREATE POLICY "Users can view their own identity verification" ON public.identity_verifications
+    FOR SELECT USING (auth.uid() = user_id);
+
+GRANT ALL ON public.identity_verifications TO authenticated;
+GRANT ALL ON public.identity_verifications TO service_role;
+
+-- Tabela de Alertas de Fraude
+CREATE TABLE IF NOT EXISTS public.fraud_alerts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    description TEXT,
+    severity public.fraud_alert_severity DEFAULT 'MEDIUM',
+    status TEXT DEFAULT 'OPEN', -- OPEN, RESOLVED
+    details JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS handle_fraud_alerts_updated_at ON public.fraud_alerts;
+CREATE TRIGGER handle_fraud_alerts_updated_at BEFORE UPDATE ON public.fraud_alerts
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.fraud_alerts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage fraud alerts" ON public.fraud_alerts;
+CREATE POLICY "Admins can manage fraud alerts" ON public.fraud_alerts
+    FOR ALL USING (public.is_admin());
+
+GRANT ALL ON public.fraud_alerts TO authenticated;
+GRANT ALL ON public.fraud_alerts TO service_role;
 

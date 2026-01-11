@@ -3,7 +3,7 @@ export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator';
 export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found';
 export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION';
-export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER';
+export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER' | 'PENDING';
 export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
 export type VehicleType = 'moto' | 'car' | 'bike' | 'other';
 export type DocumentType = 'CNH' | 'CRLV' | 'VEHICLE_PHOTO' | 'ADDRESS_PROOF' | 'SELFIE' | 'PERSONAL_ID';
@@ -171,15 +171,7 @@ export interface Task {
     completed: boolean;
 }
 
-export interface RouteListItem {
-    id: string;
-    user_id: string;
-    title: string;
-    message: string;
-    type: string;
-    is_read: boolean;
-    created_at: string;
-}
+
 
 
 
@@ -346,9 +338,8 @@ export interface ShopSettings {
     support_status_override?: 'AUTO' | 'OPEN' | 'CLOSED';
     google_gemini_api_key?: string;
     open_route_service_api_key?: string;
-    asaas_active?: boolean;
-    asaas_api_key?: string;
-    asaas_webhook_token?: string;
+    infinitepay_handle?: string;
+    infinitepay_webhook_secret?: string;
 }
 
 export interface Category {
@@ -364,8 +355,10 @@ export interface Order {
     items: OrderItem[];
     total_price: number;
     payment_method: PaymentMethod;
-    asaas_pix_copy_paste?: string;
-    asaas_bank_slip_url?: string;
+    infinitepay_url?: string;
+    infinitepay_id?: string;
+    infinitepay_status?: string;
+    infinitepay_metadata?: any;
     shipping_address?: any;
     payment_details?: any;
     shipping_cost?: number;
@@ -380,6 +373,7 @@ export interface Order {
     amount_paid?: number;
     change_amount?: number;
     custom_payment_label?: string;
+    store_id?: string;
 
     store?: any;
     partner?: any;
@@ -558,14 +552,8 @@ export interface CityRequest {
     status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
-export interface AsaasWebhookLog {
-    id: string;
-    event_type: string;
-    payload: any;
-    status: string;
-    action_taken?: string;
-    created_at: string;
-}
+// AsaasWebhookLog removed
+
 
 // Consolidated PartnerProfile
 export interface PartnerProfile {
@@ -582,7 +570,7 @@ export interface PartnerProfile {
     vehicle_plate?: string;
     vehicle_model?: string;
     vehicle_year?: string;
-    asaas_wallet_id?: string;
+    // asaas_wallet_id removido
     partner_level?: string;
     average_rating?: number;
     completed_deliveries?: number;
@@ -599,6 +587,7 @@ export interface PartnerProfile {
     address_state?: string;
 
     is_super_store?: boolean;
+    store_name?: string;
 }
 
 export interface PartnerDocument {
@@ -732,6 +721,14 @@ export interface PlatformNews {
     image_url?: string;
 }
 
+export interface SystemTip {
+    id: string;
+    message: string;
+    target_role: UserRole | 'all';
+    is_active: boolean;
+    created_at: string;
+}
+
 export interface CofrinhoSettings {
     yield_frequency: 'daily' | 'weekly' | 'monthly';
     interest_type: 'simple' | 'compound';
@@ -752,7 +749,7 @@ export interface CofrinhoAccount {
     lock_until?: string | null;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'asaas_webhook' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides';
+export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips';
 
 export interface AppNotification {
     id: string;
@@ -936,8 +933,8 @@ export interface BlitzAlert {
 }
 
 export interface AdminDashboardStats {
-    orders: { today: number, week: number, month: number, total: number, graphData: { date: string, count: number }[] };
-    finance: { gmv: number, platformRevenue: number, averageTicket: number };
+    orders: { today: number, week: number, month: number, total: number, graphData: { date: string, count: number }[], trend?: number };
+    finance: { gmv: number, platformRevenue: number, averageTicket: number, gmvTrend?: number, revenueTrend?: number };
     users: { stores: { active: number, total: number }, drivers: { online: number, total: number } };
 }
 

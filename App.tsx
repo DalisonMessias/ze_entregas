@@ -1,6 +1,0 @@
-// ... existing code ...
-            // Store Specific
-            case 'wallet': return <StoreWalletModule onNavigate={navigate} />;
-            case 'new_request': return <StoreRequest onNavigate={navigate} />;
-            case 'history': return <OrderHistory userRole={userRole as 'store_partner' | 'delivery_partner'} />;
-// ... existing code ...

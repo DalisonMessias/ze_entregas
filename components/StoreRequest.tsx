@@ -37,7 +37,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
     const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
     const [storeCity, setStoreCity] = useState<string>('');
     const [walletBalance, setWalletBalance] = useState(0);
-    const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
+    const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info', message: string, action?: { label: string, onClick: () => void } } | null>(null);
     const [isSuperStore, setIsSuperStore] = useState(false);
 
     const [requestType, setRequestType] = useState<'PLATFORM' | 'ASSOCIATE'>('PLATFORM');
@@ -125,7 +125,14 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                         if (!superStatus) setRequestType('ASSOCIATE');
                     }
                 } else {
-                    setNotification({ type: 'error', message: "Dados do perfil não encontrados. Atualize seu cadastro." });
+                    setNotification({
+                        type: 'error',
+                        message: "Dados do perfil não encontrados. Atualize seu cadastro.",
+                        action: {
+                            label: "Ir para Configurações",
+                            onClick: () => onNavigate('store_settings')
+                        }
+                    });
                 }
             } catch (e) {
                 console.error(e);
@@ -157,8 +164,6 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                 .then(setAssociatedDrivers)
                 .catch(console.error)
                 .finally(() => setLoadingAssociates(false));
-        } else {
-            setSelectedAssociateIds([]);
         } else {
             setSelectedAssociateIds([]);
             setCost(null);
@@ -218,15 +223,14 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                 return;
             }
             const stops = Math.max(0, deliveries.length - 1);
-            const calc = estimateDeliveryCosts(points.map(p => ({ lat: p.lat!, lng: p.lng! })), stops, fees || {});
+            const calc = estimateDeliveryCosts(points.map(p => ({ lat: p.lat!, lng: p.lng! })), stops, (fees || {}) as PartnerFeeSettings);
             setDistanceKm(calc.distanceKm);
             setPartnerNet(calc.partnerNet);
             setCost(calc.total);
         } catch (e: any) {
             setNotification({ type: 'error', message: e.message || 'Erro ao calcular valores.' });
-
         } finally {
-            updateState({ validating: false });
+            setCalculating(false);
         }
     };
 
@@ -388,8 +392,8 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
             if (requestType === 'ASSOCIATE') {
                 const generatedCodes: string[] = []; // DECLARADO AQUI
                 for (const partnerId of selectedAssociateIds) {
-                    const result = await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, 0, 0, 0, fees, 'ASSOCIATE', partnerId);
-                    generatedCodes.push(result.deliveryCode);
+                    const result = await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, 0, 0, 0, (fees || {}) as PartnerFeeSettings, 'ASSOCIATE', partnerId);
+                    if (result && result.deliveryCode) generatedCodes.push(result.deliveryCode);
                 }
                 setNotification({ type: 'success', message: `Solicitação enviada para ${selectedAssociateIds.length} entregador(es)! Códigos: ${generatedCodes.join(', ')}` });
             } else {
@@ -417,14 +421,14 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     setIsSubmitting(false);
                     return;
                 }
-                const result = await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, distanceKm || 0, cost || 0, partnerNet || 0, fees, 'PLATFORM');
-                if (typeof result.availablePartners === 'number' && result.availablePartners === 0) {
+                const result = await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, distanceKm || 0, cost || 0, partnerNet || 0, (fees || {}) as PartnerFeeSettings, 'PLATFORM');
+                if (result && typeof result.availablePartners === 'number' && result.availablePartners === 0) {
                     setNotification({ type: 'error', message: 'Nenhum entregador disponível' });
-                } else {
+                } else if (result) {
                     setNotification({ type: 'success', message: `Solicitação enviada para a plataforma Zé! Código de Entrega: ${result.deliveryCode}` });
-                }
-                if (result.requestId) {
-                    startCountdown(result.expiresAt, result.requestId);
+                    if (result.requestId) {
+                        startCountdown(result.expiresAt, result.requestId);
+                    }
                 }
             }
 
@@ -487,14 +491,14 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
         try {
             const pickupAddrStr = formatAddressString(pickup);
             const deliveryAddrStr = deliveries.map(formatAddressString).join(' -> ');
-            const result = await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, distanceKm || 0, cost || 0, partnerNet || 0, fees, 'PLATFORM');
-            if (typeof result.availablePartners === 'number' && result.availablePartners === 0) {
+            const result = await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, distanceKm || 0, cost || 0, partnerNet || 0, (fees || {}) as PartnerFeeSettings, 'PLATFORM');
+            if (result && typeof result.availablePartners === 'number' && result.availablePartners === 0) {
                 setNotification({ type: 'error', message: 'Nenhum entregador disponível' });
-            } else {
+            } else if (result) {
                 setNotification({ type: 'success', message: `Solicitação enviada com Empréstimo! Código: ${result.deliveryCode}` });
-            }
-            if (result.requestId) {
-                startCountdown(result.expiresAt, result.requestId);
+                if (result.requestId) {
+                    startCountdown(result.expiresAt, result.requestId);
+                }
             }
             setPickup({ id: 'pickup', street: '', number: '', neighborhood: '', validated: false });
             setDeliveries([{ id: crypto.randomUUID(), street: '', number: '', neighborhood: '', validated: false }]);
@@ -606,8 +610,16 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                             notification && (
                                 <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 mb-3 ${notification.type === 'success' ? 'bg-green-100 text-green-700' : notification.type === 'info' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                                     {notification.type === 'success' ? <Check className="w-5 h-5" /> : notification.type === 'info' ? <Info className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                                    <span className="font-bold text-sm">{notification.message}</span>
-                                    <button onClick={() => setNotification(null)} className="ml-auto"><X className="w-4 h-4" /></button>
+                                    <span className="font-bold text-sm flex-1">{notification.message}</span>
+                                    {notification.action && (
+                                        <button
+                                            onClick={notification.action.onClick}
+                                            className="px-3 py-1 bg-white/50 hover:bg-white/80 rounded-lg text-xs font-bold transition-colors mr-2 whitespace-nowrap"
+                                        >
+                                            {notification.action.label}
+                                        </button>
+                                    )}
+                                    <button onClick={() => setNotification(null)} className=""><X className="w-4 h-4" /></button>
                                 </div>
                             )
                         }
@@ -693,70 +705,6 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                 ))}
             </div>
         </div>
-    )
-}
-
-
-
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2"><Calculator className="w-4 h-4" /> Cálculo de Valores</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                        <p className="text-xs font-bold text-gray-500">Distância Total</p>
-                        <p className="font-bold text-lg">{distanceKm !== null ? `${distanceKm.toFixed(2)} km` : '--'}</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                        <p className="text-xs font-bold text-gray-500">Taxas da Plataforma</p>
-                        <p className="text-sm font-bold text-green-600">ISENTO (Fixo)</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                        <p className="text-xs font-bold text-gray-500">Resumo</p>
-                        <p className="text-sm font-bold">Total Loja: {cost !== null ? formatCurrency(cost) : '--'}</p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="space-y-4">
-                {notification && (
-                    <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 mb-3 ${notification.type === 'success' ? 'bg-green-100 text-green-700' : notification.type === 'info' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                        {notification.type === 'success' ? <Check className="w-5 h-5" /> : notification.type === 'info' ? <Info className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                        <span className="font-bold text-sm">{notification.message}</span>
-                        <button onClick={() => setNotification(null)} className="ml-auto"><X className="w-4 h-4" /></button>
-                    </div>
-                )}
-                {renderAddressInputs(pickup, true)}
-                {deliveries.map(d => (
-                    <React.Fragment key={d.id}>
-                        {renderAddressInputs(d, false)}
-                    </React.Fragment>
-                ))}
-                <div data-testid="action-grid" className="grid grid-cols-1 md:grid-cols-2 gap-5" style={{ gridAutoRows: '1fr' }}>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={addDelivery}
-                        className="w-full h-10 rounded-lg focus:ring-2 focus:ring-brand-300"
-                        style={{ alignSelf: 'center', justifySelf: 'stretch' }}
-                    >
-                        <Plus className="w-4 h-4 mr-1" /> Adicionar Parada
-                    </Button>
-                    <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={handleDispatch}
-                        disabled={isSubmitting || loadingAssociates || associatedDrivers.length === 0}
-                        className="w-full h-10 rounded-lg focus:ring-2 focus:ring-brand-300"
-                        style={{ alignSelf: 'center', justifySelf: 'stretch' }}
-                    >
-                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                        Enviar para Selecionado(s)
-                    </Button>
-                </div>
-            </div>
-
-        </div >
     )
 }
 

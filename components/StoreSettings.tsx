@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Info, CheckCircle, AlertTriangle, X } from 'lucide-react';
+import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Info, CheckCircle, AlertTriangle, X, User } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { StoreShippingRules } from './StoreShippingRules';
 import { ExclusiveLock } from './ExclusiveLock';
+import { CitySearchSelect } from './CitySearchSelect';
+import { OpeningHoursModal } from './OpeningHoursModal';
 import * as cloud from '../services/cloud';
-import { PartnerProfile } from '../types';
+import { PartnerProfile, City } from '../types';
 import { formatPhoneNumber } from '../utils/mapHelpers';
 
 // --- TOAST COMPONENT ---
@@ -35,12 +37,18 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
 export const StoreSettings: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'general' | 'shipping'>('general');
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
+    const [availableCities, setAvailableCities] = useState<City[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [isSuperStore, setIsSuperStore] = useState(false);
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
 
     // Form State
+    const [userForm, setUserForm] = useState({
+        name: '',
+        email: ''
+    });
     const [form, setForm] = useState({
         name: '',
         phone_number: '',
@@ -58,12 +66,21 @@ export const StoreSettings: React.FC = () => {
         const load = async () => {
             setLoading(true);
             try {
-                const p = await cloud.getMyPartnerProfile();
+                const [p, cities] = await Promise.all([
+                    cloud.getMyPartnerProfile(),
+                    cloud.getAvailableCities()
+                ]);
+
                 setProfile(p);
+                setAvailableCities(cities);
 
                 if (p) {
-                    setForm({
+                    setUserForm({
                         name: p.name || '',
+                        email: p.email || ''
+                    });
+                    setForm({
+                        name: p.store_name || p.name || '',
                         phone_number: p.phone_number || '',
                         contact_email: p.contact_email || p.email || '',
                         opening_hours: p.opening_hours || '',
@@ -105,7 +122,7 @@ export const StoreSettings: React.FC = () => {
             const rawZip = (form.address_zip || '').replace(/\D/g, '');
 
             await cloud.updateMyPartnerProfile({
-                name: form.name,
+                store_name: form.name,
                 phone_number: rawPhone,
                 contact_email: form.contact_email,
                 opening_hours: form.opening_hours,
@@ -130,6 +147,14 @@ export const StoreSettings: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in pb-24">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+            <OpeningHoursModal
+                isOpen={isHoursModalOpen}
+                onClose={() => setIsHoursModalOpen(false)}
+                onConfirm={(val) => handleChange('opening_hours', val)}
+                initialValue={form.opening_hours}
+            />
+
             {/* Header / Tabs */}
             <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
                 <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
@@ -150,159 +175,161 @@ export const StoreSettings: React.FC = () => {
 
             {/* General Settings */}
             {activeTab === 'general' && (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
-
-                    {/* Basic Info */}
-                    <div>
+                <div className="space-y-6">
+                    {/* User Data (ReadOnly) */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
                         <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
-                            <Store className="w-5 h-5 text-gray-500" /> Informações Básicas
+                            <User className="w-5 h-5 text-gray-400" /> Dados da Conta
                         </h3>
-                        <div className="grid grid-cols-1 gap-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Nome da Loja</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <CustomInput
+                                label="Nome do Responsável"
+                                value={userForm.name}
+                                readOnly
+                                icon={User}
+                                className="opacity-70"
+                            />
+                            <CustomInput
+                                label="Email da Conta"
+                                value={userForm.email}
+                                readOnly
+                                icon={Mail}
+                                className="opacity-70"
+                            />
+                        </div>
+                        <p className="text-[10px] text-gray-400">Os dados da conta são fixos. Para alterá-los, entre em contato com o suporte.</p>
+                    </div>
+
+                    {/* Store Info */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
+                        <div>
+                            <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
+                                <Store className="w-5 h-5 text-gray-500" /> Informações da Loja
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <CustomInput
+                                    label="Nome da Loja"
                                     type="text"
                                     value={form.name}
                                     onChange={e => handleChange('name', e.target.value)}
                                     placeholder="Ex: Pizzaria do Zé"
+                                    icon={Store}
+                                />
+                                <CustomInput
+                                    label="Horário de Funcionamento"
+                                    type="text"
+                                    value={form.opening_hours}
+                                    onClick={() => setIsHoursModalOpen(true)}
+                                    readOnly
+                                    placeholder="Toque para configurar horários"
+                                    icon={Clock}
+                                    className="cursor-pointer"
                                 />
                             </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Horário de Funcionamento</label>
-                                <div className="relative">
-                                    <Clock className="absolute left-3 top-3.5 w-4 h-4 text-gray-400 z-10" />
-                                    <CustomInput
-                                        type="text"
-                                        value={form.opening_hours}
-                                        onChange={e => handleChange('opening_hours', e.target.value)}
-                                        className="pl-10"
-                                        placeholder="Ex: Seg-Sex 18h às 23h"
-                                    />
-                                </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <CustomInput
+                                    label="Telefone / WhatsApp"
+                                    type="tel"
+                                    value={form.phone_number}
+                                    onChange={e => handleChange('phone_number', e.target.value)}
+                                    placeholder="(00) 00000-0000"
+                                    mask="phone"
+                                    icon={Phone}
+                                />
+                                <CustomInput
+                                    label="Email de Contato da Loja"
+                                    type="email"
+                                    value={form.contact_email}
+                                    onChange={e => handleChange('contact_email', e.target.value)}
+                                    placeholder="contato@loja.com"
+                                    icon={Mail}
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    {/* Contact */}
-                    <div>
-                        <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
-                            <Phone className="w-5 h-5 text-gray-500" /> Contato
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Telefone / WhatsApp</label>
-                                <div className="relative">
-                                    <Phone className="absolute left-3 top-3.5 w-4 h-4 text-gray-400 z-10" />
-                                    <CustomInput
-                                        type="tel"
-                                        value={form.phone_number}
-                                        onChange={e => handleChange('phone_number', e.target.value)}
-                                        className="pl-10"
-                                        placeholder="(00) 00000-0000"
-                                        mask="phone"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Email de Contato</label>
-                                <div className="relative">
-                                    <Mail className="absolute left-3 top-3.5 w-4 h-4 text-gray-400 z-10" />
-                                    <CustomInput
-                                        type="email"
-                                        value={form.contact_email}
-                                        onChange={e => handleChange('contact_email', e.target.value)}
-                                        className="pl-10"
-                                        placeholder="contato@loja.com"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        {/* Address */}
+                        <div>
+                            <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
+                                <MapPin className="w-5 h-5 text-gray-500" /> Endereço de Coleta
+                            </h3>
 
-                    {/* Address */}
-                    <div>
-                        <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
-                            <MapPin className="w-5 h-5 text-gray-500" /> Endereço Completo
-                        </h3>
-
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="col-span-1">
-                                    <label className="text-xs font-bold text-gray-500 uppercase">CEP</label>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <CustomInput
+                                        label="CEP"
                                         type="text"
                                         value={form.address_zip}
                                         onChange={e => handleChange('address_zip', e.target.value)}
                                         placeholder="00000-000"
                                         mask="cep"
+                                        icon={MapPin}
                                     />
+                                    <div className="md:col-span-2">
+                                        <CitySearchSelect
+                                            label="Cidade"
+                                            value={form.city}
+                                            onSelect={(city) => {
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    city: city.name,
+                                                    address_state: city.state
+                                                }));
+                                            }}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="col-span-2">
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Cidade</label>
-                                    <CustomInput
-                                        type="text"
-                                        value={form.city}
-                                        onChange={e => handleChange('city', e.target.value)}
-                                        placeholder="Nome da Cidade"
-                                    />
-                                </div>
-                            </div>
 
-                            <div className="grid grid-cols-[3fr_1fr] gap-4">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Rua</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <CustomInput
+                                        label="Rua"
                                         type="text"
                                         value={form.address_street}
                                         onChange={e => handleChange('address_street', e.target.value)}
                                         placeholder="Av. Principal"
                                     />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <CustomInput
+                                            label="Número"
+                                            type="text"
+                                            value={form.address_number}
+                                            onChange={e => handleChange('address_number', e.target.value)}
+                                            placeholder="123"
+                                        />
+                                        <CustomInput
+                                            label="UF"
+                                            type="text"
+                                            maxLength={2}
+                                            value={form.address_state}
+                                            onChange={e => handleChange('address_state', e.target.value.toUpperCase())}
+                                            placeholder="SP"
+                                            readOnly
+                                            className="opacity-70"
+                                        />
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Número</label>
-                                    <CustomInput
-                                        type="text"
-                                        value={form.address_number}
-                                        onChange={e => handleChange('address_number', e.target.value)}
-                                        placeholder="123"
-                                    />
-                                </div>
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Bairro</label>
-                                    <CustomInput
-                                        type="text"
-                                        value={form.address_district}
-                                        onChange={e => handleChange('address_district', e.target.value)}
-                                        placeholder="Centro"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Estado (UF)</label>
-                                    <CustomInput
-                                        type="text"
-                                        maxLength={2}
-                                        value={form.address_state}
-                                        onChange={e => handleChange('address_state', e.target.value.toUpperCase())}
-                                        placeholder="SP"
-                                    />
-                                </div>
+                                <CustomInput
+                                    label="Bairro"
+                                    type="text"
+                                    value={form.address_district}
+                                    onChange={e => handleChange('address_district', e.target.value)}
+                                    placeholder="Centro"
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 flex items-start gap-3">
-                        <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                        <p className="text-xs text-blue-800 dark:text-blue-200">
-                            Mantenha esses dados sempre atualizados para facilitar a coleta dos entregadores e o contato dos clientes.
-                        </p>
-                    </div>
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 flex items-start gap-3">
+                            <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-blue-800 dark:text-blue-200">
+                                Mantenha esses dados sempre atualizados para facilitar a coleta dos entregadores e o contato dos clientes.
+                            </p>
+                        </div>
 
-                    <Button onClick={handleSave} disabled={saving} fullWidth className="mt-4 py-4">
-                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Alterações</>}
-                    </Button>
+                        <Button onClick={handleSave} disabled={saving} fullWidth className="mt-4 py-4">
+                            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Alterações</>}
+                        </Button>
+                    </div>
                 </div>
             )}
 
@@ -320,3 +347,5 @@ export const StoreSettings: React.FC = () => {
         </div>
     );
 };
+
+

@@ -15,8 +15,9 @@ export const AdminRoutingConfig: React.FC = () => {
         const loadSettings = async () => {
             setLoading(true);
             try {
-                const settings = await cloud.getShopSettings();
-                setApiKey(settings?.open_route_service_api_key || '');
+                // Now fetching from api_keys table
+                const key = await cloud.getApiKey('open_route_service');
+                setApiKey(key || '');
             } catch (e) {
                 console.error("Error loading routing settings:", e);
                 setFeedback({ type: 'error', text: 'Erro ao carregar configurações de roteamento.' });
@@ -56,34 +57,34 @@ export const AdminRoutingConfig: React.FC = () => {
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Chave de API do OpenRouteService</label>
                         <div className="relative">
-                            <input 
-                                type={showApiKey ? "text" : "password"} 
-                                placeholder="YOUR_ORS_API_KEY" 
-                                value={apiKey} 
-                                onChange={e => setApiKey(e.target.value)} 
-                                className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white pl-11 pr-12 font-mono text-sm" 
+                            <input
+                                type={showApiKey ? "text" : "password"}
+                                placeholder="YOUR_ORS_API_KEY"
+                                value={apiKey}
+                                onChange={e => setApiKey(e.target.value)}
+                                className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white pl-11 pr-12 font-mono text-sm"
                             />
                             <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                            <button 
+                            <button
                                 onClick={() => setShowApiKey(!showApiKey)}
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                             >
-                                {showApiKey ? <Eye className="w-5 h-5"/> : <EyeOff className="w-5 h-5"/>}
+                                {showApiKey ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
                             </button>
                         </div>
                         <p className="text-[10px] text-gray-400 mt-1 ml-1">Obtenha sua chave em <a href="https://openrouteservice.org/dev/#/login" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">OpenRouteService Dashboard</a>.</p>
                     </div>
                 </div>
-                
+
                 {feedback && (
                     <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                        {feedback.type === 'success' ? <CheckCircle className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>}
+                        {feedback.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
                         <span className="font-bold text-sm">{feedback.text}</span>
                     </div>
                 )}
 
                 <Button fullWidth onClick={handleSaveApiKey} disabled={saving} className="mt-6 py-4 text-lg shadow-lg">
-                    {saving ? <Loader2 className="w-6 h-6 animate-spin"/> : <><Save className="w-5 h-5 mr-2"/> Salvar Chave</>}
+                    {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Chave</>}
                 </Button>
             </div>
         </div>

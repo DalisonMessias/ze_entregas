@@ -1,9 +1,28 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 import streetsNeighborhoodsRoutes from './routes/streetsNeighborhoods.js';
+import integrationRoutes from './routes/integration.js';
 
-dotenv.config();
+// Configurar dotenv com caminho explícito
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, '../.env');
+
+const result = dotenv.config({ path: envPath });
+
+console.log(`🔌 Tentando carregar .env de: ${envPath}`);
+if (result.error) {
+  console.error("❌ Erro ao carregar .env:", result.error);
+} else {
+  console.log("✅ .env carregado. Variáveis encontradas:", Object.keys(result.parsed || {}).length);
+}
+
+// Debug das variáveis críticas
+console.log("🔍 SUPABASE_URL:", process.env.SUPABASE_URL ? "Definido" : "NÃO DEFINIDO");
+console.log("🔍 VITE_SUPABASE_URL:", process.env.VITE_SUPABASE_URL ? "Definido" : "NÃO DEFINIDO");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -26,6 +45,7 @@ app.use((req, res, next) => {
 
 // Rotas
 app.use('/api/streets-neighborhoods', streetsNeighborhoodsRoutes);
+app.use('/api/v1', integrationRoutes);
 
 // Rota de health check
 app.get('/health', (req, res) => {
@@ -34,7 +54,7 @@ app.get('/health', (req, res) => {
 
 // Rota raiz
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     message: 'Zé Entregas - API Backend',
     version: '1.0.0',
     endpoints: {

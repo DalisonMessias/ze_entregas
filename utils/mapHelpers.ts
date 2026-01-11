@@ -22,7 +22,14 @@ export interface GeoJSONCollection {
 export const openNavigation = (lat: number, lng: number, address?: string) => {
   // O link universal waze.com/ul é a forma mais confiável de abrir o app se estiver instalado, 
   // ou o site do Waze no navegador como fallback.
-  const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+  let wazeUrl = '';
+  if (lat && lng) {
+    wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+  } else if (address) {
+    wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
+  } else {
+    return;
+  }
   window.open(wazeUrl, '_blank');
 };
 

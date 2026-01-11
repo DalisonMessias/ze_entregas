@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Wallet, Plus, Loader2, Copy, ExternalLink, X, AlertTriangle, MapPin, Star, MessageCircle, Crown, ChevronRight, Truck, Send, Users, BarChart3, Megaphone, History, Settings, CreditCard, Headphones, ShoppingBag, Search, FileText, Landmark, UploadCloud, Banknote } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
+import { DataErrorDisplay } from './DataErrorDisplay';
 import * as cloud from '../services/cloud';
 import { StoreWallet, WalletTransaction, PartnerRequest, PartnerRequestStatus, PartnerFeeSettings } from '../types';
 import { LiveTrackingMap } from './LiveTrackingMap';
@@ -12,6 +13,7 @@ import { SuperStoreModal } from './SuperStoreModal';
 import { Skeleton } from './Skeleton';
 import { PromoSlider } from './PromoSlider';
 import { useDialog } from '../utils/dialogService';
+import { TipOfTheDay } from './TipOfTheDay';
 
 declare const QRious: any;
 
@@ -126,6 +128,10 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
     });
     const [editShortcuts, setEditShortcuts] = useState(false);
 
+    const [loadingWallet, setLoadingWallet] = useState(true);
+    const [loadingRequests, setLoadingRequests] = useState(true);
+    const [errorWallet, setErrorWallet] = useState<string | null>(null);
+
     const { alert, confirm } = useDialog();
 
     useEffect(() => {
@@ -134,41 +140,66 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
         } catch { }
     }, [favoriteShortcuts]);
 
-    const loadAllData = async () => {
-        setLoading(true);
-        setErrorMessage(null);
+    const fetchWallet = async () => {
+        setLoadingWallet(true);
+        setErrorWallet(null);
         try {
-            const [walletData, requestsData, feesData, profileData] = await Promise.all([
-                cloud.getMyWallet(),
-                cloud.getStoreRequests(),
-                cloud.getPublicFeeSettings(),
-                cloud.getMyPartnerProfile()
-            ]);
-            setWallet(walletData);
-            setRequests(requestsData);
-            setFees(feesData);
-            setIsSuperStore(profileData?.is_super_store || false);
+            const data = await cloud.getMyWallet();
+            setWallet(data);
         } catch (e) {
-            console.error(e);
-            const msg = (e && (e as any).message) ? (e as any).message : 'Erro ao carregar dados. Tente novamente.';
-            setErrorMessage(msg);
+            console.error('[StoreWallet] Error fetching wallet:', e);
+            setErrorWallet('Falha ao carregar saldo.');
         } finally {
-            setLoading(false);
+            setLoadingWallet(false);
+        }
+    };
+
+    const fetchRequests = async () => {
+        setLoadingRequests(true);
+        try {
+            const data = await cloud.getStoreRequests();
+            setRequests(data);
+        } catch (e) {
+            console.error('[StoreWallet] Error fetching requests:', e);
+        } finally {
+            setLoadingRequests(false);
+        }
+    };
+
+    const fetchOtherData = async () => {
+        try {
+            const [feesData, profileData] = await Promise.all([
+                cloud.getPublicFeeSettings().catch(() => null),
+                cloud.getMyPartnerProfile().catch(() => null)
+            ]);
+            if (feesData) setFees(feesData);
+            if (profileData) setIsSuperStore(profileData?.is_super_store || false);
+        } catch (e) {
+            console.error('[StoreWallet] Error fetching common data:', e);
         }
     };
 
     useEffect(() => {
-        loadAllData();
+        fetchWallet();
+        fetchRequests();
+        fetchOtherData();
+
         // Setup polling
         const interval = setInterval(() => {
-            // Silently refresh requests
+            // Silently refresh requests and wallet
             cloud.getStoreRequests().then(setRequests).catch(console.error);
             cloud.getMyWallet().then(setWallet).catch(console.error);
         }, 15000);
         return () => clearInterval(interval);
     }, []);
 
-    const handleRecharge = (amount: number, method: 'PIX') => cloud.createRechargeCharge(amount, method);
+    const loadAllData = () => {
+        fetchWallet();
+        fetchRequests();
+        fetchOtherData();
+    };
+
+    // const handleRecharge = (amount: number, method: 'PIX') => cloud.createRechargeCharge(amount, method);
 
     const handleDecision = async (id: string, decision: 'RETURN' | 'DISCARD') => {
         const confirmed = await confirm({
@@ -199,17 +230,19 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
-    if (loading && !wallet) return <WalletSkeleton />;
+    if (loadingWallet && !wallet) return <WalletSkeleton />;
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {errorMessage && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-3 rounded-lg text-sm font-bold">
-                    {errorMessage}
-                </div>
+            {errorWallet && (
+                <DataErrorDisplay
+                    title="Erro na Carteira"
+                    message={errorWallet}
+                    onRetry={fetchWallet}
+                />
             )}
 
-            {showRecharge && <RechargeModal onClose={() => setShowRecharge(false)} onRecharge={handleRecharge} />}
+            {/* Recharge removed as Asaas is deprecated. Needs InfinitePay implementation */}
 
             {!isSuperStore && fees && (
                 <div
@@ -239,6 +272,7 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
 
             <div className="space-y-6">
                 <PromoSlider audience="merchants" />
+                <TipOfTheDay role="store_partner" />
                 {/* Main Balance Card */}
                 <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6 rounded-[32px] shadow-2xl shadow-gray-900/20 relative overflow-hidden">
                     <div className="absolute -right-16 -top-10 opacity-10"><Wallet className="w-48 h-48" /></div>
@@ -254,9 +288,11 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
                             <Plus className="w-4 h-4 mr-2" /> Abrir ZéPay
                         </Button>
                         <div className="flex gap-3 mt-4">
+                            {/* Recharge button temporarily hidden due to migration
                             <button onClick={() => setShowRecharge(true)} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
                                 <Plus className="w-4 h-4" /> Recarregar
                             </button>
+                            */}
                             {/* Transfer button functionality could be clearer, but keeping UI consistent */}
                         </div>
                     </div>
@@ -302,7 +338,7 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
                                 { id: 'zepay', label: 'ZéPay', icon: CreditCard, tab: 'zepay_store', color: 'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400' },
                             ],
                             frequentes: [
-                                { id: 'atualizar_estoque', label: 'Atualizar Estoque', icon: ShoppingBag, tab: 'store_integrations', color: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' },
+                                { id: 'atualizar_estoque', label: 'Atualizar Estoque', icon: ShoppingBag, tab: 'store_product_import', color: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' },
                                 { id: 'verificar_vendas', label: 'Verificar Vendas', icon: BarChart3, tab: 'store_reports', color: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' },
                                 { id: 'responder_mensagens', label: 'Responder Mensagens', icon: MessageCircle, tab: 'support', color: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' },
                                 { id: 'minha_equipe', label: 'Minha Equipe', icon: Users, tab: 'store_team', color: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' },
@@ -314,6 +350,7 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
                                 { id: 'integracoes', label: 'Integrações', icon: Send, tab: 'store_integrations', color: 'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400' },
                                 { id: 'loja_pecas', label: 'Loja de Peças', icon: ShoppingBag, tab: 'shop', color: 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400' },
                                 { id: 'pedidos_internos', label: 'Pedidos Internos', icon: FileText, tab: 'internal_orders', color: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' },
+                                { id: 'cadastro_manual', label: 'Cadastro Manual', icon: Plus, tab: 'internal_orders', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
                                 { id: 'zebank', label: 'ZéBank', icon: Landmark, tab: 'zebank', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
                                 { id: 'importar_produtos', label: 'Importar Produtos', icon: UploadCloud, tab: 'store_product_import', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' },
                                 { id: 'painel_financeiro', label: 'Painel Financeiro', icon: Banknote, tab: 'store_finance_panel', color: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' },

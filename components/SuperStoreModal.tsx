@@ -19,7 +19,7 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState('');
-    
+
     // Pix State
     const [showPix, setShowPix] = useState(false);
     const [pixData, setPixData] = useState<{ copyPaste: string, qrCodeBase64?: string } | null>(null);
@@ -62,28 +62,19 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
         if (!fees?.super_store_monthly_fee) return;
         setProcessing(true);
         setError('');
-        
+
         try {
             // Check balance locally first for better UX
             const currentBalance = wallet?.balance_decimal || 0;
             const fee = fees.super_store_monthly_fee;
 
             if (currentBalance < fee) {
-                // Insufficient funds -> Generate Pix for exact amount
-                const missingAmount = fee - currentBalance; // Or full amount? Let's just charge full amount to keep it simple recharge
-                // Actually, best flow: Generate a RECHARGE for the fee amount so they can pay and then subscribe.
-                // Or better: Just generate a charge for the fee.
-                
-                const charge = await cloud.createRechargeCharge(fee, 'PIX');
-                
-                if (charge && charge.asaas_pix_copy_paste) {
-                    setPixData({ copyPaste: charge.asaas_pix_copy_paste });
-                    setShowPix(true);
-                    setProcessing(false);
-                    return;
-                } else {
-                    throw new Error("Erro ao gerar Pix.");
-                }
+                // Insufficient funds
+                // Automatic recharge via Asaas deprecated.
+                // const charge = await cloud.createRechargeCharge(fee, 'PIX');
+                // if (charge && charge.asaas_pix_copy_paste) { ... }
+
+                throw new Error("Saldo insuficiente. A recarga automática está temporariamente indisponível. Entre em contato com o suporte.");
             }
 
             // If balance sufficient, process subscription
@@ -111,7 +102,7 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl relative">
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black/20 rounded-full z-10">
-                    <X className="w-5 h-5 text-white"/>
+                    <X className="w-5 h-5 text-white" />
                 </button>
 
                 {/* Header */}
@@ -127,27 +118,27 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
                 </div>
 
                 <div className="p-6 -mt-8 bg-white dark:bg-gray-800 rounded-t-[32px] relative z-20">
-                    
+
                     {/* Content Switch: Features vs Pix */}
                     {!showPix ? (
                         <>
                             <div className="space-y-4 mb-6">
                                 <div className="flex items-start gap-3">
-                                    <div className="p-1 bg-green-100 rounded-full mt-0.5"><Check className="w-3 h-3 text-green-600"/></div>
+                                    <div className="p-1 bg-green-100 rounded-full mt-0.5"><Check className="w-3 h-3 text-green-600" /></div>
                                     <div>
                                         <p className="font-bold text-sm dark:text-white">Gerentes Adicionais</p>
                                         <p className="text-xs text-gray-500">Cadastre sua equipe para gerenciar pedidos.</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    <div className="p-1 bg-green-100 rounded-full mt-0.5"><Check className="w-3 h-3 text-green-600"/></div>
+                                    <div className="p-1 bg-green-100 rounded-full mt-0.5"><Check className="w-3 h-3 text-green-600" /></div>
                                     <div>
                                         <p className="font-bold text-sm dark:text-white">Regras de Frete</p>
                                         <p className="text-xs text-gray-500">Crie regras de frete grátis ou fixo.</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    <div className="p-1 bg-green-100 rounded-full mt-0.5"><Check className="w-3 h-3 text-green-600"/></div>
+                                    <div className="p-1 bg-green-100 rounded-full mt-0.5"><Check className="w-3 h-3 text-green-600" /></div>
                                     <div>
                                         <p className="font-bold text-sm dark:text-white">Relatórios Exclusivos</p>
                                         <p className="text-xs text-gray-500">Acesse dados detalhados de performance.</p>
@@ -157,13 +148,13 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
 
                             {error && (
                                 <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-xl text-xs font-bold flex items-center gap-2 mb-4">
-                                    <AlertCircle className="w-4 h-4"/> {error}
+                                    <AlertCircle className="w-4 h-4" /> {error}
                                 </div>
                             )}
 
                             <div className="text-center mb-4">
                                 {loading ? (
-                                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-500"/>
+                                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-500" />
                                 ) : (
                                     <>
                                         <p className="text-3xl font-black text-gray-900 dark:text-white">
@@ -179,14 +170,14 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
                             </div>
 
                             <Button onClick={handleSubscribe} disabled={loading || processing} fullWidth className="py-4 text-lg bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700 border-none shadow-lg shadow-orange-500/30">
-                                {processing ? <Loader2 className="w-6 h-6 animate-spin"/> : ((wallet?.balance_decimal || 0) < (fees?.super_store_monthly_fee || 0) ? 'Pagar com Pix' : 'Ativar Agora')}
+                                {processing ? <Loader2 className="w-6 h-6 animate-spin" /> : ((wallet?.balance_decimal || 0) < (fees?.super_store_monthly_fee || 0) ? 'Pagar com Pix' : 'Ativar Agora')}
                             </Button>
                         </>
                     ) : (
                         <div className="text-center space-y-4 animate-in fade-in">
                             <h3 className="font-bold text-lg dark:text-white">Pagar via Pix</h3>
                             <p className="text-xs text-gray-500">Escaneie o QR Code ou copie o código abaixo para adicionar saldo e ativar sua assinatura.</p>
-                            
+
                             <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl inline-block border border-gray-200 dark:border-gray-600">
                                 <canvas ref={qrCanvasRef} className="w-40 h-40" />
                             </div>
@@ -196,9 +187,9 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
                             </div>
 
                             <Button variant="outline" fullWidth onClick={handleCopyPix}>
-                                <Copy className="w-4 h-4 mr-2"/> Copiar Código Pix
+                                <Copy className="w-4 h-4 mr-2" /> Copiar Código Pix
                             </Button>
-                            
+
                             <Button variant="ghost" fullWidth onClick={() => { setShowPix(false); window.location.reload(); /* Force reload to check balance */ }}>
                                 Já paguei, verificar saldo
                             </Button>

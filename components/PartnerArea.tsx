@@ -23,6 +23,7 @@ import { useDialog } from '../utils/dialogService';
 import { NotificationCenter } from './NotificationCenter';
 import { useNotification } from '../contexts/NotificationContext';
 import { PromoSlider } from './PromoSlider';
+import { TipOfTheDay } from './TipOfTheDay';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -293,6 +294,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             return;
         }
 
+        /* Emergency payout via Asaas deprecated.
         setProcessingWithdraw(true);
         try {
             await cloud.requestEmergencyPayoutAsaas({
@@ -306,6 +308,9 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
         } finally {
             setProcessingWithdraw(false);
         }
+        */
+        await alert({ title: "Indisponível", message: "Saque emergencial temporariamente indisponível durante migração de sistema." });
+        setShowWithdrawConfirm(false);
     };
 
     const handleRateStore = async (rating: number, comment: string) => {
@@ -401,6 +406,24 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             </div>
         );
     }
+    // NOVO: Bloqueio visual para entregadores comuns (sem barrar a navegação)
+    if (userRole === 'delivery_person') {
+        return (
+            <ExclusiveLock
+                title="Área do Parceiro"
+                description="Esta área é exclusiva para Parceiros de Entrega verificados. Torne-se um parceiro para acessar turnos, entregas oficiais e muito mais."
+                features={[
+                    "Acesso a turnos de entrega",
+                    "Recebimento de entregas oficiais",
+                    "Ganhos por entrega e métricas",
+                    "Acesso antecipado a novas áreas"
+                ]}
+                onAction={() => onNavigate('upgrade_to_partner')}
+                actionLabel="Quero ser Parceiro"
+            />
+        );
+    }
+
     // Only block if role is PARTNER and verification is not APPROVED
     if (userRole === 'delivery_partner' && profile?.verification_status !== 'APPROVED') {
         return <PartnerDocumentation profile={profile} onProfileUpdate={setProfile} />;
@@ -519,6 +542,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             {activeTab === 'requests' && (
                 <>
                     <PromoSlider audience={userRole === 'store_partner' ? 'merchants' : 'drivers'} />
+                    <TipOfTheDay role={userRole} />
                     {renderShiftControl()}
 
                     {/* Quick Access & Tools Sections for Partners */}

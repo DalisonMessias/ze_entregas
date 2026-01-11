@@ -21,6 +21,7 @@ export const AuthWrapper: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('delivery_person');
   const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [isRetryingProfile, setIsRetryingProfile] = useState(false);
   const [collaboratorSession, setCollaboratorSession] = useState<any | null>(null);
 
   const [view, setView] = useState<AuthView>('landing');
@@ -88,19 +89,32 @@ export const AuthWrapper: React.FC = () => {
     logger.warn('USER_NOT_FOUND_SIGNOUT', {});
   };
 
+  // Retry logic to prevent infinite loops
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
+
   useEffect(() => {
     let mounted = true;
 
-    const timeoutId = setTimeout(() => {
+    // Timeout de segurança global para parar loading infinito
+    const globalTimeoutId = setTimeout(() => {
       if (mounted && isCheckingSession) {
-        logger.warn('SESSION_CHECK_TIMEOUT', {});
+        logger.warn('SESSION_CHECK_TIMEOUT_GLOBAL', {});
         setIsCheckingSession(false);
+        setAuthMessage({ type: 'error', text: 'Demorou muito para conectar. Verifique sua internet.' });
       }
-    }, 10000); // 10 segundos de timeout
+    }, 15000);
 
     let authSubscriptionUnsubscribe: (() => void) | null = null;
 
     const initializeAuth = async () => {
+      if (retryCount >= MAX_RETRIES) {
+        logger.error('AUTH_MAX_RETRIES_REACHED', { retryCount });
+        setIsCheckingSession(false);
+        setAuthMessage({ type: 'error', text: 'Falha recorrente na autenticação. Tente recarregar a página.' });
+        return;
+      }
+
       const supabase = cloud.initSupabase();
 
       if (!supabase) {
@@ -119,6 +133,15 @@ export const AuthWrapper: React.FC = () => {
             console.log('[AUTH_INIT] getInitialUserData result', { userId: initialSession.user.id, status, role });
             if (!mounted) return;
 
+            if (status === ('error' as any)) {
+              setAuthMessage({ type: 'error', text: 'Não foi possível carregar seu perfil. O sistema continuará tentando.' });
+              setSession(initialSession);
+              setUserId(initialSession.user.id);
+              setUserRole('delivery_person' as any); // Fallback role
+              setIsCheckingSession(false);
+              return;
+            }
+
             if (status === 'banned') {
               await supabase.auth.signOut();
               setAuthMessage({ type: 'error', text: 'Sua conta foi suspensa.' });
@@ -127,7 +150,13 @@ export const AuthWrapper: React.FC = () => {
               setUserRole('delivery_person');
               logger.warn('LOGIN_BLOCKED_BANNED', { userId: initialSession.user.id });
             } else if (status === 'not_found') {
-              handleLogoutAndRedirect("Usuário não encontrado no sistema.");
+              // Em vez de logout imediato, verificamos se é um erro temporário ou se realmente o perfil sumiu
+              // Se sumiu, talvez precise ser recriado ou redirecionado para onboarding.
+              // Por segurança e conforme pedido, vamos evitar expulsa-lo se puder ser erro de banco.
+              setAuthMessage({ type: 'error', text: 'Perfil não encontrado. Tente novamente mais tarde.' });
+              setSession(initialSession);
+              setUserId(initialSession.user.id);
+              setIsCheckingSession(false);
               logger.warn('AUTH_INIT_USER_NOT_FOUND', { userId: initialSession.user.id });
             } else {
               setSession(initialSession);
@@ -136,17 +165,21 @@ export const AuthWrapper: React.FC = () => {
               logger.info('AUTH_INIT_ROLE', { userId: initialSession.user.id, role: (role || 'delivery_person') });
               redirectToRoleHome(role || 'delivery_person');
             }
-          } catch (e: any) {
-            if (mounted) {
-              console.log('[AUTH_INIT] getInitialUserData threw', { userId: initialSession?.user?.id, error: e?.message || String(e) });
-              handleLogoutAndRedirect("Usuário não encontrado no sistema.");
-              logger.error('AUTH_INIT_USER_DELETED', { userId: initialSession?.user?.id, error: e.message });
-            }
+          } catch (profileError) {
+            console.error('[AUTH_INIT] profile fetch error', profileError);
+            if (!mounted) return;
+            setSession(initialSession);
+            setUserId(initialSession.user.id);
+            setAuthMessage({ type: 'error', text: 'Erro ao carregar dados do perfil. Tente atualizar a página.' });
           }
         }
       } catch (err: any) {
         logger.error('AUTH_INIT_ERROR', { message: err?.message || String(err) });
         const errorMessage = err?.message || JSON.stringify(err);
+
+        // Incrementa retry count
+        setRetryCount(prev => prev + 1);
+
         if (errorMessage.includes("Refresh Token") || errorMessage.includes("Invalid Refresh Token")) {
           await cloud.signOut();
           if (mounted) {
@@ -157,14 +190,18 @@ export const AuthWrapper: React.FC = () => {
           }
         }
       } finally {
-        clearTimeout(timeoutId);
         if (mounted) {
+          // Apenas para de carregar se tiver sucesso ou se atingir max retries (tratado no topo)
+          // Mas garantimos que o spinner saia eventualmente
           setTimeout(() => setIsCheckingSession(false), 500);
         }
       }
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: any, currentSession: any) => {
         if (!mounted) return;
+
+        // Se já atingiu limite de retries, ignora eventos automáticos para evitar loop
+        if (retryCount >= MAX_RETRIES) return;
 
         if (event === 'SIGNED_OUT') {
           setSession(null);
@@ -193,6 +230,7 @@ export const AuthWrapper: React.FC = () => {
               }
             } catch (e: any) {
               if (mounted) {
+                setRetryCount(prev => prev + 1);
                 console.log('[AUTH_EVENT] getInitialUserData threw', { event, userId: currentSession?.user?.id, error: e?.message || String(e) });
                 handleLogoutAndRedirect("Usuário não encontrado no sistema.");
                 logger.error('AUTH_EVENT_USER_DELETED', { userId: currentSession?.user?.id, error: e.message });
@@ -211,9 +249,10 @@ export const AuthWrapper: React.FC = () => {
     return () => {
       mounted = false;
       try { authSubscriptionUnsubscribe?.(); } catch { }
-      clearTimeout(timeoutId);
+      clearTimeout(globalTimeoutId);
     };
-  }, []);
+  }, [retryCount]);
+
 
   useEffect(() => {
     if (!userId) return;

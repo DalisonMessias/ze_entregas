@@ -7,6 +7,7 @@ import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Ed
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { useDialog } from '../utils/dialogService';
+import { ProductModal } from './ProductModal';
 
 export const InternalOrders: React.FC = () => {
     // View State
@@ -35,7 +36,7 @@ export const InternalOrders: React.FC = () => {
     // Product Management State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Partial<StoreProduct>>({});
-    const [savingProduct, setSavingProduct] = useState(false);
+    const [isSavingProduct, setIsSavingProduct] = useState(false);
 
     // History State
     const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
@@ -99,20 +100,20 @@ export const InternalOrders: React.FC = () => {
         }));
     };
 
-    const handleSaveProduct = async () => {
-        if (!editingProduct.name || !editingProduct.price) return;
-        setSavingProduct(true);
+    const handleSaveProduct = async (productData: Partial<StoreProduct>) => {
+        if (!productData.name || !productData.price) return;
+        setIsSavingProduct(true);
         try {
-            if (editingProduct.id) {
-                await cloud.updateStoreProduct(editingProduct as StoreProduct);
+            if (productData.id) {
+                await cloud.updateStoreProduct(productData as StoreProduct);
             } else {
                 await cloud.createStoreProduct({
-                    name: editingProduct.name,
-                    description: editingProduct.description,
-                    price: Number(editingProduct.price),
-                    image_url: editingProduct.image_url,
-                    category: editingProduct.category,
-                    is_active: true
+                    name: productData.name,
+                    description: productData.description || '',
+                    price: Number(productData.price),
+                    image_url: productData.image_url,
+                    category: productData.category,
+                    is_active: productData.is_active !== false
                 });
             }
             await loadProducts();
@@ -121,7 +122,7 @@ export const InternalOrders: React.FC = () => {
             console.error(error);
             showAlert({ title: 'Erro', message: 'Erro ao salvar produto' });
         } finally {
-            setSavingProduct(false);
+            setIsSavingProduct(false);
         }
     };
 
@@ -292,7 +293,7 @@ export const InternalOrders: React.FC = () => {
             {view === 'NEW_ORDER' ? (
                 <div className="flex flex-col lg:flex-row flex-1 gap-4 overflow-hidden">
                     {/* Left: Catalog */}
-                    <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col overflow-hidden">
+                    <div className="w-full lg:w-150  bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col overflow-hidden">
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold dark:text-white">Catálogo</h2>
@@ -368,144 +369,178 @@ export const InternalOrders: React.FC = () => {
                     </div>
 
                     {/* Right: Order Ticket */}
-                    <div className="w-full lg:w-96 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full lg:h-auto overflow-y-auto custom-scrollbar">
-                        <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
-                            <h2 className="text-xl font-bold dark:text-white">Comanda</h2>
-                            <span className="text-sm font-mono text-gray-400">#{Math.floor(Math.random() * 1000).toString().padStart(4, '0')}</span>
-                        </div>
-
-                        <div className="space-y-4 mb-4">
-                            <div className="flex gap-2">
-                                <div className="flex-1">
-                                    <CustomInput
-                                        label="Nome do Cliente"
-                                        value={customerName}
-                                        onChange={(e) => setCustomerName(e.target.value)}
-                                        placeholder="Nome"
-                                    />
-                                </div>
-                                <div className="w-1/3">
-                                    <CustomInput
-                                        label="Telefone"
-                                        value={customerPhone}
-                                        onChange={(e) => setCustomerPhone(e.target.value)}
-                                        placeholder="(00) ..."
-                                    />
-                                </div>
+                    <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full lg:h-auto overflow-hidden">
+                        {/* Scrollable Content */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pb-0">
+                            <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
+                                <h2 className="text-xl font-bold dark:text-white">Comanda</h2>
+                                <span className="text-sm font-mono text-gray-400">#{Math.floor(Math.random() * 1000).toString().padStart(4, '0')}</span>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Observação</label>
-                                <textarea
-                                    className="w-full p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm resize-none dark:text-white"
-                                    rows={2}
-                                    placeholder="Ex: Sem cebola..."
-                                    value={observation}
-                                    onChange={e => setObservation(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Cart Items */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 min-h-[150px]">
-                            {cart.length === 0 ? (
-                                <div className="text-center py-10 text-gray-400 text-sm">
-                                    <ShoppingBag className="w-12 h-12 mx-auto mb-2 opacity-50 text-gray-300" />
-                                    <p>Carrinho vazio</p>
-                                </div>
-                            ) : cart.map((item, index) => (
-                                <div key={index} className="flex justify-between items-start group">
+                            <div className="space-y-4 mb-4">
+                                <div className="flex gap-2">
                                     <div className="flex-1">
-                                        <p className="font-medium text-sm dark:text-gray-200">{item.product.name}</p>
-                                        <p className="text-xs text-gray-500">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.product.price)}
-                                        </p>
+                                        <CustomInput
+                                            label="Nome do Cliente"
+                                            value={customerName}
+                                            onChange={(e) => setCustomerName(e.target.value)}
+                                            placeholder="Nome"
+                                        />
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                                            <button onClick={() => item.quantity > 1 ? updateQuantity(item.product.id, -1) : removeFromCart(item.product.id)} className="p-1 hover:text-red-500">
-                                                <Minus className="w-3 h-3" />
-                                            </button>
-                                            <span className="text-xs font-bold w-6 text-center">{item.quantity}</span>
-                                            <button onClick={() => updateQuantity(item.product.id, 1)} className="p-1 hover:text-green-500">
-                                                <Plus className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                        <span className="text-sm font-bold w-16 text-right">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.product.price * item.quantity)}
-                                        </span>
+                                    <div className="w-1/3">
+                                        <CustomInput
+                                            label="Telefone"
+                                            value={customerPhone}
+                                            onChange={(e) => setCustomerPhone(e.target.value)}
+                                            placeholder="(00) ..."
+                                        />
                                     </div>
                                 </div>
-                            ))}
-                        </div>
 
-                        {/* Payment Selection */}
-                        <div className="mb-4 space-y-3">
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">Pagamento</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {[
-                                    { id: 'CASH', label: 'Dinheiro', icon: Banknote },
-                                    { id: 'PIX', label: 'Pix', icon: CheckCircle },
-                                    { id: 'CREDIT_CARD', label: 'Crédito', icon: CreditCard },
-                                    { id: 'DEBIT_CARD', label: 'Débito', icon: CreditCard },
-                                    { id: 'OTHER', label: 'Outro', icon: HelpCircle },
-                                ].map((method) => (
-                                    <button
-                                        key={method.id}
-                                        onClick={() => setPaymentMethod(method.id as PaymentMethod)}
-                                        className={`flex items-center gap-2 p-2 rounded-lg border text-sm transition-all ${paymentMethod === method.id ? 'bg-brand-50 border-brand-500 text-brand-700 dark:bg-brand-900/20 dark:border-brand-500 dark:text-brand-300' : 'bg-gray-50 dark:bg-gray-700 border-transparent hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'}`}
-                                    >
-                                        <method.icon className="w-4 h-4" />
-                                        {method.label}
-                                    </button>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Observação</label>
+                                    <textarea
+                                        className="w-full p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm resize-none dark:text-white"
+                                        rows={2}
+                                        placeholder="Ex: Sem cebola..."
+                                        value={observation}
+                                        onChange={e => setObservation(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Cart Items */}
+                            <div className="space-y-3 mb-6 min-h-[100px]">
+                                {cart.length === 0 ? (
+                                    <div className="text-center py-10 text-gray-400 text-sm">
+                                        <ShoppingBag className="w-12 h-12 mx-auto mb-2 opacity-50 text-gray-300" />
+                                        <p>Carrinho vazio</p>
+                                    </div>
+                                ) : cart.map((item, index) => (
+                                    <div key={index} className="flex justify-between items-start group">
+                                        <div className="flex-1">
+                                            <p className="font-medium text-sm dark:text-gray-200">{item.product.name}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.product.price)}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                                                <button onClick={() => item.quantity > 1 ? updateQuantity(item.product.id, -1) : removeFromCart(item.product.id)} className="p-1 hover:text-red-500">
+                                                    <Minus className="w-3 h-3" />
+                                                </button>
+                                                <span className="text-xs font-bold w-6 text-center">{item.quantity}</span>
+                                                <button onClick={() => updateQuantity(item.product.id, 1)} className="p-1 hover:text-green-500">
+                                                    <Plus className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                            <span className="text-sm font-bold w-16 text-right">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.product.price * item.quantity)}
+                                            </span>
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
 
-                            {paymentMethod === 'CASH' && (
-                                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-100 dark:border-yellow-800">
-                                    <CustomInput
-                                        label="Valor Recebido"
-                                        mask="currency"
-                                        value={amountPaidStr}
-                                        onChange={(e) => setAmountPaidStr(e.target.value)}
-                                        placeholder="0,00"
-                                        className="bg-white dark:bg-gray-800"
-                                    />
-                                    {changeAmount > 0 && (
-                                        <div className="mt-2 flex justify-between items-center text-sm font-bold text-yellow-700 dark:text-yellow-400">
-                                            <span>Troco:</span>
-                                            <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(changeAmount)}</span>
-                                        </div>
+                            {/* Payment Selection */}
+                            <div className="mb-6 space-y-3 pb-6">
+                                <div className="flex justify-between items-end">
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">Forma de Pagamento</label>
+                                    {paymentMethod && (
+                                        <button
+                                            onClick={() => setPaymentMethod('')}
+                                            className="text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center gap-1"
+                                        >
+                                            <Edit2 className="w-3 h-3" />
+                                            Trocar
+                                        </button>
                                     )}
                                 </div>
-                            )}
 
-                            {paymentMethod === 'OTHER' && (
-                                <CustomInput
-                                    label="Detalhe"
-                                    value={customPaymentLabel}
-                                    onChange={(e) => setCustomPaymentLabel(e.target.value)}
-                                    placeholder="Descrição"
-                                />
-                            )}
+                                <div className="grid grid-cols-1 gap-2">
+                                    {[
+                                        { id: 'CASH', label: 'Dinheiro', icon: Banknote, color: 'emerald' },
+                                        { id: 'PIX', label: 'Pix Instantâneo', icon: CheckCircle, color: 'cyan' },
+                                        { id: 'CREDIT_CARD', label: 'Cartão de Crédito', icon: CreditCard, color: 'brand' },
+                                        { id: 'DEBIT_CARD', label: 'Cartão de Débito', icon: CreditCard, color: 'blue' },
+                                        { id: 'OTHER', label: 'Outras Formas', icon: HelpCircle, color: 'gray' },
+                                    ].filter(m => !paymentMethod || paymentMethod === m.id).map((method) => (
+                                        <button
+                                            key={method.id}
+                                            onClick={() => setPaymentMethod(method.id as PaymentMethod)}
+                                            className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 ${paymentMethod === method.id
+                                                ? `bg-${method.color}-50 border-${method.color}-500 text-${method.color}-700 dark:bg-${method.color}-900/10 dark:border-${method.color}-500 dark:text-${method.color}-400`
+                                                : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 hover:border-brand-200 dark:hover:border-gray-700 text-gray-600 dark:text-gray-400'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${paymentMethod === method.id ? `bg-${method.color}-100 dark:bg-${method.color}-500/20` : 'bg-gray-100 dark:bg-gray-800'}`}>
+                                                    <method.icon className="w-5 h-5" />
+                                                </div>
+                                                <span className="font-bold">{method.label}</span>
+                                            </div>
+                                            {paymentMethod === method.id && (
+                                                <div className={`w-6 h-6 rounded-full bg-${method.color}-500 flex items-center justify-center text-white scale-in-center`}>
+                                                    <CheckCircle className="w-4 h-4" />
+                                                </div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {paymentMethod === 'CASH' && (
+                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border-2 border-yellow-200 dark:border-yellow-800 animate-in slide-in-from-top-2 duration-300">
+                                        <CustomInput
+                                            label="Quanto o cliente entregou?"
+                                            mask="currency"
+                                            value={amountPaidStr}
+                                            onChange={(e) => setAmountPaidStr(e.target.value)}
+                                            placeholder="R$ 0,00"
+                                            className="bg-white dark:bg-gray-800 text-lg font-bold"
+                                        />
+                                        {changeAmount > 0 && (
+                                            <div className="mt-3 flex justify-between items-center p-3 bg-white/50 dark:bg-black/20 rounded-lg">
+                                                <span className="text-gray-500 font-medium">Troco a devolver:</span>
+                                                <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(changeAmount)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {paymentMethod === 'OTHER' && (
+                                    <div className="animate-in slide-in-from-top-2 duration-300">
+                                        <CustomInput
+                                            label="Especifique a forma de pagamento"
+                                            value={customPaymentLabel}
+                                            onChange={(e) => setCustomPaymentLabel(e.target.value)}
+                                            placeholder="Ex: Vale Refeição, Pix Terceiros..."
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Totals */}
-                        <div className="border-t border-dashed border-gray-300 dark:border-gray-600 pt-4 mt-auto">
-                            <div className="flex justify-between items-center mb-4">
-                                <span className="text-gray-500">Total</span>
+                        {/* Fixed Footer: Totals */}
+                        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 space-y-4">
+                            <div className="flex justify-between items-center">
+                                <span className="text-gray-500 font-medium">Total do Pedido</span>
                                 <span className="text-3xl font-black text-gray-900 dark:text-white">
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                                 </span>
                             </div>
 
                             <Button
-                                className="w-full py-6 text-lg"
+                                className="w-full py-7 text-xl font-black rounded-2xl shadow-lg shadow-brand-500/20"
                                 disabled={cart.length === 0 || processing}
                                 onClick={handleCheckout}
                             >
-                                {processing ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Printer className="w-5 h-5 mr-2" />}
-                                Finalizar
+                                {processing ? (
+                                    <Loader2 className="w-6 h-6 animate-spin mr-3" />
+                                ) : (
+                                    <Printer className="w-6 h-6 mr-3" />
+                                )}
+                                FINALIZAR PEDIDO
                             </Button>
                         </div>
                     </div>
@@ -701,71 +736,13 @@ export const InternalOrders: React.FC = () => {
                 </div>
             )}
 
-            {/* Product Modal */}
-            {isProductModalOpen && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in duration-200">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold dark:text-white">
-                                {editingProduct.id ? 'Editar Produto' : 'Novo Produto'}
-                            </h3>
-                            <button onClick={() => setIsProductModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-4">
-                            <CustomInput
-                                label="Nome do Produto"
-                                value={editingProduct.name || ''}
-                                onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                                placeholder="Ex: X-Salada"
-                            />
-
-                            <div className="flex gap-4">
-                                <div className="flex-1">
-                                    <CustomInput
-                                        label="Preço"
-                                        mask="currency"
-                                        value={editingProduct.price || ''}
-                                        onChange={(e) => {
-                                            const raw = e.target.value.replace(/\D/g, '');
-                                            const floatVal = Number(raw) / 100;
-                                            setEditingProduct({ ...editingProduct, price: floatVal });
-                                        }}
-                                        placeholder="0,00"
-                                    />
-                                </div>
-                            </div>
-
-                            <CustomInput
-                                label="URL da Imagem (Opcional)"
-                                value={editingProduct.image_url || ''}
-                                onChange={(e) => setEditingProduct({ ...editingProduct, image_url: e.target.value })}
-                                placeholder="https://..."
-                            />
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Descrição</label>
-                                <textarea
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 min-h-[100px] dark:text-white"
-                                    value={editingProduct.description || ''}
-                                    onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
-                                    placeholder="Ingredientes, detalhes..."
-                                />
-                            </div>
-                        </div>
-
-                        <div className="mt-6 flex gap-3">
-                            <Button variant="outline" className="flex-1" onClick={() => setIsProductModalOpen(false)}>Cancelar</Button>
-                            <Button className="flex-1" onClick={handleSaveProduct} disabled={savingProduct || !editingProduct.name}>
-                                {savingProduct ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}
-                                Salvar
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ProductModal
+                isOpen={isProductModalOpen}
+                onClose={() => setIsProductModalOpen(false)}
+                product={editingProduct}
+                onSave={handleSaveProduct}
+                isSaving={isSavingProduct}
+            />
         </div>
     );
 };

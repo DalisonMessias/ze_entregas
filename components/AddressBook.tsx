@@ -4,7 +4,9 @@ import { MapPin, Navigation, Trash2, RotateCcw, Download, Plus, ArrowLeft, Erase
 import { Button } from './Button';
 import { SavedAddress } from '../types';
 import * as storage from '../services/storage';
+import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
+import { openNavigation } from '../utils/mapHelpers';
 
 interface AddressBookProps {
   onClose: () => void;
@@ -38,6 +40,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   // Sort State
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showMap, setShowMap] = useState(false);
+  const [userCity, setUserCity] = useState<string>('');
   const { alert, confirm } = useDialog();
 
   useEffect(() => {
@@ -45,6 +48,19 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
     // Default sort by visit count/time
     loaded.sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0));
     setAddresses(loaded);
+
+    // Fetch User Profile for City Context
+    const fetchProfile = async () => {
+      try {
+        const profile = await cloud.getMyPartnerProfile();
+        if (profile?.city) {
+          setUserCity(profile.city.trim());
+        }
+      } catch (e) {
+        console.error("Failed to fetch profile city context", e);
+      }
+    };
+    fetchProfile();
   }, []);
 
   const handleClearForm = () => {
@@ -203,11 +219,17 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
   };
 
   const handleSystemNavigation = async (addressToNavigate: SavedAddress) => {
-    if (!addressToNavigate || !onNavigateInternal) return;
+    if (!addressToNavigate) return;
+
+    // If we have an internal navigator, we MUST try to geocode.
+    // If not, we can just open Waze directly if we wanted, but let's try geocoding first for precision.
     setIsGeocoding(true);
 
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressToNavigate.fullAddress)}&limit=1`);
+
+      const query = `${addressToNavigate.fullAddress.trim()} ${userCity}`;
+
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}`);
       const data = await response.json();
 
       if (data && data.length > 0) {
@@ -216,12 +238,26 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
         const lon = parseFloat(result.lon);
 
         registerVisit(addressToNavigate.id);
-        onNavigateInternal({ lat, lng: lon, name: addressToNavigate.name, fullAddress: addressToNavigate.fullAddress });
+
+        // Exact coordinates found
+        openNavigation(lat, lon, addressToNavigate.fullAddress);
+
+        if (onNavigateInternal) {
+          onNavigateInternal({ lat, lng: lon, name: addressToNavigate.name, fullAddress: addressToNavigate.fullAddress });
+        }
       } else {
-        await alert({ title: 'Geocoding', message: 'Não foi possível encontrar as coordenadas para este endereço.' });
+        // Geocoding failed, fallback to address search on Waze
+        registerVisit(addressToNavigate.id);
+        openNavigation(0, 0, addressToNavigate.fullAddress);
+
+        if (onNavigateInternal) {
+          await alert({ title: 'Navegação Interna', message: 'Endereço não encontrado para navegação interna, abrindo Waze.' });
+        }
       }
     } catch (e) {
-      await alert({ title: 'Geocoding', message: 'Erro ao buscar coordenadas. Verifique a conexão.' });
+      // Network/Other error, fallback to address search on Waze
+      registerVisit(addressToNavigate.id);
+      openNavigation(0, 0, addressToNavigate.fullAddress);
     } finally {
       setIsGeocoding(false);
     }
@@ -353,48 +389,55 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
               <div
                 key={addr.id}
                 onClick={() => isSelectionMode ? toggleSelection(addr.id) : null}
-                className={`bg-white dark:bg-gray-800 p-4 rounded-xl border shadow-sm transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''} ${isSelected ? 'border-brand-500 ring-2 ring-brand-500' : 'border-gray-100 dark:border-gray-700'}`}
+                className={`flex flex-row items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl border shadow-sm transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''} ${isSelected ? 'border-brand-500 ring-2 ring-brand-500' : 'border-gray-100 dark:border-gray-700'}`}
               >
-                <div className="flex justify-between items-start mb-2">
+                <div className="flex-1 flex flex-col gap-1 min-w-0">
                   <div className="flex items-center gap-3">
                     {isSelectionMode && (
-                      <div className="text-brand-600">
+                      <div className="text-brand-600 flex-shrink-0">
                         {isSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 text-gray-300" />}
                       </div>
                     )}
-                    <div>
-                      <div className="font-bold text-gray-900 dark:text-white text-lg leading-tight">{addr.name}</div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="font-bold text-gray-900 dark:text-white text-lg leading-tight truncate">{addr.name}</div>
                       {addr.visitCount !== undefined && addr.visitCount > 0 && (
-                        <div className="text-[10px] text-gray-400 font-bold mt-0.5">{addr.visitCount} visitas</div>
+                        <div className="flex-shrink-0 text-[10px] text-gray-400 font-bold bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">{addr.visitCount} visits</div>
                       )}
                     </div>
                   </div>
 
-                  {!isSelectionMode && (
-                    <button onClick={(e) => { e.stopPropagation(); handleRemove(addr.id); }} className="p-1.5 text-gray-300 hover:text-rose-500">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-
-                <div className={`rounded-lg p-2.5 mb-3 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/30 ${!isExpanded ? 'line-clamp-2' : ''}`} onClick={(e) => { if (!isSelectionMode) { e.stopPropagation(); toggleExpand(addr.id); } }}>
-                  {addr.fullAddress}
+                  <div
+                    className={`text-sm text-gray-600 dark:text-gray-300 ${!isExpanded ? 'line-clamp-1' : ''}`}
+                    onClick={(e) => { if (!isSelectionMode) { e.stopPropagation(); toggleExpand(addr.id); } }}
+                  >
+                    {addr.fullAddress}
+                  </div>
                 </div>
 
                 {!isSelectionMode && (
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleCopyToClipboard(addr.fullAddress, addr.id); }}
-                      className="flex-none p-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-400 hover:text-brand-500"
+                      className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-400 hover:text-brand-500"
+                      title="Copiar endereço"
                     >
                       {copiedId === addr.id ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                     </button>
+
                     <button
                       onClick={(e) => { e.stopPropagation(); handleSystemNavigation(addr); }}
                       disabled={isGeocoding}
-                      className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50"
+                      className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50 whitespace-nowrap"
                     >
-                      {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Iniciar Rota'}
+                      {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Navigation className="w-3 h-3 mr-1.5" /> Abrir no Waze</>}
+                    </button>
+
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRemove(addr.id); }}
+                      className="p-2 text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
+                      title="Deletar"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 )}

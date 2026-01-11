@@ -4,6 +4,7 @@ import { Wallet, Search, Filter, RefreshCw, Loader2, Plus, Minus, DollarSign, X 
 import * as cloud from '../services/cloud';
 import { AdminWalletUser } from '../types';
 import { Button } from './Button';
+import { CustomInput } from './CustomInput';
 import { useDialog } from '../utils/dialogService';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -22,9 +23,9 @@ const getRoleLabel = (role: string) => {
 export const AdminWalletControl: React.FC = () => {
     const [wallets, setWallets] = useState<AdminWalletUser[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'ALL' | 'store_partner' | 'delivery_partner'>('ALL'); // Alterado para usar os valores reais do enum
+    const [filter, setFilter] = useState<'ALL' | 'store_partner' | 'DELIVERY'>('ALL'); // 'DELIVERY' agrupará todos os entregadores
     const [search, setSearch] = useState('');
-    
+
     // Modal State
     const [selectedUser, setSelectedUser] = useState<AdminWalletUser | null>(null);
     const [amount, setAmount] = useState('');
@@ -52,8 +53,8 @@ export const AdminWalletControl: React.FC = () => {
 
     const filteredWallets = wallets.filter(w => {
         const matchesType = filter === 'ALL' || w.role === filter;
-        const matchesSearch = (w.name || '').toLowerCase().includes(search.toLowerCase()) || 
-                              (w.email || '').toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = (w.name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (w.email || '').toLowerCase().includes(search.toLowerCase());
         return matchesType && matchesSearch;
     });
 
@@ -69,7 +70,11 @@ export const AdminWalletControl: React.FC = () => {
             await alert({ title: 'Ajuste', message: 'Preencha todos os campos.' });
             return;
         }
-        const val = parseFloat(amount.replace(',', '.'));
+
+        // Converter valor da máscara (ex: "1.234,56" ou "1,50") para decimal
+        const raw = amount.replace(/\D/g, '');
+        const val = Number(raw) / 100;
+
         if (isNaN(val) || val <= 0) {
             await alert({ title: 'Ajuste', message: 'Valor inválido.' });
             return;
@@ -96,23 +101,23 @@ export const AdminWalletControl: React.FC = () => {
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
                 <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
                     <button onClick={() => setFilter('ALL')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'ALL' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Todos</button>
-                    <button onClick={() => setFilter('store_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'store_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojistas Parceiros</button>
-                    <button onClick={() => setFilter('delivery_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'delivery_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregadores Parceiros</button>
+                    <button onClick={() => setFilter('store_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'store_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojistas</button>
+                    <button onClick={() => setFilter('DELIVERY')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'DELIVERY' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregadores</button>
                 </div>
-                
+
                 <div className="flex gap-2 w-full md:w-auto">
                     <div className="relative flex-1 md:w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar nome ou email..." 
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar nome ou email..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             className="w-full pl-10 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm"
                         />
                     </div>
                     <button onClick={loadData} className="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <RefreshCw className="w-5 h-5 text-gray-500"/>
+                        <RefreshCw className="w-5 h-5 text-gray-500" />
                     </button>
                 </div>
             </div>
@@ -130,7 +135,7 @@ export const AdminWalletControl: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading && <tr><td colSpan={4} className="text-center p-8"><Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-600"/></td></tr>}
+                            {loading && <tr><td colSpan={4} className="text-center p-8"><Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-600" /></td></tr>}
                             {!loading && filteredWallets.map(user => (
                                 <tr key={user.user_id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                     <td className="px-4 py-3">
@@ -147,19 +152,19 @@ export const AdminWalletControl: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex justify-end gap-2">
-                                            <button 
-                                                onClick={() => handleOpenModal(user, 'ADD')} 
-                                                className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200" 
+                                            <button
+                                                onClick={() => handleOpenModal(user, 'ADD')}
+                                                className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200"
                                                 title="Adicionar Saldo"
                                             >
-                                                <Plus className="w-4 h-4"/>
+                                                <Plus className="w-4 h-4" />
                                             </button>
-                                            <button 
-                                                onClick={() => handleOpenModal(user, 'REMOVE')} 
-                                                className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200" 
+                                            <button
+                                                onClick={() => handleOpenModal(user, 'REMOVE')}
+                                                className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200"
                                                 title="Remover Saldo"
                                             >
-                                                <Minus className="w-4 h-4"/>
+                                                <Minus className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </td>
@@ -177,11 +182,11 @@ export const AdminWalletControl: React.FC = () => {
             {selectedUser && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl relative">
-                        <button onClick={() => setSelectedUser(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
-                        
+                        <button onClick={() => setSelectedUser(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+
                         <div className="flex items-center gap-3 mb-4">
                             <div className={`p-3 rounded-full ${actionType === 'ADD' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                <DollarSign className="w-6 h-6"/>
+                                <DollarSign className="w-6 h-6" />
                             </div>
                             <div>
                                 <h3 className="font-bold text-lg dark:text-white">{actionType === 'ADD' ? 'Adicionar Saldo' : 'Remover Saldo'}</h3>
@@ -190,34 +195,31 @@ export const AdminWalletControl: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Valor (R$)</label>
-                                <input 
-                                    type="number" 
-                                    value={amount} 
-                                    onChange={e => setAmount(e.target.value)} 
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl font-bold text-lg outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
-                                    placeholder="0.00"
-                                    autoFocus
-                                />
-                            </div>
+                            <CustomInput
+                                label="Valor (R$)"
+                                mask="currency"
+                                value={amount}
+                                onChange={e => setAmount(e.target.value)}
+                                placeholder="0,00"
+                                autoFocus
+                            />
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Motivo (Obrigatório)</label>
-                                <textarea 
-                                    value={reason} 
-                                    onChange={e => setReason(e.target.value)} 
+                                <textarea
+                                    value={reason}
+                                    onChange={e => setReason(e.target.value)}
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500 dark:text-white h-20 resize-none"
                                     placeholder="Ex: Bônus por meta, Correção de erro..."
                                 />
                             </div>
 
-                            <Button 
-                                fullWidth 
-                                onClick={handleConfirmAdjustment} 
-                                disabled={processing} 
+                            <Button
+                                fullWidth
+                                onClick={handleConfirmAdjustment}
+                                disabled={processing}
                                 variant={actionType === 'ADD' ? 'success' : 'danger'}
                             >
-                                {processing ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Confirmar Ajuste'}
+                                {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirmar Ajuste'}
                             </Button>
                         </div>
                     </div>

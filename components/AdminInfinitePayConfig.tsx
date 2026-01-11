@@ -1,0 +1,123 @@
+
+import React, { useState, useEffect } from 'react';
+import { Settings, Save, Loader2, Link2, Copy, Check, Info } from 'lucide-react';
+import * as cloud from '../services/cloud';
+import { ShopSettings } from '../types';
+import { Button } from './Button';
+import { useDialog } from '../utils/dialogService';
+import { CustomInput } from './CustomInput';
+
+export const AdminInfinitePayConfig: React.FC = () => {
+    const [settings, setSettings] = useState<ShopSettings | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    // The webhook URL is fixed based on Supabase project, or we can construct it
+    // Assuming standard Supabase Edge Function URL structure
+    const webhookUrl = "https://pjnxrqemjozlpnvoxpmn.supabase.co/functions/v1/infinitepay-webhook";
+
+    const { alert } = useDialog();
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const data = await cloud.getShopSettings();
+            setSettings(data);
+        } catch (error) {
+            console.error("Failed to load settings:", error);
+            alert({ title: "Erro", message: "Erro ao carregar configurações." });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSave = async () => {
+        if (!settings) return;
+        setSaving(true);
+        try {
+            await cloud.adminUpdateShopSettings({
+                infinitepay_handle: settings.infinitepay_handle,
+                infinitepay_webhook_secret: settings.infinitepay_webhook_secret
+            });
+            await alert({ title: "Sucesso", message: "Configurações salvas!" });
+        } catch (error: any) {
+            await alert({ title: "Erro", message: error.message });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(webhookUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white/20 rounded-xl">
+                        <Settings className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-black">InfinitePay</h2>
+                        <p className="text-green-100 text-sm">Configure sua Infinite Tag e Webhook.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6">
+
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Infinite Tag (Handle)</label>
+                    <CustomInput
+                        type="text"
+                        value={settings?.infinitepay_handle || ''}
+                        onChange={e => setSettings(s => s ? ({ ...s, infinitepay_handle: e.target.value }) : null)}
+                        placeholder="Ex: @sualoja"
+                    />
+                    <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                        <Info className="w-3 h-3" /> Sua identificação única na InfinitePay.
+                    </p>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
+                    <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                        <Link2 className="w-4 h-4 text-gray-400" />
+                        <span className="flex-1 text-sm font-mono text-gray-600 dark:text-gray-300 truncate">{webhookUrl}</span>
+                        <button onClick={copyToClipboard} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors">
+                            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">Configure esta URL no painel de desenvolvedor da InfinitePay para receber atualizações de status.</p>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Webhook Secret (Opcional)</label>
+                    <CustomInput
+                        type="password"
+                        value={settings?.infinitepay_webhook_secret || ''}
+                        onChange={e => setSettings(s => s ? ({ ...s, infinitepay_webhook_secret: e.target.value }) : null)}
+                        placeholder="Secret para validação de assinatura"
+                    />
+                </div>
+
+                <div className="pt-4">
+                    <Button onClick={handleSave} disabled={saving} className="w-full py-4 text-lg shadow-lg bg-green-600 hover:bg-green-700 text-white">
+                        {saving ? <Loader2 className="animate-spin w-6 h-6" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Configurações</>}
+                    </Button>
+                </div>
+
+            </div>
+        </div>
+    );
+};

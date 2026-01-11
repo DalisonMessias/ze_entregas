@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, Plus, Calculator, TrendingDown, Target, Trash2, Edit2, Share2, MapPin, Gauge, Package, DollarSign, X, Check, Coffee, Wrench, Fuel, AlertCircle, Sparkles, ChevronRight, Settings, Zap, Siren, Map as MapIcon, Loader2, History, ClipboardList, ListPlus, Megaphone, ShoppingBag, Smartphone, Landmark, User, Route } from 'lucide-react';
 import { Button } from './Button';
 import { DailyTransaction, DailySummary, BlitzAlert, PartnerProfile } from '../types';
+import { DataErrorDisplay } from './DataErrorDisplay';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
 import { ShareCard } from './ShareCard';
@@ -14,6 +15,7 @@ import { Switch } from './Switch';
 import { MerchantPOS } from './MerchantPOS';
 import { useDialog } from '../utils/dialogService';
 import { PromoSlider } from './PromoSlider';
+import { TipOfTheDay } from './TipOfTheDay';
 
 // Helper for currency
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -81,7 +83,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
         loadData();
     }, []);
 
-    const loadData = () => {
+    const loadData = async () => {
         const storedFixed = storage.getFixedValue();
         const storedGoal = storage.getDailyGoal();
 
@@ -96,12 +98,17 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 goal: storedGoal ? storedGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''
             });
         } else {
-            // New user: Default to Quick Start ACTIVE (skip inputs)
             setIsQuickStart(true);
         }
 
-        // Fetch profile for upgrade flow
-        cloud.getMyPartnerProfile().then(p => setProfile(p)).catch(console.error);
+        // Fetch profile for upgrade flow - ISOLATED
+        try {
+            const p = await cloud.getMyPartnerProfile();
+            setProfile(p);
+        } catch (e) {
+            console.error('[DailyPanel] Error fetching profile:', e);
+            // We don't block the UI as this is non-essential for daily tracking
+        }
     };
 
     // --- LOGIC ---
@@ -382,6 +389,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
     return (
         <div className="space-y-6 animate-in fade-in pb-24">
             <PromoSlider audience="drivers" />
+            <TipOfTheDay role="delivery_partner" />
 
             {/* Header Stats */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden mb-4">

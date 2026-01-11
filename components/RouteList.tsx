@@ -1,16 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ListPlus, MapPin, Search, Plus, Trash2, Navigation, Loader2, Edit2, Check, X, Lock, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ListPlus, MapPin, Search, Plus, Trash2, Navigation, Loader2, Edit2, Check, X, Lock, AlertTriangle, CheckCircle, Mic, Info } from 'lucide-react';
 import { RouteListItem, UserRole } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
 import { ExclusiveLock } from './ExclusiveLock';
+import { BaseModal } from './BaseModal';
 import { openNavigation } from '../utils/mapHelpers';
 import { useDialog } from '../utils/dialogService';
 
 interface RouteListProps {
     userRole: UserRole;
     onNavigate?: (destination: { lat: number, lng: number, name: string, fullAddress: string }) => void;
+}
+
+interface IWindow extends Window {
+    webkitSpeechRecognition: any;
+    SpeechRecognition: any;
 }
 
 export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) => {
@@ -32,6 +38,65 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
     const [userCity, setUserCity] = useState<string>('');
     const [feedback, setFeedback] = useState<{ type: 'error' | 'success', message: string } | null>(null);
     const [isProfileLoading, setIsProfileLoading] = useState(true);
+
+    // Info Modal State
+    const [infoItem, setInfoItem] = useState<RouteListItem | null>(null);
+
+    // Voice Input State
+    const [listeningField, setListeningField] = useState<'name' | 'search' | null>(null);
+
+    const handleVoiceInput = async (field: 'name' | 'search') => {
+        const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
+        const SpeechRecognitionAPI = SpeechRecognition || webkitSpeechRecognition;
+
+        if (!SpeechRecognitionAPI) {
+            setFeedback({ type: 'error', message: 'Seu navegador não suporta reconhecimento de voz.' });
+            return;
+        }
+
+        if (listeningField === field) {
+            setListeningField(null);
+            return;
+        }
+
+        const recognition = new SpeechRecognitionAPI();
+        recognition.lang = 'pt-BR';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        setListeningField(field);
+
+        recognition.onstart = () => {
+            setListeningField(field);
+        };
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            if (field === 'name') {
+                setNewItemName(transcript);
+            } else {
+                setSearch(transcript);
+            }
+            setListeningField(null);
+        };
+
+        recognition.onerror = (event: any) => {
+            setListeningField(null);
+            if (event.error !== 'no-speech') {
+                setFeedback({ type: 'error', message: 'Erro no microfone ou permissão negada.' });
+            }
+        };
+
+        recognition.onend = () => {
+            setListeningField(null);
+        };
+
+        try {
+            recognition.start();
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
 
     useEffect(() => {
@@ -78,25 +143,45 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
         setIsSearching(true);
         setFeedback(null);
 
-        const query = `${search.trim()} ${userCity}`;
-        try {
+        // Helper to perform search
+        const performSearch = async (term: string): Promise<any> => {
+            const query = `${term.trim()} ${userCity}`;
             const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}`);
             if (!response.ok) throw new Error("Falha na comunicação com a API de endereços.");
-
             const data = await response.json();
+            return data && data.length > 0 ? data[0] : null;
+        };
 
-            if (data && data.length > 0) {
-                const result = data[0];
+        try {
+            // 1. Try exact search
+            let result = await performSearch(search);
 
+            // 2. If valid result not found, try relaxed search (remove "Rua", "Av", etc.)
+            if (!result) {
+                const cleanedSearch = search.replace(/^(Rua|Avenida|Av\.|Travessa|Al\.|Alameda)\s+/i, '').trim();
+                const cleanedSearchDe = cleanedSearch.replace(/\s+(de|da|do|dos|das)\s+/gi, ' ').trim();
+
+                // Only retry if the cleaned term is significantly different
+                if (cleanedSearchDe !== search.trim()) {
+                    result = await performSearch(cleanedSearchDe);
+                }
+            }
+
+            if (result) {
                 const resultCity = result.address.city || result.address.town || result.address.village || result.address.suburb;
-                if (!resultCity || resultCity.toLowerCase() !== userCity.toLowerCase()) {
-                    setFeedback({ type: 'error', message: `Endereço inválido. O endereço informado não pertence a ${userCity}.` });
-                    setIsSearching(false);
-                    return;
+
+                // Fuzzy city check (contains is safer than exact match case)
+                if (!resultCity || !userCity.toLowerCase().includes(resultCity.toLowerCase()) && !resultCity.toLowerCase().includes(userCity.toLowerCase())) {
+                    // Even if strict city check fails, let's look if result address contains the city string anywhere in display_name
+                    if (!result.display_name.toLowerCase().includes(userCity.toLowerCase())) {
+                        setFeedback({ type: 'error', message: `Endereço encontrado em outra cidade (${resultCity || 'Desconhecida'}). O endereço deve ser em ${userCity}.` });
+                        setIsSearching(false);
+                        return;
+                    }
                 }
 
                 // Construct the address as requested
-                const formattedAddress = `${search.trim()}, ${newItemNumber.trim()}, ${newItemNeighborhood.trim()}, ${resultCity}`;
+                const formattedAddress = `${search.trim()}, ${newItemNumber.trim()}, ${newItemNeighborhood.trim()}, ${userCity}`;
 
                 const newItem: RouteListItem = {
                     id: crypto.randomUUID(),
@@ -117,7 +202,7 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                 setTimeout(() => setFeedback(null), 4000);
 
             } else {
-                setFeedback({ type: 'error', message: `Endereço não encontrado em ${userCity}. Tente ser mais específico.` });
+                setFeedback({ type: 'error', message: `Endereço não encontrado em ${userCity}. Tente remover "Rua" ou simplificar o nome.` });
             }
         } catch (e: any) {
             setFeedback({ type: 'error', message: e.message || 'Erro ao buscar endereço. Verifique sua conexão.' });
@@ -135,10 +220,11 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
     };
 
     const handleNavigate = (item: RouteListItem) => {
+        // User requested Waze navigation specifically
+        openNavigation(item.lat, item.lng, item.address);
+
         if (onNavigate) {
             onNavigate({ lat: item.lat, lng: item.lng, name: item.name, fullAddress: item.address });
-        } else {
-            openNavigation(item.lat, item.lng, item.address);
         }
     };
 
@@ -185,22 +271,40 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <input
-                        type="text"
-                        value={newItemName}
-                        onChange={e => setNewItemName(e.target.value)}
-                        placeholder="Nome (Opcional)"
-                        className="p-3 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50 flex-grow max-w-[180px]"
-                        disabled={isProfileLoading || isSearching}
-                    />
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        placeholder="Endereço (Rua)"
-                        className="p-3 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50 flex-grow min-w-[180px]"
-                        disabled={isProfileLoading || isSearching}
-                    />
+                    <div className="relative flex-grow max-w-[180px]">
+                        <input
+                            type="text"
+                            value={newItemName}
+                            onChange={e => setNewItemName(e.target.value)}
+                            placeholder="Nome (Opcional)"
+                            className="w-full p-3 pr-8 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
+                            disabled={isProfileLoading || isSearching}
+                        />
+                        <button
+                            onClick={() => handleVoiceInput('name')}
+                            className={`absolute right-2 top-2.5 p-1 rounded-full ${listeningField === 'name' ? 'bg-red-100 text-red-500' : 'text-gray-400 hover:text-purple-500'}`}
+                            disabled={isProfileLoading || isSearching}
+                        >
+                            <Mic className="w-3 h-3" />
+                        </button>
+                    </div>
+                    <div className="relative flex-grow min-w-[180px]">
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Endereço (Rua)"
+                            className="w-full p-3 pr-8 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
+                            disabled={isProfileLoading || isSearching}
+                        />
+                        <button
+                            onClick={() => handleVoiceInput('search')}
+                            className={`absolute right-2 top-2.5 p-1 rounded-full ${listeningField === 'search' ? 'bg-red-100 text-red-500' : 'text-gray-400 hover:text-purple-500'}`}
+                            disabled={isProfileLoading || isSearching}
+                        >
+                            <Mic className="w-3 h-3" />
+                        </button>
+                    </div>
                     <input
                         type="text"
                         value={newItemNumber}
@@ -244,11 +348,11 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     </div>
                 ) : (
                     items.map((item, index) => (
-                        <div key={item.id} className="flex flex-col bg-white dark:bg-gray-800 p-4 rounded-xl border-b border-gray-100 dark:border-gray-700">
+                        <div key={item.id} className="flex flex-row items-center bg-white dark:bg-gray-800 p-4 rounded-xl border-b border-gray-100 dark:border-gray-700 gap-4">
 
-                            {/* Content Row */}
-                            <div className="flex items-start gap-3 mb-3">
-                                <div className="w-8 h-8 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center text-sm font-bold text-purple-600 dark:text-purple-400 flex-shrink-0">
+                            {/* Content Section */}
+                            <div className="flex-1 flex items-start gap-3 min-w-0">
+                                <div className="w-8 h-8 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center text-sm font-bold text-purple-600 dark:text-purple-400 flex-shrink-0 mt-1">
                                     {index + 1}
                                 </div>
 
@@ -273,18 +377,26 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                                             </button>
                                         </div>
                                     )}
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">{item.address}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed line-clamp-2">{item.address}</p>
                                 </div>
                             </div>
 
-                            {/* Actions Row */}
-                            <div className="flex gap-2 pl-11">
+                            {/* Actions Section */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
                                 <Button
                                     onClick={() => handleNavigate(item)}
-                                    className="flex-1 py-2 h-auto text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+                                    className="px-4 py-2 h-auto text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-sm whitespace-nowrap"
                                 >
-                                    <Navigation className="w-3 h-3 mr-1.5" /> {onNavigate ? 'Navegação Interna' : 'Abrir no Waze'}
+                                    <Navigation className="w-3 h-3 mr-1.5" /> Abrir no Waze
                                 </Button>
+
+                                <button
+                                    onClick={() => setInfoItem(item)}
+                                    className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                                    title="Detalhes"
+                                >
+                                    <Info className="w-4 h-4" />
+                                </button>
 
                                 <button
                                     onClick={() => handleDelete(item.id)}
@@ -298,6 +410,61 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     ))
                 )}
             </div>
+
+            {/* Info Modal */}
+            <BaseModal
+                isOpen={!!infoItem}
+                onClose={() => setInfoItem(null)}
+                title="Detalhes do Endereço"
+                icon={<Info className="w-6 h-6 text-blue-500" />}
+            >
+                {infoItem && (
+                    <div className="space-y-4">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-3">
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-500 uppercase mb-1">Nome / Identificador</h4>
+                                <p className="text-gray-900 dark:text-white font-medium">{infoItem.name}</p>
+                            </div>
+
+                            <div className="h-px bg-gray-200 dark:bg-gray-700" />
+
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-500 uppercase mb-1">Endereço Completo</h4>
+                                <p className="text-gray-900 dark:text-white text-sm leading-relaxed">{infoItem.address}</p>
+                            </div>
+
+                            <div className="h-px bg-gray-200 dark:bg-gray-700" />
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-1">Latitude</h4>
+                                    <p className="text-gray-700 dark:text-gray-300 text-xs font-mono">{infoItem.lat}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-1">Longitude</h4>
+                                    <p className="text-gray-700 dark:text-gray-300 text-xs font-mono">{infoItem.lng}</p>
+                                </div>
+                            </div>
+
+                            <div className="h-px bg-gray-200 dark:bg-gray-700" />
+
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-500 uppercase mb-1">Status</h4>
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${infoItem.completed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                    {infoItem.completed ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                                    {infoItem.completed ? 'Concluído' : 'Pendente'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                            <Button onClick={() => setInfoItem(null)} variant="outline">
+                                Fechar
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </BaseModal>
         </div>
     );
 };

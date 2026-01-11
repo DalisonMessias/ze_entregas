@@ -3,6 +3,7 @@ import { Wallet, Calendar, Clock, ChevronRight, TrendingUp, TrendingDown, Eye, E
 import * as cloud from '../services/cloud';
 import { Loader2 } from 'lucide-react';
 import { Logo } from './Logo';
+import { DataErrorDisplay } from './DataErrorDisplay';
 import { UserRole, ZebankData, ZebankTransaction, ZebankCard, PayoutSummary } from '../types';
 import { ExclusiveLock } from './ExclusiveLock';
 import { Button } from './Button';
@@ -417,25 +418,12 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
 
     const { confirm } = useDialog(); // Use the custom dialog service
 
-    const loadData = async () => {
-        try {
-            const d = await cloud.getZebankDashboardData();
-            setData(d);
-        } catch (e: any) {
-            const errorMessage = e instanceof Error ? e.message : (typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string') ? e.message : 'Um erro desconhecido ocorreu ao carregar o Zebank.';
-            setToast({ type: 'error', message: errorMessage });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { loadData(); }, []);
+    const isNormalDriver = userRole === 'delivery_person';
 
     const showToast = (type: 'success' | 'error' | 'info', msg: string) => {
         setToast({ message: msg, type });
     };
 
-    // Helper functions moved inside or accessible
     const copyToClipboard = (text: string, label: string) => {
         if (!text) return showToast('error', 'Nada para copiar.');
 
@@ -470,15 +458,30 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         }
     };
 
-    const isNormalDriver = userRole === 'delivery_person';
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const d = await cloud.getZebankDashboardData();
+            setData(d);
+        } catch (e: any) {
+            console.error('[Zebank] Load Error:', e);
+            setToast({ type: 'error', message: 'Falha ao carregar dados do banco.' });
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    if (userRole && userRole !== 'delivery_partner' && userRole !== 'delivery_person') {
-        // Optional: Render ExclusiveLock if role is restricted (assuming 'delivery_partner' or 'delivery_person' are allowed)
-        // Keeping logic from Incoming that blocks if not delivery_partner, but adapted to accept delivery_person too if that's the intention of HEAD's isNormalDriver check
+    useEffect(() => { loadData(); }, []);
+
+    if (loading && !data) return <ZebankSkeleton isNormalDriver={isNormalDriver} />;
+
+    if (!data && !loading) {
+        return (
+            <div className="p-8">
+                <DataErrorDisplay title="ZéBank Indisponível" onRetry={loadData} />
+            </div>
+        );
     }
-
-    if (loading) return <ZebankSkeleton isNormalDriver={isNormalDriver} />;
-    if (!data) return <div>Erro ao carregar dados.</div>;
 
     const handleP2PTransfer = async () => {
         setProcessing(true);

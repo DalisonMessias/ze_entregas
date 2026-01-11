@@ -118,7 +118,7 @@ export const TaskList: React.FC = () => {
                     tasks.map((task, index) => (
                         <div
                             key={task.id}
-                            draggable
+                            draggable={editingTask?.id !== task.id}
                             onDragStart={(e) => handleDragStart(e, index)}
                             onDragEnter={(e) => handleDragEnter(e, index)}
                             onDragEnd={handleDrop}

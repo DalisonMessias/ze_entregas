@@ -1,31 +1,37 @@
 
 import React, { useEffect, useState } from 'react';
-import { BarChart3, TrendingUp, Users, DollarSign, Download, Store, Bike, Activity, Loader2, ArrowUpRight, ArrowDownRight, Layout, Construction, Award, Star, ShieldOff, Link2, Globe, Newspaper, Banknote, Bot, MapPin, Zap, CreditCard } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, DollarSign, Download, Store, Bike, Activity, Loader2, ArrowUpRight, ArrowDownRight, Layout, Construction, Award, Star, ShieldOff, Link2, Globe, Newspaper, Banknote, Bot, MapPin, Zap, CreditCard, FileCheck, Wallet, Megaphone, Headphones, ShieldAlert, Smartphone, Key } from 'lucide-react';
 import { Button } from './Button';
+import { DataErrorDisplay } from './DataErrorDisplay';
 import * as cloud from '../services/cloud';
 import { AdminDashboardStats } from '../types';
+import { TipOfTheDay } from './TipOfTheDay';
 
-const KPICard = ({ title, value, subtext, icon, colorClass, trend }: { title: string, value: string, subtext?: string, icon: React.ReactNode, colorClass: string, trend?: 'up' | 'down' }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
-        <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform ${colorClass.replace('bg-', 'text-')}`}>
-            {icon}
-        </div>
-        <div className="relative z-10">
-            <div className="flex justify-between items-start">
-                <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">{title}</p>
-                {trend && (
-                    <div className={`flex items-center text-xs font-bold ${trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
-                        {trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-                        {trend === 'up' ? '+5%' : '-2%'} {/* Mocked trend for now */}
-                    </div>
-                )}
+const KPICard = ({ title, value, subtext, icon, colorClass, trendValue }: { title: string, value: string, subtext?: string, icon: React.ReactNode, colorClass: string, trendValue?: number }) => {
+    const trend = trendValue !== undefined && trendValue !== 0 ? (trendValue > 0 ? 'up' : 'down') : undefined;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
+            <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform ${colorClass.replace('bg-', 'text-')}`}>
+                {icon}
             </div>
-            <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-1">{value}</h3>
-            {subtext && <p className="text-xs font-medium text-gray-400">{subtext}</p>}
+            <div className="relative z-10">
+                <div className="flex justify-between items-start">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">{title}</p>
+                    {trend && (
+                        <div className={`flex items-center text-xs font-bold ${trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                            {trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                            {trend === 'up' ? '+' : ''}{trendValue?.toFixed(1)}%
+                        </div>
+                    )}
+                </div>
+                <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-1">{value}</h3>
+                {subtext && <p className="text-xs font-medium text-gray-400">{subtext}</p>}
+            </div>
+            <div className={`absolute bottom-0 left-0 h-1 w-full ${colorClass}`}></div>
         </div>
-        <div className={`absolute bottom-0 left-0 h-1 w-full ${colorClass}`}></div>
-    </div>
-);
+    );
+};
 
 const SimpleBarChart = ({ data }: { data: { date: string, count: number }[] }) => {
     const max = Math.max(...data.map(d => d.count), 1);
@@ -52,7 +58,7 @@ const SimpleBarChart = ({ data }: { data: { date: string, count: number }[] }) =
 };
 
 export const AdminDashboard: React.FC = () => {
-    const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+    const [stats, setStats] = useState<AdminDashboardStats>({} as AdminDashboardStats);
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -103,18 +109,18 @@ export const AdminDashboard: React.FC = () => {
         document.body.removeChild(link);
     };
 
-    if (errorMsg || !stats) {
-        return (
-            <div className="flex flex-col items-center justify-center p-10 text-gray-500 h-64 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl bg-gray-50 dark:bg-gray-800">
-                <p className="mb-2 font-bold">Falha ao carregar dados do dashboard.</p>
-                <p className="text-xs text-red-500 mb-4">{errorMsg}</p>
-                <Button onClick={() => { setLoading(true); loadStats(); }} variant="outline" size="sm">Tentar Novamente</Button>
-            </div>
-        );
-    }
+    // Loading screen removed as requested by user. 
+    // Data will populate as it arrives. 
+    // "stats" is initialized as null, so we handle optional chaining in UI.
+
 
     return (
         <div className="space-y-[15px] animate-in fade-in">
+            {errorMsg && !stats.orders && (
+                <div className="p-8">
+                    <DataErrorDisplay title="Falha ao Carregar Dashboard" message={errorMsg} onRetry={loadStats} />
+                </div>
+            )}
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
@@ -134,7 +140,7 @@ export const AdminDashboard: React.FC = () => {
                     subtext={`Total: ${stats.orders?.total ?? 0}`}
                     icon={<Activity className="w-8 h-8" />}
                     colorClass="bg-blue-500"
-                    trend="up"
+                    trendValue={stats.orders?.trend}
                 />
                 <KPICard
                     title="GMV Mensal"
@@ -142,7 +148,7 @@ export const AdminDashboard: React.FC = () => {
                     subtext="Volume Bruto de Mercadorias"
                     icon={<DollarSign className="w-8 h-8" />}
                     colorClass="bg-green-500"
-                    trend="up"
+                    trendValue={stats.finance?.gmvTrend}
                 />
                 <KPICard
                     title="Receita Plataforma"
@@ -150,7 +156,7 @@ export const AdminDashboard: React.FC = () => {
                     subtext="Taxas e Mensalidades"
                     icon={<TrendingUp className="w-8 h-8" />}
                     colorClass="bg-purple-500"
-                    trend="up"
+                    trendValue={stats.finance?.revenueTrend}
                 />
                 <KPICard
                     title="Ticket Médio"
@@ -174,14 +180,14 @@ export const AdminDashboard: React.FC = () => {
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_validation' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
-                            <Users className="w-5 h-5" />
+                            <FileCheck className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Validação</span>
                     </button>
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_wallet_control' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
-                            <DollarSign className="w-5 h-5" />
+                            <Wallet className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Saldos</span>
                     </button>
@@ -190,12 +196,12 @@ export const AdminDashboard: React.FC = () => {
                         <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
                             <Store className="w-5 h-5" />
                         </div>
-                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Loja</span>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Loja Admin</span>
                     </button>
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_cities' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
-                            <Store className="w-5 h-5" />
+                            <MapPin className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Cidades</span>
                     </button>
@@ -216,40 +222,39 @@ export const AdminDashboard: React.FC = () => {
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_notifications' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-full text-yellow-600 dark:text-yellow-400">
-                            <BarChart3 className="w-5 h-5" />
+                            <Megaphone className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Notificações</span>
                     </button>
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_claims' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
-                            <Users className="w-5 h-5" />
+                            <Headphones className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Suporte</span>
                     </button>
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_security' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
-                            <Activity className="w-5 h-5" />
+                            <ShieldAlert className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Segurança</span>
                     </button>
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_pwa' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-full text-pink-600 dark:text-pink-400">
-                            <Bike className="w-5 h-5" />
+                            <Smartphone className="w-5 h-5" />
                         </div>
-                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">PWA</span>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">App PWA</span>
                     </button>
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_api_keys' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300">
-                            <BarChart3 className="w-5 h-5" />
+                            <Key className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">API Keys</span>
                     </button>
 
-                    {/* Faltantes */}
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_slides' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
                             <Layout className="w-5 h-5" />
@@ -327,11 +332,13 @@ export const AdminDashboard: React.FC = () => {
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Roteamento</span>
                     </button>
 
-                    <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_asaas_webhook' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
-                        <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-full text-yellow-600 dark:text-yellow-400">
-                            <Zap className="w-5 h-5" />
+
+
+                    <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_infinitepay' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                        <div className="p-2 bg-lime-100 dark:bg-lime-900/30 rounded-full text-lime-600 dark:text-lime-400">
+                            <CreditCard className="w-5 h-5" />
                         </div>
-                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Asaas Webhook</span>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">InfinitePay</span>
                     </button>
 
                     <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_loan_config' } }))} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
@@ -395,17 +402,7 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="bg-gradient-to-br from-brand-600 to-brand-700 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden mt-[15px]">
-                        <div className="relative z-10">
-                            <p className="text-brand-100 text-xs font-bold uppercase mb-1">Dica do Dia</p>
-                            <p className="font-medium text-sm leading-relaxed">
-                                Lojas com fotos de produtos vendem 30% mais. Incentive seus parceiros a completarem o cadastro!
-                            </p>
-                        </div>
-                        <div className="absolute -bottom-4 -right-4 text-brand-500/30">
-                            <Store className="w-24 h-24" />
-                        </div>
-                    </div>
+                    <TipOfTheDay role="admin" className="mt-[15px]" />
                 </div>
             </div>
         </div>
