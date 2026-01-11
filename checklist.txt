@@ -18,4 +18,6 @@
 [x] Adicionado botão de recarregamento manual (F5) no menu superior para sincronização de dados (2026-01-11)
 [x] Removida dependência conflitante `react-joyride` e limpos mocks de testes para corrigir erro de deploy no Vercel (2026-01-11)
 [x] Corrigida ordem de tabelas no `supabase_global.sql` movendo `system_tips` para após `is_admin` para corrigir erro SQL 42883 (2026-01-11)
+
 [x] Adicionada coluna `store_id` à tabela `products` em `supabase_global.sql` para corrigir erro SQL 42703 (2026-01-11)
+[ ] Converter view system_maintenance em tabela para compatibilidade com Realtime e RLS (2026-01-11)
