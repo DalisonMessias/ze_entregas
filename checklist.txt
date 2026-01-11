@@ -16,3 +16,4 @@
 [x] Corrigido redirecionamento inicial: O sistema agora respeita a URL atual ao atualizar e não força a abertura em /perfil (2026-01-11)
 [x] Implementada funcionalidade de notificações específicas para usuários e busca detalhada no Painel Administrativo (2026-01-11)
 [x] Adicionado botão de recarregamento manual (F5) no menu superior para sincronização de dados (2026-01-11)
+[x] Removida dependência conflitante `react-joyride` e limpos mocks de testes para corrigir erro de deploy no Vercel (2026-01-11)
