@@ -4315,3 +4315,35 @@ CREATE POLICY "Admins can manage fraud alerts" ON public.fraud_alerts
 GRANT ALL ON public.fraud_alerts TO authenticated;
 GRANT ALL ON public.fraud_alerts TO service_role;
 
+-- Tabela para Notificações Individuais do Usuário (Adicionada em 2026-01-11)
+CREATE TABLE IF NOT EXISTS public.app_notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT DEFAULT 'info' NOT NULL, -- 'success' | 'error' | 'warning' | 'info'
+    is_read BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS app_notifications_user_id_idx ON public.app_notifications (user_id);
+CREATE INDEX IF NOT EXISTS app_notifications_is_read_idx ON public.app_notifications (is_read);
+
+DROP TRIGGER IF EXISTS handle_app_notifications_updated_at ON public.app_notifications;
+CREATE TRIGGER handle_app_notifications_updated_at BEFORE UPDATE ON public.app_notifications
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.app_notifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.app_notifications;
+CREATE POLICY "Users can view their own notifications" ON public.app_notifications
+    FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can manage all notifications" ON public.app_notifications;
+CREATE POLICY "Admins can manage all notifications" ON public.app_notifications
+    FOR ALL USING (public.is_admin());
+
+GRANT SELECT, UPDATE ON public.app_notifications TO authenticated;
+GRANT ALL ON public.app_notifications TO service_role;
+

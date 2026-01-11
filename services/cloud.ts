@@ -1353,37 +1353,60 @@ export const getNotifications = async (): Promise<AppNotification[]> => {
     if (!sb) return [];
 
     try {
-        // Busca notícias da plataforma que podem servir como notificações gerais
-        const { data, error } = await sb.from('platform_news')
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) return [];
+
+        // 1. Busca notícias globais (platform_news)
+        const { data: news, error: newsError } = await sb.from('platform_news')
             .select('*')
+            .eq('is_active', true)
             .order('created_at', { ascending: false })
             .limit(10);
 
-        if (error) {
-            console.error('[getNotifications] DB Error:', error);
-            return [];
+        // 2. Busca notificações individuais (app_notifications)
+        const { data: individual, error: indivError } = await sb.from('app_notifications')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+        const allNotifications: AppNotification[] = [];
+
+        // Mapear notícias globais
+        if (news) {
+            news.forEach(n => {
+                allNotifications.push({
+                    id: n.id,
+                    user_id: user.id,
+                    title: n.title,
+                    message: n.description,
+                    type: 'info',
+                    is_read: false,
+                    created_at: n.created_at
+                });
+            });
         }
 
-        if (!data) return [];
+        // Mapear notificações individuais
+        if (individual) {
+            individual.forEach(i => {
+                allNotifications.push({
+                    id: i.id,
+                    user_id: i.user_id,
+                    title: i.title,
+                    message: i.message,
+                    type: i.type as any,
+                    is_read: i.is_read,
+                    created_at: i.created_at
+                });
+            });
+        }
 
-        let userId = 'system';
-        try {
-            const { data: userData } = await sb.auth.getUser();
-            if (userData?.user) userId = userData.user.id;
-        } catch { /* ignore auth failure for public news */ }
+        // Ordenar por data
+        return allNotifications.sort((a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
 
-        return data.map(n => ({
-            id: n.id,
-            user_id: userId,
-            title: n.title,
-            message: n.content,
-            type: n.priority === 'urgent' ? 'warning' : 'info',
-            timestamp: new Date(n.created_at).getTime(),
-            read: false,
-            is_read: false,
-            created_at: n.created_at,
-            actionLink: n.action_link
-        }));
     } catch (e) {
         console.error('[getNotifications] Exception:', e);
         return [];
@@ -1419,10 +1442,51 @@ export const partnerReportDeliveryFailure = async (requestId: string, reason: st
 };
 
 export const markNotificationRead = async (notificationId: string) => {
-    // Como estamos usando platform_news, não temos como marcar como lido individualmente no banco sem uma tabela de relacionamento.
-    // Implementação stub para satisfazer a interface ou uso de local storage se necessário.
-    // Por enquanto, apenas retorna sucesso.
-    return true;
+    const sb = getClient();
+    if (!sb) return;
+
+    // Tenta marcar na tabela de notificações individuais
+    await sb.from('app_notifications').update({ is_read: true }).eq('id', notificationId);
+};
+
+export const adminSearchUsers = async (query: string): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb.from('user_profiles')
+        .select('id, name, email, phone_number, cpf, role')
+        .or(`name.ilike.%${query}%,email.ilike.%${query}%,phone_number.ilike.%${query}%,cpf.ilike.%${query}%`)
+        .limit(10);
+
+    if (error) {
+        console.error('Error searching users:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const adminSendGlobalNotification = async (title: string, message: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('platform_news').insert({
+        title,
+        description: message,
+        is_active: true,
+        icon_name: 'Megaphone'
+    });
+    if (error) throw error;
+};
+
+export const adminSendIndividualNotification = async (userId: string, title: string, message: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+    const { error } = await sb.from('app_notifications').insert({
+        user_id: userId,
+        title,
+        message,
+        type: 'info'
+    });
+    if (error) throw error;
 };
 
 export const storeCancelPartnerRequest = async (requestId: string) => {

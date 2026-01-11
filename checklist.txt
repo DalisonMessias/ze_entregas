@@ -9,3 +9,4 @@
 [x] Implementada independência de carregamento de dados e tratamento de erros local com retry em todos os perfis (2026-01-11)
 [x] Implementadas tendências reais no Dashboard Administrativo, removendo simulações estáticas (2026-01-11)
 [x] Corrigido redirecionamento inicial: O sistema agora respeita a URL atual ao atualizar e não força a abertura em /perfil (2026-01-11)
+[x] Implementada funcionalidade de notificações específicas para usuários e busca detalhada no Painel Administrativo (2026-01-11)
