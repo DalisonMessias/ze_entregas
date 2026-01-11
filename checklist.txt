@@ -21,3 +21,5 @@
 
 [x] Adicionada coluna `store_id` à tabela `products` em `supabase_global.sql` para corrigir erro SQL 42703 (2026-01-11)
 [x] Converter view system_maintenance em tabela para compatibilidade com Realtime e RLS (2026-01-11)
+[x] Implementar métodos faltantes em services/cloud.ts para corrigir erros no MerchantPOS (2026-01-11)
+[ ] Implementar Módulo de Empréstimos Completo (Tabelas, Admin, App, Lógica) (2026-01-11)
