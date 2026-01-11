@@ -12,14 +12,11 @@ vi.mock('../utils/dialogService', () => ({
 import { AdminPanel } from '../AdminPanel'
 import { AdminApiKeysUnified } from '../AdminApiKeysUnified'
 
-vi.mock('../../services/cloud', () => ({
-  getShopSettings: vi.fn().mockResolvedValue({ id: 'shop' })
-}))
-vi.mock('../../utils/dialogService', () => ({
-  useDialog: () => ({
-    alert: async () => { },
-    confirm: async () => true,
-    prompt: async () => ''
+
+describe('AdminNavigation', () => {
+  it('renders default dashboard on load', async () => {
+    // Basic test to ensure component renders without Asaas
+    render(<AdminPanel activeSubTab={'dashboard'} />)
+    expect(screen.getByText('Visão Geral')).toBeInTheDocument()
   })
-}))
-  ```
+})
