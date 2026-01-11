@@ -4384,3 +4384,161 @@ CREATE POLICY "Admins can manage all notifications" ON public.app_notifications
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.app_notifications TO authenticated;
 GRANT ALL ON public.app_notifications TO service_role;
 
+
+-- ==================================================================
+-- MÓDULO DE EMPRÉSTIMOS (2026-01-11)
+-- ==================================================================
+
+-- Tabela de Tipos de Empréstimo
+CREATE TABLE IF NOT EXISTS public.loan_types (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    interest_rate_monthly NUMERIC(5, 2) NOT NULL DEFAULT 0,
+    max_installments INT NOT NULL DEFAULT 1,
+    max_amount NUMERIC(10, 2), -- Limite específico do tipo (opcional)
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS handle_loan_types_updated_at ON public.loan_types;
+CREATE TRIGGER handle_loan_types_updated_at BEFORE UPDATE ON public.loan_types
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.loan_types ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read access to loan_types" ON public.loan_types;
+CREATE POLICY "Public read access to loan_types" ON public.loan_types FOR SELECT USING (is_active = true OR public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can manage loan_types" ON public.loan_types;
+CREATE POLICY "Admins can manage loan_types" ON public.loan_types FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.loan_types TO authenticated;
+GRANT ALL ON public.loan_types TO service_role;
+
+
+-- Tabela de Limites por Nível de Parceiro
+CREATE TABLE IF NOT EXISTS public.loan_level_limits (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    partner_level VARCHAR(50) NOT NULL UNIQUE, -- 'Iniciante', 'Prata', 'Ouro', etc.
+    max_limit NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    allow_negative_balance BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS handle_loan_level_limits_updated_at ON public.loan_level_limits;
+CREATE TRIGGER handle_loan_level_limits_updated_at BEFORE UPDATE ON public.loan_level_limits
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.loan_level_limits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read access to loan_level_limits" ON public.loan_level_limits;
+CREATE POLICY "Public read access to loan_level_limits" ON public.loan_level_limits FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage loan_level_limits" ON public.loan_level_limits;
+CREATE POLICY "Admins can manage loan_level_limits" ON public.loan_level_limits FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.loan_level_limits TO authenticated;
+GRANT ALL ON public.loan_level_limits TO service_role;
+
+
+-- Tabela de Solicitações/Contratos de Empréstimo
+CREATE TABLE IF NOT EXISTS public.partner_loans (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    loan_type_id UUID REFERENCES public.loan_types(id) ON DELETE SET NULL,
+    amount_requested NUMERIC(10, 2) NOT NULL,
+    amount_total NUMERIC(10, 2) NOT NULL, -- Inclui juros
+    installments_count INT NOT NULL,
+    interest_rate_applied NUMERIC(5, 2) NOT NULL,
+    status VARCHAR(50) DEFAULT 'PENDING', -- PENDING, APPROVED, ACTIVE, REJECTED, PAID, DEFAULTED
+    approved_at TIMESTAMPTZ,
+    approved_by UUID REFERENCES public.user_profiles(id),
+    rejected_at TIMESTAMPTZ,
+    rejection_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS partner_loans_user_id_idx ON public.partner_loans (user_id);
+CREATE INDEX IF NOT EXISTS partner_loans_status_idx ON public.partner_loans (status);
+
+DROP TRIGGER IF EXISTS handle_partner_loans_updated_at ON public.partner_loans;
+CREATE TRIGGER handle_partner_loans_updated_at BEFORE UPDATE ON public.partner_loans
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.partner_loans ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their own loans" ON public.partner_loans;
+CREATE POLICY "Users can view their own loans" ON public.partner_loans
+    FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can create loan requests" ON public.partner_loans;
+CREATE POLICY "Users can create loan requests" ON public.partner_loans
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can manage partner_loans" ON public.partner_loans;
+CREATE POLICY "Admins can manage partner_loans" ON public.partner_loans
+    FOR ALL USING (public.is_admin());
+
+GRANT SELECT, INSERT ON public.partner_loans TO authenticated;
+GRANT ALL ON public.partner_loans TO service_role;
+
+
+-- Tabela de Parcelas do Empréstimo
+CREATE TABLE IF NOT EXISTS public.loan_installments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    loan_id UUID NOT NULL REFERENCES public.partner_loans(id) ON DELETE CASCADE,
+    installment_number INT NOT NULL,
+    due_date DATE NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL,
+    status VARCHAR(50) DEFAULT 'PENDING', -- PENDING, PAID, PARTIALLY_PAID, OVERDUE
+    paid_amount NUMERIC(10, 2) DEFAULT 0,
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS loan_installments_loan_id_idx ON public.loan_installments (loan_id);
+CREATE INDEX IF NOT EXISTS loan_installments_due_date_idx ON public.loan_installments (due_date);
+
+DROP TRIGGER IF EXISTS handle_loan_installments_updated_at ON public.loan_installments;
+CREATE TRIGGER handle_loan_installments_updated_at BEFORE UPDATE ON public.loan_installments
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.loan_installments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their own loan installments" ON public.loan_installments;
+CREATE POLICY "Users can view their own loan installments" ON public.loan_installments
+    FOR SELECT USING (EXISTS (SELECT 1 FROM public.partner_loans WHERE id = loan_installments.loan_id AND user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Admins can manage loan_installments" ON public.loan_installments;
+CREATE POLICY "Admins can manage loan_installments" ON public.loan_installments
+    FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.loan_installments TO authenticated;
+GRANT ALL ON public.loan_installments TO service_role;
+
+
+-- Tabela de Logs de Auditoria de Empréstimos
+CREATE TABLE IF NOT EXISTS public.loan_audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    loan_id UUID REFERENCES public.partner_loans(id) ON DELETE SET NULL,
+    action VARCHAR(100) NOT NULL, -- APPROVED, REJECTED, PAYMENT_DEDUCTED, MANUAL_ADJUSTMENT
+    details JSONB DEFAULT '{}'::jsonb,
+    performed_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS loan_audit_logs_loan_id_idx ON public.loan_audit_logs (loan_id);
+
+ALTER TABLE public.loan_audit_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view loan audits" ON public.loan_audit_logs;
+CREATE POLICY "Admins can view loan audits" ON public.loan_audit_logs
+    FOR SELECT USING (public.is_admin());
+
+GRANT ALL ON public.loan_audit_logs TO service_role;
+
