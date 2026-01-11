@@ -2,33 +2,7 @@
 -- 0.x EXTENSIONS E CONFIGURAÇÕES GERAIS
 -- ==================================================================
 
--- Tabela de Dicas do Dia (Adicionada 11/01/2026)
-CREATE TABLE IF NOT EXISTS public.system_tips (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    message text NOT NULL,
-    target_role text NOT NULL, -- admin, store_partner, delivery_partner, all
-    is_active boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
-);
 
--- Migração segura para alterar tipo da coluna caso já exista como enum
-DO $$
-BEGIN
-    ALTER TABLE public.system_tips ALTER COLUMN target_role TYPE text;
-EXCEPTION
-    WHEN OTHERS THEN NULL;
-END $$;
-
-ALTER TABLE public.system_tips ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Public read access to system_tips" ON public.system_tips;
-CREATE POLICY "Public read access to system_tips" ON public.system_tips FOR SELECT USING (is_active = true OR public.is_admin());
-
-DROP POLICY IF EXISTS "Admin full access to system_tips" ON public.system_tips;
-CREATE POLICY "Admin full access to system_tips" ON public.system_tips FOR ALL USING (public.is_admin());
-
-GRANT SELECT ON public.system_tips TO anon, authenticated;
-GRANT ALL ON public.system_tips TO authenticated;
 
 -- ==================================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -349,6 +323,34 @@ CREATE POLICY "Admins can manage user profiles" ON public.user_profiles
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_profiles TO authenticated;
 
+-- Tabela de Dicas do Dia (Adicionada 11/01/2026 e movida para cá para resolver dependência de is_admin)
+CREATE TABLE IF NOT EXISTS public.system_tips (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    message text NOT NULL,
+    target_role text NOT NULL, -- admin, store_partner, delivery_partner, all
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+-- Migração segura para alterar tipo da coluna caso já exista como enum
+DO $$
+BEGIN
+    ALTER TABLE public.system_tips ALTER COLUMN target_role TYPE text;
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
+
+ALTER TABLE public.system_tips ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read access to system_tips" ON public.system_tips;
+CREATE POLICY "Public read access to system_tips" ON public.system_tips FOR SELECT USING (is_active = true OR public.is_admin());
+
+DROP POLICY IF EXISTS "Admin full access to system_tips" ON public.system_tips;
+CREATE POLICY "Admin full access to system_tips" ON public.system_tips FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.system_tips TO anon, authenticated;
+GRANT ALL ON public.system_tips TO authenticated;
+
 -- Trigger para criar perfil de usuário após AUTH
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -526,6 +528,7 @@ CREATE TABLE IF NOT EXISTS public.products (
     description TEXT,
     price NUMERIC(10, 2) NOT NULL,
     category_id UUID REFERENCES public.categories(id) ON DELETE SET NULL,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE, -- Adicionado para resolver erro 42703
     images TEXT[] DEFAULT ARRAY[]::TEXT[],
     is_active BOOLEAN DEFAULT TRUE,
     stock_quantity INT,
