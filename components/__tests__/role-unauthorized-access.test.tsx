@@ -19,16 +19,16 @@ vi.mock('../../services/cloud', () => ({
   getMyPartnerProfile: vi.fn().mockResolvedValue(null)
 }))
 
-vi.mock('react-joyride', () => ({ STATUS: {}, default: () => null }))
+
 vi.mock('@list-labs/react-joyride', () => ({ default: () => null }))
 vi.mock('../Tour/TourContext', () => ({
   useTour: () => ({
     steps: [],
     run: false,
     stepIndex: 0,
-    startTour: () => {},
-    stopTour: () => {},
-    handleJoyrideCallback: () => {},
+    startTour: () => { },
+    stopTour: () => { },
+    handleJoyrideCallback: () => { },
     isTourRunning: false,
   })
 }))

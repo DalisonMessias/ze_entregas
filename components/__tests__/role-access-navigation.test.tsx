@@ -14,16 +14,16 @@ vi.mock('../../services/cloud', () => ({
 
 import * as cloud from '../../services/cloud'
 
-vi.mock('react-joyride', () => ({ STATUS: {}, default: () => null }))
+
 vi.mock('@list-labs/react-joyride', () => ({ default: () => null }))
 vi.mock('../Tour/TourContext', () => ({
   useTour: () => ({
     steps: [],
     run: false,
     stepIndex: 0,
-    startTour: () => {},
-    stopTour: () => {},
-    handleJoyrideCallback: () => {},
+    startTour: () => { },
+    stopTour: () => { },
+    handleJoyrideCallback: () => { },
     isTourRunning: false,
   })
 }))
@@ -31,7 +31,7 @@ vi.mock('../Tour/Tour', () => ({ default: () => null }))
 
 vi.mock('../../utils/dialogService', () => ({
   useDialog: () => ({
-    alert: async () => {},
+    alert: async () => { },
     confirm: async () => true,
     prompt: async () => ''
   })
@@ -42,7 +42,7 @@ vi.mock('../AdminPanel', () => ({ AdminPanel: () => (<div>Dashboard BI</div>) })
 
 describe('Role-based menu visibility', () => {
   it('store_partner sees store features and not partner-only items', async () => {
-    ;(cloud.getUserRole as any).mockResolvedValue('store_partner')
+    ; (cloud.getUserRole as any).mockResolvedValue('store_partner')
     render(<App userId={'u1'} userRole={'store_partner'} />)
     fireEvent.click(document.getElementById('header-menu-button')!)
 
@@ -56,7 +56,7 @@ describe('Role-based menu visibility', () => {
   })
 
   it('delivery_partner sees partner features and not store-only items', async () => {
-    ;(cloud.getUserRole as any).mockResolvedValue('delivery_partner')
+    ; (cloud.getUserRole as any).mockResolvedValue('delivery_partner')
     render(<App userId={'u2'} userRole={'delivery_partner'} />)
     fireEvent.click(document.getElementById('header-menu-button')!)
 
@@ -69,7 +69,7 @@ describe('Role-based menu visibility', () => {
   })
 
   it('delivery_person sees partner pages and driver tools subset', async () => {
-    ;(cloud.getUserRole as any).mockResolvedValue('delivery_person')
+    ; (cloud.getUserRole as any).mockResolvedValue('delivery_person')
     render(<App userId={'u3'} userRole={'delivery_person'} />)
     fireEvent.click(document.getElementById('header-menu-button')!)
 
@@ -83,7 +83,7 @@ describe('Role-based menu visibility', () => {
   })
 
   it('admin sees admin dashboard option', async () => {
-    ;(cloud.getUserRole as any).mockResolvedValue('admin')
+    ; (cloud.getUserRole as any).mockResolvedValue('admin')
     render(<App userId={'u4'} userRole={'admin'} />)
     fireEvent.click(document.getElementById('header-menu-button')!)
     expect(await screen.findByText('Dashboard BI')).toBeInTheDocument()

@@ -19,16 +19,16 @@ vi.mock('../../services/cloud', () => ({
   getMyPartnerProfile: vi.fn().mockResolvedValue(null)
 }))
 
-vi.mock('react-joyride', () => ({ STATUS: {}, default: () => null }))
+
 vi.mock('@list-labs/react-joyride', () => ({ default: () => null }))
 vi.mock('../Tour/TourContext', () => ({
   useTour: () => ({
     steps: [],
     run: false,
     stepIndex: 0,
-    startTour: () => {},
-    stopTour: () => {},
-    handleJoyrideCallback: () => {},
+    startTour: () => { },
+    stopTour: () => { },
+    handleJoyrideCallback: () => { },
     isTourRunning: false,
   })
 }))
@@ -41,12 +41,12 @@ describe('Real-time role sync behaviour', () => {
     const { rerender } = render(<App userId={'u1'} userRole={'delivery_person'} />)
 
     window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'wallet' } }))
-    await act(async () => {})
+    await act(async () => { })
     expect(alertSpy).toHaveBeenCalled()
 
     rerender(<App userId={'u1'} userRole={'store_partner'} />)
     window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'wallet' } }))
-    await act(async () => {})
+    await act(async () => { })
     expect(alertSpy).toHaveBeenCalledTimes(1)
   })
 })

@@ -19,16 +19,16 @@ vi.mock('../../services/notificationService', () => ({
   stopNotificationService: vi.fn(),
 }))
 
-vi.mock('react-joyride', () => ({ STATUS: {}, default: () => null }))
+
 vi.mock('@list-labs/react-joyride', () => ({ default: () => null }))
 vi.mock('../Tour/TourContext', () => ({
   useTour: () => ({
     steps: [],
     run: false,
     stepIndex: 0,
-    startTour: () => {},
-    stopTour: () => {},
-    handleJoyrideCallback: () => {},
+    startTour: () => { },
+    stopTour: () => { },
+    handleJoyrideCallback: () => { },
     isTourRunning: false,
   })
 }))
@@ -36,7 +36,7 @@ vi.mock('../Tour/Tour', () => ({ default: () => null }))
 
 vi.mock('../../utils/dialogService', () => ({
   useDialog: () => ({
-    alert: async () => {},
+    alert: async () => { },
     confirm: async () => true,
     prompt: async () => ''
   })
