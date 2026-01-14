@@ -14,19 +14,35 @@ serve(async (req) => {
     }
 
     try {
+        const payload = await req.json();
+        console.log('Request payload:', JSON.stringify(payload));
+
+        // Support both styles (camelCase and snake_case)
+        const amount = payload.amount;
+        const orderId = payload.orderId || payload.order_id;
+        const handle = payload.handle;
+        const items = payload.items;
+        const redirectUrl = payload.redirectUrl || payload.redirect_url;
+        const webhookUrl = payload.webhookUrl || payload.webhook_url;
+
+        const authHeader = req.headers.get('Authorization');
+        console.log('Auth Header presence:', !!authHeader);
+
         // 1. Auth Check (User who is paying/borrowing)
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+            { global: { headers: { Authorization: authHeader } } }
         )
 
-        const {
-            data: { user },
-        } = await supabaseClient.auth.getUser()
+        const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
 
-        if (!user) {
-            throw new Error('Unauthorized');
+        if (userError || !user) {
+            console.error('Auth Error:', userError);
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 401
+            });
         }
 
         // 2. Fetch InfinitePay Configuration (Admin/System Level)
@@ -53,12 +69,12 @@ serve(async (req) => {
             throw new Error('Failed to retrieve system configuration');
         }
 
-        // Use handle from database config if available, explicit override from request, or fallback env
+        // PRIORIDADE: Configuração do Banco > Request > Env Var
         const dbHandle = apiKeyData?.permissions?.handle;
         const configHandle = dbHandle || handle || Deno.env.get('INFINITEPAY_HANDLE');
 
         if (!configHandle) {
-            throw new Error('Configuration Error: InfinitePay Handle (@loja) not found in System Config.');
+            throw new Error('Configuration Error: InfinitePay Handle (@loja) not found.');
         }
 
         // Convert amount to cents (InfinitePay uses cents)
@@ -67,23 +83,22 @@ serve(async (req) => {
         // ... (rest of logic)
 
         const finalPayload = {
-            handle: configHandle, // Use resolved handle
-            redirect_url,
-            webhook_url,
-            order_nsu: order_id,
-            items: finalItems,
+            handle: configHandle,
+            redirect_url: redirectUrl,
+            webhook_url: webhookUrl,
+            order_nsu: orderId,
+            items: items || [],
             metadata: {
                 user_id: user.id
             }
         };
 
-        console.log('Sending payload to InfinitePay:', JSON.stringify(finalPayload));
+        console.log('Final InfinitePay Payload:', JSON.stringify(finalPayload));
 
         const response = await fetch('https://api.infinitepay.io/invoices/public/checkout/links', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-                // No Authorization header needed for public checkout links
             },
             body: JSON.stringify(finalPayload),
         })
@@ -91,26 +106,20 @@ serve(async (req) => {
         const data = await response.json()
 
         if (!response.ok) {
-            console.error('InfinitePay Error:', data);
+            console.error('InfinitePay API Error:', data);
             throw new Error(data.message || 'Failed to create payment link');
         }
 
-        return new Response(
-            JSON.stringify(data),
-            {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200,
-            },
-        )
+        return new Response(JSON.stringify(data), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+        })
 
     } catch (error) {
-        console.error(error)
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400,
-            },
-        )
+        console.error('Edge Function Exception:', error.message);
+        return new Response(JSON.stringify({ error: error.message }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400,
+        })
     }
 })
