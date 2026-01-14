@@ -8,7 +8,7 @@ import { useDialog } from '../utils/dialogService';
 import { CustomInput } from './CustomInput';
 
 export const AdminInfinitePayConfig: React.FC = () => {
-    const [settings, setSettings] = useState<ShopSettings | null>(null);
+    const [config, setConfig] = useState<cloud.ServiceConfig>({ apiKey: '', handle: '', webhookSecret: '' });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -26,8 +26,10 @@ export const AdminInfinitePayConfig: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const data = await cloud.getShopSettings();
-            setSettings(data);
+            const data = await cloud.getServiceConfig('infinitepay');
+            if (data) {
+                setConfig(data);
+            }
         } catch (error) {
             console.error("Failed to load settings:", error);
             alert({ title: "Erro", message: "Erro ao carregar configurações." });
@@ -37,13 +39,9 @@ export const AdminInfinitePayConfig: React.FC = () => {
     };
 
     const handleSave = async () => {
-        if (!settings) return;
         setSaving(true);
         try {
-            await cloud.adminUpdateShopSettings({
-                infinitepay_handle: settings.infinitepay_handle,
-                infinitepay_webhook_secret: settings.infinitepay_webhook_secret
-            });
+            await cloud.saveServiceConfig('infinitepay', config);
             await alert({ title: "Sucesso", message: "Configurações salvas!" });
         } catch (error: any) {
             await alert({ title: "Erro", message: error.message });
@@ -69,7 +67,7 @@ export const AdminInfinitePayConfig: React.FC = () => {
                     </div>
                     <div>
                         <h2 className="text-2xl font-black">InfinitePay</h2>
-                        <p className="text-green-100 text-sm">Configure sua Infinite Tag e Webhook.</p>
+                        <p className="text-green-100 text-sm">Configure sua API Key, Infinite Tag e Webhook.</p>
                     </div>
                 </div>
             </div>
@@ -80,8 +78,8 @@ export const AdminInfinitePayConfig: React.FC = () => {
                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Infinite Tag (Handle)</label>
                     <CustomInput
                         type="text"
-                        value={settings?.infinitepay_handle || ''}
-                        onChange={e => setSettings(s => s ? ({ ...s, infinitepay_handle: e.target.value }) : null)}
+                        value={config.handle || ''}
+                        onChange={e => setConfig(s => ({ ...s, handle: e.target.value }))}
                         placeholder="Ex: @sualoja"
                     />
                     <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
@@ -105,8 +103,8 @@ export const AdminInfinitePayConfig: React.FC = () => {
                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Webhook Secret (Opcional)</label>
                     <CustomInput
                         type="password"
-                        value={settings?.infinitepay_webhook_secret || ''}
-                        onChange={e => setSettings(s => s ? ({ ...s, infinitepay_webhook_secret: e.target.value }) : null)}
+                        value={config.webhookSecret || ''}
+                        onChange={e => setConfig(s => ({ ...s, webhookSecret: e.target.value }))}
                         placeholder="Secret para validação de assinatura"
                     />
                 </div>

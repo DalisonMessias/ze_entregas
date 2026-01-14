@@ -14,7 +14,7 @@ serve(async (req) => {
     }
 
     try {
-        // 1. Auth Check
+        // 1. Auth Check (User who is paying/borrowing)
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -26,39 +26,48 @@ serve(async (req) => {
         } = await supabaseClient.auth.getUser()
 
         if (!user) {
-            throw new Error('Unauthorized')
+            throw new Error('Unauthorized');
         }
 
-        const apiKey = Deno.env.get('INFINITEPAY_API_KEY');
-        if (!apiKey) {
-            console.error('Missing INFINITEPAY_API_KEY');
-            throw new Error('Configuration Error: INFINITEPAY_API_KEY is not set on server secrets.');
+        // 2. Fetch InfinitePay Configuration (Admin/System Level)
+        // We use Service Role Key to bypass RLS and find the system admin's config
+        // Note: Using SERVICE_ROLE_KEY env var (set manually) as SUPABASE_ prefix is reserved
+        const serviceRoleKey = (Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) ?? '';
+
+        const supabaseAdmin = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            serviceRoleKey
+        )
+
+        // Find the configuration for InfinitePay (from any admin user)
+        // Assuming the first entry found with service_name='infinitepay' is the valid system config
+        const { data: apiKeyData, error: apiKeyError } = await supabaseAdmin
+            .from('api_keys')
+            .select('*')
+            .eq('service_name', 'infinitepay')
+            .limit(1)
+            .maybeSingle();
+
+        if (apiKeyError) {
+            console.error('Database Error (Admin Config):', apiKeyError);
+            throw new Error('Failed to retrieve system configuration');
         }
 
-        const { amount, order_id, handle, items, redirect_url, webhook_url } = await req.json()
+        // Use handle from database config if available, explicit override from request, or fallback env
+        const dbHandle = apiKeyData?.permissions?.handle;
+        const configHandle = dbHandle || handle || Deno.env.get('INFINITEPAY_HANDLE');
 
-        if (!amount || !order_id || !handle) {
-            throw new Error('Missing required fields: amount, order_id, handle')
+        if (!configHandle) {
+            throw new Error('Configuration Error: InfinitePay Handle (@loja) not found in System Config.');
         }
 
         // Convert amount to cents (InfinitePay uses cents)
         const amountInCents = Math.round(amount * 100)
 
-        // Simplification: use the passed items or create a default one
-        const finalItems = items && items.length > 0 ? items.map((i: any) => ({
-            quantity: i.quantity,
-            price: Math.round(i.price * 100),
-            description: i.description
-        })) : [
-            {
-                quantity: 1,
-                price: amountInCents,
-                description: `Pedido ${order_id}`
-            }
-        ];
+        // ... (rest of logic)
 
         const finalPayload = {
-            handle,
+            handle: configHandle, // Use resolved handle
             redirect_url,
             webhook_url,
             order_nsu: order_id,
@@ -73,8 +82,8 @@ serve(async (req) => {
         const response = await fetch('https://api.infinitepay.io/invoices/public/checkout/links', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get('INFINITEPAY_API_KEY')}` // Ensure API Key Use
+                'Content-Type': 'application/json'
+                // No Authorization header needed for public checkout links
             },
             body: JSON.stringify(finalPayload),
         })

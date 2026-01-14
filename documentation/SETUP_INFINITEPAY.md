@@ -1,29 +1,24 @@
 # Configuração e Teste: InfinitePay
 
-Este guia orienta como configurar as credenciais necessárias para a integração da InfinitePay funcionar e como testar o fluxo.
+Este guia orienta como configurar a integração da InfinitePay utilizando o Infinite Tag (Handle).
 
-## 1. Configurar Chaves de API (Supabase Secrets)
+## 1. Configurar Infinite Tag (Handle)
 
-As Edge Functions do Supabase precisam acessar a chave da API da InfinitePay de forma segura.
+A integração utiliza o link de pagamento público (Infinite Link), que não requer Chave de API, apenas o seu identificador único.
 
-**Passo 1:** Obtenha sua `API Key` no painel da InfinitePay (Modo Produção ou Sandbox).
+**Passo 1:** Obtenha sua Infinite Tag (Handle) no App ou Painel da InfinitePay (ex: `@sualoja`).
 
-**Passo 2:** Configure no Supabase.
-Você pode fazer isso rodando o comando no terminal (se tiver a CLI instalada) ou via Dashboard do Supabase.
+**Passo 2:** Configure no Admin do Sistema.
+1. Acesse o painel administrativo: `/admin/infinitepay`.
+2. Insira sua Tag no campo **Infinite Tag (Handle)**.
+3. (Opcional) Configure o **Webhook Secret** se desejar validar as assinaturas das notificações.
+4. Salve as configurações.
 
-**Via Dashboard (Recomendado):**
-1. Vá em **Project Settings** > **Edge Functions**.
-2. Adicione um novo segredo chamado `INFINITEPAY_API_KEY`.
-3. Cole sua chave da InfinitePay como valor.
-
-**Via CLI (Se disponível):**
-```bash
-npx supabase secrets set INFINITEPAY_API_KEY=sua_chave_aqui
-```
+Isso salvará suas credenciais na tabela `api_keys` do banco de dados de forma segura.
 
 ## 2. Testar Geração de Link (Simulação)
 
-Para testar se a função `infinitepay-checkout` está gerando links corretamente, você pode usar o painel do Supabase ou o Postman/Insomnia.
+Para testar se a função `infinitepay-checkout` está gerando links corretamente:
 
 **Rota:** `https://<seu-projeto>.supabase.co/functions/v1/infinitepay-checkout`
 **Método:** `POST`
@@ -39,14 +34,15 @@ Para testar se a função `infinitepay-checkout` está gerando links corretament
   "webhook_url": "https://zeentregas.com/api/webhook"
 }
 ```
+*Nota: Se o `handle` for omitido no JSON, o sistema usará o configured no Admin.*
 
 ## 3. Testar Webhook (Simulação)
 
-Para verificar se o sistema processa pagamentos, você pode simular um webhook da InfinitePay enviado para sua função.
+Para verificar se o sistema processa pagamentos via Webhook:
 
 **Rota:** `https://<seu-projeto>.supabase.co/functions/v1/infinitepay-webhook`
 **Método:** `POST`
-**Body (JSON) - Exemplo de Sucesso:**
+**Body (JSON) - Exemplo de Pagamento Aprovado:**
 ```json
 {
   "event": "transaction.status_changed",
@@ -56,15 +52,15 @@ Para verificar se o sistema processa pagamentos, você pode simular um webhook d
         "amount": 1050,
         "status": "paid",
         "metadata": {
-            "user_id": "ID_DO_LOJISTA_NO_SEU_BANCO" 
+            "user_id": "ID_DO_USUARIO_NO_SEU_BANCO" 
         },
         "order_id": "teste-001"
     }
   }
 }
 ```
-*Nota: Substitua `ID_DO_LOJISTA_NO_SEU_BANCO` por um ID real de usuário `store_partner` do seu banco de dados para testar o crédito na carteira.*
+*Nota: Substitua `ID_DO_USUARIO_NO_SEU_BANCO` por um ID real (`uuid`) de um usuário existente para testar o crédito.*
 
 ## Resolução de Problemas
 
-- **Erros de Deno na IDE:** Se o VS Code mostrar erros vermelhos nos arquivos `.ts` dentro de `supabase/functions`, instale a extensão "Deno" no VS Code e habilite-a para o workspace. Se não quiser instalar, ignore os erros; eles não impedem o funcionamento no servidor Supabase.
+- **Erro "Configuration Error: InfinitePay Handle not found":** Verifique se você salvou o Handle no painel admin ou se ele está sendo enviado no payload.
