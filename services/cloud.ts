@@ -3249,7 +3249,8 @@ export const getUserLoans = async (): Promise<any[]> => {
         .from('partner_loans')
         .select(`
             *,
-            loan_type:loan_types(*)
+            loan_type:loan_types(*),
+            loan_installments(*)
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -3638,123 +3639,14 @@ export const saveServiceConfig = async (serviceName: string, config: ServiceConf
     }
 };
 
-// --- LOANS & FINANCIAL ---
 
-export const getLoanTypes = async (): Promise<any[]> => {
-    const sb = getClient();
-    if (!sb) return [];
 
-    // Fetch active loan types
-    const { data: types, error } = await sb
-        .from('loan_types')
-        .select('*')
-        .eq('is_active', true)
-        .order('amount_min', { ascending: true });
 
-    if (error) {
-        console.error('Error fetching loan types:', error);
-        return [];
-    }
-    return types || [];
-};
 
-export const getUserLoanLimit = async () => {
-    const sb = getClient();
-    if (!sb) return null;
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return null;
 
-    // Check partner_level_configs for limits based on user level
-    // For now returning mock or profile based limit
-    const { data: profile } = await sb.from('user_profiles').select('partner_level').eq('id', user.id).single();
-    const level = profile?.partner_level || 'BRONZE';
 
-    // Mock limits based on level
-    const limits: any = {
-        'BRONZE': { max_limit: 50.00, max_installments: 1, allow_negative_balance: false },
-        'SILVER': { max_limit: 150.00, max_installments: 2, allow_negative_balance: false },
-        'GOLD': { max_limit: 300.00, max_installments: 3, allow_negative_balance: true },
-        'DIAMOND': { max_limit: 600.00, max_installments: 4, allow_negative_balance: true }
-    };
 
-    return limits[level] || limits['BRONZE'];
-};
 
-export const getUserLoans = async (): Promise<any[]> => {
-    const sb = getClient();
-    if (!sb) return [];
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return [];
 
-    // Fetch loans with installments
-    const { data: loans, error } = await sb
-        .from('partner_loans')
-        .select('*, loan_installments(*)')
-        .eq('partner_id', user.id)
-        .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error('Error fetching user loans:', error);
-        return [];
-    }
-    return loans || [];
-};
 
-export const simulateLoan = async (typeId: string, amount: number, installments: number) => {
-    // Client-side simulation
-    const feePercent = 0.10; // 10% fee
-    const totalAmount = amount * (1 + feePercent);
-    const installmentValue = totalAmount / installments;
-
-    return {
-        amount_requested: amount,
-        total_amount: totalAmount,
-        fee_amount: amount * feePercent,
-        installments_count: installments,
-        installment_value: installmentValue,
-        first_due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // +7 days
-    };
-};
-
-export const requestLoan = async (typeId: string, amount: number, installments: number) => {
-    const sb = getClient();
-    if (!sb) throw new Error("No client");
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) throw new Error("Not logged in");
-
-    // Create loan request (status pending)
-    // 1. Insert loan
-    const feePercent = 0.10;
-    const totalAmount = amount * (1 + feePercent);
-
-    const { data: loan, error } = await sb
-        .from('partner_loans')
-        .insert({
-            partner_id: user.id,
-            loan_type_id: typeId,
-            amount_requested: amount,
-            amount_total: totalAmount, // Total with fees
-            amount_paid: 0,
-            status: 'PENDING',
-            installments_count: installments,
-            due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        })
-        .select()
-        .single();
-
-    if (error) throw error;
-
-    // 2. Generate installments (mock generation, usually backend logic)
-    const installmentValue = totalAmount / (installments || 1);
-    for (let i = 1; i <= installments; i++) {
-        await sb.from('loan_installments').insert({
-            loan_id: loan.id,
-            installment_number: i,
-            amount: installmentValue,
-            due_date: new Date(Date.now() + (i * 7 * 24 * 60 * 60 * 1000)).toISOString(),
-            status: 'PENDING'
-        });
-    }
-
-    return loan;
-};
