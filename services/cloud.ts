@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+﻿import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
     PartnerRequest, UserRole, UserStatus, ManagedUser, PartnerProfile, PartnerDocument,
     City, CityRequest, PayoutSettings, PartnerLevelBenefit, PartnerFeeSettings,
@@ -9,7 +9,8 @@ import {
     ReferralData, ReferralHistoryItem, StoreReportData, StoreShippingRule,
     AdminWalletUser, AdminDashboardStats, PWASettings, MaintenanceData,
     AppNotification, PayoutSummary, AppSlide, StoreProduct,
-    UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator
+    UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator, StoreAddonOption, StoreAddonGroup,
+    StoreDeliverySettings, StoreNeighborhoodFee
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -266,6 +267,71 @@ export const deleteCollaborator = async (collaboratorId: string) => {
         console.error('Delete Collaborator Failed', error);
         throw error;
     }
+};
+
+export const updateCollaborator = async (collaboratorId: string, name: string, email: string, password?: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.rpc('update_collaborator', {
+        p_collaborator_id: collaboratorId,
+        p_name: name,
+        p_email: email,
+        p_password: password || null
+    });
+    if (error) {
+        console.error('Update Collaborator Failed', error);
+        throw error;
+    }
+    if (error) {
+        console.error('Update Collaborator Failed', error);
+        throw error;
+    }
+};
+
+export const updateCollaboratorAvatar = async (collaboratorId: string, avatarUrl: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    // Assume collaborator is a user in user_profiles based on create logic
+    const { error } = await sb.from('user_profiles').update({ avatar_url: avatarUrl }).eq('id', collaboratorId);
+    if (error) {
+        console.error('Update Collaborator Avatar Failed', error);
+        throw error;
+    }
+};
+
+export const uploadAvatar = async (file: File, path?: string): Promise<string> => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not ready");
+
+    // Check auth? Upload usually requires auth
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error("Not logged in");
+
+    const filePath = path || `avatars/${user.id}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await sb.storage.from('avatars').upload(filePath, file, { upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(filePath);
+    return publicUrl;
+};
+
+export const updateCollaboratorPassword = async (collaboratorId: string, oldPass: string, newPass: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    const { data, error } = await sb.rpc('update_collaborator_password', {
+        p_collaborator_id: collaboratorId,
+        p_old_password: oldPass,
+        p_new_password: newPass
+    });
+
+    if (error) {
+        console.error('Error updating password:', error);
+        return false;
+    }
+
+    return data as boolean;
 };
 
 
@@ -565,6 +631,106 @@ export const adminGetSystemTips = async (): Promise<any[]> => {
     return data || [];
 };
 
+// --- STORE ADDON GROUPS (GLOBAL) ---
+
+export const getStoreAddonGroups = async (): Promise<StoreAddonGroup[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    // Obter ID da loja atual
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await sb
+        .from('store_addon_groups')
+        .select('*')
+        .eq('store_id', user.id)
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Erro ao buscar grupos de adicionais:', error);
+        return [];
+    }
+
+    return data || [];
+};
+
+export const createStoreAddonGroup = async (group: Partial<StoreAddonGroup>): Promise<StoreAddonGroup | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await sb
+        .from('store_addon_groups')
+        .insert({
+            ...group,
+            store_id: user.id
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Erro ao criar grupo de adicionais:', error);
+        throw error;
+    }
+
+    return data;
+};
+
+export const updateStoreAddonGroup = async (group: Partial<StoreAddonGroup>) => {
+    const sb = getClient();
+    if (!sb) return;
+
+    if (!group.id) return;
+
+    const { error } = await sb
+        .from('store_addon_groups')
+        .update(group)
+        .eq('id', group.id);
+
+    if (error) {
+        console.error('Erro ao atualizar grupo de adicionais:', error);
+        throw error;
+    }
+};
+
+export const deleteStoreAddonGroup = async (id: string) => {
+    const sb = getClient();
+    if (!sb) return;
+
+    const { error } = await sb
+        .from('store_addon_groups')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Erro ao deletar grupo de adicionais:', error);
+        throw error;
+    }
+};
+
+// --- WALLET ---
+export const getUserWalletBalance = async (): Promise<number> => {
+    const sb = getClient();
+    if (!sb) return 0;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return 0;
+
+    const { data, error } = await sb
+        .from('store_wallets')
+        .select('balance_decimal')
+        .eq('store_id', user.id)
+        .single();
+
+    if (error) {
+        console.error('Error fetching wallet balance:', error);
+        return 0;
+    }
+    return data?.balance_decimal || 0;
+};
+
 export const adminCreateSystemTip = async (message: string, target_role: UserRole | 'all') => {
     const sb = getClient();
     if (!sb) throw new Error("Client not initialized");
@@ -753,8 +919,8 @@ export const getInternalOrders = async (): Promise<Order[]> => {
 export const adminUpdateShopSettings = async (settings: Partial<ShopSettings>) => {
     const sb = getClient();
     if (!sb) return;
-    // Assuming single row with ID true or 1
-    await sb.from('shop_settings').update(settings).eq('id', true);
+    // Ensure singleton row ID is '1' in shop_settings
+    await sb.from('shop_settings').upsert({ ...settings, id: '1' });
 };
 
 export const adminUpdateApiKey = async (serviceName: string, value: string) => {
@@ -781,14 +947,18 @@ export const adminUpdateApiKey = async (serviceName: string, value: string) => {
             service_name: serviceName,
             name: serviceName, // Provide name
             encrypted_key: value,
-            key_token: value, // Mandatory token field
+            key_token: value,
+            permissions: { all: true },
             is_active: true,
-            user_id: user.id,
-            permissions: { full_access: true }, // Default permissions for system keys
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            user_id: user.id
         });
         if (error) throw error;
+    }
+
+    // Se a chave for uma das chaves globais do sistema, refletir também em shop_settings
+    const globalKeys = ['google_gemini_api_key', 'open_route_service_api_key', 'infinitepay_handle', 'infinitepay_webhook_secret'];
+    if (globalKeys.includes(serviceName)) {
+        await adminUpdateShopSettings({ [serviceName]: value });
     }
 };
 
@@ -940,20 +1110,21 @@ export const adminGetPayoutHistory = async (): Promise<any[]> => {
 export const adminGetFeeSettings = async (): Promise<PartnerFeeSettings | null> => {
     const sb = getClient();
     if (!sb) return null;
-    const { data } = await sb.from('fee_settings').select('*').single();
+    const { data } = await sb.from('partner_fee_settings').select('*').single();
     return data;
 };
 
 export const adminUpdateFeeSettings = async (settings: Partial<PartnerFeeSettings>) => {
     const sb = getClient();
     if (!sb) return;
-    await sb.from('fee_settings').update(settings).eq('id', true);
+    const { error } = await sb.from('partner_fee_settings').update(settings).eq('id', '1');
+    if (error) throw error;
 };
 
 export const getPublicFeeSettings = async (): Promise<PartnerFeeSettings | null> => {
     const sb = getClient();
     if (!sb) return null;
-    const { data } = await sb.from('fee_settings').select('*').single();
+    const { data } = await sb.from('partner_fee_settings').select('*').single();
     return data;
 };
 
@@ -1230,6 +1401,26 @@ export const createOrder = async (order: Partial<Order>) => {
     const { data, error } = await sb.from('orders').insert(newOrder).select().single();
     if (error) throw error;
     return data;
+};
+
+export const findCustomerByPhone = async (phone: string) => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    // Busca o último pedido com esse telefone nesta loja
+    const { data: orders, error } = await sb
+        .from('orders')
+        .select('*')
+        .eq('store_id', user.id)
+        .eq('customer_phone', phone)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    if (error || !orders || orders.length === 0) return null;
+    return orders[0];
 };
 
 export const getMyOrders = async (): Promise<Order[]> => {
@@ -1538,6 +1729,29 @@ export const adminSearchUsers = async (query: string): Promise<any[]> => {
     return data || [];
 };
 
+export const adminUpdateUserPassword = async (userId: string, newPass: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+    const { data, error } = await sb.rpc('admin_update_user_password', {
+        p_user_id: userId,
+        p_new_password: newPass
+    });
+    if (error) throw error;
+    return data;
+};
+
+export const adminCreateUserManual = async (email: string, pass: string, metadata: any) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+    const { data, error } = await sb.rpc('admin_create_user_manual', {
+        p_email: email,
+        p_password: pass,
+        p_metadata: metadata
+    });
+    if (error) throw error;
+    return data;
+};
+
 export const adminSendGlobalNotification = async (title: string, message: string) => {
     const sb = getClient();
     if (!sb) return;
@@ -1653,6 +1867,9 @@ export const createInfinitePayCheckout = async (orderId: string, amount: number,
     if (!sb) throw new Error("No client");
 
     // Call Edge Function
+    console.log('[DEBUG] createInfinitePayCheckout: Invoking infinitepay-checkout with:', {
+        orderId, amount, handle, items, redirectUrl, webhookUrl
+    });
     const { data, error } = await sb.functions.invoke('infinitepay-checkout', {
         body: {
             amount,
@@ -1665,7 +1882,7 @@ export const createInfinitePayCheckout = async (orderId: string, amount: number,
     });
 
     if (error) {
-        console.error('InfinitePay Checkout Error:', error);
+        console.error('[DEBUG] createInfinitePayCheckout: Invoke Error:', error);
         throw error;
     }
 
@@ -2396,18 +2613,18 @@ export const generateCardQRToken = async (cardId: string): Promise<string> => {
 
 // --- CLIENT EXPORTS (FIXES) ---
 
-export const placeCollaboratorOrder = async (storeId: string, collaboratorId: string, tableIdentifier: string, items: any[]) => {
+export const placeCollaboratorOrder = async (storeId: string, collaboratorId: string, tableIdentifier: string, items: any[], customerName?: string, orderId?: string) => {
     const sb = getClient();
     if (!sb) throw new Error("No client");
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) throw new Error("Not logged in"); // Usually collaborator login?
 
     // Check if using RPC
     const { data, error } = await sb.rpc('place_collaborator_order', {
         p_store_id: storeId,
         p_collaborator_id: collaboratorId,
         p_table_identifier: tableIdentifier,
-        p_items: items
+        p_customer_name: customerName || null,
+        p_items: items,
+        p_order_id: orderId || null
     });
 
     if (error) {
@@ -2415,6 +2632,60 @@ export const placeCollaboratorOrder = async (storeId: string, collaboratorId: st
         throw error;
     }
     return data;
+};
+
+export const getOpenOrders = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.rpc('get_open_orders', { p_store_id: storeId });
+    if (error) {
+        console.error('getOpenOrders error', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const closeCollaboratorOrder = async (orderId: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.rpc('close_collaborator_order', { p_order_id: orderId });
+    if (error) {
+        console.error('closeCollaboratorOrder error', error);
+        throw error;
+    }
+};
+
+export const getClosedOrders = async (storeId: string, collaboratorId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.rpc('get_closed_orders', { p_store_id: storeId, p_collaborator_id: collaboratorId });
+    if (error) {
+        console.error('getClosedOrders error', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getCollaboratorSummary = async (storeId: string, collaboratorId: string) => {
+    const sb = getClient();
+    if (!sb) return { total_sales: 0, total_orders: 0, avg_ticket: 0 };
+    const { data, error } = await sb.rpc('get_collaborator_summary', { p_store_id: storeId, p_collaborator_id: collaboratorId });
+    if (error) {
+        console.error('getCollaboratorSummary error', error);
+        return { total_sales: 0, total_orders: 0, avg_ticket: 0 };
+    }
+    return data;
+};
+
+export const getCategoriesForCollaborator = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.rpc('get_categories_for_collaborator', { p_store_id: storeId });
+    if (error) {
+        console.error('getCategoriesForCollaborator error', error);
+        return [];
+    }
+    return data || [];
 };
 
 export const saveRoute = async (name: string, waypoints: any[], distance: number, duration: number) => {
@@ -2811,27 +3082,36 @@ export const getLoanLevelLimits = async (): Promise<any[]> => {
     return data || [];
 };
 
-export const getUserLoanLimit = async (): Promise<{ max_limit: number; allow_negative_balance: boolean } | null> => {
+export const getUserLoanLimit = async (): Promise<{ max_limit: number; max_installments: number; allow_negative_balance: boolean } | null> => {
     const sb = getClient();
     if (!sb) return null;
 
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return null;
 
-    // Get user's partner level
+    // Get user's partner level AND role
     const { data: profile } = await sb
         .from('user_profiles')
-        .select('partner_level')
+        .select('partner_level, role')
         .eq('id', user.id)
         .single();
 
     if (!profile?.partner_level) return null;
 
-    // Get limit for that level
+    // Determinar o user_type baseado no role
+    let userType: 'DELIVERY' | 'STORE' = 'DELIVERY';
+    if (profile.role === 'store_partner') {
+        userType = 'STORE';
+    } else if (profile.role === 'delivery_partner' || profile.role === 'delivery_person') {
+        userType = 'DELIVERY';
+    }
+
+    // Get limit for that level AND user type
     const { data: limit } = await sb
         .from('loan_level_limits')
-        .select('max_limit, allow_negative_balance')
+        .select('max_limit, max_installments, allow_negative_balance')
         .eq('partner_level', profile.partner_level)
+        .eq('user_type', userType)
         .single();
 
     return limit;
@@ -3011,13 +3291,18 @@ export const adminApproveLoan = async (loanId: string): Promise<void> => {
     if (!user) throw new Error('Usuário não autenticado');
 
     // Get loan details
-    const { data: loan } = await sb
+    console.log('[DEBUG] adminApproveLoan: Fetching loan with ID:', loanId);
+    const { data: loan, error: fetchError } = await sb
         .from('partner_loans')
-        .select('*, user:user_profiles(id)')
+        .select('*')
         .eq('id', loanId)
         .single();
 
-    if (!loan) throw new Error('Empréstimo não encontrado');
+    if (fetchError || !loan) {
+        console.error('[DEBUG] adminApproveLoan: Fetch loan error:', fetchError);
+        console.log('[DEBUG] adminApproveLoan: Loan data:', loan);
+        throw new Error('Empréstimo não encontrado');
+    }
 
     // Update loan status
     const { error: updateError } = await sb
@@ -3147,7 +3432,7 @@ export const adminUpsertLoanLevelLimit = async (limit: any): Promise<void> => {
 
     const { error } = await sb
         .from('loan_level_limits')
-        .upsert(limit, { onConflict: 'partner_level' });
+        .upsert(limit, { onConflict: 'user_type,partner_level' });
 
     if (error) throw error;
 };
@@ -3170,6 +3455,83 @@ export const processLoanInstallmentPayments = async (
     // Retorna o primeiro resultado (função retorna TABLE)
     return data?.[0] || { remaining_payout: payoutAmount, installments_paid: 0, total_deducted: 0 };
 };
+
+// --- STORE DELIVERY SETTINGS (CUSTOM) ---
+
+export const getStoreDeliverySettings = async (): Promise<StoreDeliverySettings | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await sb
+        .from('store_delivery_settings')
+        .select('*')
+        .eq('store_id', user.id)
+        .single();
+
+    if (error && error.code !== 'PGRST116') { // Ignore not found error
+        console.error("Error fetching delivery settings:", error);
+    }
+
+    return data;
+};
+
+export const updateStoreDeliverySettings = async (settings: Partial<StoreDeliverySettings>) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    // First check if exists, if not create
+    const { data: existing } = await sb.from('store_delivery_settings').select('id').eq('store_id', user.id).single();
+
+    if (existing) {
+        const { error } = await sb.from('store_delivery_settings').update(settings).eq('store_id', user.id);
+        if (error) throw error;
+    } else {
+        const { error } = await sb.from('store_delivery_settings').insert({ ...settings, store_id: user.id });
+        if (error) throw error;
+    }
+};
+
+export const getStoreNeighborhoodFees = async (): Promise<StoreNeighborhoodFee[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await sb
+        .from('store_neighborhood_fees')
+        .select('*')
+        .eq('store_id', user.id)
+        .order('neighborhood_name', { ascending: true });
+
+    if (error) {
+        console.error("Error fetching neighborhood fees:", error);
+        return [];
+    }
+    return data || [];
+};
+
+export const upsertStoreNeighborhoodFee = async (fee: Partial<StoreNeighborhoodFee>) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const payload = { ...fee, store_id: user.id };
+    const { error } = await sb.from('store_neighborhood_fees').upsert(payload);
+    if (error) throw error;
+};
+
+export const deleteStoreNeighborhoodFee = async (id: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('store_neighborhood_fees').delete().eq('id', id);
+    if (error) throw error;
+};
+
 
 
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StoreProduct } from '../types';
-import { X, Save, Loader2, Upload, Trash2, Image as ImageIcon } from 'lucide-react';
+import { X, Save, Loader2, Upload } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
@@ -80,7 +80,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     </button>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
                     {/* Image Upload Area */}
                     <div>
                         <div className="flex justify-between items-center mb-2">
@@ -157,8 +157,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         />
                         <CategorySelector
                             categories={categories}
-                            selectedCategory={editingProduct.category || ''}
-                            onSelect={(catName) => setEditingProduct({ ...editingProduct, category: catName })}
+                            selectedCategory={editingProduct.category_id || null}
+                            onSelect={(catId) => setEditingProduct({ ...editingProduct, category_id: catId })}
                         />
                     </div>
 
@@ -202,7 +202,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     </div>
                 </div>
 
-                <div className="mt-8 flex gap-4 pb-2">
+                <div className="mt-8 flex gap-4 pb-2 border-t border-gray-100 dark:border-gray-800 pt-6">
                     <Button variant="outline" className="flex-1 py-4 rounded-2xl" onClick={onClose}>Cancelar</Button>
                     <Button
                         className="flex-1 py-4 rounded-2xl shadow-lg shadow-brand-500/20"

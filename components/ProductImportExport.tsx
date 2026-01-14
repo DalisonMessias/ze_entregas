@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
@@ -6,6 +6,8 @@ import { Loader2, Upload, FileSpreadsheet, Check, AlertTriangle, Download, Arrow
 import * as cloud from '../services/cloud';
 import { StoreProduct } from '../types';
 import { CustomInput } from './CustomInput';
+import { ProfileValidationAlert } from './ProfileValidationAlert';
+import { validateStoreProfile } from '../utils/profileValidation';
 
 type ImportMode = 'create_new' | 'update_existing' | 'skip_duplicates';
 
@@ -38,6 +40,24 @@ export const ProductImportExport: React.FC = () => {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { alert, confirm } = useDialog();
+    const [profileValid, setProfileValid] = useState<boolean | null>(null);
+    const [missingFields, setMissingFields] = useState<string[]>([]);
+
+    useEffect(() => {
+        // Validar perfil ao carregar
+        const checkProfile = async () => {
+            try {
+                const profile = await cloud.getMyPartnerProfile();
+                const validation = validateStoreProfile(profile);
+                setProfileValid(validation.isValid);
+                setMissingFields(validation.missingFields);
+            } catch (e) {
+                setProfileValid(false);
+                setMissingFields(['Erro ao carregar perfil']);
+            }
+        };
+        checkProfile();
+    }, []);
 
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const selected = e.target.files?.[0];
@@ -224,6 +244,16 @@ export const ProductImportExport: React.FC = () => {
             setProcessing(false);
         }
     };
+
+    // Validação de perfil
+    if (profileValid === false) {
+        return (
+            <ProfileValidationAlert
+                onNavigateToSettings={() => window.location.href = '/loja/configuracoes'}
+                missingFields={missingFields}
+            />
+        );
+    }
 
     return (
         <div className="p-6 max-w-4xl mx-auto animate-in fade-in">

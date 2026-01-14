@@ -3,8 +3,8 @@ import { Search, Check, ChevronDown, Tag, X } from 'lucide-react';
 
 interface CategorySelectorProps {
     categories: any[];
-    selectedCategory: string;
-    onSelect: (category: string) => void;
+    selectedCategory: string | null;
+    onSelect: (categoryId: string | null) => void;
 }
 
 export const CategorySelector: React.FC<CategorySelectorProps> = ({ categories, selectedCategory, onSelect }) => {
@@ -37,7 +37,7 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({ categories, 
                 <div className="flex items-center gap-2">
                     <Tag className="w-4 h-4 text-brand-500" />
                     <span className={selectedCategory ? "text-gray-900 dark:text-white font-bold text-sm" : "text-gray-400 text-sm"}>
-                        {selectedCategory || "Selecionar Categoria"}
+                        {selectedCategory ? categories.find(c => c.id === selectedCategory)?.name || "Categoria Desconhecida" : "Selecionar Categoria"}
                     </span>
                 </div>
                 <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-brand-500' : ''}`} />
@@ -69,7 +69,7 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({ categories, 
                     <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-1 pr-1">
                         <button
                             onClick={() => {
-                                onSelect('');
+                                onSelect(null);
                                 setIsOpen(false);
                                 setSearch('');
                             }}
@@ -83,14 +83,14 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({ categories, 
                             <button
                                 key={cat.id}
                                 onClick={() => {
-                                    onSelect(cat.name);
+                                    onSelect(cat.id);
                                     setIsOpen(false);
                                     setSearch('');
                                 }}
-                                className={`w-full text-left px-4 py-3 rounded-xl flex items-center justify-between transition-all ${selectedCategory === cat.name ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                                className={`w-full text-left px-4 py-3 rounded-xl flex items-center justify-between transition-all ${selectedCategory === cat.id ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                             >
                                 <span className="text-sm font-bold">{cat.name}</span>
-                                {selectedCategory === cat.name && <Check className="w-4 h-4" />}
+                                {selectedCategory === cat.id && <Check className="w-4 h-4" />}
                             </button>
                         ))}
 

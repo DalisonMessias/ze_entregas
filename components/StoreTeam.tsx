@@ -9,6 +9,8 @@ import { Skeleton } from './Skeleton';
 import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 import { StoreCollaborators } from './StoreCollaborators';
+import { ProfileValidationAlert } from './ProfileValidationAlert';
+import { validateStoreProfile } from '../utils/profileValidation';
 
 const TeamSkeleton = () => (
     <div className="space-y-4">
@@ -43,6 +45,8 @@ export const StoreTeam: React.FC = () => {
     const [searching, setSearching] = useState(false);
     const [associating, setAssociating] = useState(false);
     const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
+    const [profileValid, setProfileValid] = useState<boolean | null>(null);
+    const [missingFields, setMissingFields] = useState<string[]>([]);
 
     const { alert, confirm } = useDialog();
 
@@ -53,14 +57,22 @@ export const StoreTeam: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [p, f] = await Promise.all([
+            const [p, f, profile] = await Promise.all([
                 cloud.getStoreAssociatedPartners(),
-                cloud.adminGetFeeSettings()
+                cloud.adminGetFeeSettings(),
+                cloud.getMyPartnerProfile()
             ]);
             setPartners(p);
             setFees(f);
+
+            // Validar perfil completo
+            const validation = validateStoreProfile(profile);
+            setProfileValid(validation.isValid);
+            setMissingFields(validation.missingFields);
         } catch (e) {
             console.error(e);
+            setProfileValid(false);
+            setMissingFields(['Erro ao carregar perfil']);
         } finally {
             setLoading(false);
         }
@@ -125,6 +137,16 @@ export const StoreTeam: React.FC = () => {
             await alert({ title: "Erro ao Remover", message: "Erro ao remover: " + e.message });
         }
     };
+
+    // Validação de perfil
+    if (profileValid === false) {
+        return (
+            <ProfileValidationAlert
+                onNavigateToSettings={() => window.location.href = '/loja/configuracoes'}
+                missingFields={missingFields}
+            />
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in">

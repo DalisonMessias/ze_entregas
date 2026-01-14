@@ -115,7 +115,7 @@ export const AdminPartnerLevels = () => {
                 <div className="space-y-4">
                     {levels.map(level => (
                         <div key={level.id} className="p-4 border rounded-lg dark:border-gray-700 relative group">
-                             <div className="absolute top-1 right-4">
+                            <div className="absolute top-1 right-4">
                                 <Button variant="ghost" size="sm" onClick={() => handleDeleteLevel(level.id)}>
                                     <Trash2 className="w-4 h-4 text-red-500" />
                                 </Button>
@@ -128,7 +128,6 @@ export const AdminPartnerLevels = () => {
                                         value={level.partner_level}
                                         onChange={e => handleLevelChange(level.id, 'partner_level', e.target.value.toUpperCase())}
                                         className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 font-mono"
-                                        readOnly={!level.id.startsWith('new-')}
                                     />
                                 </div>
                                 <div>

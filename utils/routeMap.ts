@@ -39,7 +39,6 @@ const routeMap: Record<string, ActiveTab> = {
     '/suporte': 'support',
     '/loja': 'shop',
     '/assistente': 'assistant',
-    '/carteira': 'wallet',
     '/nova-entrega': 'new_request',
     '/historico': 'history',
     '/mapa-calor': 'heatmap',
@@ -62,7 +61,9 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/api': 'store_api_docs',
     '/loja/zepay': 'zepay_store',
     '/loja/emprestimos': 'store_loans',
-    '/colaborador': 'collaborator_area',
+    '/loja/comanda': 'internal_orders',
+    '/loja/dashboard': 'wallet',
+    '/loja/colaborador': 'collaborator_area',
 
     // Delivery Partner/Person Routes
     '/entregador/inicio': 'daily_panel',
@@ -78,7 +79,7 @@ const routeMap: Record<string, ActiveTab> = {
     // Public/Misc
     '/instalar': 'install_app',
     '/upgrade': 'upgrade_to_partner',
-    '/ruas-bairros': 'streets_neighborhoods'
+    '/ruas': 'streets_list'
 };
 
 // Inverte o mapa para buscar URL a partir da Tab

@@ -13,11 +13,14 @@ import {
     adminAddCity,
     adminUpdateCityStatus,
     adminEditCity,
-    adminProcessCityRequest
+    adminProcessCityRequest,
+    adminUpdateUserPassword,
+    adminCreateUserManual
 } from '../services/cloud';
 import { ManagedUser, UserRole, UserStatus, PartnerProfile, PartnerDocument, City, CityRequest, AdminSubTab, PartnerLevelBenefit } from '../types';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
+import { CitySelector } from './CitySelector';
 import { useDialog } from '../utils/dialogService';
 import { Switch } from './Switch';
 
@@ -143,14 +146,36 @@ const UserManagement: React.FC = () => {
         status: '' as UserStatus,
         verification_status: '',
         partner_level: '',
-        is_super_store: false
+        is_super_store: false,
+        password: ''
     });
     const [isSaving, setIsSaving] = useState(false);
+    const [isEditingCity, setIsEditingCity] = useState(false); // Toggle for city editing 
+
+
+    // Add User State
+    const [isAddingUser, setIsAddingUser] = useState(false);
+    const [isEditingAddCity, setIsEditingAddCity] = useState(true); // Default true for new user
+    const [addForm, setAddForm] = useState({
+        name: '',
+        email: '',
+        password: '',
+        phone: '',
+        cpf: '',
+        city: '',
+        role: 'store_partner' as UserRole,
+        is_super_store: false
+    });
 
     // Filter states
     const [roleFilter, setRoleFilter] = useState<string>('ALL');
 
-    useEffect(() => { loadUsers(); }, []);
+    useEffect(() => {
+        loadUsers();
+        // loadCities(); // Removed
+    }, []);
+
+    // Removed loadCities as CitySelector handles it internally
 
     const loadUsers = async () => {
         setLoading(true);
@@ -175,8 +200,10 @@ const UserManagement: React.FC = () => {
             status: user.status,
             verification_status: user.verification_status || 'NOT_SUBMITTED',
             partner_level: user.partner_level || 'BRONZE',
-            is_super_store: user.is_super_store || false
+            is_super_store: user.is_super_store || false,
+            password: '' // Reset password field
         });
+        setIsEditingCity(false); // Reset edit city toggle
     };
 
     const handleSaveUser = async () => {
@@ -199,11 +226,47 @@ const UserManagement: React.FC = () => {
             };
 
             await adminUpdateUserProfile(selectedUser.id, updates);
+
+            if (editForm.password && editForm.password.length >= 6) {
+                await adminUpdateUserPassword(selectedUser.id, editForm.password);
+            }
+
             setToast({ type: 'success', message: "Dados do usuário atualizados com sucesso!" });
             setSelectedUser(null);
             loadUsers();
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao salvar: " + e.message });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleAddUser = async () => {
+        if (!addForm.email || !addForm.password || !addForm.name) {
+            setToast({ type: 'error', message: "Preencha nome, email e senha." });
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const metadata = {
+                name: addForm.name,
+                phone_number: addForm.phone.replace(/\D/g, ''),
+                cpf: addForm.cpf.replace(/\D/g, ''),
+                city: addForm.city,
+                role: addForm.role,
+                is_super_store: addForm.is_super_store
+                // Other fields will be default or handled by trigger
+            };
+
+            await adminCreateUserManual(addForm.email, addForm.password, metadata);
+
+            setToast({ type: 'success', message: "Usuário criado com sucesso!" });
+            setIsAddingUser(false);
+            setAddForm({ name: '', email: '', password: '', phone: '', cpf: '', city: '', role: 'store_partner', is_super_store: false });
+            setIsEditingAddCity(true); // Reset for next add
+            loadUsers();
+        } catch (e: any) {
+            setToast({ type: 'error', message: "Erro ao criar: " + e.message });
         } finally {
             setIsSaving(false);
         }
@@ -232,6 +295,9 @@ const UserManagement: React.FC = () => {
                     />
                 </div>
                 <div className="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1">
+                    <Button onClick={() => setIsAddingUser(true)} className="whitespace-nowrap h-10">
+                        <Plus className="w-4 h-4 mr-2" /> Adicionar Usuário
+                    </Button>
                     <button onClick={() => setRoleFilter('ALL')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'ALL' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Todos</button>
                     <button onClick={() => setRoleFilter('store_partner')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'store_partner' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Lojistas</button>
                     <button onClick={() => setRoleFilter('delivery_partner')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'delivery_partner' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Parceiros</button>
@@ -338,11 +404,37 @@ const UserManagement: React.FC = () => {
                                     </div>
                                     <div className="md:col-span-2">
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Cidade</label>
+                                        {!isEditingCity ? (
+                                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl">
+                                                <div className="flex items-center gap-2 text-sm dark:text-white">
+                                                    <MapPin className="w-4 h-4 text-brand-500" />
+                                                    <span className="font-bold">{editForm.city || 'Nenhuma cidade definida'}</span>
+                                                </div>
+                                                <Button size="sm" variant="outline" onClick={() => setIsEditingCity(true)} className="h-7 text-xs">
+                                                    Editar Cidade
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] uppercase font-bold text-brand-600">Selecionar Nova Cidade</span>
+                                                    <button onClick={() => setIsEditingCity(false)} className="text-xs text-red-500 hover:underline">Cancelar</button>
+                                                </div>
+                                                <CitySelector
+                                                    selectedCity={editForm.city}
+                                                    onSelect={(name, state) => setEditForm(prev => ({ ...prev, city: `${name} - ${state}` }))}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Nova Senha (Opcional - Min 6 caracteres)</label>
                                         <input
-                                            type="text"
-                                            value={editForm.city}
-                                            onChange={e => setEditForm(prev => ({ ...prev, city: e.target.value }))}
-                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                            type="password"
+                                            value={editForm.password}
+                                            onChange={e => setEditForm(prev => ({ ...prev, password: e.target.value }))}
+                                            placeholder="Deixe em branco para manter a atual"
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-yellow-200 dark:border-yellow-900/50 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                                         />
                                     </div>
                                 </div>
@@ -424,7 +516,132 @@ const UserManagement: React.FC = () => {
                     </div>
                 </div>
             )}
-        </div>
+
+
+            {
+                isAddingUser && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setIsAddingUser(false)}>
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-[32px] w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                            <div className="flex justify-between items-center mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
+                                <div>
+                                    <h3 className="font-black text-xl dark:text-white flex items-center gap-2">
+                                        <Plus className="w-6 h-6 text-brand-600" /> Adicionar Usuário
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1">Crie um novo usuário manualmente</p>
+                                </div>
+                                <button onClick={() => setIsAddingUser(false)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 hover:text-gray-700 dark:hover:text-white"><X className="w-5 h-5" /></button>
+                            </div>
+
+                            <div className="overflow-y-auto pr-2 custom-scrollbar space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Nome Completo *</label>
+                                        <input
+                                            type="text"
+                                            value={addForm.name}
+                                            onChange={e => setAddForm(prev => ({ ...prev, name: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Email *</label>
+                                        <input
+                                            type="email"
+                                            value={addForm.email}
+                                            onChange={e => setAddForm(prev => ({ ...prev, email: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Senha *</label>
+                                        <input
+                                            type="password"
+                                            value={addForm.password}
+                                            onChange={e => setAddForm(prev => ({ ...prev, password: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Telefone</label>
+                                        <input
+                                            type="text"
+                                            value={addForm.phone}
+                                            onChange={e => setAddForm(prev => ({ ...prev, phone: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">CPF</label>
+                                        <input
+                                            type="text"
+                                            value={addForm.cpf}
+                                            onChange={e => setAddForm(prev => ({ ...prev, cpf: e.target.value }))}
+                                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Cidade de Atuação</label>
+                                        {!isEditingAddCity && addForm.city ? (
+                                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl">
+                                                <div className="flex items-center gap-2 text-sm dark:text-white">
+                                                    <MapPin className="w-4 h-4 text-brand-500" />
+                                                    <span className="font-bold">{addForm.city}</span>
+                                                </div>
+                                                <Button size="sm" variant="outline" onClick={() => setIsEditingAddCity(true)} className="h-7 text-xs">
+                                                    Editar Cidade
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                                {addForm.city && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] uppercase font-bold text-brand-600">Selecionar Cidade</span>
+                                                        <button onClick={() => setIsEditingAddCity(false)} className="text-xs text-red-500 hover:underline">Cancelar Alteração</button>
+                                                    </div>
+                                                )}
+                                                <CitySelector
+                                                    selectedCity={addForm.city}
+                                                    onSelect={(name, state) => {
+                                                        setAddForm(prev => ({ ...prev, city: `${name} - ${state}` }));
+                                                        setIsEditingAddCity(false);
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Função</label>
+                                        <CustomSelect
+                                            value={addForm.role}
+                                            onChange={val => setAddForm(prev => ({ ...prev, role: val as UserRole }))}
+                                            options={[
+                                                { label: 'Administrador', value: 'admin' },
+                                                { label: 'Lojista Parceiro', value: 'store_partner' },
+                                                { label: 'Entregador Parceiro', value: 'delivery_partner' },
+                                                { label: 'Entregador (App)', value: 'delivery_person' }
+                                            ]}
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <Switch
+                                            checked={addForm.is_super_store}
+                                            onChange={val => setAddForm(prev => ({ ...prev, is_super_store: val }))}
+                                            label="Ativar Super Lojista"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+                                <Button fullWidth onClick={handleAddUser} disabled={isSaving}>
+                                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Criar Usuário'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 

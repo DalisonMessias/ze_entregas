@@ -22,7 +22,20 @@ export const AuthWrapper: React.FC = () => {
   const [userRole, setUserRole] = useState<UserRole>('delivery_person');
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isRetryingProfile, setIsRetryingProfile] = useState(false);
-  const [collaboratorSession, setCollaboratorSession] = useState<any | null>(null);
+  const [collaboratorSession, setCollaboratorSession] = useState<any | null>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('ze_collaborator_session') : null;
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  useEffect(() => {
+    if (collaboratorSession) {
+      localStorage.setItem('ze_collaborator_session', JSON.stringify(collaboratorSession));
+    } else {
+      localStorage.removeItem('ze_collaborator_session');
+    }
+  }, [collaboratorSession]);
 
   const [view, setView] = useState<AuthView>('landing');
   const [signupType, setSignupType] = useState<'STORE_PARTNER' | 'DELIVERY_PARTNER' | null>(null);
@@ -85,6 +98,7 @@ export const AuthWrapper: React.FC = () => {
     setUserId(null);
     setUserRole('delivery_person');
     setView('login');
+    setCollaboratorSession(null);
     setAuthMessage({ type: 'error', text: message });
     logger.warn('USER_NOT_FOUND_SIGNOUT', {});
   };

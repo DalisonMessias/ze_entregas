@@ -4,6 +4,8 @@ import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { MarketingTemplate, MarketingDesign } from '../types';
 import { MarketingEditor } from './MarketingEditor';
+import { ProfileValidationAlert } from './ProfileValidationAlert';
+import { validateStoreProfile } from '../utils/profileValidation';
 
 // Template padrão para designs em branco
 const DEFAULT_BLANK_TEMPLATE: MarketingTemplate = {
@@ -74,6 +76,8 @@ export const MarketingModule: React.FC = () => {
     const [myDesigns, setMyDesigns] = useState<MarketingDesign[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingDesign, setEditingDesign] = useState<{ template?: MarketingTemplate, design?: MarketingDesign } | null>(null);
+    const [profileValid, setProfileValid] = useState<boolean | null>(null);
+    const [missingFields, setMissingFields] = useState<string[]>([]);
 
     useEffect(() => {
         loadMarketingData();
@@ -83,9 +87,10 @@ export const MarketingModule: React.FC = () => {
         setLoading(true);
         const sb = cloud.getClient();
         try {
-            const [templatesData, designsData] = await Promise.all([
+            const [templatesData, designsData, profile] = await Promise.all([
                 sb?.from('marketing_templates').select('*').eq('is_active', true) || Promise.resolve({ data: null, error: null }),
-                sb?.from('marketing_designs').select('*').order('updated_at', { ascending: false }) || Promise.resolve({ data: null, error: null })
+                sb?.from('marketing_designs').select('*').order('updated_at', { ascending: false }) || Promise.resolve({ data: null, error: null }),
+                cloud.getMyPartnerProfile()
             ]);
 
             console.log('Templates carregados:', templatesData.data);
@@ -100,14 +105,32 @@ export const MarketingModule: React.FC = () => {
 
             setTemplates(templatesData.data || []);
             setMyDesigns(designsData.data || []);
+
+            // Validar perfil
+            if (profile && profile.city) {
+                setProfileValid(true);
+            } else {
+                setProfileValid(false);
+            }
         } catch (error) {
             console.error('Error loading marketing data:', error);
             setTemplates([]);
             setMyDesigns([]);
+            setProfileValid(false);
         } finally {
             setLoading(false);
         }
     };
+
+    // Validação de perfil
+    if (profileValid === false) {
+        return (
+            <ProfileValidationAlert
+                onNavigateToSettings={() => window.location.href = '/loja/configuracoes'}
+                missingFields={missingFields}
+            />
+        );
+    }
 
     if (editingDesign) {
         return (

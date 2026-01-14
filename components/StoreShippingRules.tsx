@@ -31,7 +31,7 @@ export const StoreShippingRules: React.FC = () => {
     const [saving, setSaving] = useState(false);
 
     // New Rule State
-    const [type, setType] = useState<'free_above' | 'fixed_rate'>('free_above');
+    // const [type, setType] = useState<'free_above' | 'fixed_rate'>('free_above'); // Removed as fixed_rate is deprecated here
     const [value, setValue] = useState('');
     const [threshold, setThreshold] = useState('');
 
@@ -58,7 +58,7 @@ export const StoreShippingRules: React.FC = () => {
             await alert({ title: "Valor Não Definido", message: "Defina o valor." });
             return;
         }
-        if (type === 'free_above' && !threshold) {
+        if (!threshold) {
             await alert({ title: "Valor Mínimo Não Definido", message: "Defina o valor mínimo do pedido." });
             return;
         }
@@ -71,7 +71,7 @@ export const StoreShippingRules: React.FC = () => {
         setSaving(true);
         try {
             await cloud.createStoreShippingRule({
-                rule_type: type,
+                rule_type: 'free_above',
                 value: valFloat,
                 threshold: thresholdFloat
             });
@@ -106,37 +106,26 @@ export const StoreShippingRules: React.FC = () => {
 
                 {/* Form */}
                 <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl space-y-4 mb-6">
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setType('free_above')}
-                            className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${type === 'free_above' ? 'bg-white dark:bg-gray-600 shadow text-brand-600' : 'text-gray-500'}`}
-                        >
+                    <div className="flex gap-2 mb-2">
+                        <div className="p-2 rounded-lg bg-white dark:bg-gray-600 shadow text-brand-600 flex-1 text-center text-xs font-bold">
                             Frete Grátis Acima de...
-                        </button>
-                        <button
-                            onClick={() => setType('fixed_rate')}
-                            className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${type === 'fixed_rate' ? 'bg-white dark:bg-gray-600 shadow text-brand-600' : 'text-gray-500'}`}
-                        >
-                            Taxa Fixa de Entrega
-                        </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        {type === 'free_above' && (
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Valor Mínimo do Pedido</label>
-                                <CustomInput
-                                    mask="currency"
-                                    placeholder="Ex: 100,00"
-                                    value={threshold}
-                                    onChange={e => setThreshold(e.target.value)}
-                                    className="mt-1"
-                                />
-                            </div>
-                        )}
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase">Valor Mínimo do Pedido</label>
+                            <CustomInput
+                                mask="currency"
+                                placeholder="Ex: 100,00"
+                                value={threshold}
+                                onChange={e => setThreshold(e.target.value)}
+                                className="mt-1"
+                            />
+                        </div>
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase">
-                                {type === 'free_above' ? 'Custo para Loja (Subsídio)' : 'Valor da Taxa Fixa'}
+                                Custo para Loja (Subsídio)
                             </label>
                             <CustomInput
                                 mask="currency"
@@ -169,7 +158,7 @@ export const StoreShippingRules: React.FC = () => {
                                     <p className="font-bold text-gray-900 dark:text-white text-sm">
                                         {rule.rule_type === 'free_above'
                                             ? `Frete Grátis p/ pedidos > R$ ${rule.threshold?.toFixed(2)}`
-                                            : `Taxa Fixa de Entrega`
+                                            : `Taxa Fixa (Antigo - Remova e use a nova configuração)`
                                         }
                                     </p>
                                     <p className="text-xs text-gray-500">

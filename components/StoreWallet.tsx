@@ -14,6 +14,8 @@ import { Skeleton } from './Skeleton';
 import { PromoSlider } from './PromoSlider';
 import { useDialog } from '../utils/dialogService';
 import { TipOfTheDay } from './TipOfTheDay';
+import { ProfileValidationAlert } from './ProfileValidationAlert';
+import { validateStoreProfile } from '../utils/profileValidation';
 
 declare const QRious: any;
 
@@ -112,6 +114,10 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
     const [isSuperStore, setIsSuperStore] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
+    // Profile Validation State
+    const [profileValid, setProfileValid] = useState<boolean | null>(null);
+    const [missingFields, setMissingFields] = useState<string[]>([]);
+
     // Shortcuts state
     const [searchShortcut, setSearchShortcut] = useState('');
     const [activeShortcutSection, setActiveShortcutSection] = useState<'principais' | 'frequentes' | 'links'>('principais');
@@ -170,7 +176,16 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                 cloud.getMyPartnerProfile().catch(() => null)
             ]);
             if (feesData) setFees(feesData);
-            if (profileData) setIsSuperStore(profileData?.is_super_store || false);
+            if (profileData) {
+                setIsSuperStore(profileData?.is_super_store || false);
+                // Validar perfil completo
+                const validation = validateStoreProfile(profileData);
+                setProfileValid(validation.isValid);
+                setMissingFields(validation.missingFields);
+            } else {
+                setProfileValid(false);
+                setMissingFields(['Perfil não encontrado']);
+            }
         } catch (e) {
             console.error('[StoreWallet] Error fetching common data:', e);
         }
@@ -228,6 +243,16 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
     };
 
     if (loadingWallet && !wallet) return <WalletSkeleton />;
+
+    // Validação de perfil - redirecionar para configurações se perfil incompleto
+    if (profileValid === false) {
+        return (
+            <ProfileValidationAlert
+                onNavigateToSettings={() => onNavigate && onNavigate('store_settings')}
+                missingFields={missingFields}
+            />
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in">

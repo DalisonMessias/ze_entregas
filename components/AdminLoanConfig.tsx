@@ -44,6 +44,20 @@ export const AdminLoanConfig: React.FC = () => {
     const [loans, setLoans] = useState<PartnerLoan[]>([]);
     const [selectedLoan, setSelectedLoan] = useState<PartnerLoan | null>(null);
 
+    // Rejection Modal State
+    const [rejectModalOpen, setRejectModalOpen] = useState(false);
+    const [loanToReject, setLoanToReject] = useState<string | null>(null);
+    const [rejectionReason, setRejectionReason] = useState('');
+
+    // Confirmation Modals
+    const [confirmModal, setConfirmModal] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        action: () => void;
+        type: 'danger' | 'success';
+    } | null>(null);
+
     useEffect(() => {
         loadData();
     }, [activeTab]);
@@ -88,14 +102,22 @@ export const AdminLoanConfig: React.FC = () => {
     };
 
     const handleDeleteLoanType = async (id: string) => {
-        if (!confirm('Tem certeza que deseja excluir este tipo de empréstimo?')) return;
-        try {
-            await cloud.adminDeleteLoanType(id);
-            setToast({ type: 'success', message: 'Tipo excluído com sucesso!' });
-            loadData();
-        } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro ao excluir' });
-        }
+        setConfirmModal({
+            open: true,
+            title: 'Excluir Tipo de Empréstimo',
+            message: 'Tem certeza que deseja excluir este tipo de empréstimo? Esta ação não pode ser desfeita.',
+            type: 'danger',
+            action: async () => {
+                try {
+                    await cloud.adminDeleteLoanType(id);
+                    setToast({ type: 'success', message: 'Tipo de empréstimo excluído!' });
+                    loadData();
+                } catch (e: any) {
+                    setToast({ type: 'error', message: e.message || 'Erro ao excluir' });
+                }
+                setConfirmModal(null);
+            }
+        });
     };
 
     const handleSaveLevelLimit = async () => {
@@ -114,22 +136,40 @@ export const AdminLoanConfig: React.FC = () => {
     };
 
     const handleApproveLoan = async (loanId: string) => {
-        if (!confirm('Aprovar este empréstimo?')) return;
-        try {
-            await cloud.adminApproveLoan(loanId);
-            setToast({ type: 'success', message: 'Empréstimo aprovado!' });
-            loadData();
-        } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro ao aprovar' });
-        }
+        setConfirmModal({
+            open: true,
+            title: 'Aprovar Empréstimo',
+            message: 'Deseja aprovar esta solicitação de empréstimo?',
+            type: 'success',
+            action: async () => {
+                try {
+                    await cloud.adminApproveLoan(loanId);
+                    setToast({ type: 'success', message: 'Empréstimo aprovado!' });
+                    loadData();
+                } catch (e: any) {
+                    setToast({ type: 'error', message: e.message || 'Erro ao aprovar' });
+                }
+                setConfirmModal(null);
+            }
+        });
     };
 
     const handleRejectLoan = async (loanId: string) => {
-        const reason = prompt('Motivo da rejeição:');
-        if (!reason) return;
+        setLoanToReject(loanId);
+        setRejectModalOpen(true);
+    };
+
+    const confirmRejectLoan = async () => {
+        if (!loanToReject || !rejectionReason.trim()) {
+            setToast({ type: 'error', message: 'Por favor, informe o motivo da rejeição' });
+            return;
+        }
         try {
-            await cloud.adminRejectLoan(loanId, reason);
+            await cloud.adminRejectLoan(loanToReject, rejectionReason);
             setToast({ type: 'success', message: 'Empréstimo rejeitado!' });
+            setRejectModalOpen(false);
+            setLoanToReject(null);
+            setRejectionReason('');
             loadData();
         } catch (e: any) {
             setToast({ type: 'error', message: e.message || 'Erro ao rejeitar' });
@@ -215,8 +255,8 @@ export const AdminLoanConfig: React.FC = () => {
                                 <span><Percent className="w-3 h-3 inline mr-1" />{type.interest_rate_monthly}% ao mês</span>
                                 <span><Hash className="w-3 h-3 inline mr-1" />Até {type.max_installments}x</span>
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] ${type.target_audience === 'STORE' ? 'bg-blue-100 text-blue-700' :
-                                        type.target_audience === 'COURIER' ? 'bg-orange-100 text-orange-700' :
-                                            'bg-purple-100 text-purple-700'
+                                    type.target_audience === 'COURIER' ? 'bg-orange-100 text-orange-700' :
+                                        'bg-purple-100 text-purple-700'
                                     }`}>
                                     {type.target_audience === 'STORE' ? 'Lojistas' : type.target_audience === 'COURIER' ? 'Entregadores' : 'Todos'}
                                 </span>
@@ -236,22 +276,33 @@ export const AdminLoanConfig: React.FC = () => {
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h4 className="font-bold text-gray-700 dark:text-gray-300">Limites por Nível</h4>
-                <Button onClick={() => setEditingLimit({ partner_level: '', max_limit: 0, allow_negative_balance: false })}>
+                <Button onClick={() => setEditingLimit({ user_type: 'DELIVERY', partner_level: '', max_limit: 0, max_installments: 12, allow_negative_balance: false })}>
                     <Plus className="w-4 h-4 mr-2" /> Novo Limite
                 </Button>
             </div>
 
             {editingLimit && (
                 <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl space-y-3">
+                    <div>
+                        <label className="text-xs text-gray-500 block mb-1">Tipo de Usuário</label>
+                        <CustomSelect
+                            value={editingLimit.user_type || 'DELIVERY'}
+                            onChange={val => setEditingLimit({ ...editingLimit, user_type: val as 'DELIVERY' | 'STORE' })}
+                            options={[
+                                { label: 'Entregador', value: 'DELIVERY' },
+                                { label: 'Lojista', value: 'STORE' }
+                            ]}
+                            placeholder="Selecione o tipo de usuário"
+                        />
+                    </div>
                     <CustomSelect
                         value={editingLimit.partner_level || ''}
                         onChange={val => setEditingLimit({ ...editingLimit, partner_level: val as string })}
                         options={[
                             { label: 'BRONZE', value: 'BRONZE' },
-                            { label: 'SILVER', value: 'SILVER' },
-                            { label: 'GOLD', value: 'GOLD' },
-                            { label: 'PLATINUM', value: 'PLATINUM' },
-                            { label: 'DIAMOND', value: 'DIAMOND' }
+                            { label: 'PRATA', value: 'PRATA' },
+                            { label: 'OURO', value: 'OURO' },
+                            { label: 'DIAMANTE', value: 'DIAMANTE' }
                         ]}
                         placeholder="Selecione o Nível do parceiro"
                     />
@@ -266,6 +317,16 @@ export const AdminLoanConfig: React.FC = () => {
                                 const numberValue = value ? Number(value) / 100 : 0;
                                 setEditingLimit({ ...editingLimit, max_limit: numberValue });
                             }}
+                            className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500 block mb-1">Parcelas Máximas</label>
+                        <input
+                            type="number"
+                            placeholder="12"
+                            value={editingLimit.max_installments || ''}
+                            onChange={e => setEditingLimit({ ...editingLimit, max_installments: parseInt(e.target.value) || 0 })}
                             className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800"
                         />
                     </div>
@@ -291,8 +352,16 @@ export const AdminLoanConfig: React.FC = () => {
                 {levelLimits.map(limit => (
                     <div key={limit.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 flex justify-between items-center">
                         <div>
-                            <h5 className="font-bold text-gray-800 dark:text-white">{limit.partner_level}</h5>
-                            <p className="text-sm text-gray-500">Limite: {formatCurrency(limit.max_limit)}</p>
+                            <div className="flex items-center gap-2">
+                                <h5 className="font-bold text-gray-800 dark:text-white">{limit.partner_level}</h5>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${limit.user_type === 'DELIVERY'
+                                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                                    }`}>
+                                    {limit.user_type === 'DELIVERY' ? 'Entregador' : 'Lojista'}
+                                </span>
+                            </div>
+                            <p className="text-sm text-gray-500">Limite: {formatCurrency(limit.max_limit)} • Máx: {limit.max_installments}x</p>
                             <p className="text-xs text-gray-400">{limit.allow_negative_balance ? '✓ Permite saldo negativo' : '✗ Não permite saldo negativo'}</p>
                         </div>
                         <Button variant="ghost" onClick={() => setEditingLimit(limit)}><Edit className="w-4 h-4" /></Button>
@@ -365,6 +434,70 @@ export const AdminLoanConfig: React.FC = () => {
             {activeTab === 'types' && renderTypesTab()}
             {activeTab === 'levels' && renderLevelsTab()}
             {activeTab === 'loans' && renderLoansTab()}
+
+            {/* Modal de Rejeição */}
+            {rejectModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setRejectModalOpen(false)}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-4">Rejeitar Empréstimo</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Por favor, informe o motivo da rejeição:</p>
+                        <textarea
+                            value={rejectionReason}
+                            onChange={e => setRejectionReason(e.target.value)}
+                            className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 mb-4 min-h-[100px]"
+                            placeholder="Ex: Documentação incompleta, histórico de inadimplência, etc."
+                            autoFocus
+                        />
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setRejectModalOpen(false);
+                                    setLoanToReject(null);
+                                    setRejectionReason('');
+                                }}
+                                fullWidth
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={confirmRejectLoan}
+                                disabled={!rejectionReason.trim()}
+                                fullWidth
+                            >
+                                <XCircle className="w-4 h-4 mr-2" />
+                                Rejeitar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal de Confirmação Genérico */}
+            {confirmModal && confirmModal.open && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110]" onClick={() => setConfirmModal(null)}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col items-center text-center">
+                            <div className={`w-16 h-16 ${confirmModal.type === 'danger' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} rounded-full flex items-center justify-center mb-4`}>
+                                {confirmModal.type === 'danger' ? <Trash2 className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
+                            </div>
+                            <h3 className="font-bold text-xl text-gray-800 dark:text-white mb-2">{confirmModal.title}</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                {confirmModal.message}
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Button variant="outline" onClick={() => setConfirmModal(null)} fullWidth>Cancelar</Button>
+                            <Button
+                                onClick={confirmModal.action}
+                                className={confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-700' : ''}
+                                fullWidth
+                            >
+                                Confirmar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

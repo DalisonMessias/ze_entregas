@@ -94,49 +94,31 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 </div>
 
                 <div className="space-y-6">
-                    <div className="flex gap-2">
-                        <div className="flex-1">
-                            <CustomInput
-                                placeholder="Nova categoria..."
-                                value={newCategoryName}
-                                onChange={(e) => setNewCategoryName(e.target.value)}
-                                className="h-12"
-                            />
+                    <div className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                            Nome da Categoria
+                        </label>
+                        <CustomInput
+                            placeholder="Ex: Bebidas, Lanches..."
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            className="h-12"
+                            autoFocus
+                        />
+                        <div className="mt-4">
+                            <Button
+                                onClick={handleAddCategory}
+                                disabled={isSaving || !newCategoryName.trim()}
+                                className="w-full h-12 rounded-xl font-bold"
+                            >
+                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
+                                Adicionar Categoria
+                            </Button>
                         </div>
-                        <Button
-                            onClick={handleAddCategory}
-                            disabled={isSaving || !newCategoryName.trim()}
-                            className="h-12 px-4 rounded-xl"
-                        >
-                            {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                        </Button>
                     </div>
 
-                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                        {isLoading ? (
-                            <div className="flex justify-center py-8">
-                                <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
-                            </div>
-                        ) : categories.length === 0 ? (
-                            <div className="text-center py-8 text-gray-400 text-sm">
-                                Nenhuma categoria cadastrada.
-                            </div>
-                        ) : (
-                            categories.map((cat) => (
-                                <div
-                                    key={cat.id}
-                                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl group hover:border-brand-200 dark:hover:border-brand-900 transition-all"
-                                >
-                                    <span className="font-bold text-gray-700 dark:text-gray-300">{cat.name}</span>
-                                    <button
-                                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            ))
-                        )}
+                    <div className="text-center text-sm text-gray-500">
+                        Após adicionar, a categoria aparecerá na lista.
                     </div>
                 </div>
 

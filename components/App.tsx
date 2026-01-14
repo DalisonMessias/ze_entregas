@@ -65,7 +65,7 @@ const SettingsPage = React.lazy(() => import('./SettingsPage').then(module => ({
 const InstallApp = React.lazy(() => import('./InstallApp').then(module => ({ default: module.InstallApp })));
 const ChatAssistant = React.lazy(() => import('./ChatAssistant').then(module => ({ default: module.ChatAssistant })));
 const PrivacyPolicy = React.lazy(() => import('./PrivacyPolicy').then(module => ({ default: module.PrivacyPolicy })));
-const StreetsNeighborhoods = React.lazy(() => import('../src/pages/StreetsNeighborhoods'));
+const StreetsList = React.lazy(() => import('../src/pages/StreetsList'));
 const LoansModule = React.lazy(() => import('./LoansModule'));
 const CollaboratorWrapper = React.lazy(() => import('./CollaboratorWrapper').then(m => ({ default: m.CollaboratorWrapper })));
 
@@ -126,8 +126,8 @@ export type ActiveTab =
     | 'internal_orders'
     | 'store_catalog'
     | 'store_api_docs'
-    | 'streets_neighborhoods'
-    | 'streets_neighborhoods'
+
+    | 'streets_list'
     | 'store_loans'
     | 'loans'
     | 'collaborator_area';
@@ -295,7 +295,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
         return 'profile'; // Fallback padrão
     });
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [isSidebarExpanded, setIsSidebarExpanded] = useState(true); // Default open on desktop
+    const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Default collapsed on desktop per user request
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -604,7 +604,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     const isDriver = isNormalDriver || isPartner;
 
     const generalTabs = new Set<ActiveTab>([
-        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_neighborhoods', 'settings', 'upgrade_to_partner'
+        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner'
     ]);
 
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
@@ -751,7 +751,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 case 'privacy': return <PrivacyPolicy onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')} />; // Direct access to privacy policy
                 case 'upgrade_to_partner': return <UpgradeToPartnerPage />;
                 case 'settings': return <SettingsPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
-                case 'streets_neighborhoods': return <StreetsNeighborhoods />;
+                case 'streets_list': return <StreetsList />;
 
                 default: return <div className="p-10 text-center text-gray-500">Etapa não implementada: {activeTab}</div>;
             }
@@ -967,6 +967,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
                     {/* --- GENERAL MENU (ALL USERS) --- */}
                     <MenuSection title="Geral" />
+                    {/* Exibe Ruas para todos EXCETO colaborador, conforme solicitado */}
+                    {effectiveRole !== 'collaborator' && (
+                        <MenuButton icon={Map} label="Ruas" tab="streets_list" />
+                    )}
                     <MenuButton icon={ShoppingBag} label="Loja de Peças" tab="shop" />
                     <MenuButton icon={User} label="Meu Perfil" tab="profile" />
                     <MenuButton icon={Headphones} label="Suporte" tab="support" />

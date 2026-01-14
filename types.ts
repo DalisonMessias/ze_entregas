@@ -1,4 +1,4 @@
-
+﻿
 export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator';
 export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found';
@@ -175,8 +175,10 @@ export interface Task {
 
 
 
-export interface CartItem extends Product {
+export interface CartItem {
+    product: Product;
     quantity: number;
+    observation?: string;
 }
 
 export interface OrderItem {
@@ -199,29 +201,7 @@ export interface DailySummary {
     completed: boolean;
 }
 
-export interface Order {
-    id: string;
-    status: string;
-    items: { product_id: string, name: string, quantity: number, price: number }[];
-    total_price: number;
-    payment_method: PaymentMethod;
-    shipping_address?: any;
-    payment_details?: any;
-    shipping_cost?: number;
-    discount?: number;
-    coupon_code?: string;
-
-    // Internal Orders fields
-    customer_name?: string;
-    customer_phone?: string;
-    observation?: string;
-    origin?: 'APP' | 'INTERNAL';
-    amount_paid?: number;
-    change_amount?: number;
-    custom_payment_label?: string;
-
-    created_at: string;
-}
+// Order interface consolidated below (lines 371-403)
 
 export interface ManagedUser {
     id: string;
@@ -284,20 +264,40 @@ export interface Product {
     store_id?: string;
 }
 
+export interface StoreAddonOption {
+    id: string;
+    name: string;
+    price: number;
+    is_active: boolean;
+}
+
+export interface StoreAddonGroup {
+    id: string;
+    store_id: string;
+    name: string;
+    type: 'SINGLE' | 'MULTIPLE';
+    min: number;
+    max: number;
+    options: StoreAddonOption[];
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface StoreProduct {
     id: string;
     store_id: string;
     name: string;
     description?: string;
     price: number;
-    category?: string;
+    category?: string; // Legacy: Name
+    category_id?: string | null; // Correct: ID
     image_url?: string;
     is_active: boolean;
     created_at: string;
     updated_at: string;
     internal_code?: string;
     variations?: any[];
-    options?: any[];
     availability?: any;
     observations?: string;
     origin_prefix?: string;
@@ -362,6 +362,7 @@ export interface Order {
     shipping_cost?: number;
     discount?: number;
     coupon_code?: string;
+    order_type?: 'LOCAL' | 'PICKUP' | 'DELIVERY';
 
     // Internal constants
     customer_name?: string;
@@ -372,10 +373,10 @@ export interface Order {
     change_amount?: number;
     custom_payment_label?: string;
     store_id?: string;
+    delivery_mode?: 'OWN' | 'PLATFORM' | 'ASSOCIATE';
 
     store?: any;
     partner?: any;
-
     created_at: string;
 }
 
@@ -829,10 +830,6 @@ export interface PlatformNews {
     counts?: { completed: number; cancelled: number; failed: number };
 }
 
-export interface CartItem extends Product {
-    quantity: number;
-}
-
 
 
 export interface CompanyInfo {
@@ -1053,6 +1050,7 @@ export interface Collaborator {
     name: string;
     active: boolean;
     created_at: string;
+    avatar_url?: string;
 }
 
 export interface CollaboratorOrder {
@@ -1204,6 +1202,7 @@ export interface MarketingDesign {
     config: MarketingCanvasConfig;
     last_image_url?: string;
     created_at: string;
+    updated_at: string;
     related_user_id?: string;
 }
 
@@ -1264,8 +1263,10 @@ export interface LoanType {
 
 export interface LoanLevelLimit {
     id: string;
+    user_type: 'DELIVERY' | 'STORE';
     partner_level: string;
     max_limit: number;
+    max_installments: number;
     allow_negative_balance: boolean;
     created_at: string;
     updated_at: string;
@@ -1332,4 +1333,27 @@ export interface LoanConfig {
     allow_manual_payment: boolean;
     deduct_from_payout: boolean;
 }
+
+export interface StoreDeliverySettings {
+    id: string;
+    store_id: string;
+    delivery_mode: 'FIXED' | 'NEIGHBORHOOD';
+    fixed_fee: number;
+    allow_outside_city: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface StoreNeighborhoodFee {
+    id: string;
+    store_id: string;
+    neighborhood_name: string;
+    fee: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+
+
 

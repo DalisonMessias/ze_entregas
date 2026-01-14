@@ -5,7 +5,7 @@ import { MapPin, Calculator, Loader2, DollarSign, Navigation, Info, Plus, Trash2
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
-import { PartnerFeeSettings, OfflineDriver, StoreDeliveryPartner } from '../types';
+import { PartnerFeeSettings, OfflineDriver, StoreDeliveryPartner, LoanConfig } from '../types';
 import { openNavigation } from '../utils/mapHelpers';
 import { LoanModal } from './LoanModal';
 import { estimateDeliveryCosts } from '../utils/estimateDeliveryCosts';
@@ -53,7 +53,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
     const [associatedDrivers, setAssociatedDrivers] = useState<StoreDeliveryPartner[]>([]);
     const [selectedAssociateIds, setSelectedAssociateIds] = useState<string[]>([]);
     const [loadingAssociates, setLoadingAssociates] = useState(false);
-    const [loanConfig, setLoanConfig] = useState<{ interest_rate_percent: number; repayment_days: number; credit_limit: number } | null>(null);
+    const [loanConfig, setLoanConfig] = useState<Partial<LoanConfig> | null>(null);
     const [activeLoan, setActiveLoan] = useState<{ amount: number; status: string; created_at: string } | null>(null);
     const [showLoanModal, setShowLoanModal] = useState(false);
     const [expiresCountdown, setExpiresCountdown] = useState<number | null>(null);
@@ -78,18 +78,27 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     setActiveLoan(loan);
                 } catch { }
 
-                const profile = await cloud.getClient()?.from('user_profiles').select('city, is_super_store, address').eq('id', user?.data?.user?.id).single();
+                const profile = await cloud.getClient()?.from('user_profiles').select('city, is_super_store').eq('id', user?.data?.user?.id).single();
+
+                console.log('[StoreRequest] Profile completo:', profile);
+
+                if (profile?.error) {
+                    console.error('[StoreRequest] Erro ao buscar perfil:', profile.error);
+                }
 
                 if (profile?.data) {
+                    console.log('[StoreRequest] profile.data:', profile.data);
                     const rawCity = profile.data.city || '';
-                    const cleanCity = rawCity.split(' - ')[0].trim();
+                    // Aceita tanto "Cidade - UF" quanto "Cidade" (formato antigo)
+                    const cleanCity = rawCity.includes(' - ') ? rawCity.split(' - ')[0].trim() : rawCity.trim();
+                    console.log('[StoreRequest] rawCity:', rawCity, 'cleanCity:', cleanCity);
                     setStoreCity(cleanCity);
 
                     const superStatus = profile.data.is_super_store || false;
                     setIsSuperStore(superStatus);
 
                     // Autofill pickup address from profile data or auth metadata
-                    const metadataAddr: string = (user?.data?.user?.user_metadata?.address as string) || profile.data.address || '';
+                    const metadataAddr: string = (user?.data?.user?.user_metadata?.address as string) || '';
                     if (metadataAddr) {
                         const [left, right] = metadataAddr.split('-').map(s => s.trim());
                         const [streetPart, numberPart] = (left || '').split(',').map(s => s.trim());
@@ -115,14 +124,12 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                         const associates = await cloud.getStoreAssociatedPartners();
                         if (associates.length > 0) {
                             setAssociatedDrivers(associates);
-                            setRequestType('ASSOCIATE');
                             setSelectedAssociateIds(associates.map(a => a.partner_id));
-                            setNotification({ type: 'info', message: 'Entregadores fixos detectados! Modo "Entregador Fixo" ativado.' });
-                        } else if (!superStatus) {
-                            setRequestType('ASSOCIATE');
+                            // Não força mais o modo ASSOCIATE, apenas notifica
+                            setNotification({ type: 'info', message: `${associates.length} entregador(es) fixo(s) disponível(is). Você pode escolher entre Parceiro Zé ou Entregador Fixo.` });
                         }
                     } catch (e) {
-                        if (!superStatus) setRequestType('ASSOCIATE');
+                        console.error('Failed to load associates:', e);
                     }
                 } else {
                     setNotification({
@@ -156,6 +163,11 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
         } catch { }
         init();
     }, []);
+
+    // Debug: monitorar mudanças em storeCity
+    useEffect(() => {
+        console.log('[StoreRequest] storeCity atualizado para:', storeCity);
+    }, [storeCity]);
 
     useEffect(() => {
         if (requestType === 'ASSOCIATE') {
@@ -580,7 +592,10 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h1 className="text-xl font-black text-gray-900 dark:text-white">Solicitar Entrega</h1>
-                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" /> {storeCity}</p>
+                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                            <MapPin className="w-3 h-3" />
+                            {storeCity || '(Cidade não configurada - Atualize seu perfil)'}
+                        </p>
                     </div>
                     <div className="text-right">
                         <p className="text-xs text-gray-400 font-bold uppercase">Saldo</p>
@@ -590,7 +605,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
 
                 <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-xl flex gap-1 mb-6">
                     <button
-                        onClick={handleSelectPlatform}
+                        onClick={() => setRequestType('PLATFORM')}
                         className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 transition-all rounded-lg ${requestType === 'PLATFORM' ? 'bg-white dark:bg-gray-600 shadow' : 'text-gray-500 dark:text-gray-400'}`}
                     >
                         {isSuperStore ? <ShieldCheck className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
@@ -677,7 +692,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                                 variant="primary"
                                 size="sm"
                                 onClick={handleDispatch}
-                                disabled={isSubmitting || distanceKm === null || cost === null || partnerNet === null}
+                                disabled={isSubmitting || distanceKm === null || cost === null || partnerNet === null || cost <= 0}
                                 className="w-full h-10 rounded-lg focus:ring-2 focus:ring-brand-300"
                                 style={{ alignSelf: 'center', justifySelf: 'stretch' }}
                             >
@@ -688,7 +703,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                             isOpen={showLoanModal}
                             onConfirm={confirmLoanAndDispatch}
                             onCancel={() => setShowLoanModal(false)}
-                            config={loanConfig}
+                            config={loanConfig as LoanConfig}
                             neededAmount={Math.max(0, (cost || 0) - (walletBalance || 0))}
                         />
                     </div >

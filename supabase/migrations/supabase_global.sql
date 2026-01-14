@@ -1175,7 +1175,9 @@ CREATE TABLE IF NOT EXISTS public.shop_settings (
     support_status_override public.support_status_override_type,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    google_gemini_api_key TEXT,
+    open_route_service_api_key TEXT
 );
 DROP TRIGGER IF EXISTS handle_shop_settings_updated_at ON public.shop_settings;
 CREATE TRIGGER handle_shop_settings_updated_at BEFORE UPDATE ON public.shop_settings
@@ -1197,6 +1199,10 @@ CREATE POLICY "Admins can manage shop_settings" ON public.shop_settings FOR ALL 
 );
 
 INSERT INTO public.shop_settings (id) VALUES ('1') ON CONFLICT (id) DO NOTHING;
+
+-- Garantir colunas de API se não existirem
+ALTER TABLE public.shop_settings ADD COLUMN IF NOT EXISTS google_gemini_api_key TEXT;
+ALTER TABLE public.shop_settings ADD COLUMN IF NOT EXISTS open_route_service_api_key TEXT;
 
 
 
@@ -1846,6 +1852,8 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage partner fee settings' AND tablename = 'partner_fee_settings') THEN
         CREATE POLICY "Admins can manage partner fee settings" ON public.partner_fee_settings FOR ALL USING (public.is_admin());
 INSERT INTO public.partner_fee_settings (id) VALUES ('1') ON CONFLICT (id) DO NOTHING;
+GRANT ALL ON public.partner_fee_settings TO authenticated;
+GRANT ALL ON public.partner_fee_settings TO service_role;
 
 
 -- Tabela de avaliações de parceiros;
@@ -3617,13 +3625,41 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.collaborators (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
-    username VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    email VARCHAR(255),
     password_hash TEXT NOT NULL,
     active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT unique_store_username UNIQUE (store_id, username)
+    CONSTRAINT unique_store_email UNIQUE (store_id, email)
 );
+
+-- Garantir colunas se a tabela j existir
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'collaborators' AND column_name = 'name') THEN
+        ALTER TABLE public.collaborators ADD COLUMN name VARCHAR(255);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'collaborators' AND column_name = 'email') THEN
+        ALTER TABLE public.collaborators ADD COLUMN email VARCHAR(255);
+    END IF;
+    
+    -- Ajustar restrio de unicidade se necessrio
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_store_username') THEN
+        ALTER TABLE public.collaborators DROP CONSTRAINT unique_store_username;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_store_email') THEN
+        ALTER TABLE public.collaborators ADD CONSTRAINT unique_store_email UNIQUE (store_id, email);
+    END IF;
+
+    -- Remover coluna username redundante
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'collaborators' AND column_name = 'username') THEN
+        ALTER TABLE public.collaborators DROP COLUMN username;
+    END IF;
+END $$;
+
 DROP TRIGGER IF EXISTS handle_collaborators_updated_at ON public.collaborators;
 CREATE TRIGGER handle_collaborators_updated_at BEFORE UPDATE ON public.collaborators
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -3644,10 +3680,23 @@ CREATE TABLE IF NOT EXISTS public.orders_collaborators (
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     collaborator_id UUID REFERENCES public.collaborators(id) ON DELETE SET NULL,
     table_identifier VARCHAR(50),
+    customer_name VARCHAR(255),
     status VARCHAR(50) DEFAULT 'opened', -- opened, sent, completed
+    total_amount NUMERIC(10, 2) DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Garantir colunas se a tabela j existir
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders_collaborators' AND column_name = 'customer_name') THEN
+        ALTER TABLE public.orders_collaborators ADD COLUMN customer_name VARCHAR(255);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders_collaborators' AND column_name = 'total_amount') THEN
+        ALTER TABLE public.orders_collaborators ADD COLUMN total_amount NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+END $$;
 DROP TRIGGER IF EXISTS handle_orders_collaborators_updated_at ON public.orders_collaborators;
 CREATE TRIGGER handle_orders_collaborators_updated_at BEFORE UPDATE ON public.orders_collaborators
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -3677,19 +3726,20 @@ CREATE POLICY "Stores can manage order items" ON public.orders_items
 
 -- Funes de Autenticao de Colaborador (usando pgcrypto)
 DROP FUNCTION IF EXISTS public.login_collaborator(TEXT, TEXT);
-CREATE OR REPLACE FUNCTION public.login_collaborator(p_username TEXT, p_password TEXT)
+CREATE OR REPLACE FUNCTION public.login_collaborator(p_email TEXT, p_password TEXT)
 RETURNS JSONB AS $$
 DECLARE
     v_user RECORD;
 BEGIN
     SELECT * INTO v_user FROM public.collaborators
-    WHERE username = p_username AND password_hash = crypt(p_password, password_hash) AND active = TRUE;
+    WHERE email = p_email AND password_hash = crypt(p_password, password_hash) AND active = TRUE;
 
     IF v_user.id IS NOT NULL THEN
         RETURN jsonb_build_object(
             'id', v_user.id,
             'store_id', v_user.store_id,
-            'username', v_user.username,
+            'name', v_user.name,
+            'email', v_user.email,
             'role', 'collaborator'
         );
     ELSE
@@ -3698,48 +3748,121 @@ BEGIN
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP FUNCTION IF EXISTS public.create_collaborator(TEXT, TEXT, UUID);
-CREATE OR REPLACE FUNCTION public.create_collaborator(p_username TEXT, p_password TEXT, p_store_id UUID)
+DROP FUNCTION IF EXISTS public.create_collaborator(TEXT, TEXT, TEXT, UUID);
+CREATE OR REPLACE FUNCTION public.create_collaborator(p_email TEXT, p_name TEXT, p_password TEXT, p_store_id UUID)
 RETURNS UUID AS $$
 DECLARE
     v_id UUID;
 BEGIN
-    INSERT INTO public.collaborators (store_id, username, password_hash)
-    VALUES (p_store_id, p_username, crypt(p_password, gen_salt('bf')))
+    INSERT INTO public.collaborators (store_id, email, name, password_hash)
+    VALUES (p_store_id, p_email, p_name, crypt(p_password, gen_salt('bf')))
     RETURNING id INTO v_id;
     RETURN v_id;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- RPC para atualizar colaborador
+DROP FUNCTION IF EXISTS public.update_collaborator(UUID, TEXT, TEXT, TEXT);
+CREATE OR REPLACE FUNCTION public.update_collaborator(
+    p_collaborator_id UUID,
+    p_name TEXT,
+    p_email TEXT,
+    p_password TEXT DEFAULT NULL
+)
+RETURNS VOID AS $$
+BEGIN
+    IF p_password IS NOT NULL AND p_password != '' THEN
+        UPDATE public.collaborators 
+        SET name = p_name, 
+            email = p_email, 
+            password_hash = crypt(p_password, gen_salt('bf')),
+            updated_at = now()
+        WHERE id = p_collaborator_id;
+    ELSE
+        UPDATE public.collaborators 
+        SET name = p_name, 
+            email = p_email,
+            updated_at = now()
+        WHERE id = p_collaborator_id;
+    END IF;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- RPC para enviar pedido de mesa
+-- RPC para alteração de senha segura (exige senha antiga)
+DROP FUNCTION IF EXISTS public.update_collaborator_password(UUID, TEXT, TEXT);
+CREATE OR REPLACE FUNCTION public.update_collaborator_password(
+    p_collaborator_id UUID,
+    p_old_password TEXT,
+    p_new_password TEXT
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_valid BOOLEAN;
+BEGIN
+    -- Verifica se a senha antiga está correta
+    SELECT (password_hash = crypt(p_old_password, password_hash)) INTO v_valid
+    FROM public.collaborators
+    WHERE id = p_collaborator_id;
+
+    IF v_valid THEN
+        UPDATE public.collaborators 
+        SET password_hash = crypt(p_new_password, gen_salt('bf')),
+            updated_at = now()
+        WHERE id = p_collaborator_id;
+        RETURN TRUE;
+    ELSE
+        RETURN FALSE;
+    END IF;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC para excluir colaborador
+DROP FUNCTION IF EXISTS public.delete_collaborator(UUID);
+CREATE OR REPLACE FUNCTION public.delete_collaborator(p_collaborator_id UUID)
+RETURNS VOID AS $$
+BEGIN
+    DELETE FROM public.collaborators WHERE id = p_collaborator_id;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- RPC para enviar pedido de mesa (Permite criar nova ou adicionar a uma aberta)
+DROP FUNCTION IF EXISTS public.place_collaborator_order(UUID, UUID, TEXT, JSONB);
+DROP FUNCTION IF EXISTS public.place_collaborator_order(UUID, UUID, TEXT, TEXT, JSONB);
 CREATE OR REPLACE FUNCTION public.place_collaborator_order(
     p_store_id UUID,
     p_collaborator_id UUID,
     p_table_identifier TEXT,
-    p_items JSONB
+    p_customer_name TEXT,
+    p_items JSONB, -- Array de itens [{product_id, quantity, unit_price, additional}]
+    p_order_id UUID DEFAULT NULL -- Se enviado, adiciona nessa mesa
 )
 RETURNS JSONB AS $$
 DECLARE
-    v_order_id UUID;
+    v_order_id UUID := p_order_id;
     v_item JSONB;
-    v_total NUMERIC(10, 2) := 0;
-    v_item_total NUMERIC(10, 2);
+    v_item_total NUMERIC;
+    v_total NUMERIC := 0;
 BEGIN
-    -- Calcular total
+    -- Se no passou order_id, tenta encontrar uma mesa aberta com o mesmo identificador
+    IF v_order_id IS NULL THEN
+        SELECT id INTO v_order_id FROM public.orders_collaborators 
+        WHERE store_id = p_store_id AND table_identifier = p_table_identifier AND status IN ('opened', 'sent')
+        LIMIT 1;
+    END IF;
+
+    -- Se ainda no tem order_id, cria um novo
+    IF v_order_id IS NULL THEN
+        INSERT INTO public.orders_collaborators (store_id, collaborator_id, table_identifier, customer_name, status)
+        VALUES (p_store_id, p_collaborator_id, p_table_identifier, p_customer_name, 'sent')
+        RETURNING id INTO v_order_id;
+    ELSE
+        -- Se j existe, garante que o nome do cliente seja atualizado se enviado
+        UPDATE public.orders_collaborators SET customer_name = COALESCE(p_customer_name, customer_name), status = 'sent' WHERE id = v_order_id;
+    END IF;
+
+    -- Inserir Itens e calcular total para o campo redundante
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
         v_item_total := (v_item->>'quantity')::INT * (v_item->>'unit_price')::NUMERIC;
         v_total := v_total + v_item_total;
-    END LOOP;
-
-    -- Criar Pedido
-    INSERT INTO public.orders_collaborators (store_id, collaborator_id, table_identifier, status)
-    VALUES (p_store_id, p_collaborator_id, p_table_identifier, 'sent')
-    RETURNING id INTO v_order_id;
-
-    -- Inserir Itens
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-    LOOP
-        v_item_total := (v_item->>'quantity')::INT * (v_item->>'unit_price')::NUMERIC;
+        
         INSERT INTO public.orders_items (order_id, product_id, additional, quantity, unit_price, total_price)
         VALUES (
             v_order_id,
@@ -3751,20 +3874,223 @@ BEGIN
         );
     END LOOP;
 
+    -- Atualizar total acumulado da mesa
+    UPDATE public.orders_collaborators SET total_amount = total_amount + v_total WHERE id = v_order_id;
+
     RETURN jsonb_build_object('id', v_order_id, 'status', 'success');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- RPC para listar mesas abertas
+DROP FUNCTION IF EXISTS public.get_open_orders(UUID);
+CREATE OR REPLACE FUNCTION public.get_open_orders(p_store_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+BEGIN
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', oc.id,
+            'table_identifier', oc.table_identifier,
+            'customer_name', oc.customer_name,
+            'status', oc.status,
+            'total_amount', oc.total_amount,
+            'created_at', oc.created_at,
+            'items', (
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'id', oi.id,
+                        'name', p.name,
+                        'quantity', oi.quantity,
+                        'unit_price', oi.unit_price,
+                        'additional', oi.additional
+                    )
+                ) FROM public.orders_items oi 
+                JOIN public.products p ON p.id = oi.product_id
+                WHERE oi.order_id = oc.id
+            )
+        ) ORDER BY oc.created_at DESC
+    ) INTO result
+    FROM public.orders_collaborators oc
+    WHERE oc.store_id = p_store_id AND oc.status IN ('opened', 'sent');
 
--- RPC para listar produtos pelo colaborador
+    RETURN COALESCE(result, '[]'::jsonb);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC para finalizar mesa
+DROP FUNCTION IF EXISTS public.close_collaborator_order(UUID);
+CREATE OR REPLACE FUNCTION public.close_collaborator_order(p_order_id UUID)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE public.orders_collaborators SET status = 'completed', updated_at = now() WHERE id = p_order_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC para listar histórico de mesas fechadas do colaborador
+DROP FUNCTION IF EXISTS public.get_closed_orders(UUID, UUID);
+CREATE OR REPLACE FUNCTION public.get_closed_orders(p_store_id UUID, p_collaborator_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+BEGIN
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', oc.id,
+            'table_identifier', oc.table_identifier,
+            'customer_name', oc.customer_name,
+            'status', oc.status,
+            'total_amount', oc.total_amount,
+            'created_at', oc.created_at,
+            'updated_at', oc.updated_at,
+            'items', (
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'id', oi.id,
+                        'name', p.name,
+                        'quantity', oi.quantity,
+                        'unit_price', oi.unit_price,
+                        'total_price', oi.total_price
+                    )
+                ) FROM public.orders_items oi 
+                JOIN public.products p ON p.id = oi.product_id
+                WHERE oi.order_id = oc.id
+            )
+        ) ORDER BY oc.updated_at DESC
+    ) INTO result
+    FROM public.orders_collaborators oc
+    WHERE oc.store_id = p_store_id 
+      AND oc.collaborator_id = p_collaborator_id 
+      AND oc.status = 'completed'
+      AND oc.updated_at >= CURRENT_DATE; -- Histrico do dia
+
+    RETURN COALESCE(result, '[]'::jsonb);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC para resumo de vendas do colaborador no dia
+DROP FUNCTION IF EXISTS public.get_collaborator_summary(UUID, UUID);
+CREATE OR REPLACE FUNCTION public.get_collaborator_summary(p_store_id UUID, p_collaborator_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    v_total_sales NUMERIC := 0;
+    v_total_orders INT := 0;
+    v_avg_ticket NUMERIC := 0;
+BEGIN
+    SELECT 
+        COALESCE(SUM(total_amount), 0),
+        COUNT(id)
+    INTO v_total_sales, v_total_orders
+    FROM public.orders_collaborators
+    WHERE store_id = p_store_id 
+      AND collaborator_id = p_collaborator_id 
+      AND status = 'completed'
+      AND updated_at >= CURRENT_DATE;
+
+    IF v_total_orders > 0 THEN
+        v_avg_ticket := v_total_sales / v_total_orders;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'total_sales', v_total_sales,
+        'total_orders', v_total_orders,
+        'avg_ticket', v_avg_ticket
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- RPC para listar produtos pelo colaborador (com nome da categoria e imagens)
+DROP FUNCTION IF EXISTS public.get_products_for_collaborator(UUID);
 CREATE OR REPLACE FUNCTION public.get_products_for_collaborator(p_store_id UUID)
 RETURNS JSONB AS $$
 DECLARE
     result JSONB;
 BEGIN
-    SELECT jsonb_agg(to_jsonb(p.*)) INTO result
-    FROM public.products p
-    WHERE p.store_id = p_store_id AND p.is_active = TRUE;
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', sp.id,
+            'name', sp.name,
+            'description', sp.description,
+            'price', sp.price,
+            'image_url', sp.image_url,
+            'category_name', COALESCE(sc.name, 'Geral'), -- Nome da categoria
+            'is_active', sp.is_active
+        ) ORDER BY sp.name ASC
+    ) INTO result
+    FROM public.store_products sp
+    LEFT JOIN public.store_categories sc ON sp.category_id = sc.id
+    WHERE sp.store_id = p_store_id
+      AND sp.is_active = true;
+
+    RETURN COALESCE(result, '[]'::jsonb);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- Tabela de Grupos de Adicionais (Global)
+CREATE TABLE IF NOT EXISTS public.store_addon_groups (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    store_id UUID REFERENCES auth.users(id) NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('SINGLE', 'MULTIPLE')),
+    min INTEGER NOT NULL DEFAULT 0,
+    max INTEGER NOT NULL DEFAULT 1,
+    options JSONB NOT NULL DEFAULT '[]'::jsonb, -- Array de {id, name, price, is_active}
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Index para performance
+CREATE INDEX IF NOT EXISTS store_addon_groups_store_id_idx ON public.store_addon_groups (store_id);
+
+-- Trigger para updated_at
+DROP TRIGGER IF EXISTS handle_store_addon_groups_updated_at ON public.store_addon_groups;
+CREATE TRIGGER handle_store_addon_groups_updated_at BEFORE UPDATE ON public.store_addon_groups
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS Policies
+ALTER TABLE public.store_addon_groups ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    -- Permitir que a loja gerencie seus prprios grupos
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store partners can manage their own addon groups' AND tablename = 'store_addon_groups') THEN
+        CREATE POLICY "Store partners can manage their own addon groups" ON public.store_addon_groups
+        FOR ALL
+        USING (auth.uid() = store_id)
+        WITH CHECK (auth.uid() = store_id);
+    END IF;
+
+    -- Permitir que admins gerenciem tudo
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage all store addon groups' AND tablename = 'store_addon_groups') THEN
+        CREATE POLICY "Admins can manage all store addon groups" ON public.store_addon_groups
+        FOR ALL
+        USING (public.is_admin());
+    END IF;
+END $$;
+
+-- Garantir permisses
+GRANT ALL ON TABLE public.store_addon_groups TO anon;
+GRANT ALL ON TABLE public.store_addon_groups TO authenticated;
+GRANT ALL ON TABLE public.store_addon_groups TO service_role;
+
+-- RPC para listar categorias da loja
+DROP FUNCTION IF EXISTS public.get_categories_for_collaborator(UUID);
+CREATE OR REPLACE FUNCTION public.get_categories_for_collaborator(p_store_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+BEGIN
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', id,
+            'name', name
+        ) ORDER BY name ASC
+    ) INTO result
+    FROM public.categories
+    WHERE store_id = p_store_id;
     
     RETURN COALESCE(result, '[]'::jsonb);
 END;
@@ -3802,13 +4128,13 @@ END $$;
 
 -- RPC para listar colaboradores da loja
 DROP FUNCTION IF EXISTS public.get_store_collaborators(UUID);
-CREATE OR REPLACE FUNCTION public.get_store_collaborators(p_store_id UUID)
+CREATE OR REPLACE FUNCTION public.get_store_collaborators(p_store_id UUID DEFAULT NULL)
 RETURNS JSONB AS $$
 BEGIN
     RETURN COALESCE((
         SELECT jsonb_agg(to_jsonb(c.*))
         FROM public.collaborators c
-        WHERE c.store_id = p_store_id
+        WHERE c.store_id = COALESCE(p_store_id, auth.uid())
     ), '[]'::jsonb);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -4070,11 +4396,14 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     key_token TEXT UNIQUE NOT NULL, -- O token em si (sk_...)
+    service_name TEXT, -- Nome do serviço (ex: google_gemini_api_key)
+    encrypted_key TEXT, -- A chave de API propiamente dita
     permissions JSONB DEFAULT '{"all": true}'::jsonb,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ,
-    last_used_at TIMESTAMPTZ
+    last_used_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Garantir colunas em api_keys (Migração Segura)
@@ -4091,6 +4420,15 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'name') THEN
         ALTER TABLE public.api_keys ADD COLUMN name VARCHAR(255) DEFAULT 'Chave API';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'service_name') THEN
+        ALTER TABLE public.api_keys ADD COLUMN service_name TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'encrypted_key') THEN
+        ALTER TABLE public.api_keys ADD COLUMN encrypted_key TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'updated_at') THEN
+        ALTER TABLE public.api_keys ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now();
     END IF;
 END $$;
 
@@ -4448,12 +4786,39 @@ GRANT ALL ON public.loan_types TO service_role;
 -- Tabela de Limites por Nível de Parceiro
 CREATE TABLE IF NOT EXISTS public.loan_level_limits (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    partner_level VARCHAR(50) NOT NULL UNIQUE, -- 'Iniciante', 'Prata', 'Ouro', etc.
+    user_type VARCHAR(20) NOT NULL DEFAULT 'DELIVERY', -- 'DELIVERY', 'STORE'
+    partner_level VARCHAR(50) NOT NULL, -- 'BRONZE', 'PRATA', 'OURO', 'DIAMANTE'
     max_limit NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    max_installments INTEGER NOT NULL DEFAULT 12,
     allow_negative_balance BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT loan_level_limits_user_type_partner_level_key UNIQUE (user_type, partner_level)
 );
+
+-- Migração segura: adicionar coluna user_type se não existir
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'loan_level_limits' AND column_name = 'user_type') THEN
+        ALTER TABLE public.loan_level_limits ADD COLUMN user_type VARCHAR(20) NOT NULL DEFAULT 'DELIVERY';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'loan_level_limits' AND column_name = 'max_installments') THEN
+        ALTER TABLE public.loan_level_limits ADD COLUMN max_installments INTEGER NOT NULL DEFAULT 12;
+    END IF;
+END $$;
+
+-- Remover constraint antiga e criar nova com user_type + partner_level
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'loan_level_limits_partner_level_key') THEN
+        ALTER TABLE public.loan_level_limits DROP CONSTRAINT loan_level_limits_partner_level_key;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'loan_level_limits_user_type_partner_level_key') THEN
+        ALTER TABLE public.loan_level_limits ADD CONSTRAINT loan_level_limits_user_type_partner_level_key UNIQUE (user_type, partner_level);
+    END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS handle_loan_level_limits_updated_at ON public.loan_level_limits;
 CREATE TRIGGER handle_loan_level_limits_updated_at BEFORE UPDATE ON public.loan_level_limits
@@ -4722,15 +5087,29 @@ GRANT EXECUTE ON FUNCTION public.process_loan_installment_payments(UUID, NUMERIC
 -- SEEDS & BACKFILLS (LOANS MODULE) - Adicionado em 2026-01-12
 -- ==================================================================
 
--- 1. Inserir Limites por Nível (Se não existirem)
-INSERT INTO public.loan_level_limits (partner_level, max_limit, allow_negative_balance)
+-- 1. Inserir Limites por Nível e Tipo de Usuário (Se não existirem)
+-- Limites para Entregadores
+INSERT INTO public.loan_level_limits (user_type, partner_level, max_limit, max_installments, allow_negative_balance)
 VALUES
-    ('BRONZE', 200.00, false),
-    ('PRATA', 500.00, false),
-    ('OURO', 1000.00, true),
-    ('DIAMANTE', 2500.00, true)
-ON CONFLICT (partner_level) DO UPDATE
+    ('DELIVERY', 'BRONZE', 200.00, 3, false),
+    ('DELIVERY', 'PRATA', 500.00, 6, false),
+    ('DELIVERY', 'OURO', 1000.00, 12, true),
+    ('DELIVERY', 'DIAMANTE', 2500.00, 24, true)
+ON CONFLICT (user_type, partner_level) DO UPDATE
 SET max_limit = EXCLUDED.max_limit,
+    max_installments = EXCLUDED.max_installments,
+    allow_negative_balance = EXCLUDED.allow_negative_balance;
+
+-- Limites para Lojistas (valores menores que entregadores)
+INSERT INTO public.loan_level_limits (user_type, partner_level, max_limit, max_installments, allow_negative_balance)
+VALUES
+    ('STORE', 'BRONZE', 100.00, 6, false),
+    ('STORE', 'PRATA', 300.00, 12, false),
+    ('STORE', 'OURO', 700.00, 24, false),
+    ('STORE', 'DIAMANTE', 1500.00, 36, true)
+ON CONFLICT (user_type, partner_level) DO UPDATE
+SET max_limit = EXCLUDED.max_limit,
+    max_installments = EXCLUDED.max_installments,
     allow_negative_balance = EXCLUDED.allow_negative_balance;
 
 -- 2. Backfill: Garantir que usuários tenham nível 'BRONZE' se estiver nulo
@@ -4761,4 +5140,261 @@ CREATE POLICY "Users can create loan installments" ON public.loan_installments
             AND user_id = auth.uid()
         )
     );
+-- Adicionando coluna order_type para controle de pedidos (Local, Retirada, Entrega)
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS order_type text DEFAULT 'LOCAL';
 
+
+-- Liberar RLS para tabela orders (Lojistas) e definir policies corretas
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+
+-- Remover policies antigas se existirem para evitar conflitos
+DROP POLICY IF EXISTS "Enable read for store owners" ON public.orders;
+DROP POLICY IF EXISTS "Enable insert for store owners" ON public.orders;
+DROP POLICY IF EXISTS "Enable update for store owners" ON public.orders;
+
+-- Criar policies com tipagem correta (UUID = UUID)
+CREATE POLICY "Enable read for store owners" ON public.orders
+FOR SELECT
+USING (auth.uid() = store_id);
+
+CREATE POLICY "Enable insert for store owners" ON public.orders
+FOR INSERT
+WITH CHECK (auth.uid() = store_id);
+
+CREATE POLICY "Enable update for store owners" ON public.orders
+FOR UPDATE
+USING (auth.uid() = store_id);
+
+-- ==================================================================
+-- CONFIGURAÇÕES DE ENTREGA DA LOJA (Adicionado em 2026-01-14)
+-- ==================================================================
+
+-- Tabela para configurar modo de entrega e taxas
+CREATE TABLE IF NOT EXISTS public.store_delivery_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    delivery_mode TEXT NOT NULL DEFAULT 'FIXED', -- 'FIXED' ou 'NEIGHBORHOOD'
+    fixed_fee NUMERIC(10, 2) DEFAULT 0.00,
+    allow_outside_city BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_store_delivery_settings UNIQUE (store_id)
+);
+
+-- Trigger para updated_at
+DROP TRIGGER IF EXISTS handle_store_delivery_settings_updated_at ON public.store_delivery_settings;
+CREATE TRIGGER handle_store_delivery_settings_updated_at BEFORE UPDATE ON public.store_delivery_settings
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS para store_delivery_settings
+ALTER TABLE public.store_delivery_settings ENABLE ROW LEVEL SECURITY;
+
+-- Garantir permissões de leitura para authenticated
+GRANT SELECT ON public.store_delivery_settings TO authenticated;
+GRANT SELECT ON public.store_delivery_settings TO anon;
+GRANT ALL ON public.store_delivery_settings TO service_role;
+
+DROP POLICY IF EXISTS "Store owners manage their delivery settings" ON public.store_delivery_settings;
+CREATE POLICY "Store owners manage their delivery settings" ON public.store_delivery_settings
+    FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Anyone can view delivery settings" ON public.store_delivery_settings;
+CREATE POLICY "Anyone can view delivery settings" ON public.store_delivery_settings
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Authenticated users can view delivery settings" ON public.store_delivery_settings;
+CREATE POLICY "Authenticated users can view delivery settings" ON public.store_delivery_settings
+    FOR SELECT TO authenticated USING (true);
+
+
+-- Tabela para taxas por bairro
+CREATE TABLE IF NOT EXISTS public.store_neighborhood_fees (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    neighborhood_name TEXT NOT NULL,
+    fee NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_store_neighborhood UNIQUE (store_id, neighborhood_name)
+);
+
+-- Trigger para updated_at
+DROP TRIGGER IF EXISTS handle_store_neighborhood_fees_updated_at ON public.store_neighborhood_fees;
+CREATE TRIGGER handle_store_neighborhood_fees_updated_at BEFORE UPDATE ON public.store_neighborhood_fees
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS para store_neighborhood_fees
+ALTER TABLE public.store_neighborhood_fees ENABLE ROW LEVEL SECURITY;
+
+-- Garantir permissões de leitura para authenticated
+GRANT SELECT ON public.store_neighborhood_fees TO authenticated;
+GRANT SELECT ON public.store_neighborhood_fees TO anon;
+GRANT ALL ON public.store_neighborhood_fees TO service_role;
+
+DROP POLICY IF EXISTS "Store owners manage their neighborhood fees" ON public.store_neighborhood_fees;
+CREATE POLICY "Store owners manage their neighborhood fees" ON public.store_neighborhood_fees
+    FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Anyone can view neighborhood fees" ON public.store_neighborhood_fees;
+CREATE POLICY "Anyone can view neighborhood fees" ON public.store_neighborhood_fees
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Authenticated users can view neighborhood fees" ON public.store_neighborhood_fees;
+CREATE POLICY "Authenticated users can view neighborhood fees" ON public.store_neighborhood_fees
+    FOR SELECT TO authenticated USING (true);
+
+-- Permissões adicionais para permitir salvamento pelos lojistas
+GRANT ALL ON public.store_delivery_settings TO authenticated;
+GRANT ALL ON public.store_neighborhood_fees TO authenticated;
+
+
+
+-- ==================================================================
+-- RPCs para Gestão de Usuários (Admin) - Adicionado em 14/01/2026
+-- ==================================================================
+
+-- RPC: Atualizar senha de usuário (Admin Only)
+CREATE OR REPLACE FUNCTION public.admin_update_user_password(
+    p_user_id UUID,
+    p_new_password TEXT
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+    -- Verifica se quem chama é admin
+    IF NOT public.is_admin() THEN
+        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem alterar senhas de outros usuários.';
+    END IF;
+
+    -- Atualiza a senha na tabela auth.users
+    UPDATE auth.users
+    SET encrypted_password = crypt(p_new_password, gen_salt('bf'))
+    WHERE id = p_user_id;
+
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Garantir permissões
+GRANT EXECUTE ON FUNCTION public.admin_update_user_password(UUID, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_update_user_password(UUID, TEXT) TO service_role;
+
+
+-- RPC: Criar usuário manualmente (Admin Only)
+-- Permite criar usuário passando metadados completos sem logar automaticamente
+CREATE OR REPLACE FUNCTION public.admin_create_user_manual(
+    p_email TEXT,
+    p_password TEXT,
+    p_metadata JSONB
+)
+RETURNS UUID AS $$
+DECLARE
+    v_user_id UUID;
+BEGIN
+    -- Verifica se quem chama é admin
+    IF NOT public.is_admin() THEN
+        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem criar usuários manualmente.';
+    END IF;
+
+    -- Verifica se usuário já existe
+    IF EXISTS (SELECT 1 FROM auth.users WHERE email = p_email) THEN
+        RAISE EXCEPTION 'Email já cadastrado.';
+    END IF;
+
+    -- Gera novo UUID
+    v_user_id := uuid_generate_v4();
+
+    -- Insere em auth.users
+    INSERT INTO auth.users (
+        instance_id,
+        id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        created_at,
+        updated_at,
+        confirmation_token,
+        recovery_token
+    ) VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        v_user_id,
+        'authenticated',
+        'authenticated',
+        p_email,
+        crypt(p_password, gen_salt('bf')),
+        now(),
+        '{"provider": "email", "providers": ["email"]}'::jsonb,
+        p_metadata,
+        now(),
+        now(),
+        '',
+        ''
+    );
+
+    -- Insere na tabela identity (necessário para login funcionar corretamente em alguns casos do Supabase)
+    INSERT INTO auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider,
+        provider_id,
+        last_sign_in_at,
+        created_at,
+        updated_at
+    ) VALUES (
+        v_user_id,
+        v_user_id,
+        format('{"sub": "%s", "email": "%s"}', v_user_id, p_email)::jsonb,
+        'email',
+        v_user_id,
+        now(),
+        now(),
+        now()
+    );
+
+    -- O trigger handle_new_user será disparado automaticamente após insert em auth.users
+    -- preenchendo user_profiles e outras tabelas
+
+    RETURN v_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Garantir permissões
+GRANT EXECUTE ON FUNCTION public.admin_create_user_manual(TEXT, TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_create_user_manual(TEXT, TEXT, JSONB) TO service_role;
+
+-- ==================================================================
+-- ASSOCIAÇÃO DE LOJISTAS E PARCEIROS (Adicionado em 14/01/2026)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.store_partners (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    partner_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, partner_id)
+);
+
+ALTER TABLE public.store_partners ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Store owners manage their partners" ON public.store_partners;
+CREATE POLICY "Store owners manage their partners" ON public.store_partners
+    FOR ALL USING (auth.uid() = store_id);
+
+GRANT ALL ON public.store_partners TO authenticated;
+GRANT ALL ON public.store_partners TO service_role;
+
+-- Nova política para permitir que lojistas gerenciem empréstimos de seus parceiros associados
+DROP POLICY IF EXISTS "Store partners can manage their drivers loans" ON public.partner_loans;
+CREATE POLICY "Store partners can manage their drivers loans" ON public.partner_loans
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.store_partners 
+            WHERE store_id = auth.uid() 
+            AND partner_id = partner_loans.user_id
+        )
+    );

@@ -115,15 +115,16 @@ export const CitySearchSelect: React.FC<CitySearchSelectProps> = ({
                         {!loading && cities.length > 0 && (
                             <div className="p-1">
                                 {cities.map((city) => {
-                                    const isSelected = value === city.name;
+                                    const cityFullName = `${city.name} - ${city.state}`;
+                                    const isSelected = value === cityFullName || value === city.name;
                                     return (
                                         <button
                                             key={city.id}
                                             type="button"
                                             onClick={() => handleSelect(city)}
                                             className={`w-full flex items-center justify-between px-3 py-3 text-sm rounded-xl transition-all text-left mb-0.5 ${isSelected
-                                                    ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold'
-                                                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold'
+                                                : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
                                                 }`}
                                         >
                                             <div className="flex flex-col">

@@ -4,6 +4,7 @@ import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { StoreShippingRules } from './StoreShippingRules';
+import { StoreDeliverySettings } from './StoreDeliverySettings';
 import { ExclusiveLock } from './ExclusiveLock';
 import { CitySearchSelect } from './CitySearchSelect';
 import { OpeningHoursModal } from './OpeningHoursModal';
@@ -272,7 +273,7 @@ export const StoreSettings: React.FC = () => {
                                             onSelect={(city) => {
                                                 setForm(prev => ({
                                                     ...prev,
-                                                    city: city.name,
+                                                    city: `${city.name} - ${city.state}`,
                                                     address_state: city.state
                                                 }));
                                             }}
@@ -333,16 +334,26 @@ export const StoreSettings: React.FC = () => {
                 </div>
             )}
 
-            {/* Shipping Rules (Super Store Only) */}
+            {/* Shipping Settings */}
             {activeTab === 'shipping' && (
-                isSuperStore ? (
-                    <StoreShippingRules />
-                ) : (
-                    <ExclusiveLock
-                        title="Regras de Frete Avançadas"
-                        description="Recurso Exclusivo: Acesso disponível apenas para Superlogista. Configure taxas fixas personalizadas ou crie regras de frete grátis."
-                    />
-                )
+                <div className="space-y-8">
+                    {/* Basic Delivery Settings (Available to Everyone) */}
+                    <StoreDeliverySettings />
+
+                    {/* Advanced Rules (Super Store Only) */}
+                    {isSuperStore ? (
+                        <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
+                            <StoreShippingRules />
+                        </div>
+                    ) : (
+                        <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
+                            <ExclusiveLock
+                                title="Regras Promocionais Avançadas"
+                                description="Recurso Exclusivo: Acesso disponível apenas para Superlogista. Crie regras de frete grátis por valor mínimo e outras promoções."
+                            />
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );

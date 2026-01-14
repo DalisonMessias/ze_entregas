@@ -29,10 +29,12 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
 };
 
 const LoansModule: React.FC = () => {
-    const { confirm } = useDialog();
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [activeView, setActiveView] = useState<'dashboard' | 'simulate' | 'myloans'>('dashboard');
+
+    // Modals State
+    const [requestModalOpen, setRequestModalOpen] = useState(false);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -51,7 +53,9 @@ const LoansModule: React.FC = () => {
 
     // Data
     const [loanTypes, setLoanTypes] = useState<LoanType[]>([]);
-    const [userLimit, setUserLimit] = useState<{ max_limit: number; allow_negative_balance: boolean } | null>(null);
+    const [userLimit, setUserLimit] = useState<{ max_limit: number; max_installments: number; allow_negative_balance: boolean } | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null); // 'store_partner', 'delivery_partner', etc.
+    const [userBalance, setUserBalance] = useState<number>(0);
     const [myLoans, setMyLoans] = useState<PartnerLoan[]>([]);
     const [selectedLoan, setSelectedLoan] = useState<PartnerLoan | null>(null);
     const [installments, setInstallments] = useState<LoanInstallment[]>([]);
@@ -73,14 +77,18 @@ const LoansModule: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [types, limit, loans] = await Promise.all([
+            const [types, limit, loans, role, balance] = await Promise.all([
                 cloud.getLoanTypes(),
                 cloud.getUserLoanLimit(),
-                cloud.getUserLoans()
+                cloud.getUserLoans(),
+                cloud.getUserRole(),
+                cloud.getUserWalletBalance()
             ]);
             setLoanTypes(types);
             setUserLimit(limit);
             setMyLoans(loans);
+            setUserRole(role || null);
+            setUserBalance(balance);
         } catch (e: any) {
             setToast({ type: 'error', message: e.message || 'Erro ao carregar dados' });
         } finally {
@@ -93,32 +101,61 @@ const LoansModule: React.FC = () => {
             return setToast({ type: 'error', message: 'Preencha todos os campos' });
         }
 
+        const amount = parseFloat(simForm.amount);
+        const limitValue = userLimit?.max_limit || 0;
+
+        if (amount > limitValue) {
+            return setToast({ type: 'error', message: `Valor acima do seu limite disponível (${formatCurrency(limitValue)})` });
+        }
+
         setSimulating(true);
         try {
-            const amount = parseFloat(simForm.amount.replace(/\./g, '').replace(',', '.'));
-            const result = await cloud.simulateLoan(amount, simForm.loanTypeId, simForm.installments);
-            setSimulation(result);
+            const res = await cloud.simulateLoan(amount, simForm.loanTypeId, simForm.installments);
+            setSimulation(res);
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro na simulação' });
+            setToast({ type: 'error', message: e.message || 'Erro ao simular' });
         } finally {
             setSimulating(false);
         }
     };
 
+    const handlePayInstallment = async (installment: LoanInstallment) => {
+        try {
+            // Get shop handle or use default
+            const settings = await cloud.getShopSettings();
+            const handle = settings?.infinitepay_handle || 'general';
+
+            const res = await cloud.createInfinitePayCheckout(
+                installment.id,
+                installment.amount,
+                handle,
+                [{ name: `Parcela Empréstimo #${installment.loan_id.substring(0, 8)}`, price: installment.amount, quantity: 1 }],
+                window.location.href,
+                `${window.location.origin}/api/infinitepay-webhook`
+            );
+
+            if (res.url) {
+                window.location.href = res.url;
+            } else {
+                setToast({ type: 'error', message: 'Erro ao gerar link de pagamento' });
+            }
+        } catch (e: any) {
+            setToast({ type: 'error', message: e.message || 'Erro ao processar pagamento' });
+        }
+    };
+
     const handleRequestLoan = async () => {
         if (!simulation) return;
+        setRequestModalOpen(true);
+    };
 
-        if (!simulation) return;
+    const confirmRequestLoan = async () => {
+        if (!simulation) {
+            setRequestModalOpen(false);
+            return;
+        }
 
-        const confirmed = await confirm({
-            title: 'Confirmar Solicitação',
-            message: `Deseja solicitar o empréstimo de ${simForm.amount} em ${simForm.installments}x?`,
-            confirmButtonText: 'Sim, solicitar',
-            cancelButtonText: 'Cancelar'
-        });
-
-        if (!confirmed) return;
-
+        setRequestModalOpen(false);
         setRequesting(true);
         try {
             const amount = parseFloat(simForm.amount.replace(/\./g, '').replace(',', '.'));
@@ -231,7 +268,7 @@ const LoansModule: React.FC = () => {
                                 <div className="grid grid-cols-2 gap-2">
                                     <p><span className="font-bold text-gray-700 dark:text-gray-300">Taxa:</span> {selectedType.interest_rate_monthly}% a.m.</p>
                                     <p><span className="font-bold text-gray-700 dark:text-gray-300">Máx. Parcelas:</span> {selectedType.max_installments}x</p>
-                                    <p><span className="font-bold text-gray-700 dark:text-gray-300">Limite da Modalidade:</span> {formatCurrency(selectedType.max_amount)}</p>
+                                    <p><span className="font-bold text-gray-700 dark:text-gray-300">Seu Limite:</span> {userLimit ? formatCurrency(userLimit.max_limit) : 'R$ 0,00'}</p>
                                 </div>
                             </div>
                         );
@@ -250,24 +287,57 @@ const LoansModule: React.FC = () => {
                                 return;
                             }
                             const amount = Number(value) / 100;
+
+                            // Validar contra o limite do usuário
+                            if (userLimit && amount > userLimit.max_limit) {
+                                setToast({ type: 'error', message: `Valor não pode ser maior que seu limite de ${formatCurrency(userLimit.max_limit)}` });
+                                return;
+                            }
+
                             const formatted = amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                             setSimForm({ ...simForm, amount: formatted });
                         }}
                         className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700"
                         placeholder="0,00"
                     />
+                    {userLimit && (
+                        <p className="text-xs text-gray-500 mt-1">
+                            Limite disponível: {formatCurrency(userLimit.max_limit)}
+                        </p>
+                    )}
                 </div>
 
                 <div>
-                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">Número de Parcelas</label>
-                    <input
-                        type="number"
-                        min="1"
-                        max={loanTypes.find(t => t.id === simForm.loanTypeId)?.max_installments || 12}
-                        value={simForm.installments}
-                        onChange={e => setSimForm({ ...simForm, installments: parseInt(e.target.value) || 1 })}
-                        className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700"
-                    />
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 block">Número de Parcelas</label>
+                    {(() => {
+                        const selectedType = loanTypes.find(t => t.id === simForm.loanTypeId);
+                        const typeMax = selectedType?.max_installments || 12;
+                        const userMax = userLimit?.max_installments || 12;
+                        const finalMax = Math.min(typeMax, userMax);
+
+                        return (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                                    {Array.from({ length: finalMax }, (_, i) => i + 1).map(n => (
+                                        <button
+                                            key={n}
+                                            type="button"
+                                            onClick={() => setSimForm({ ...simForm, installments: n })}
+                                            className={`py-3 rounded-xl text-sm font-bold transition-all border-2 ${simForm.installments === n
+                                                ? 'bg-brand-600 border-brand-600 text-white shadow-lg shadow-brand-500/20'
+                                                : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-brand-200'
+                                                }`}
+                                        >
+                                            {n}x
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center italic">
+                                    * Máximo permitido para seu nível: {finalMax}x
+                                </p>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 <Button fullWidth onClick={handleSimulate} disabled={simulating}>
@@ -302,7 +372,10 @@ const LoansModule: React.FC = () => {
                     <div className="pt-4 border-t border-green-300 dark:border-green-600">
                         <p className="text-xs text-green-700 dark:text-green-400 mb-3">
                             <AlertTriangle className="w-3 h-3 inline mr-1" />
-                            As parcelas serão descontadas automaticamente do seu repasse semanal.
+                            {userRole === 'store_partner'
+                                ? 'As parcelas deverão ser pagas mensalmente via boleto ou PIX.'
+                                : 'As parcelas serão descontadas automaticamente do seu repasse semanal.'
+                            }
                         </p>
                         <Button fullWidth onClick={handleRequestLoan} disabled={requesting}>
                             {requesting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
@@ -360,7 +433,7 @@ const LoansModule: React.FC = () => {
                                         <p className="font-bold text-gray-800 dark:text-white">Parcela {inst.installment_number}/{selectedLoan.installments_count}</p>
                                         <p className="text-xs text-gray-500">Vencimento: {new Date(inst.due_date).toLocaleDateString('pt-BR')}</p>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right flex flex-col items-end gap-1">
                                         <p className="font-bold">{formatCurrency(inst.amount)}</p>
                                         <span className={`text-xs px-2 py-1 rounded-full ${inst.status === 'PAID' ? 'bg-green-100 text-green-700' :
                                             inst.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
@@ -368,6 +441,25 @@ const LoansModule: React.FC = () => {
                                             }`}>
                                             {inst.status === 'PAID' ? 'Pago' : inst.status === 'OVERDUE' ? 'Atrasado' : 'Pendente'}
                                         </span>
+                                        {(() => {
+                                            const isStore = userRole === 'store_partner';
+                                            const isDelivery = userRole === 'delivery_partner' || userRole === 'delivery_person';
+                                            const canPay = (isStore || (isDelivery && userBalance < inst.amount)) &&
+                                                selectedLoan.status === 'ACTIVE' &&
+                                                inst.status !== 'PAID';
+
+                                            if (canPay) {
+                                                return (
+                                                    <button
+                                                        onClick={() => handlePayInstallment(inst)}
+                                                        className="mt-1 text-[10px] bg-brand-600 text-white px-2 py-1 rounded-lg hover:bg-brand-700 transition-colors font-bold shadow-sm"
+                                                    >
+                                                        Pagar com InfinitePay
+                                                    </button>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
                                 </div>
                             ))}
@@ -414,6 +506,41 @@ const LoansModule: React.FC = () => {
             {activeView === 'dashboard' && renderDashboard()}
             {activeView === 'simulate' && renderSimulate()}
             {activeView === 'myloans' && renderMyLoans()}
+
+            {/* Modal de Confirmação de Solicitação */}
+            {requestModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110]" onClick={() => setRequestModalOpen(false)}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 text-brand-600 rounded-full flex items-center justify-center mb-4">
+                                <DollarSign className="w-8 h-8" />
+                            </div>
+                            <h3 className="font-bold text-xl text-gray-800 dark:text-white mb-2">Confirmar Solicitação</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                Deseja solicitar o empréstimo de <span className="font-bold text-gray-800 dark:text-white">{simForm.amount}</span> em <span className="font-bold text-gray-800 dark:text-white">{simForm.installments}x</span>?
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={() => setRequestModalOpen(false)}
+                                fullWidth
+                                disabled={requesting}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={confirmRequestLoan}
+                                fullWidth
+                                disabled={requesting}
+                            >
+                                {requesting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+                                Confirmar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

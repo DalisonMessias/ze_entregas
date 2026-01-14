@@ -21,7 +21,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
     // Currency Formatter logic...
 
     useEffect(() => {
-        if (mask === 'currency' && value) {
+        if (mask === 'currency' && (value !== undefined && value !== null && value !== '')) {
             const valStr = String(value);
             if (!valStr.includes(',')) {
                 const num = Number(valStr);
@@ -34,7 +34,10 @@ export const CustomInput: React.FC<CustomInputProps> = ({
                 setDisplayValue(valStr);
             }
         } else {
-            setDisplayValue(String(value || ''));
+            // Se value for 0 (número), String(0) é "0". Se for 0, queremos mostrar "0,00" se for currency?
+            // Na verdade, se value for 0 e for currency, o if acima já pegaria se não fosse falsy.
+            // Ajustando a lógica do if acima para pegar o 0.
+            setDisplayValue(String(value ?? ''));
         }
     }, [value, mask]);
 
@@ -53,6 +56,52 @@ export const CustomInput: React.FC<CustomInputProps> = ({
             }
             const amount = Number(digits) / 100;
             const formatted = amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+            setDisplayValue(formatted);
+            if (onChange) {
+                const syntheticEvent = { ...e, target: { ...e.target, value: formatted } } as any;
+                onChange(syntheticEvent);
+            }
+        } else if (mask === 'phone') {
+            const digits = newVal.replace(/\D/g, '');
+            let formatted = digits;
+            if (digits.length <= 11) {
+                if (digits.length > 2) formatted = `(${digits.substring(0, 2)}) ${digits.substring(2)}`;
+                if (digits.length > 7) formatted = `(${digits.substring(0, 2)}) ${digits.substring(2, 7)}-${digits.substring(7, 11)}`;
+            } else {
+                formatted = `(${digits.substring(0, 2)}) ${digits.substring(2, 7)}-${digits.substring(7, 11)}`;
+            }
+            setDisplayValue(formatted);
+            if (onChange) {
+                const syntheticEvent = { ...e, target: { ...e.target, value: formatted } } as any;
+                onChange(syntheticEvent);
+            }
+        } else if (mask === 'cpf') {
+            const digits = newVal.replace(/\D/g, '').substring(0, 11);
+            let formatted = digits;
+            if (digits.length > 3) formatted = `${digits.substring(0, 3)}.${digits.substring(3)}`;
+            if (digits.length > 6) formatted = `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6)}`;
+            if (digits.length > 9) formatted = `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9)}`;
+            setDisplayValue(formatted);
+            if (onChange) {
+                const syntheticEvent = { ...e, target: { ...e.target, value: formatted } } as any;
+                onChange(syntheticEvent);
+            }
+        } else if (mask === 'cnpj') {
+            const digits = newVal.replace(/\D/g, '').substring(0, 14);
+            let formatted = digits;
+            if (digits.length > 2) formatted = `${digits.substring(0, 2)}.${digits.substring(2)}`;
+            if (digits.length > 5) formatted = `${digits.substring(0, 2)}.${digits.substring(2, 5)}.${digits.substring(5)}`;
+            if (digits.length > 8) formatted = `${digits.substring(0, 2)}.${digits.substring(2, 5)}.${digits.substring(5, 8)}/${digits.substring(8)}`;
+            if (digits.length > 12) formatted = `${digits.substring(0, 2)}.${digits.substring(2, 5)}.${digits.substring(5, 8)}/${digits.substring(8, 12)}-${digits.substring(12)}`;
+            setDisplayValue(formatted);
+            if (onChange) {
+                const syntheticEvent = { ...e, target: { ...e.target, value: formatted } } as any;
+                onChange(syntheticEvent);
+            }
+        } else if (mask === 'cep') {
+            const digits = newVal.replace(/\D/g, '').substring(0, 8);
+            let formatted = digits;
+            if (digits.length > 5) formatted = `${digits.substring(0, 5)}-${digits.substring(5)}`;
             setDisplayValue(formatted);
             if (onChange) {
                 const syntheticEvent = { ...e, target: { ...e.target, value: formatted } } as any;

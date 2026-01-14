@@ -1,13 +1,8 @@
-# TASK LIST - Melhorias de Equipe e Login
+# Lista de Tarefas (TASK_LIST.md)
 
-- [x] Analisar o componente `CollaboratorModule.tsx` e o fluxo de login
-- [x] Criar o plano de implementação
-- [x] Atualizar `supabase_global.sql` (adicionar coluna `name` e RPCs)
-- [x] Atualizar `cloud.ts` (modificar `createCollaborator`, adicionar `deleteCollaborator`)
-- [x] Modificar `StoreCollaborators.tsx` (adicionar campo Nome e exclusão)
-- [x] Revisar `StoreTeam.tsx` (desvinculação de entregadores)
-- [x] Atualizar `AuthWrapper.tsx` (lógica de login com e-mail para colaboradores)
-- [x] Atualizar `checklist.txt`
-- [x] Corrigir import de `Collaborator` em `cloud.ts`
-- [x] Corrigir erro de runtime (substring) em `StoreCollaborators.tsx`
-- [x] Corrigir erro SQL 42P13 (cannot change return type) adicionando `DROP FUNCTION IF EXISTS` em `supabase_global.sql`
+- [x] Analisar a estrutura do projeto e localizar a página /admin/usuarios
+- [x] Criar plano de implementação (Implementation Plan)
+- [x] Adicionar campo de senha no formulário de edição de usuário
+- [x] Substituir campo de cidade por seletor de cidades (com UF) na edição
+- [x] Implementar funcionalidade de adicionar novo usuário manualmente
+- [x] Corrigir erro de tipagem no componente LoansModule.tsx (setUserLimit)
