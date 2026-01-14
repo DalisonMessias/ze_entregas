@@ -96,16 +96,22 @@ const LoansModule: React.FC = () => {
         }
     };
 
+    // Computed Values
+    const usedLimit = myLoans
+        .filter(l => ['ACTIVE', 'PENDING'].includes(l.status))
+        .reduce((sum, l) => sum + (l.amount_requested || 0), 0);
+
+    const availableLimit = userLimit ? Math.max(0, userLimit.max_limit - usedLimit) : 0;
+
     const handleSimulate = async () => {
         if (!simForm.loanTypeId || !simForm.amount || simForm.installments < 1) {
             return setToast({ type: 'error', message: 'Preencha todos os campos' });
         }
 
-        const amount = parseFloat(simForm.amount);
-        const limitValue = userLimit?.max_limit || 0;
+        const amount = parseFloat(simForm.amount.replace(/\./g, '').replace(',', '.')); // Fix parse
 
-        if (amount > limitValue) {
-            return setToast({ type: 'error', message: `Valor acima do seu limite disponível (${formatCurrency(limitValue)})` });
+        if (amount > availableLimit) {
+            return setToast({ type: 'error', message: `Valor acima do seu limite disponível (${formatCurrency(availableLimit)})` });
         }
 
         setSimulating(true);
@@ -140,7 +146,12 @@ const LoansModule: React.FC = () => {
                 setToast({ type: 'error', message: 'Erro ao gerar link de pagamento' });
             }
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro ao processar pagamento' });
+            // Tratamento amigável para erro da função edge
+            if (e.message && e.message.includes('FunctionsFetchError')) {
+                setToast({ type: 'error', message: 'Erro de conexão com serviço de pagamento. Tente novamente mais tarde.' });
+            } else {
+                setToast({ type: 'error', message: e.message || 'Erro ao processar pagamento' });
+            }
         }
     };
 
@@ -158,13 +169,17 @@ const LoansModule: React.FC = () => {
         setRequestModalOpen(false);
         setRequesting(true);
         try {
-            const amount = parseFloat(simForm.amount.replace(/\./g, '').replace(',', '.'));
-            await cloud.requestLoan(amount, simForm.loanTypeId, simForm.installments);
+            // Amount já está no simulation, mas vamos garantir o parse correto do form se necessario, 
+            // porem melhor usar o simulation.amount que ja foi validado
+            await cloud.requestLoan(simulation.amount, simForm.loanTypeId, simForm.installments);
             setToast({ type: 'success', message: 'Empréstimo solicitado com sucesso!' });
             setSimulation(null);
             setSimForm({ loanTypeId: '', amount: '', installments: 1 });
+
+            // Recarregar dados para atualizar limite
+            await loadData();
+
             updateView('myloans');
-            loadData();
         } catch (e: any) {
             setToast({ type: 'error', message: e.message || 'Erro ao solicitar empréstimo' });
         } finally {
@@ -190,7 +205,7 @@ const LoansModule: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <p className="text-xs opacity-70">Limite Disponível</p>
-                        <p className="text-2xl font-black">{userLimit ? formatCurrency(userLimit.max_limit) : '---'}</p>
+                        <p className="text-2xl font-black">{formatCurrency(availableLimit)}</p>
                     </div>
                     <div>
                         <p className="text-xs opacity-70">Empréstimos Ativos</p>
@@ -268,7 +283,7 @@ const LoansModule: React.FC = () => {
                                 <div className="grid grid-cols-2 gap-2">
                                     <p><span className="font-bold text-gray-700 dark:text-gray-300">Taxa:</span> {selectedType.interest_rate_monthly}% a.m.</p>
                                     <p><span className="font-bold text-gray-700 dark:text-gray-300">Máx. Parcelas:</span> {selectedType.max_installments}x</p>
-                                    <p><span className="font-bold text-gray-700 dark:text-gray-300">Seu Limite:</span> {userLimit ? formatCurrency(userLimit.max_limit) : 'R$ 0,00'}</p>
+                                    <p><span className="font-bold text-gray-700 dark:text-gray-300">Seu Limite:</span> {formatCurrency(availableLimit)}</p>
                                 </div>
                             </div>
                         );
@@ -288,9 +303,9 @@ const LoansModule: React.FC = () => {
                             }
                             const amount = Number(value) / 100;
 
-                            // Validar contra o limite do usuário
-                            if (userLimit && amount > userLimit.max_limit) {
-                                setToast({ type: 'error', message: `Valor não pode ser maior que seu limite de ${formatCurrency(userLimit.max_limit)}` });
+                            // Validar contra o limite disponível calculado
+                            if (amount > availableLimit) {
+                                setToast({ type: 'error', message: `Valor não pode ser maior que seu limite disponível de ${formatCurrency(availableLimit)}` });
                                 return;
                             }
 
@@ -302,7 +317,7 @@ const LoansModule: React.FC = () => {
                     />
                     {userLimit && (
                         <p className="text-xs text-gray-500 mt-1">
-                            Limite disponível: {formatCurrency(userLimit.max_limit)}
+                            Limite disponível: {formatCurrency(availableLimit)}
                         </p>
                     )}
                 </div>
