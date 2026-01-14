@@ -29,6 +29,12 @@ serve(async (req) => {
             throw new Error('Unauthorized')
         }
 
+        const apiKey = Deno.env.get('INFINITEPAY_API_KEY');
+        if (!apiKey) {
+            console.error('Missing INFINITEPAY_API_KEY');
+            throw new Error('Configuration Error: INFINITEPAY_API_KEY is not set on server secrets.');
+        }
+
         const { amount, order_id, handle, items, redirect_url, webhook_url } = await req.json()
 
         if (!amount || !order_id || !handle) {
