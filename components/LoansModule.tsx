@@ -402,6 +402,18 @@ const LoansModule: React.FC = () => {
         </div>
     );
 
+    const translateStatus = (status: string) => {
+        const map: Record<string, string> = {
+            'PENDING': 'Pendente',
+            'ACTIVE': 'Ativo',
+            'PAID': 'Pago',
+            'REJECTED': 'Rejeitado',
+            'CANCELLED': 'Cancelado',
+            'OVERDUE': 'Atrasado'
+        };
+        return map[status] || status;
+    };
+
     const renderMyLoans = () => (
         <div className="space-y-6">
             <div className="flex items-center gap-3 mb-4">
@@ -422,11 +434,22 @@ const LoansModule: React.FC = () => {
                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${selectedLoan.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
                                 selectedLoan.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700' :
                                     selectedLoan.status === 'PAID' ? 'bg-green-100 text-green-700' :
-                                        'bg-gray-100 text-gray-700'
+                                        selectedLoan.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                                            'bg-gray-100 text-gray-700'
                                 }`}>
-                                {selectedLoan.status}
+                                {translateStatus(selectedLoan.status)}
                             </span>
                         </div>
+
+                        {selectedLoan.status === 'REJECTED' && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-xl mb-4">
+                                <p className="text-sm font-bold text-red-800 dark:text-red-300">Empréstimo Rejeitado</p>
+                                <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                                    {selectedLoan.rejection_reason || 'Motivo não informado pela análise de crédito.'}
+                                </p>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <p className="text-xs text-gray-500">Valor Solicitado</p>
@@ -439,47 +462,49 @@ const LoansModule: React.FC = () => {
                         </div>
                     </div>
 
-                    <div>
-                        <h5 className="font-bold text-gray-800 dark:text-white mb-3">Parcelas</h5>
-                        <div className="space-y-2">
-                            {installments.map(inst => (
-                                <div key={inst.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold text-gray-800 dark:text-white">Parcela {inst.installment_number}/{selectedLoan.installments_count}</p>
-                                        <p className="text-xs text-gray-500">Vencimento: {new Date(inst.due_date).toLocaleDateString('pt-BR')}</p>
-                                    </div>
-                                    <div className="text-right flex flex-col items-end gap-1">
-                                        <p className="font-bold">{formatCurrency(inst.amount)}</p>
-                                        <span className={`text-xs px-2 py-1 rounded-full ${inst.status === 'PAID' ? 'bg-green-100 text-green-700' :
-                                            inst.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
-                                                'bg-gray-100 text-gray-700'
-                                            }`}>
-                                            {inst.status === 'PAID' ? 'Pago' : inst.status === 'OVERDUE' ? 'Atrasado' : 'Pendente'}
-                                        </span>
-                                        {(() => {
-                                            const isStore = userRole === 'store_partner';
-                                            const isDelivery = userRole === 'delivery_partner' || userRole === 'delivery_person';
-                                            const canPay = (isStore || (isDelivery && userBalance < inst.amount)) &&
-                                                selectedLoan.status === 'ACTIVE' &&
-                                                inst.status !== 'PAID';
+                    {selectedLoan.status !== 'REJECTED' && selectedLoan.status !== 'CANCELLED' && (
+                        <div>
+                            <h5 className="font-bold text-gray-800 dark:text-white mb-3">Parcelas</h5>
+                            <div className="space-y-2">
+                                {installments.map(inst => (
+                                    <div key={inst.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                        <div>
+                                            <p className="font-bold text-gray-800 dark:text-white">Parcela {inst.installment_number}/{selectedLoan.installments_count}</p>
+                                            <p className="text-xs text-gray-500">Vencimento: {new Date(inst.due_date).toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                        <div className="text-right flex flex-col items-end gap-1">
+                                            <p className="font-bold">{formatCurrency(inst.amount)}</p>
+                                            <span className={`text-xs px-2 py-1 rounded-full ${inst.status === 'PAID' ? 'bg-green-100 text-green-700' :
+                                                inst.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
+                                                    'bg-gray-100 text-gray-700'
+                                                }`}>
+                                                {inst.status === 'PAID' ? 'Pago' : inst.status === 'OVERDUE' ? 'Atrasado' : 'Pendente'}
+                                            </span>
+                                            {(() => {
+                                                const isStore = userRole === 'store_partner';
+                                                const isDelivery = userRole === 'delivery_partner' || userRole === 'delivery_person';
+                                                const canPay = (isStore || (isDelivery && userBalance < inst.amount)) &&
+                                                    selectedLoan.status === 'ACTIVE' &&
+                                                    inst.status !== 'PAID';
 
-                                            if (canPay) {
-                                                return (
-                                                    <button
-                                                        onClick={() => handlePayInstallment(inst)}
-                                                        className="mt-1 text-[10px] bg-brand-600 text-white px-2 py-1 rounded-lg hover:bg-brand-700 transition-colors font-bold shadow-sm"
-                                                    >
-                                                        Pagar com InfinitePay
-                                                    </button>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
+                                                if (canPay) {
+                                                    return (
+                                                        <button
+                                                            onClick={() => handlePayInstallment(inst)}
+                                                            className="mt-1 text-[10px] bg-brand-600 text-white px-2 py-1 rounded-lg hover:bg-brand-700 transition-colors font-bold shadow-sm"
+                                                        >
+                                                            Pagar com InfinitePay
+                                                        </button>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             ) : (
                 <div className="space-y-2">
@@ -500,9 +525,10 @@ const LoansModule: React.FC = () => {
                                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${loan.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
                                     loan.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700' :
                                         loan.status === 'PAID' ? 'bg-green-100 text-green-700' :
-                                            'bg-gray-100 text-gray-700'
+                                            loan.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                                                'bg-gray-100 text-gray-700'
                                     }`}>
-                                    {loan.status}
+                                    {translateStatus(loan.status)}
                                 </span>
                             </div>
                         </div>

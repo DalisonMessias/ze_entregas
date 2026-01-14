@@ -3326,6 +3326,18 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- ==================================================================
+-- ALTERAÇÕES EM TABELAS EXISTENTES (Non-destructive)
+-- ==================================================================
+
+-- Adicionar rejection_reason em partner_loans
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_loans' AND column_name = 'rejection_reason') THEN
+        ALTER TABLE public.partner_loans ADD COLUMN rejection_reason TEXT;
+    END IF;
+END $$;
+
+-- ==================================================================
 -- 6.x STORAGE (BUCKETS E POLÍTICAS)
 -- ==================================================================
 

@@ -1275,17 +1275,14 @@ export interface LoanLevelLimit {
 export interface PartnerLoan {
     id: string;
     user_id: string;
-    loan_type_id?: string;
+    loan_type_id: string;
     amount_requested: number;
     amount_total: number;
     installments_count: number;
     interest_rate_applied: number;
-    status: LoanStatus;
-    approved_at?: string;
-    approved_by?: string;
-    rejected_at?: string;
-    rejection_reason?: string;
+    status: 'PENDING' | 'ACTIVE' | 'PAID' | 'REJECTED' | 'CANCELLED' | 'OVERDUE';
     created_at: string;
+    rejection_reason?: string;
     updated_at: string;
 
     // Joined data
