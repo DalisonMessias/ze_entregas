@@ -28,7 +28,7 @@ import { SectionErrorBoundary } from './SectionErrorBoundary';
 // Lazy Loaded Components
 const AdminPanel = React.lazy(() => import('./AdminPanel').then(module => ({ default: module.AdminPanel })));
 const PartnerArea = React.lazy(() => import('./PartnerArea').then(module => ({ default: module.PartnerArea })));
-const StoreWalletModule = React.lazy(() => import('./StoreWallet').then(module => ({ default: module.StoreWalletModule })));
+const StoreWalletModule = React.lazy(() => import('./StoreWallet'));
 const InternalOrders = React.lazy(() => import('./InternalOrders').then(module => ({ default: module.InternalOrders })));
 const StoreCatalog = React.lazy(() => import('./StoreCatalog').then(module => ({ default: module.StoreCatalog })));
 
@@ -66,6 +66,8 @@ const InstallApp = React.lazy(() => import('./InstallApp').then(module => ({ def
 const ChatAssistant = React.lazy(() => import('./ChatAssistant').then(module => ({ default: module.ChatAssistant })));
 const PrivacyPolicy = React.lazy(() => import('./PrivacyPolicy').then(module => ({ default: module.PrivacyPolicy })));
 const StreetsNeighborhoods = React.lazy(() => import('../src/pages/StreetsNeighborhoods'));
+const LoansModule = React.lazy(() => import('./LoansModule'));
+const CollaboratorWrapper = React.lazy(() => import('./CollaboratorWrapper').then(m => ({ default: m.CollaboratorWrapper })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -124,7 +126,11 @@ export type ActiveTab =
     | 'internal_orders'
     | 'store_catalog'
     | 'store_api_docs'
-    | 'streets_neighborhoods';
+    | 'streets_neighborhoods'
+    | 'streets_neighborhoods'
+    | 'store_loans'
+    | 'loans'
+    | 'collaborator_area';
 
 
 interface AppProps {
@@ -270,7 +276,24 @@ const UpgradeToPartnerPage: React.FC = () => {
 
 
 export const App: React.FC<AppProps> = ({ userId, userRole }) => {
-    const [activeTab, setActiveTab] = useState<ActiveTab>(() => getTabFromUrl(window.location.pathname) || 'shop'); // Fallback temporário, será ajustado no useEffect
+    const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+        const tabFromUrl = getTabFromUrl(window.location.pathname);
+        if (tabFromUrl) return tabFromUrl;
+
+        // Default tabs by role
+
+        if (userRole === 'admin') return 'admin_dashboard'; // Admin
+
+        if (userRole === 'store_partner') return 'wallet'; // Lojistas
+
+        if (userRole === 'delivery_person') return 'daily_panel'; //Entregadores Normais
+
+        if (userRole === 'delivery_partner') return 'partner'; // Entregadores Parceiros
+
+        if (userRole === 'collaborator') return 'collaborator_area'; // Colaboradores
+
+        return 'profile'; // Fallback padrão
+    });
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(true); // Default open on desktop
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -589,7 +612,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
         store_partner: 'wallet',
         delivery_partner: 'partner',
         delivery_person: 'daily_panel',
-        collaborator: 'shop'
+        collaborator: 'collaborator_area'
     };
 
     const allowedTabs: Record<UserRole, Set<ActiveTab>> = {
@@ -597,19 +620,19 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             'admin_dashboard', 'admin_users', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
             'admin_ai_config', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
-            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips'
+            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config'
         ]),
         store_partner: new Set<ActiveTab>([
-            'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs'
+            'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
-            'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses'
+            'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'loans'
         ]),
         delivery_person: new Set<ActiveTab>([
             'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses'
         ]),
-        collaborator: new Set<ActiveTab>(['shop'])
+        collaborator: new Set<ActiveTab>(['collaborator_area', 'profile', 'settings', 'support'])
     };
 
     const canAccessTab = (tab: ActiveTab) => {
@@ -700,6 +723,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 case 'internal_orders': return <InternalOrders />;
                 case 'store_catalog': return <StoreCatalog />;
                 case 'store_api_docs': return <StoreApiDocs onNavigate={navigate} />;
+                case 'store_loans': return <LoansModule />;
+                case 'collaborator_area': return <CollaboratorWrapper userId={userId} onLogout={handleLogout} />;
 
 
                 // Partner & Delivery Person Specific
@@ -711,6 +736,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 case 'reports': return <Reports history={storage.getHistory()} todayStats={{ value: 0, count: 0, km: 0 }} />;
                 case 'tasks': return <TaskList />;
                 case 'zebank': return <Zebank userRole={effectiveRole} />;
+                case 'loans': return <LoansModule />;
                 case 'associate_driver': return <AssociateDriver onBack={() => navigate('daily_panel')} />;
                 case 'heatmap': return <Heatmap userRole={effectiveRole} />;
                 case 'local_history': return <LocalHistoryPage />;
@@ -882,6 +908,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuSection title="Financeiro" />
                             <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
                             <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
+                            <MenuButton icon={CreditCard} label="Config. Empréstimos" tab="admin_loan_config" />
                             <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
 
                             <MenuSection title="Marketing & Conteúdo" />
@@ -905,6 +932,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
                             <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
                             <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
+                            <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
 
                             <MenuSection title="Gestão" />
                             <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
@@ -923,6 +951,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
                             <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
                             <MenuButton icon={Wallet} label="Zebank" tab="zebank" />
+                            <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
                             <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
 
                             <MenuSection title="Crescimento" />

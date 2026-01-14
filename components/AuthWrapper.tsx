@@ -304,47 +304,49 @@ export const AuthWrapper: React.FC = () => {
       return;
     }
 
-    // Colaborador Login
-    if (!emailInput.includes('@')) {
-      setAuthLoading(true);
-      setAuthMessage(null);
-      try {
+    setAuthLoading(true);
+    setAuthMessage(null);
+
+    try {
+      // 1. Tenta login de colaborador se não for e-mail ou se o lojista explicitamente quiser
+      // Mas a regra principal é: se incluir @, tenta Supabase primeiro.
+
+      if (!emailInput.includes('@')) {
         const collab = await cloud.loginCollaborator(emailInput, password);
         if (collab) {
           setCollaboratorSession(collab);
           return;
         } else {
           setAuthMessage({ type: 'error', text: 'Colaborador não encontrado ou senha incorreta.' });
+          return;
         }
-      } catch (e) {
-        console.error(e);
-        setAuthMessage({ type: 'error', text: 'Erro ao conectar.' });
-      } finally {
-        setAuthLoading(false);
       }
-      return;
-    }
 
-    logger.info('AUTH_LOGIN_SUBMIT', {
-      email: emailInput,
-    });
-
-    setAuthLoading(true);
-    setAuthMessage(null);
-
-    try {
+      // 2. Se for e-mail, tenta Supabase Auth
       const supabase = cloud.getClient();
       if (!supabase) throw new Error("Erro de conexão.");
 
-      const { error } = await supabase.auth.signInWithPassword({ email: emailInput, password });
-      if (error) throw error;
+      const { error: authError } = await supabase.auth.signInWithPassword({ email: emailInput, password });
+
+      if (!authError) {
+        // Sucesso no login padrão (Lojista/Entregador/Admin)
+        return;
+      }
+
+      // 3. Se falhar no Supabase e for e-mail, pode ser um colaborador usando e-mail
+      const collab = await cloud.loginCollaborator(emailInput, password);
+      if (collab) {
+        setCollaboratorSession(collab);
+        return;
+      }
+
+      // Se ambos falharem, reporta o erro do Supabase
+      throw authError;
 
     } catch (error: any) {
       logger.error('AUTH_LOGIN_ERROR', {
         email: emailInput,
         errorMessage: error?.message || String(error),
-        errorCode: (error as any)?.code,
-        errorName: (error as any)?.name,
       });
       const errorMessage = getErrorMessage(error);
       if (errorMessage.includes("Usuário não encontrado")) {
@@ -356,6 +358,7 @@ export const AuthWrapper: React.FC = () => {
       setAuthLoading(false);
     }
   };
+
 
   const handleForgotPassword = async () => {
     if (!emailOrPhone || !emailOrPhone.includes('@')) {
@@ -425,7 +428,7 @@ export const AuthWrapper: React.FC = () => {
     try {
       const [city, state] = selectedCity.split(' - ');
 
-      const roleToSend: UserRole = signupType === 'STORE_PARTNER' ? 'store_partner' : 'delivery_partner';
+      const roleToSend: UserRole = signupType === 'STORE_PARTNER' ? 'store_partner' : 'delivery_person';
 
       logger.info('AUTH_SIGNUP_SUBMIT', {
         type: signupType,
@@ -463,7 +466,17 @@ export const AuthWrapper: React.FC = () => {
         phoneDigits,
         cpfDigits || '',
         roleToSend,
-        city
+        city,
+        {
+          state,
+          store_name: signupType === 'STORE_PARTNER' ? storeName : undefined,
+          store_document: signupType === 'STORE_PARTNER' ? storeDocumentDigits : undefined,
+          address_street: signupType === 'STORE_PARTNER' ? addressStreet : undefined,
+          address_number: signupType === 'STORE_PARTNER' ? addressNumber : undefined,
+          address_district: signupType === 'STORE_PARTNER' ? addressNeighborhood : undefined,
+          address_zip: signupType === 'STORE_PARTNER' ? zipDigits : undefined,
+          address_state: signupType === 'STORE_PARTNER' ? state : undefined,
+        }
       );
       logger.info('AUTH_SIGNUP_SUCCESS', {
         type: signupType,

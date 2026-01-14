@@ -598,6 +598,7 @@ export interface PartnerDocument {
 
 export interface PartnerLevelBenefit {
     id: string;
+    partner_level: string;
     display_name: string;
     min_deliveries: number;
     min_rating: number;
@@ -1048,7 +1049,8 @@ export interface UserTerminalTransaction {
 export interface Collaborator {
     id: string;
     store_id: string;
-    username: string;
+    email: string;
+    name: string;
     active: boolean;
     created_at: string;
 }
@@ -1153,7 +1155,7 @@ export interface PendingPayoutSummary {
     last_payout_date?: string | null;
 }
 
-export type LoanStatus = 'VENCIDO' | 'PAGO' | 'EM_DIA';
+// LoanStatus definido mais abaixo no módulo de Empréstimos (2026-01-11)
 
 export interface LoanItem {
     id: string;
@@ -1239,3 +1241,95 @@ export interface MarketingElement {
     borderWidth?: number;
     rotation?: number; // Rotação em graus (0-360)
 }
+
+// ==================================================================
+// LOAN MODULE TYPES (2026-01-11)
+// ==================================================================
+
+export type LoanStatus = 'PENDING' | 'APPROVED' | 'ACTIVE' | 'REJECTED' | 'PAID' | 'DEFAULTED';
+export type InstallmentStatus = 'PENDING' | 'PAID' | 'PARTIALLY_PAID' | 'OVERDUE';
+
+export interface LoanType {
+    id: string;
+    name: string;
+    description?: string;
+    interest_rate_monthly: number;
+    max_installments: number;
+    max_amount?: number;
+    target_audience?: 'STORE' | 'COURIER' | 'BOTH';
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface LoanLevelLimit {
+    id: string;
+    partner_level: string;
+    max_limit: number;
+    allow_negative_balance: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PartnerLoan {
+    id: string;
+    user_id: string;
+    loan_type_id?: string;
+    amount_requested: number;
+    amount_total: number;
+    installments_count: number;
+    interest_rate_applied: number;
+    status: LoanStatus;
+    approved_at?: string;
+    approved_by?: string;
+    rejected_at?: string;
+    rejection_reason?: string;
+    created_at: string;
+    updated_at: string;
+
+    // Joined data
+    loan_type?: LoanType;
+    user?: { name: string; email: string; partner_level?: string };
+}
+
+export interface LoanInstallment {
+    id: string;
+    loan_id: string;
+    installment_number: number;
+    due_date: string;
+    amount: number;
+    status: InstallmentStatus;
+    paid_amount: number;
+    paid_at?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface LoanAuditLog {
+    id: string;
+    loan_id?: string;
+    action: string;
+    details: any;
+    performed_by?: string;
+    created_at: string;
+}
+
+export interface LoanSimulation {
+    amount: number;
+    loan_type_id: string;
+    installments_count: number;
+    interest_rate: number;
+    amount_per_installment: number;
+    total_amount: number;
+    total_interest: number;
+    first_due_date: string;
+}
+
+export interface LoanConfig {
+    is_enabled: boolean;
+    auto_approve: boolean;
+    require_approval: boolean;
+    allow_manual_payment: boolean;
+    deduct_from_payout: boolean;
+}
+

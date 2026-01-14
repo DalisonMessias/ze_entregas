@@ -8,6 +8,8 @@
 [x] Refatorar serviços para usar user_notifications
 [x] Exibir notificações no sino (tempo real via user_notifications)
 [x] Adicionar tabelas `fraud_alerts` e `identity_verifications` com RLS em `supabase_global.sql` para corrigir erro 42501 (2026-01-11)
+[x] Implementar sincronização de URL para abas internas do Módulo de Empréstimos (2026-01-12)
+[x] Exibir detalhes completos do Tipo de Empréstimo na tela de simulação (2026-01-12)
 [x] Implementar sistema de rotas (URL Sync) para corrigir loops e navegação (2026-01-11)
 [x] Corrigir persistência da API de Rotas usando tabela `api_keys` (2026-01-11)
 [x] Implementada resiliência e isolamento de erros com SectionErrorBoundaries e melhoria na Auth (2026-01-11)
@@ -16,10 +18,45 @@
 [x] Corrigido redirecionamento inicial: O sistema agora respeita a URL atual ao atualizar e não força a abertura em /perfil (2026-01-11)
 [x] Implementada funcionalidade de notificações específicas para usuários e busca detalhada no Painel Administrativo (2026-01-11)
 [x] Adicionado botão de recarregamento manual (F5) no menu superior para sincronização de dados (2026-01-11)
+[x] Corrigido erro 'Invalid hook call' no componente LoansModule alterando exportação para default e simplificando lazy load (2026-01-12)
 [x] Removida dependência conflitante `react-joyride` e limpos mocks de testes para corrigir erro de deploy no Vercel (2026-01-11)
 [x] Corrigida ordem de tabelas no `supabase_global.sql` movendo `system_tips` para após `is_admin` para corrigir erro SQL 42883 (2026-01-11)
 
 [x] Adicionada coluna `store_id` à tabela `products` em `supabase_global.sql` para corrigir erro SQL 42703 (2026-01-11)
 [x] Converter view system_maintenance em tabela para compatibilidade com Realtime e RLS (2026-01-11)
 [x] Implementar métodos faltantes em services/cloud.ts para corrigir erros no MerchantPOS (2026-01-11)
-[ ] Implementar Módulo de Empréstimos Completo (Tabelas, Admin, App, Lógica) (2026-01-11)
+[x] Implementar Módulo de Empréstimos Completo (Tabelas, Admin, App, Lógica) (2026-01-11)
+    - 5 tabelas no banco de dados (loan_types, loan_level_limits, partner_loans, loan_installments, loan_audit_logs)
+    - 1 função SQL para processamento automático (process_loan_installment_payments)
+    - 16 métodos de serviço em cloud.ts
+    - Interface Admin completa (AdminLoanConfig.tsx)
+    - Interface do entregador (LoansModule.tsx)
+    - Sistema de simulação, solicitação, aprovação e pagamento automático
+
+[x] Adicionada label descritiva no campo de limite máximo em 'AdminLoanConfig.tsx' para melhorar usabilidade (2026-01-12)
+[x] Implementada máscara de moeda no campo 'Limite Máximo' em 'AdminLoanConfig.tsx' para exibir valores formatados em R$ (2026-01-12)
+[x] Corrigidas permissões GRANT nas tabelas de empréstimos (loan_*) em 'supabase_global.sql' para permitir operações de escrita por usuários autenticados, resolvendo erro de 'permission denied' (2026-01-12)
+[x] Adicionados seeds e backfill para corrigir Limite Indefinido (---) no LoansModule (2026-01-12)
+[x] Corrigido erro RLS 42501 em `loan_installments` criando policy de INSERT para dono do empréstimo (2026-01-12)
+[x] Implementado redirecionamento inteligente em App.tsx baseado em UserRole (2026-01-12)
+[x] Substituído window.confirm por DialogService (modal personalizado) em LoansModule (2026-01-12)
+[x] Corrigido erro 'Invalid hook call' no componente StoreWalletModule alterando exportação para default e atualizando lazy load (2026-01-12)
+[x] Corrigido erro de permissão (RLS) para 'partner_requests' e 'store_delivery_partners' adicionando GRANT para authenticated (2026-01-12)
+[x] Corrigido erro de permissão (RLS) para 'driver_wallets' e 'driver_wallet_transactions' adicionando GRANT para authenticated (2026-01-12)
+[x] Corrigido erro de permissão (RLS) para 'driver_wallets' e 'driver_wallet_transactions' adicionando GRANT para authenticated (2026-01-12)
+[x] Adicionado módulo de Colaboradores (store_collaborators) ao `supabase_global.sql` (Tabela + 5 RPCs incluindo login) e funções em `cloud.ts` (2026-01-12)
+[x] Implementado redirecionamento de Colaboradores em App.tsx (CollaboratorWrapper) e alterado login para E-mail (2026-01-12)
+
+
+[x] Corrigido erro SQL 42P13 na função `get_store_collaborators` adicionando `DROP FUNCTION` em `supabase_global.sql` (2026-01-12)
+[x] Aprimorada gestão de equipe: Adicionado campo 'Nome' e login via 'E-mail' para colaboradores (2026-01-12)
+[x] Implementada exclusão permanente de colaboradores em `StoreCollaborators.tsx` e nova RPC `delete_collaborator` (2026-01-12)
+[x] Atualizada tabela `collaborators` e RPCs de autenticação no `supabase_global.sql` para suportar novas colunas (2026-01-12)
+[x] Refatorado `AuthWrapper.tsx` para suportar login híbrido de colaboradores via e-mail (2026-01-12)
+[x] Corrigido erro de importação da interface `Collaborator` no `services/cloud.ts` (2026-01-12)
+[x] Resolvido conflito de assinatura de funções SQL adicionando `DROP FUNCTION` para as RPCs de colaboradores (2026-01-12)
+[x] Corrigido erro de runtime 'Cannot read properties of undefined (reading substring)' em `StoreCollaborators.tsx` (2026-01-12)
+
+
+
+[x] Corrigido erro SQL 42P13 nas funcoes de colaboradores adicionando DROP FUNCTION IF EXISTS em supabase_global.sql (2026-01-13)

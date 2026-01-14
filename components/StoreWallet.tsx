@@ -98,7 +98,7 @@ const WalletSkeleton = () => (
 );
 
 // Main Component - acts as StoreWalletModule
-export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = ({ onNavigate }) => {
+const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) => {
     const [wallet, setWallet] = useState<StoreWallet | null>(null);
     const [requests, setRequests] = useState<PartnerRequest[]>([]);
     const [fees, setFees] = useState<PartnerFeeSettings | null>(null);
@@ -435,3 +435,5 @@ export const StoreWalletModule: React.FC<{ onNavigate?: (tab: any) => void }> = 
         </div>
     );
 };
+
+export default StoreWalletModule;

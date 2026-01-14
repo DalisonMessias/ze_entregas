@@ -1,13 +1,13 @@
-# Tarefas Realizadas
+# TASK LIST - Melhorias de Equipe e Login
 
-- [x] Analisar erro de dependência no package.json
-- [x] Confirmar desuso de react-joyride antigo
-- [x] Remover react-joyride do package.json
-- [x] Remover mocks de react-joyride# Lista de Tarefas
-
-- [x] Converter View `system_maintenance` para Tabela (Correção Realtime)
-- [x] Implementar Trigger para sincronizar `maintenance_settings` -> `system_maintenance`
-- [x] Verificar RLS de `spatial_ref_sys` (Verificação passiva - Não encontrado no arquivo)
-- [x] Validar script SQL completoação do projeto
-- [x] Corrigir supabase_global.sql movendo `system_tips` para resolver erro de `is_admin()`
-- [x] Adicionar coluna `store_id` na tabela `products` para corrigir erro SQL 42703
+- [x] Analisar o componente `CollaboratorModule.tsx` e o fluxo de login
+- [x] Criar o plano de implementação
+- [x] Atualizar `supabase_global.sql` (adicionar coluna `name` e RPCs)
+- [x] Atualizar `cloud.ts` (modificar `createCollaborator`, adicionar `deleteCollaborator`)
+- [x] Modificar `StoreCollaborators.tsx` (adicionar campo Nome e exclusão)
+- [x] Revisar `StoreTeam.tsx` (desvinculação de entregadores)
+- [x] Atualizar `AuthWrapper.tsx` (lógica de login com e-mail para colaboradores)
+- [x] Atualizar `checklist.txt`
+- [x] Corrigir import de `Collaborator` em `cloud.ts`
+- [x] Corrigir erro de runtime (substring) em `StoreCollaborators.tsx`
+- [x] Corrigir erro SQL 42P13 (cannot change return type) adicionando `DROP FUNCTION IF EXISTS` em `supabase_global.sql`

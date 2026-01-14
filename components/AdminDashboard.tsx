@@ -57,7 +57,7 @@ const SimpleBarChart = ({ data }: { data: { date: string, count: number }[] }) =
     );
 };
 
-export const AdminDashboard: React.FC = () => {
+export const AdminDashboard = () => {
     const [stats, setStats] = useState<AdminDashboardStats>({} as AdminDashboardStats);
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);

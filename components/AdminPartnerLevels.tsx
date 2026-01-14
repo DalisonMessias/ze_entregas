@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Star, Save, CheckCircle, AlertTriangle, Edit } from 'lucide-react';
+import { Loader2, Star, Save, CheckCircle, AlertTriangle, Edit, Trash2 } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { PartnerLevelBenefit } from '../types';
+import { useDialog } from '../utils/dialogService';
 
-export const AdminPartnerLevels: React.FC = () => {
+export const AdminPartnerLevels = () => {
+    const { confirm } = useDialog();
     const [levels, setLevels] = useState<PartnerLevelBenefit[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -35,12 +37,56 @@ export const AdminPartnerLevels: React.FC = () => {
         );
     };
 
+    const handleAddLevel = () => {
+        setLevels(prev => [...prev, {
+            id: `new-${crypto.randomUUID()}`,
+            partner_level: '',
+            display_name: '',
+            min_deliveries: 0,
+            min_rating: 0,
+            store_discount_percent: 0,
+            service_fee_reduction_percent: 0,
+        } as unknown as PartnerLevelBenefit]);
+    };
+
+    const handleDeleteLevel = async (levelId: string) => {
+        const confirmed = await confirm({
+            title: 'Confirmar Exclusão',
+            message: 'Tem certeza que deseja excluir este nível? Esta ação não pode ser desfeita.',
+        });
+
+        if (confirmed) {
+            if (levelId.startsWith('new-')) {
+                setLevels(prev => prev.filter(l => l.id !== levelId));
+                setFeedback({ type: 'success', text: 'Nível removido.' });
+                return;
+            }
+
+            try {
+                await cloud.adminDeletePartnerLevel(levelId);
+                setFeedback({ type: 'success', text: 'Nível excluído com sucesso!' });
+                loadLevels();
+            } catch (e: any) {
+                setFeedback({ type: 'error', text: 'Erro ao excluir o nível: ' + e.message });
+            }
+        }
+    };
+
     const handleSaveChanges = async () => {
         setSaving(true);
         setFeedback(null);
         try {
-            await cloud.adminUpdatePartnerLevels(levels);
+            // Remove temporary IDs before saving
+            const levelsToSave = levels.map(l => {
+                if (l.id.startsWith('new-')) {
+                    const { id, ...rest } = l;
+                    return rest;
+                }
+                return l;
+            });
+            await cloud.adminUpdatePartnerLevels(levelsToSave);
             setFeedback({ type: 'success', text: 'Níveis de parceiro salvos com sucesso!' });
+            loadLevels(); // Recarregar para obter IDs do banco de dados
         } catch (e: any) {
             setFeedback({ type: 'error', text: 'Erro ao salvar os níveis: ' + e.message });
         } finally {
@@ -55,22 +101,45 @@ export const AdminPartnerLevels: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                    <Star className="w-6 h-6 text-yellow-500" /> Configuração de Níveis de Parceiro
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Defina os benefícios e requisitos para cada nível de entregador parceiro.</p>
+                <div className="flex justify-between items-center mb-4">
+                    <div>
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                            <Star className="w-6 h-6 text-yellow-500" /> Configuração de Níveis de Parceiro
+                        </h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Defina os benefícios e requisitos para cada nível de entregador parceiro.</p>
+                    </div>
+                    <Button onClick={handleAddLevel}>Adicionar Nível</Button>
+                </div>
+
 
                 <div className="space-y-4">
                     {levels.map(level => (
-                        <div key={level.id} className="p-4 border rounded-lg dark:border-gray-700">
-                            <div className="mb-4">
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Nível</label>
-                                <input
-                                    type="text"
-                                    value={level.display_name}
-                                    onChange={e => handleLevelChange(level.id, 'display_name', e.target.value)}
-                                    className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 text-lg font-bold text-brand-600 dark:text-brand-400"
-                                />
+                        <div key={level.id} className="p-4 border rounded-lg dark:border-gray-700 relative group">
+                             <div className="absolute top-1 right-4">
+                                <Button variant="ghost" size="sm" onClick={() => handleDeleteLevel(level.id)}>
+                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                </Button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Identificador (Ex: BRONZE)</label>
+                                    <input
+                                        type="text"
+                                        value={level.partner_level}
+                                        onChange={e => handleLevelChange(level.id, 'partner_level', e.target.value.toUpperCase())}
+                                        className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 font-mono"
+                                        readOnly={!level.id.startsWith('new-')}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome de Exibição</label>
+                                    <input
+                                        type="text"
+                                        value={level.display_name}
+                                        onChange={e => handleLevelChange(level.id, 'display_name', e.target.value)}
+                                        className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600"
+                                    />
+                                </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                                 <div>

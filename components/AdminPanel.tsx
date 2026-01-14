@@ -557,7 +557,7 @@ const PartnerVerification: React.FC = () => {
 
 // --- CITY MANAGEMENT MODULE ---
 const CityManagement: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'cities' | 'requests'>('cities');
+    const [activeTab, setActiveTab] = useState<'active' | 'inactive' | 'requests'>('active');
     const [cities, setCities] = useState<City[]>([]);
     const [requests, setRequests] = useState<CityRequest[]>([]);
     const [loading, setLoading] = useState(false);
@@ -580,15 +580,16 @@ const CityManagement: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            if (activeTab === 'cities') {
+            if (activeTab === 'active' || activeTab === 'inactive') {
                 const data = await adminGetCities();
                 setCities(data);
             } else {
                 const data = await adminGetCityRequests();
                 setRequests(data);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
+            setToast({ type: 'error', message: "Erro ao carregar dados: " + (e.message || 'Erro desconhecido') });
         } finally {
             setLoading(false);
         }
@@ -613,8 +614,13 @@ const CityManagement: React.FC = () => {
         if (!ok) return;
         try {
             await adminUpdateCityStatus(city.id, !city.is_active);
-            loadData();
+            // Optimistic update
+            setCities(prev => prev.map(c => c.id === city.id ? { ...c, is_active: !city.is_active } : c));
             setToast({ type: 'success', message: `Cidade ${action === 'ativar' ? 'ativada' : 'desativada'}!` });
+
+            // If we are in specific tab, the city might "disappear" from view, which is expected behavior
+            // But we keep the optimized update to ensure smooth transition
+            loadData();
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro: " + e.message });
         }
@@ -648,17 +654,21 @@ const CityManagement: React.FC = () => {
         }
     };
 
+    // Filter cities based on active tab
+    const filteredCities = cities.filter(c => activeTab === 'active' ? c.is_active : !c.is_active);
+
     return (
         <div className="space-y-6 animate-in fade-in">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-fit">
-                <button onClick={() => setActiveTab('cities')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'cities' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Ativas</button>
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-fit flex-wrap">
+                <button onClick={() => setActiveTab('active')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'active' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Ativas</button>
+                <button onClick={() => setActiveTab('inactive')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'inactive' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Desativadas</button>
                 <button onClick={() => setActiveTab('requests')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Solicitações</button>
             </div>
 
-            {activeTab === 'cities' && (
+            {(activeTab === 'active' || activeTab === 'inactive') && (
                 <div className="space-y-6">
-                    {/* Add Form */}
+                    {/* Add Form - Show only on active tab or both? Showing on active seems cleaner or both. Let's show on both to allow re-activating via add if needed, or just adding new */}
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-3 items-center">
                         <input type="text" placeholder="Cidade" value={newName} onChange={e => setNewName(e.target.value)} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" />
                         <input type="text" placeholder="UF" maxLength={2} value={newState} onChange={e => setNewState(e.target.value.toUpperCase())} className="w-20 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" />
@@ -679,7 +689,14 @@ const CityManagement: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {cities.map(city => (
+                                {filteredCities.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="text-center p-8 text-gray-400">
+                                            Nenhuma cidade {activeTab === 'active' ? 'ativa' : 'desativada'} encontrada.
+                                        </td>
+                                    </tr>
+                                )}
+                                {filteredCities.map(city => (
                                     <tr key={city.id} className="border-b border-gray-100 dark:border-gray-700 last:border-0">
                                         <td className="px-4 py-3 font-bold dark:text-white">{city.name}</td>
                                         <td className="px-4 py-3">{city.state}</td>
@@ -692,6 +709,7 @@ const CityManagement: React.FC = () => {
                                             <Button size="sm" variant="outline" onClick={() => openEditModal(city)}><Edit2 className="w-3 h-3" /></Button>
                                             <Button size="sm" variant={city.is_active ? 'danger' : 'success'} onClick={() => handleToggleStatus(city)}>
                                                 {city.is_active ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
+                                                <span className="ml-1">{city.is_active ? 'Desativar' : 'Ativar'}</span>
                                             </Button>
                                         </td>
                                     </tr>

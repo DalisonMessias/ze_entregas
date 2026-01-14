@@ -10,7 +10,8 @@ export const StoreCollaborators = () => {
     const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAdd, setShowAdd] = useState(false);
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
+    const [name, setName] = useState('');
     const [password, setPassword] = useState('');
     const [creating, setCreating] = useState(false);
 
@@ -27,21 +28,36 @@ export const StoreCollaborators = () => {
     };
 
     const handleCreate = async () => {
-        if (!username || !password) return;
+        if (!email || !name || !password) return;
         setCreating(true);
         try {
-            await cloud.createCollaborator(username, password);
+            await cloud.createCollaborator(email, name, password);
             await alert({ title: 'Sucesso', message: 'Colaborador criado!' });
             setShowAdd(false);
-            setUsername('');
+            setEmail('');
+            setName('');
             setPassword('');
             load();
         } catch (e) {
-            await alert({ title: 'Erro', message: 'Falha ao criar. Verifique se o nome já existe.' });
+            await alert({ title: 'Erro', message: 'Falha ao criar. Verifique os dados.' });
         } finally {
             setCreating(false);
         }
     };
+
+    const handleDelete = async (id: string, collaboratorName: string) => {
+        const confirm = window.confirm(`Deseja realmente excluir o colaborador ${collaboratorName}? Esta ação é permanente.`);
+        if (!confirm) return;
+
+        try {
+            await cloud.deleteCollaborator(id);
+            setCollaborators(prev => prev.filter(c => c.id !== id));
+            await alert({ title: 'Sucesso', message: 'Colaborador excluído.' });
+        } catch {
+            await alert({ title: 'Erro', message: 'Falha ao excluir colaborador.' });
+        }
+    };
+
 
     const toggleStatus = async (id: string, current: boolean) => {
         const newStatus = !current;
@@ -68,10 +84,12 @@ export const StoreCollaborators = () => {
             {showAdd && (
                 <div className="bg-white dark:bg-gray-800 border-l-4 border-brand-500 p-6 rounded-r-xl shadow-lg space-y-4 animate-in slide-in-from-top-2">
                     <p className="font-bold text-gray-800 dark:text-white">Novo Colaborador</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <CustomInput placeholder="Nome de Usuário (Login)" value={username} onChange={e => setUsername(e.target.value)} />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <CustomInput placeholder="Nome Completo" value={name} onChange={e => setName(e.target.value)} />
+                        <CustomInput placeholder="E-mail de Login" value={email} onChange={e => setEmail(e.target.value)} />
                         <CustomInput placeholder="Senha de Acesso" type="password" value={password} onChange={e => setPassword(e.target.value)} />
                     </div>
+
                     <div className="flex justify-end">
                         <Button onClick={handleCreate} disabled={creating} className="px-8">
                             {creating ? <Loader2 className="animate-spin" /> : 'Salvar Acesso'}
@@ -88,23 +106,36 @@ export const StoreCollaborators = () => {
                         <div key={c.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center group hover:border-brand-200 transition-colors">
                             <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${c.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                    {c.username.substring(0, 2).toUpperCase()}
+                                    {(c.name || c.email || (c as any).username || '?').substring(0, 2).toUpperCase()}
                                 </div>
                                 <div>
-                                    <div className="font-bold dark:text-white">{c.username}</div>
-                                    <div className={`text-xs flex items-center gap-1 ${c.active ? 'text-green-500' : 'text-red-500'}`}>
+                                    <div className="font-bold dark:text-white">{c.name || (c as any).username || 'Sem Nome'}</div>
+                                    <div className="text-xs text-gray-500">{c.email || (c as any).username}</div>
+
+                                    <div className={`text-xs flex items-center gap-1 mt-1 ${c.active ? 'text-green-500' : 'text-red-500'}`}>
                                         <span className={`w-2 h-2 rounded-full ${c.active ? 'bg-green-500' : 'bg-red-500'}`}></span>
                                         {c.active ? 'Ativo' : 'Inativo'}
                                     </div>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => toggleStatus(c.id, c.active)}
-                                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
-                                title={c.active ? "Desativar" : "Ativar"}
-                            >
-                                {c.active ? <StopCircle className="w-5 h-5 text-red-400 group-hover:text-red-600" /> : <PlayCircle className="w-5 h-5 text-green-400 group-hover:text-green-600" />}
-                            </button>
+                            <div className="flex gap-1">
+                                <button
+                                    onClick={() => toggleStatus(c.id, c.active)}
+                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
+                                    title={c.active ? "Desativar" : "Ativar"}
+                                >
+                                    {c.active ? <StopCircle className="w-5 h-5 text-red-400" /> : <PlayCircle className="w-5 h-5 text-green-400" />}
+                                </button>
+                                <button
+                                    onClick={() => handleDelete(c.id, c.name || c.email || (c as any).username || 'Colaborador')}
+                                    className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors"
+
+                                    title="Excluir Permanentemente"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                </button>
+                            </div>
+
                         </div>
                     ))}
                 </div>

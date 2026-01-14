@@ -61,6 +61,8 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/catalogo': 'store_catalog',
     '/loja/api': 'store_api_docs',
     '/loja/zepay': 'zepay_store',
+    '/loja/emprestimos': 'store_loans',
+    '/colaborador': 'collaborator_area',
 
     // Delivery Partner/Person Routes
     '/entregador/inicio': 'daily_panel',
@@ -71,6 +73,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/entregador/historico-local': 'local_history',
     '/entregador/banco': 'zebank',
     '/entregador/associar': 'associate_driver',
+    '/entregador/emprestimos': 'loans',
 
     // Public/Misc
     '/instalar': 'install_app',

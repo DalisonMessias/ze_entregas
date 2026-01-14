@@ -792,7 +792,7 @@ GRANT ALL ON public.maintenance_settings TO authenticated;
 -- Mapeia os campos usados na UI para os nomes presentes na tabela
 -- Tabela de sistema para manutenção (Compatibilidade com Realtime)
 -- Substitui VIEW antiga para permitir publicação no Supabase Realtime e evitar erro 22023
-DROP VIEW IF EXISTS public.system_maintenance;
+DROP TABLE IF EXISTS public.system_maintenance;
 
 CREATE TABLE IF NOT EXISTS public.system_maintenance (
     id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -1271,6 +1271,7 @@ DROP TRIGGER IF EXISTS handle_partner_requests_updated_at ON public.partner_requ
 CREATE TRIGGER handle_partner_requests_updated_at BEFORE UPDATE ON public.partner_requests
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.partner_requests ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_requests TO authenticated;
 DROP POLICY IF EXISTS "Store owners can manage their own requests" ON public.partner_requests;
 DO $$
 BEGIN
@@ -1307,6 +1308,7 @@ CREATE TABLE IF NOT EXISTS public.store_delivery_partners (
 CREATE INDEX IF NOT EXISTS store_delivery_partners_store_id_idx ON public.store_delivery_partners (store_id);
 CREATE INDEX IF NOT EXISTS store_delivery_partners_partner_id_idx ON public.store_delivery_partners (partner_id);
 ALTER TABLE public.store_delivery_partners ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_delivery_partners TO authenticated;
 DROP POLICY IF EXISTS "Store owners can manage their associated partners" ON public.store_delivery_partners;
 DO $$
 BEGIN
@@ -1330,6 +1332,15 @@ BEGIN
 -- Política para permitir que parceiros leiam perfis com base em associação ou visibilidade pública;
     END IF;
 END $$;
+
+-- Política para permitir leitura durante avaliação de políticas de outras tabelas
+-- Necessária para que delivery_person possa acessar user_profiles sem erro de permissão
+DROP POLICY IF EXISTS "Authenticated users can read store_delivery_partners" ON public.store_delivery_partners;
+CREATE POLICY "Authenticated users can read store_delivery_partners" 
+    ON public.store_delivery_partners 
+    FOR SELECT 
+    USING (true);
+
 DROP POLICY IF EXISTS "Partners and stores can view associated profiles" ON public.user_profiles;
 CREATE POLICY "Partners and stores can view associated profiles" ON public.user_profiles
     FOR SELECT USING (
@@ -1439,7 +1450,8 @@ DROP TRIGGER IF EXISTS handle_available_cities_updated_at ON public.available_ci
 CREATE TRIGGER handle_available_cities_updated_at BEFORE UPDATE ON public.available_cities
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.available_cities ENABLE ROW LEVEL SECURITY;
-GRANT SELECT ON public.available_cities TO anon, authenticated;
+GRANT SELECT ON public.available_cities TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.available_cities TO authenticated;
 DROP POLICY IF EXISTS "Public can read available cities" ON public.available_cities;
 DO $$
 BEGIN
@@ -2191,6 +2203,7 @@ DROP TRIGGER IF EXISTS handle_driver_wallets_updated_at ON public.driver_wallets
 CREATE TRIGGER handle_driver_wallets_updated_at BEFORE UPDATE ON public.driver_wallets
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.driver_wallets ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.driver_wallets TO authenticated;
 DROP POLICY IF EXISTS "Drivers can access their own wallet" ON public.driver_wallets;
 DO $$
 BEGIN
@@ -2223,6 +2236,7 @@ DROP TRIGGER IF EXISTS handle_driver_wallet_transactions_updated_at ON public.dr
 CREATE TRIGGER handle_driver_wallet_transactions_updated_at BEFORE UPDATE ON public.driver_wallet_transactions
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.driver_wallet_transactions ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.driver_wallet_transactions TO authenticated;
 DROP POLICY IF EXISTS "Drivers can view their own wallet transactions" ON public.driver_wallet_transactions;
 DO $$
 BEGIN
@@ -3661,7 +3675,8 @@ CREATE POLICY "Stores can manage order items" ON public.orders_items
         EXISTS (SELECT 1 FROM public.orders_collaborators oc WHERE oc.id = order_id AND oc.store_id = auth.uid())
     );
 
--- Fun��es de Autentica��o de Colaborador (usando pgcrypto)
+-- Funes de Autenticao de Colaborador (usando pgcrypto)
+DROP FUNCTION IF EXISTS public.login_collaborator(TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.login_collaborator(p_username TEXT, p_password TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -3682,6 +3697,7 @@ BEGIN
     END IF;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP FUNCTION IF EXISTS public.create_collaborator(TEXT, TEXT, UUID);
 CREATE OR REPLACE FUNCTION public.create_collaborator(p_username TEXT, p_password TEXT, p_store_id UUID)
 RETURNS UUID AS $$
 DECLARE
@@ -3785,6 +3801,7 @@ END $$;
 
 
 -- RPC para listar colaboradores da loja
+DROP FUNCTION IF EXISTS public.get_store_collaborators(UUID);
 CREATE OR REPLACE FUNCTION public.get_store_collaborators(p_store_id UUID)
 RETURNS JSONB AS $$
 BEGIN
@@ -3797,6 +3814,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- RPC para alterar status do colaborador
+DROP FUNCTION IF EXISTS public.toggle_collaborator_status(UUID, BOOLEAN);
 CREATE OR REPLACE FUNCTION public.toggle_collaborator_status(p_collaborator_id UUID, p_active BOOLEAN)
 RETURNS VOID AS $$
 BEGIN
@@ -4397,10 +4415,19 @@ CREATE TABLE IF NOT EXISTS public.loan_types (
     interest_rate_monthly NUMERIC(5, 2) NOT NULL DEFAULT 0,
     max_installments INT NOT NULL DEFAULT 1,
     max_amount NUMERIC(10, 2), -- Limite específico do tipo (opcional)
+    target_audience VARCHAR(20) DEFAULT 'BOTH', -- 'STORE', 'COURIER', 'BOTH'
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Safe migration for target_audience column
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'loan_types' AND column_name = 'target_audience') THEN
+        ALTER TABLE public.loan_types ADD COLUMN target_audience VARCHAR(20) DEFAULT 'BOTH';
+    END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS handle_loan_types_updated_at ON public.loan_types;
 CREATE TRIGGER handle_loan_types_updated_at BEFORE UPDATE ON public.loan_types
@@ -4414,7 +4441,7 @@ CREATE POLICY "Public read access to loan_types" ON public.loan_types FOR SELECT
 DROP POLICY IF EXISTS "Admins can manage loan_types" ON public.loan_types;
 CREATE POLICY "Admins can manage loan_types" ON public.loan_types FOR ALL USING (public.is_admin());
 
-GRANT SELECT ON public.loan_types TO authenticated;
+GRANT ALL ON public.loan_types TO authenticated;
 GRANT ALL ON public.loan_types TO service_role;
 
 
@@ -4440,7 +4467,7 @@ CREATE POLICY "Public read access to loan_level_limits" ON public.loan_level_lim
 DROP POLICY IF EXISTS "Admins can manage loan_level_limits" ON public.loan_level_limits;
 CREATE POLICY "Admins can manage loan_level_limits" ON public.loan_level_limits FOR ALL USING (public.is_admin());
 
-GRANT SELECT ON public.loan_level_limits TO authenticated;
+GRANT ALL ON public.loan_level_limits TO authenticated;
 GRANT ALL ON public.loan_level_limits TO service_role;
 
 
@@ -4483,7 +4510,7 @@ DROP POLICY IF EXISTS "Admins can manage partner_loans" ON public.partner_loans;
 CREATE POLICY "Admins can manage partner_loans" ON public.partner_loans
     FOR ALL USING (public.is_admin());
 
-GRANT SELECT, INSERT ON public.partner_loans TO authenticated;
+GRANT ALL ON public.partner_loans TO authenticated;
 GRANT ALL ON public.partner_loans TO service_role;
 
 
@@ -4518,7 +4545,7 @@ DROP POLICY IF EXISTS "Admins can manage loan_installments" ON public.loan_insta
 CREATE POLICY "Admins can manage loan_installments" ON public.loan_installments
     FOR ALL USING (public.is_admin());
 
-GRANT SELECT ON public.loan_installments TO authenticated;
+GRANT ALL ON public.loan_installments TO authenticated;
 GRANT ALL ON public.loan_installments TO service_role;
 
 
@@ -4541,4 +4568,197 @@ CREATE POLICY "Admins can view loan audits" ON public.loan_audit_logs
     FOR SELECT USING (public.is_admin());
 
 GRANT ALL ON public.loan_audit_logs TO service_role;
+GRANT ALL ON public.loan_audit_logs TO authenticated;
+
+-- ==================================================================
+-- LOAN PAYMENT PROCESSING FUNCTION (2026-01-11)
+-- ==================================================================
+
+-- Função para processar pagamento de parcelas de empréstimo
+-- Deve ser chamada durante o processamento de repasses semanais
+CREATE OR REPLACE FUNCTION public.process_loan_installment_payments(
+    p_user_id UUID,
+    p_payout_amount NUMERIC
+)
+RETURNS TABLE (
+    remaining_payout NUMERIC,
+    installments_paid INT,
+    total_deducted NUMERIC
+) AS $$
+DECLARE
+    v_installment RECORD;
+    v_remaining NUMERIC := p_payout_amount;
+    v_paid_count INT := 0;
+    v_total_deducted NUMERIC := 0;
+    v_allow_negative BOOLEAN := FALSE;
+    v_partner_level TEXT;
+BEGIN
+    -- Buscar nível do parceiro e verificar se permite saldo negativo
+    SELECT partner_level INTO v_partner_level 
+    FROM public.user_profiles 
+    WHERE id = p_user_id;
+    
+    IF v_partner_level IS NOT NULL THEN
+        SELECT allow_negative_balance INTO v_allow_negative
+        FROM public.loan_level_limits
+        WHERE partner_level = v_partner_level;
+    END IF;
+    
+    -- Processar parcelas pendentes em ordem de vencimento
+    FOR v_installment IN 
+        SELECT li.*
+        FROM public.loan_installments li
+        INNER JOIN public.partner_loans pl ON li.loan_id = pl.id
+        WHERE pl.user_id = p_user_id
+        AND pl.status = 'ACTIVE'
+        AND li.status IN ('PENDING', 'OVERDUE')
+        AND li.due_date <= CURRENT_DATE
+        ORDER BY li.due_date ASC
+    LOOP
+        DECLARE
+            v_amount_to_pay NUMERIC := v_installment.amount - COALESCE(v_installment.paid_amount, 0);
+        BEGIN
+            -- Se o repasse cobre a parcela
+            IF v_remaining >= v_amount_to_pay THEN
+                -- Pagar parcela completa
+                UPDATE public.loan_installments
+                SET 
+                    status = 'PAID',
+                    paid_amount = v_installment.amount,
+                    paid_at = NOW()
+                WHERE id = v_installment.id;
+                
+                v_remaining := v_remaining - v_amount_to_pay;
+                v_total_deducted := v_total_deducted + v_amount_to_pay;
+                v_paid_count := v_paid_count + 1;
+                
+                -- Log de auditoria
+                INSERT INTO public.loan_audit_logs (loan_id, action, details, performed_by)
+                VALUES (
+                    v_installment.loan_id,
+                    'INSTALLMENT_PAID',
+                    jsonb_build_object(
+                        'installment_id', v_installment.id,
+                        'installment_number', v_installment.installment_number,
+                        'amount', v_amount_to_pay,
+                        'payment_type', 'AUTOMATIC_DEDUCTION'
+                    ),
+                    p_user_id
+                );
+                
+            -- Se o repasse não cobre, mas permite saldo negativo
+            ELSIF v_allow_negative THEN
+                -- Pagar parcela mesmo ficando negativo
+                UPDATE public.loan_installments
+                SET 
+                    status = 'PAID',
+                    paid_amount = v_installment.amount,
+                    paid_at = NOW()
+                WHERE id = v_installment.id;
+                
+                v_remaining := v_remaining - v_amount_to_pay;
+                v_total_deducted := v_total_deducted + v_amount_to_pay;
+                v_paid_count := v_paid_count + 1;
+                
+                -- Log de auditoria
+                INSERT INTO public.loan_audit_logs (loan_id, action, details, performed_by)
+                VALUES (
+                    v_installment.loan_id,
+                    'INSTALLMENT_PAID_NEGATIVE_BALANCE',
+                    jsonb_build_object(
+                        'installment_id', v_installment.id,
+                        'installment_number', v_installment.installment_number,
+                        'amount', v_amount_to_pay,
+                        'payment_type', 'AUTOMATIC_DEDUCTION',
+                        'resulting_balance', v_remaining
+                    ),
+                    p_user_id
+                );
+                
+            -- Se não cobre e não permite negativo
+            ELSE
+                -- Marcar como atrasada
+                UPDATE public.loan_installments
+                SET status = 'OVERDUE'
+                WHERE id = v_installment.id;
+                
+                -- Log de auditoria
+                INSERT INTO public.loan_audit_logs (loan_id, action, details, performed_by)
+                VALUES (
+                    v_installment.loan_id,
+                    'INSTALLMENT_OVERDUE',
+                    jsonb_build_object(
+                        'installment_id', v_installment.id,
+                        'installment_number', v_installment.installment_number,
+                        'amount_due', v_amount_to_pay,
+                        'available_balance', v_remaining
+                    ),
+                    p_user_id
+                );
+            END IF;
+        END;
+    END LOOP;
+    
+    -- Verificar se algum empréstimo foi totalmente pago
+    UPDATE public.partner_loans pl
+    SET status = 'PAID'
+    WHERE pl.user_id = p_user_id
+    AND pl.status = 'ACTIVE'
+    AND NOT EXISTS (
+        SELECT 1 FROM public.loan_installments li
+        WHERE li.loan_id = pl.id
+        AND li.status != 'PAID'
+    );
+    
+    RETURN QUERY SELECT v_remaining, v_paid_count, v_total_deducted;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Garantir permissões
+GRANT EXECUTE ON FUNCTION public.process_loan_installment_payments(UUID, NUMERIC) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.process_loan_installment_payments(UUID, NUMERIC) TO service_role;
+
+-- ==================================================================
+-- SEEDS & BACKFILLS (LOANS MODULE) - Adicionado em 2026-01-12
+-- ==================================================================
+
+-- 1. Inserir Limites por Nível (Se não existirem)
+INSERT INTO public.loan_level_limits (partner_level, max_limit, allow_negative_balance)
+VALUES
+    ('BRONZE', 200.00, false),
+    ('PRATA', 500.00, false),
+    ('OURO', 1000.00, true),
+    ('DIAMANTE', 2500.00, true)
+ON CONFLICT (partner_level) DO UPDATE
+SET max_limit = EXCLUDED.max_limit,
+    allow_negative_balance = EXCLUDED.allow_negative_balance;
+
+-- 2. Backfill: Garantir que usuários tenham nível 'BRONZE' se estiver nulo
+UPDATE public.user_profiles
+SET partner_level = 'BRONZE'
+WHERE partner_level IS NULL OR partner_level = '';
+
+-- 3. Inserir Tipos de Empréstimo Padrão (Evitando duplicidade)
+INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
+SELECT 'Antecipação de Recebíveis', 'Antecipe seus ganhos futuros com taxas reduzidas.', 2.50, 4, 1000.00, 'BOTH', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Antecipação de Recebíveis');
+
+INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
+SELECT 'Capital de Giro', 'Empréstimo para impulsionar seu negócio.', 3.90, 12, 5000.00, 'STORE', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Capital de Giro');
+
+INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
+SELECT 'Crédito Pessoal', 'Dinheiro rápido para emergências.', 4.50, 6, 2000.00, 'COURIER', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Crédito Pessoal');
+
+-- 4. Correção RLS: Permitir INSERT em loan_installments pelo usuário dono do empréstimo
+DROP POLICY IF EXISTS "Users can create loan installments" ON public.loan_installments;
+CREATE POLICY "Users can create loan installments" ON public.loan_installments
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.partner_loans 
+            WHERE id = loan_installments.loan_id 
+            AND user_id = auth.uid()
+        )
+    );
 

@@ -9,7 +9,7 @@ import {
     ReferralData, ReferralHistoryItem, StoreReportData, StoreShippingRule,
     AdminWalletUser, AdminDashboardStats, PWASettings, MaintenanceData,
     AppNotification, PayoutSummary, AppSlide, StoreProduct,
-    UserTerminal, UserTerminalHistoryItem, SalesSimulation
+    UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -226,10 +226,10 @@ export const adminGetPendingPayouts = async (): Promise<any[]> => {
 
 // --- COLLABORATOR AUTH ---
 
-export const loginCollaborator = async (username: string, password: string): Promise<any | null> => {
+export const loginCollaborator = async (email: string, password: string): Promise<Collaborator | null> => {
     const sb = getClient();
     if (!sb) return null;
-    const { data, error } = await sb.rpc('login_collaborator', { p_username: username, p_password: password });
+    const { data, error } = await sb.rpc('login_collaborator', { p_email: email, p_password: password });
     if (error) {
         console.error('Login Collaborator Failed', error);
         return null;
@@ -237,23 +237,37 @@ export const loginCollaborator = async (username: string, password: string): Pro
     return data;
 };
 
-export const createCollaborator = async (username: string, password: string): Promise<string | null> => {
+
+export const createCollaborator = async (email: string, name: string, password: string): Promise<string | null> => {
     const sb = getClient();
     if (!sb) return null;
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return null; // Must be store owner logged in
 
     const { data, error } = await sb.rpc('create_collaborator', {
-        p_username: username,
+        p_email: email,
+        p_name: name,
         p_password: password,
         p_store_id: user.id
     });
+
     if (error) {
         console.error('Create Collaborator Failed', error);
         throw error;
     }
     return data;
 };
+
+export const deleteCollaborator = async (collaboratorId: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.rpc('delete_collaborator', { p_collaborator_id: collaboratorId });
+    if (error) {
+        console.error('Delete Collaborator Failed', error);
+        throw error;
+    }
+};
+
 
 export const getProductsForCollaborator = async (storeId: string) => {
     const sb = getClient();
@@ -398,40 +412,60 @@ export const sendPasswordResetEmail = async (email: string) => {
     await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
 };
 
-export const registerUserWithType = async (email: string, pass: string, name: string, phone: string, cpf: string, role: string, city?: string) => {
+export const registerUserWithType = async (
+    email: string,
+    pass: string,
+    name: string,
+    phone: string,
+    cpf: string,
+    role: string,
+    city?: string,
+    additionalData?: {
+        state?: string;
+        store_name?: string;
+        store_document?: string;
+        address_street?: string;
+        address_number?: string;
+        address_district?: string;
+        address_zip?: string;
+        address_state?: string;
+    }
+) => {
     const sb = getClient();
     if (!sb) return;
+
+    // Preparar dados para raw_user_meta_data
+    const userData: any = {
+        name,
+        phone_number: phone,
+        city,
+        role,
+        cpf
+    };
+
+    // Adicionar campos opcionais se fornecidos
+    if (additionalData) {
+        if (additionalData.state) userData.state = additionalData.state;
+        if (additionalData.store_name) userData.store_name = additionalData.store_name;
+        if (additionalData.store_document) userData.store_document = additionalData.store_document;
+        if (additionalData.address_street) userData.address_street = additionalData.address_street;
+        if (additionalData.address_number) userData.address_number = additionalData.address_number;
+        if (additionalData.address_district) userData.address_district = additionalData.address_district;
+        if (additionalData.address_zip) userData.address_zip = additionalData.address_zip;
+        if (additionalData.address_state) userData.address_state = additionalData.address_state;
+    }
 
     const { data, error } = await sb.auth.signUp({
         email,
         password: pass,
         options: {
-            data: { name, phone, city }
+            data: userData  // Envia todos os campos para raw_user_meta_data
         }
     });
     if (error) throw error;
 
-    if (data.user) {
-        // Create profile
-        await sb.from('user_profiles').insert({
-            id: data.user.id,
-            email,
-            name,
-            phone_number: phone,
-            cpf,
-            role,
-            city
-        });
-
-        // If partner, create partner profile
-        if (role === 'DELIVERY_PARTNER') {
-            await sb.from('partner_profiles').insert({
-                user_id: data.user.id,
-                city,
-                verification_status: 'PENDING_REVIEW'
-            });
-        }
-    }
+    // O trigger handle_new_user agora receberá todos os campos via raw_user_meta_data
+    return data;
 };
 
 // --- BACKUP ---
@@ -809,7 +843,7 @@ export const adminUpdateDocumentStatus = async (docId: string, status: string, n
 export const adminGetCities = async (): Promise<City[]> => {
     const sb = getClient();
     if (!sb) return [];
-    const { data } = await sb.from('cities').select('*');
+    const { data } = await sb.from('available_cities').select('*');
     return data || [];
 };
 
@@ -826,26 +860,40 @@ export const adminGetCityRequests = async (): Promise<CityRequest[]> => {
 
 export const adminAddCity = async (name: string, state: string) => {
     const sb = getClient();
-    if (!sb) return;
-    await sb.from('cities').insert({ name, state, is_active: true });
+    if (!sb) throw new Error("Cliente Supabase não inicializado");
+    const { error } = await sb.from('available_cities').insert({ name, state, is_active: true });
+    if (error) throw error;
 };
 
 export const adminEditCity = async (id: string, name: string, state: string) => {
     const sb = getClient();
-    if (!sb) return;
-    await sb.from('cities').update({ name, state }).eq('id', id);
+    if (!sb) throw new Error("Cliente Supabase não inicializado");
+    const { error } = await sb.from('available_cities').update({ name, state }).eq('id', id);
+    if (error) throw error;
 };
 
 export const adminProcessCityRequest = async (id: string, status: string) => {
     const sb = getClient();
-    if (!sb) return;
-    await sb.from('city_requests').update({ status }).eq('id', id);
+    if (!sb) throw new Error("Cliente Supabase não inicializado");
+    const { error } = await sb.from('city_requests').update({ status }).eq('id', id);
+    if (error) throw error;
 };
 
 export const adminUpdateCityStatus = async (id: string, isActive: boolean) => {
     const sb = getClient();
-    if (!sb) return;
-    await sb.from('cities').update({ is_active: isActive }).eq('id', id);
+    if (!sb) throw new Error("Cliente Supabase não inicializado");
+
+    // .select() ensures we get the updated row back. 
+    // If RLS blocks it or ID not found, data will be empty.
+    const { data, error } = await sb.from('available_cities')
+        .update({ is_active: isActive })
+        .eq('id', id)
+        .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+        throw new Error("Falha ao atualizar: Permissão negada ou cidade não encontrada.");
+    }
 };
 
 // function removed (duplicate/corrupted)
@@ -916,6 +964,30 @@ export const adminGetPartnerLevels = async (): Promise<PartnerLevelBenefit[]> =>
     if (!sb) return [];
     const { data } = await sb.from('partner_levels').select('*');
     return data || [];
+};
+
+export const adminUpdatePartnerLevels = async (levels: Partial<PartnerLevelBenefit>[]) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+
+    const { error } = await sb.from('partner_levels').upsert(levels);
+
+    if (error) {
+        console.error('Error upserting partner levels:', error);
+        throw error;
+    }
+};
+
+export const adminDeletePartnerLevel = async (levelId: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+
+    const { error } = await sb.from('partner_levels').delete().eq('id', levelId);
+
+    if (error) {
+        console.error('Error deleting partner level:', error);
+        throw error;
+    }
 };
 
 // function removed (duplicate/corrupted)
@@ -2407,11 +2479,15 @@ export const logClientError = async (category: string, message: string, context?
     await sb.rpc('log_client_error', { p_category: category, p_message: message, p_context: context || {} });
 };
 
-export const getStoreCollaborators = async (storeId: string) => {
+export const getStoreCollaborators = async (storeId?: string) => {
     const sb = getClient();
     if (!sb) return [];
-    // RPC get_store_collaborators(p_store_id)
-    const { data, error } = await sb.rpc('get_store_collaborators', { p_store_id: storeId });
+
+    // Se storeId não for passado, tenta pegar do usuário autenticado no backend (RPC lida com isso se null)
+    // Mas se cloud.ts for usado onde storeId é obrigatório por lógica, ok. 
+    // Aqui mudamos para opcional para compatibilidade com StoreCollaborators.tsx
+
+    const { data, error } = await sb.rpc('get_store_collaborators', { p_store_id: storeId || null });
     if (error) {
         console.error('getStoreCollaborators error', error);
         return [];
@@ -2697,3 +2773,403 @@ export const adminUpdateIdentityVerification = async (id: string, status: string
         throw e;
     }
 };
+
+// ==================================================================
+// LOAN MODULE SERVICES (2026-01-11)
+// ==================================================================
+
+export const getLoanTypes = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('loan_types')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+    if (error) {
+        console.error('Error fetching loan types:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getLoanLevelLimits = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('loan_level_limits')
+        .select('*')
+        .order('partner_level');
+
+    if (error) {
+        console.error('Error fetching loan level limits:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getUserLoanLimit = async (): Promise<{ max_limit: number; allow_negative_balance: boolean } | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    // Get user's partner level
+    const { data: profile } = await sb
+        .from('user_profiles')
+        .select('partner_level')
+        .eq('id', user.id)
+        .single();
+
+    if (!profile?.partner_level) return null;
+
+    // Get limit for that level
+    const { data: limit } = await sb
+        .from('loan_level_limits')
+        .select('max_limit, allow_negative_balance')
+        .eq('partner_level', profile.partner_level)
+        .single();
+
+    return limit;
+};
+
+export const simulateLoan = async (
+    amount: number,
+    loanTypeId: string,
+    installmentsCount: number
+): Promise<any> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    // Get loan type details
+    const { data: loanType, error } = await sb
+        .from('loan_types')
+        .select('*')
+        .eq('id', loanTypeId)
+        .single();
+
+    if (error || !loanType) throw new Error('Tipo de empréstimo não encontrado');
+
+    const interestRate = loanType.interest_rate_monthly;
+    const totalInterest = (amount * interestRate * installmentsCount) / 100;
+    const totalAmount = amount + totalInterest;
+    const amountPerInstallment = totalAmount / installmentsCount;
+
+    // Calculate first due date (7 days from now)
+    const firstDueDate = new Date();
+    firstDueDate.setDate(firstDueDate.getDate() + 7);
+
+    return {
+        amount,
+        loan_type_id: loanTypeId,
+        installments_count: installmentsCount,
+        interest_rate: interestRate,
+        amount_per_installment: amountPerInstallment,
+        total_amount: totalAmount,
+        total_interest: totalInterest,
+        first_due_date: firstDueDate.toISOString()
+    };
+};
+
+export const requestLoan = async (
+    amount: number,
+    loanTypeId: string,
+    installmentsCount: number
+): Promise<string> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    // Simulate to get calculations
+    const simulation = await simulateLoan(amount, loanTypeId, installmentsCount);
+
+    // Create loan request
+    const { data: loan, error: loanError } = await sb
+        .from('partner_loans')
+        .insert({
+            user_id: user.id,
+            loan_type_id: loanTypeId,
+            amount_requested: amount,
+            amount_total: simulation.total_amount,
+            installments_count: installmentsCount,
+            interest_rate_applied: simulation.interest_rate,
+            status: 'PENDING'
+        })
+        .select()
+        .single();
+
+    if (loanError || !loan) throw new Error('Erro ao criar solicitação de empréstimo');
+
+    // Create installments
+    const installments = [];
+    for (let i = 1; i <= installmentsCount; i++) {
+        const dueDate = new Date(simulation.first_due_date);
+        dueDate.setDate(dueDate.getDate() + (i - 1) * 7); // Weekly installments
+
+        installments.push({
+            loan_id: loan.id,
+            installment_number: i,
+            due_date: dueDate.toISOString().split('T')[0],
+            amount: simulation.amount_per_installment,
+            status: 'PENDING',
+            paid_amount: 0
+        });
+    }
+
+    const { error: installmentsError } = await sb
+        .from('loan_installments')
+        .insert(installments);
+
+    if (installmentsError) {
+        console.error('Error creating installments:', installmentsError);
+        throw new Error('Erro ao criar parcelas do empréstimo');
+    }
+
+    // Create audit log
+    await sb.from('loan_audit_logs').insert({
+        loan_id: loan.id,
+        action: 'LOAN_REQUESTED',
+        details: { amount, installments_count: installmentsCount },
+        performed_by: user.id
+    });
+
+    return loan.id;
+};
+
+export const getUserLoans = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await sb
+        .from('partner_loans')
+        .select(`
+            *,
+            loan_type:loan_types(*)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching user loans:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getLoanInstallments = async (loanId: string): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('loan_installments')
+        .select('*')
+        .eq('loan_id', loanId)
+        .order('installment_number');
+
+    if (error) {
+        console.error('Error fetching loan installments:', error);
+        return [];
+    }
+    return data || [];
+};
+
+// Admin functions
+export const adminGetAllLoans = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('partner_loans')
+        .select(`
+            *,
+            loan_type:loan_types(*),
+            user:user_profiles!user_id(name, email, partner_level)
+        `)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching all loans:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const adminApproveLoan = async (loanId: string): Promise<void> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    // Get loan details
+    const { data: loan } = await sb
+        .from('partner_loans')
+        .select('*, user:user_profiles(id)')
+        .eq('id', loanId)
+        .single();
+
+    if (!loan) throw new Error('Empréstimo não encontrado');
+
+    // Update loan status
+    const { error: updateError } = await sb
+        .from('partner_loans')
+        .update({
+            status: 'ACTIVE',
+            approved_at: new Date().toISOString(),
+            approved_by: user.id
+        })
+        .eq('id', loanId);
+
+    if (updateError) throw updateError;
+
+    // Credit user wallet
+    await sb.rpc('credit_wallet', {
+        p_user_id: loan.user_id,
+        p_amount: loan.amount_requested,
+        p_description: `Empréstimo aprovado #${loanId.substring(0, 8)}`
+    });
+
+    // Create audit log
+    await sb.from('loan_audit_logs').insert({
+        loan_id: loanId,
+        action: 'LOAN_APPROVED',
+        details: { approved_by: user.id },
+        performed_by: user.id
+    });
+};
+
+export const adminRejectLoan = async (loanId: string, reason: string): Promise<void> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+
+    const { error } = await sb
+        .from('partner_loans')
+        .update({
+            status: 'REJECTED',
+            rejected_at: new Date().toISOString(),
+            rejection_reason: reason
+        })
+        .eq('id', loanId);
+
+    if (error) throw error;
+
+    // Create audit log
+    await sb.from('loan_audit_logs').insert({
+        loan_id: loanId,
+        action: 'LOAN_REJECTED',
+        details: { reason, rejected_by: user.id },
+        performed_by: user.id
+    });
+};
+
+export const adminGetLoanTypes = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('loan_types')
+        .select('*')
+        .order('name');
+
+    if (error) {
+        console.error('Error fetching loan types:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const adminCreateLoanType = async (loanType: any): Promise<void> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { error } = await sb.from('loan_types').insert({
+        ...loanType,
+        target_audience: loanType.target_audience || 'BOTH'
+    });
+    if (error) throw error;
+};
+
+export const adminUpdateLoanType = async (id: string, updates: any): Promise<void> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { error } = await sb
+        .from('loan_types')
+        .update(updates)
+        .eq('id', id);
+
+    if (error) throw error;
+};
+
+export const adminDeleteLoanType = async (id: string): Promise<void> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { error } = await sb
+        .from('loan_types')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+};
+
+export const adminGetLoanLevelLimits = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('loan_level_limits')
+        .select('*')
+        .order('partner_level');
+
+    if (error) {
+        console.error('Error fetching loan level limits:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const adminUpsertLoanLevelLimit = async (limit: any): Promise<void> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { error } = await sb
+        .from('loan_level_limits')
+        .upsert(limit, { onConflict: 'partner_level' });
+
+    if (error) throw error;
+};
+
+// Process loan installment payments (called during payout processing)
+export const processLoanInstallmentPayments = async (
+    userId: string,
+    payoutAmount: number
+): Promise<{ remaining_payout: number; installments_paid: number; total_deducted: number }> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { data, error } = await sb.rpc('process_loan_installment_payments', {
+        p_user_id: userId,
+        p_payout_amount: payoutAmount
+    });
+
+    if (error) throw error;
+
+    // Retorna o primeiro resultado (função retorna TABLE)
+    return data?.[0] || { remaining_payout: payoutAmount, installments_paid: 0, total_deducted: 0 };
+};
+
+
+
