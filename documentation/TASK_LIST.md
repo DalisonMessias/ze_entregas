@@ -6,3 +6,4 @@
 - [x] Substituir campo de cidade por seletor de cidades (com UF) na edição
 - [x] Implementar funcionalidade de adicionar novo usuário manualmente
 - [x] Corrigir erro de tipagem no componente LoansModule.tsx (setUserLimit)
+- [ ] Investigar erro `FunctionsFetchError` na Edge Function `infinitepay-checkout`
