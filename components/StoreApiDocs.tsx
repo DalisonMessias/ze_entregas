@@ -38,7 +38,7 @@ async function getOrders() {
   });
 
   const data = await response.json();
-  console.log(data);
+  // console.log(data);
 }
 
 getOrders();`,
@@ -63,7 +63,7 @@ async function createOrder() {
   });
 
   const data = await response.json();
-  console.log(data);
+  // console.log(data);
 }
 
 createOrder();`,
@@ -82,7 +82,7 @@ async function getProducts() {
   });
 
   const data = await response.json();
-  console.log(data);
+  // console.log(data);
 }
 
 getProducts();`

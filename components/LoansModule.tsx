@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Calculator, FileText, Clock, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Calculator, ChevronRight, AlertTriangle, Clock, CheckCircle, XCircle, TrendingUp, Calendar, DollarSign, FileText, Loader2, Landmark } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
 import { Button } from './Button';
@@ -35,6 +35,8 @@ const LoansModule: React.FC = () => {
 
     // Modals State
     const [requestModalOpen, setRequestModalOpen] = useState(false);
+    const [cancelModalOpen, setCancelModalOpen] = useState(false);
+    const [loanToCancel, setLoanToCancel] = useState<string | null>(null);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -69,6 +71,7 @@ const LoansModule: React.FC = () => {
     const [simulation, setSimulation] = useState<LoanSimulation | null>(null);
     const [simulating, setSimulating] = useState(false);
     const [requesting, setRequesting] = useState(false);
+    const [hasBankDetails, setHasBankDetails] = useState<boolean>(false); // Novo estado
 
     useEffect(() => {
         loadData();
@@ -77,18 +80,36 @@ const LoansModule: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [types, limit, loans, role, balance] = await Promise.all([
+            const [types, limit, loans, role, balance, user] = await Promise.all([
                 cloud.getLoanTypes(),
                 cloud.getUserLoanLimit(),
                 cloud.getUserLoans(),
                 cloud.getUserRole(),
-                cloud.getUserWalletBalance()
+                cloud.getUserWalletBalance(),
+                cloud.getClient()?.auth.getUser()
             ]);
+
             setLoanTypes(types);
             setUserLimit(limit);
             setMyLoans(loans);
             setUserRole(role || null);
             setUserBalance(balance);
+
+            if (user?.data?.user?.id) {
+                const { data: profile } = await cloud.getClient()
+                    ?.from('user_profiles')
+                    .select('bank_details')
+                    .eq('id', user.data.user.id)
+                    .single();
+
+                // Verifica se existe algum detalhe bancário configurado
+                if (profile?.bank_details && Object.keys(profile.bank_details).length > 0) {
+                    setHasBankDetails(true);
+                } else {
+                    setHasBankDetails(false);
+                }
+            }
+
         } catch (e: any) {
             setToast({ type: 'error', message: e.message || 'Erro ao carregar dados' });
         } finally {
@@ -157,8 +178,16 @@ const LoansModule: React.FC = () => {
 
     const handleRequestLoan = async () => {
         if (!simulation) return;
+
+        if (!hasBankDetails && userRole !== 'admin') {
+            setToast({ type: 'error', message: 'Você precisa configurar seus dados bancários no perfil antes de solicitar um empréstimo.' });
+            return;
+        }
+
         setRequestModalOpen(true);
     };
+
+    const [disbursementMethod, setDisbursementMethod] = useState<'WALLET' | 'BANK_ACCOUNT'>('WALLET');
 
     const confirmRequestLoan = async () => {
         if (!simulation) {
@@ -169,12 +198,11 @@ const LoansModule: React.FC = () => {
         setRequestModalOpen(false);
         setRequesting(true);
         try {
-            // Amount já está no simulation, mas vamos garantir o parse correto do form se necessario, 
-            // porem melhor usar o simulation.amount que ja foi validado
-            await cloud.requestLoan(simulation.amount, simForm.loanTypeId, simForm.installments);
+            await cloud.requestLoan(simulation.amount, simForm.loanTypeId, simForm.installments, disbursementMethod);
             setToast({ type: 'success', message: 'Empréstimo solicitado com sucesso!' });
             setSimulation(null);
             setSimForm({ loanTypeId: '', amount: '', installments: 1 });
+            setDisbursementMethod('WALLET'); // Reset to default
 
             // Recarregar dados para atualizar limite
             await loadData();
@@ -187,6 +215,8 @@ const LoansModule: React.FC = () => {
         }
     };
 
+
+
     const handleViewLoanDetails = async (loan: PartnerLoan) => {
         setSelectedLoan(loan);
         try {
@@ -194,6 +224,29 @@ const LoansModule: React.FC = () => {
             setInstallments(inst);
         } catch (e: any) {
             setToast({ type: 'error', message: 'Erro ao carregar parcelas' });
+        }
+    };
+
+    const handleCancelLoan = (loanId: string) => {
+        setLoanToCancel(loanId);
+        setCancelModalOpen(true);
+    };
+
+    const confirmCancelLoan = async () => {
+        if (!loanToCancel) return;
+
+        setCancelModalOpen(false);
+        setLoading(true);
+        try {
+            await cloud.cancelLoan(loanToCancel);
+            setToast({ type: 'success', message: 'Solicitação cancelada com sucesso.' });
+            setSelectedLoan(null);
+            setLoanToCancel(null);
+            await loadData();
+        } catch (e: any) {
+            setToast({ type: 'error', message: e.message || 'Erro ao cancelar' });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -384,6 +437,62 @@ const LoansModule: React.FC = () => {
                             <p className="text-sm font-bold text-green-800 dark:text-green-300">{new Date(simulation.first_due_date).toLocaleDateString('pt-BR')}</p>
                         </div>
                     </div>
+                    {/* UI de Seleção de Destino */}
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
+                        <h5 className="font-bold text-gray-800 dark:text-white mb-3">Onde deseja receber o valor?</h5>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setDisbursementMethod('WALLET')}
+                                className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${disbursementMethod === 'WALLET'
+                                    ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/10'
+                                    : 'border-gray-100 dark:border-gray-700 hover:border-brand-200'
+                                    }`}
+                            >
+                                <div className={`p-2 rounded-full ${disbursementMethod === 'WALLET' ? 'bg-brand-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                                    <DollarSign className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                    <p className={`font-bold ${disbursementMethod === 'WALLET' ? 'text-brand-900 dark:text-brand-300' : 'text-gray-700 dark:text-gray-300'}`}>Carteira Digital</p>
+                                    <p className="text-xs text-gray-500">Saldo na plataforma</p>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => setDisbursementMethod('BANK_ACCOUNT')}
+                                disabled={!hasBankDetails}
+                                className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${disbursementMethod === 'BANK_ACCOUNT'
+                                    ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/10'
+                                    : 'border-gray-100 dark:border-gray-700 hover:border-brand-200'
+                                    } ${!hasBankDetails ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                <div className={`p-2 rounded-full ${disbursementMethod === 'BANK_ACCOUNT' ? 'bg-brand-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                                    <Landmark className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                    <p className={`font-bold ${disbursementMethod === 'BANK_ACCOUNT' ? 'text-brand-900 dark:text-brand-300' : 'text-gray-700 dark:text-gray-300'}`}>Conta Bancária</p>
+                                    <p className="text-xs text-gray-500">{hasBankDetails ? 'Depósito via Pix/TED' : 'Dados não cadastrados'}</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* DISCLAIMER DE PRAZO DE ENVIO */}
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <p className="text-xs text-blue-700 dark:text-blue-300 font-bold">
+                            O valor será enviado em 2 a 5 dias úteis.
+                        </p>
+                    </div>
+
+                    {!hasBankDetails && userRole !== 'admin' && (
+                        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-800 flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                            <p className="text-xs text-red-700 dark:text-red-300 font-bold">
+                                Você precisa adicionar seus dados bancários no perfil para solicitar.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="pt-4 border-t border-green-300 dark:border-green-600">
                         <p className="text-xs text-green-700 dark:text-green-400 mb-3">
                             <AlertTriangle className="w-3 h-3 inline mr-1" />
@@ -392,7 +501,7 @@ const LoansModule: React.FC = () => {
                                 : 'As parcelas serão descontadas automaticamente do seu repasse semanal.'
                             }
                         </p>
-                        <Button fullWidth onClick={handleRequestLoan} disabled={requesting}>
+                        <Button fullWidth onClick={handleRequestLoan} disabled={requesting || (!hasBankDetails && userRole !== 'admin' && disbursementMethod === 'BANK_ACCOUNT')}>
                             {requesting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
                             Solicitar Empréstimo
                         </Button>
@@ -461,6 +570,18 @@ const LoansModule: React.FC = () => {
                             </div>
                         </div>
                     </div>
+
+                    {selectedLoan.status === 'PENDING' && (
+                        <Button
+                            variant="outline"
+                            fullWidth
+                            className="mt-4 border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                            onClick={() => handleCancelLoan(selectedLoan.id)}
+                        >
+                            <XCircle className="w-4 h-4 mr-2" />
+                            Cancelar Solicitação
+                        </Button>
+                    )}
 
                     {selectedLoan.status !== 'REJECTED' && selectedLoan.status !== 'CANCELLED' && (
                         <div>
@@ -559,6 +680,10 @@ const LoansModule: React.FC = () => {
                             <h3 className="font-bold text-xl text-gray-800 dark:text-white mb-2">Confirmar Solicitação</h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                                 Deseja solicitar o empréstimo de <span className="font-bold text-gray-800 dark:text-white">{simForm.amount}</span> em <span className="font-bold text-gray-800 dark:text-white">{simForm.installments}x</span>?
+                                <br /><br />
+                                <span className="text-xs text-blue-600 dark:text-blue-400 font-bold block">
+                                    Previsão de envio: 2 a 5 dias úteis.
+                                </span>
                             </p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -577,6 +702,42 @@ const LoansModule: React.FC = () => {
                             >
                                 {requesting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
                                 Confirmar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Confirmação de Cancelamento */}
+            {cancelModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110]" onClick={() => setCancelModalOpen(false)}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mb-4">
+                                <AlertTriangle className="w-8 h-8" />
+                            </div>
+                            <h3 className="font-bold text-xl text-gray-800 dark:text-white mb-2">Cancelar Solicitação?</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                Tem certeza que deseja cancelar esta solicitação de empréstimo?
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={() => setCancelModalOpen(false)}
+                                fullWidth
+                                disabled={loading}
+                            >
+                                Não, Manter
+                            </Button>
+                            <Button
+                                onClick={confirmCancelLoan}
+                                fullWidth
+                                disabled={loading}
+                                className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
+                                Sim, Cancelar
                             </Button>
                         </div>
                     </div>

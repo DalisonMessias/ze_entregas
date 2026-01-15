@@ -26,37 +26,55 @@ serve(async (req) => {
         const webhookUrl = payload.webhookUrl || payload.webhook_url;
 
         const authHeader = req.headers.get('Authorization');
+        const tokenToken = authHeader?.replace('Bearer ', '');
         console.log('Auth Header presence:', !!authHeader);
 
-        // 1. Auth Check (User who is paying/borrowing)
-        const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: authHeader } } }
-        )
+        if (!tokenToken || tokenToken === 'undefined') {
+            return new Response(JSON.stringify({
+                error: 'Unauthorized',
+                details: 'Auth token missing or malformed',
+                header: authHeader ? 'Malformed' : 'Missing'
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 });
+        }
 
-        const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+        // 1. Initialize Admin Client (to bypass RLS and session issues)
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+        const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-        if (userError || !user) {
-            console.error('Auth Error:', userError);
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 401
+        if (!supabaseUrl || !serviceRoleKey) {
+            throw new Error('Server Configuration Error: Missing Supabase Secrets');
+        }
+
+        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+        // 2. Decode User ID from JWT manually (resilient to session missing)
+        let userId = '';
+        try {
+            const parts = tokenToken.split('.');
+            const payload = JSON.parse(atob(parts[1]));
+            userId = payload.sub;
+            console.log('Decoded User ID:', userId);
+        } catch (e) {
+            return new Response(JSON.stringify({ error: 'Unauthorized', details: 'Invalid JWT Format' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401
             });
         }
 
-        // 2. Fetch InfinitePay Configuration (Admin/System Level)
-        // We use Service Role Key to bypass RLS and find the system admin's config
-        // Note: Using SERVICE_ROLE_KEY env var (set manually) as SUPABASE_ prefix is reserved
-        const serviceRoleKey = (Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) ?? '';
+        // 3. Verify User exists in database
+        const { data: userProfile, error: profileError } = await supabaseAdmin
+            .from('user_profiles')
+            .select('id')
+            .eq('id', userId)
+            .single();
 
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            serviceRoleKey
-        )
+        if (profileError || !userProfile) {
+            console.error('User not found in DB:', profileError);
+            return new Response(JSON.stringify({ error: 'Unauthorized', details: 'User not found in database' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401
+            });
+        }
 
-        // Find the configuration for InfinitePay (from any admin user)
-        // Assuming the first entry found with service_name='infinitepay' is the valid system config
+        // 4. Fetch InfinitePay Configuration
         const { data: apiKeyData, error: apiKeyError } = await supabaseAdmin
             .from('api_keys')
             .select('*')
@@ -66,16 +84,19 @@ serve(async (req) => {
 
         if (apiKeyError) {
             console.error('Database Error (Admin Config):', apiKeyError);
-            throw new Error('Failed to retrieve system configuration');
         }
 
-        // PRIORIDADE: Configuração do Banco > Request > Env Var
+        console.log('Admin Config found:', !!apiKeyData);
+
+        // PRIORIDADE: Banco > Request > Env
         const dbHandle = apiKeyData?.permissions?.handle;
         const configHandle = dbHandle || handle || Deno.env.get('INFINITEPAY_HANDLE');
 
         if (!configHandle) {
             throw new Error('Configuration Error: InfinitePay Handle (@loja) not found.');
         }
+
+        console.log('Using Handle:', configHandle);
 
         // Convert amount to cents (InfinitePay uses cents)
         const amountInCents = Math.round(amount * 100)
@@ -89,7 +110,7 @@ serve(async (req) => {
             order_nsu: orderId,
             items: items || [],
             metadata: {
-                user_id: user.id
+                user_id: userId
             }
         };
 

@@ -118,6 +118,63 @@ const MyOrders: React.FC = () => {
     );
 };
 
+// Extracted Bank Form Fields Component to avoid re-render focus loss
+interface BankFormFieldsProps {
+    bankDetails: UserBankDetails;
+    setBankDetails: React.Dispatch<React.SetStateAction<UserBankDetails>>;
+    showSensitive: boolean;
+    setShowSensitive: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+const BankFormFields: React.FC<BankFormFieldsProps> = ({ bankDetails, setBankDetails, showSensitive, setShowSensitive }) => (
+    <div className="space-y-4">
+        <div className="relative">
+            <label className="text-xs font-bold text-gray-500 uppercase">Chave PIX</label>
+            <CustomInput
+                type={showSensitive ? 'text' : 'password'}
+                value={bankDetails.pixKey}
+                onChange={e => setBankDetails({ ...bankDetails, pixKey: e.target.value })}
+                className="pr-10"
+                placeholder="CPF, Email ou Telefone"
+            />
+            <button
+                type="button"
+                onClick={() => setShowSensitive(!showSensitive)}
+                aria-label={showSensitive ? "Esconder chave" : "Mostrar chave"}
+                className="absolute right-3 top-8 text-gray-400"
+            >
+                {showSensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+            <div>
+                <label className="text-xs font-bold text-gray-500 uppercase">Banco (Nome/Cód)</label>
+                <CustomInput type="text" value={bankDetails.bankName} onChange={e => setBankDetails({ ...bankDetails, bankName: e.target.value })} placeholder="Ex: Nubank (260)" />
+            </div>
+            <div>
+                <label className="text-xs font-bold text-gray-500 uppercase">Tipo de Conta</label>
+                <CustomSelect
+                    value={bankDetails.accountType || 'corrente'}
+                    onChange={(val) => setBankDetails({ ...bankDetails, accountType: val as any })}
+                    options={[{ label: 'Corrente', value: 'corrente' }, { label: 'Poupança', value: 'poupanca' }]}
+                />
+            </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+            <div>
+                <label className="text-xs font-bold text-gray-500 uppercase">Agência</label>
+                <CustomInput type="text" value={bankDetails.agency} onChange={e => setBankDetails({ ...bankDetails, agency: e.target.value })} placeholder="0000" />
+            </div>
+            <div>
+                <label className="text-xs font-bold text-gray-500 uppercase">Conta com Dígito</label>
+                <CustomInput type="text" value={bankDetails.account} onChange={e => setBankDetails({ ...bankDetails, account: e.target.value })} placeholder="00000-0" />
+            </div>
+        </div>
+    </div>
+);
+
 
 interface ProfileDataProps {
     onBack: () => void;
@@ -372,55 +429,6 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
 
     const hasBankData = !!bankDetails.pixKey;
 
-    const BankFormFields = () => (
-        <div className="space-y-4">
-            <div className="relative">
-                <label className="text-xs font-bold text-gray-500 uppercase">Chave PIX</label>
-                <CustomInput
-                    type={showSensitive ? 'text' : 'password'}
-                    value={bankDetails.pixKey}
-                    onChange={e => setBankDetails({ ...bankDetails, pixKey: e.target.value })}
-                    className="pr-10"
-                    placeholder="CPF, Email ou Telefone"
-                />
-                <button
-                    type="button"
-                    onClick={() => setShowSensitive(!showSensitive)}
-                    aria-label={showSensitive ? "Esconder chave" : "Mostrar chave"}
-                    className="absolute right-3 top-8 text-gray-400"
-                >
-                    {showSensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Banco (Nome/Cód)</label>
-                    <CustomInput type="text" value={bankDetails.bankName} onChange={e => setBankDetails({ ...bankDetails, bankName: e.target.value })} placeholder="Ex: Nubank (260)" />
-                </div>
-                <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Tipo de Conta</label>
-                    <CustomSelect
-                        value={bankDetails.accountType || 'corrente'}
-                        onChange={(val) => setBankDetails({ ...bankDetails, accountType: val as any })}
-                        options={[{ label: 'Corrente', value: 'corrente' }, { label: 'Poupança', value: 'poupanca' }]}
-                    />
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Agência</label>
-                    <CustomInput type="text" value={bankDetails.agency} onChange={e => setBankDetails({ ...bankDetails, agency: e.target.value })} placeholder="0000" />
-                </div>
-                <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Conta com Dígito</label>
-                    <CustomInput type="text" value={bankDetails.account} onChange={e => setBankDetails({ ...bankDetails, account: e.target.value })} placeholder="00000-0" />
-                </div>
-            </div>
-        </div>
-    );
-
     return (
         <div className="space-y-6 animate-in fade-in">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -597,7 +605,12 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                         </div>
                     </div>
                 ) : (
-                    <BankFormFields />
+                    <BankFormFields
+                        bankDetails={bankDetails}
+                        setBankDetails={setBankDetails}
+                        showSensitive={showSensitive}
+                        setShowSensitive={setShowSensitive}
+                    />
                 )}
             </div>
 
@@ -620,7 +633,12 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                             </button>
                         </div>
 
-                        <BankFormFields />
+                        <BankFormFields
+                            bankDetails={bankDetails}
+                            setBankDetails={setBankDetails}
+                            showSensitive={showSensitive}
+                            setShowSensitive={setShowSensitive}
+                        />
 
                         <Button fullWidth onClick={handleSaveAll} disabled={isLoading} className="mt-4">
                             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Salvar'}

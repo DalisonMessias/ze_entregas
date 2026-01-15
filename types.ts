@@ -182,10 +182,14 @@ export interface CartItem {
 }
 
 export interface OrderItem {
-    product_id: string;
+    product_id: string | null;
     name: string;
     quantity: number;
     price: number;
+    unit_price?: number;
+    total_price?: number;
+    observation?: string;
+    additional?: any[];
 }
 
 export interface DailySummary {
@@ -584,8 +588,31 @@ export interface PartnerProfile {
     address_district?: string;
     address_state?: string;
 
+    // Store Branding & Address (Separated)
+    cover_url?: string;
+    store_logo_url?: string;
+    store_address_zip?: string;
+    store_address_street?: string;
+    store_address_number?: string;
+    store_address_district?: string;
+    store_address_city?: string;
+    store_address_state?: string;
+    store_address_complement?: string;
+
     is_super_store?: boolean;
     store_name?: string;
+    is_open?: boolean;
+}
+
+export interface StoreDailyReport {
+    id: string;
+    store_id: string;
+    report_date: string;
+    total_orders: number;
+    total_revenue: number;
+    total_delivery_fees: number;
+    orders_summary: any[];
+    created_at: string;
 }
 
 export interface PartnerDocument {
@@ -1280,14 +1307,24 @@ export interface PartnerLoan {
     amount_total: number;
     installments_count: number;
     interest_rate_applied: number;
-    status: 'PENDING' | 'ACTIVE' | 'PAID' | 'REJECTED' | 'CANCELLED' | 'OVERDUE';
+    status: 'PENDING' | 'APPROVED' | 'ACTIVE' | 'PAID' | 'REJECTED' | 'CANCELLED' | 'OVERDUE';
     created_at: string;
     rejection_reason?: string;
+    disbursement_method?: 'WALLET' | 'BANK_ACCOUNT';
     updated_at: string;
 
     // Joined data
     loan_type?: LoanType;
-    user?: { name: string; email: string; partner_level?: string };
+    user?: {
+        name: string;
+        email: string;
+        partner_level?: string;
+        avatar_url?: string;
+        cpf?: string;
+        phone_number?: string;
+        vehicle_type?: string;
+        bank_details?: UserBankDetails;
+    };
 }
 
 export interface LoanInstallment {

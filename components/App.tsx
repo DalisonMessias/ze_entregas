@@ -11,7 +11,7 @@ import TourComponent from './Tour/Tour';
 import { tourSteps } from './Tour/tourSteps';
 
 // Icons
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power } from 'lucide-react';
 
 // Components
 import { Logo } from './Logo';
@@ -74,6 +74,7 @@ const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ d
 const RouteList = React.lazy(() => import('./RouteList').then(module => ({ default: module.RouteList })));
 
 // Hooks
+import { StoreStatus } from './StoreStatus';
 import { useDialog } from '../utils/dialogService';
 import { getTabFromUrl, syncUrlWithTab } from '../utils/routeMap';
 
@@ -98,6 +99,7 @@ export type ActiveTab =
     | 'store_integrations'
     | 'store_settings'
     | 'store_product_import'
+    | 'store_status'
     | 'store_finance_panel'
     | 'partner'
     | 'daily_panel'
@@ -495,7 +497,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     useEffect(() => {
         const handleNavigate = (event: CustomEvent) => {
             if (event.detail && event.detail.tab) {
-                console.log('[App] Navigating to tab:', event.detail.tab);
+                // console.log('[App] Navigating to tab:', event.detail.tab);
                 setActiveTab(event.detail.tab as ActiveTab);
                 setIsMenuOpen(false);
             }
@@ -623,7 +625,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config'
         ]),
         store_partner: new Set<ActiveTab>([
-            'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans'
+            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
@@ -709,6 +711,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     />;
 
                 // Store Specific
+                case 'store_status': return <div className="max-w-4xl mx-auto"><h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">Gerenciar Loja</h1><StoreStatus /></div>;
                 case 'wallet': return <StoreWalletModule onNavigate={navigate} />;
                 case 'new_request': return <StoreRequest onNavigate={navigate} />;
                 case 'history': return <OrderHistory userRole={effectiveRole as 'store_partner'} />;
@@ -776,10 +779,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             id={id}
             title={!isSidebarExpanded ? label : undefined}
             onClick={() => onClick ? onClick() : navigate(tab!)}
-            className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${activeTab === tab ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300 font-bold' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'} ${!isSidebarExpanded ? 'justify-center md:px-2' : ''}`}
+            className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${activeTab === tab ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300 font-bold' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'} ${!isSidebarExpanded ? 'md:justify-center md:px-2' : ''}`}
         >
             <Icon className={`w-5 h-5 ${activeTab === tab ? 'text-brand-600' : 'text-gray-500'} flex-shrink-0`} />
-            <span className={`text-sm whitespace-nowrap overflow-hidden transition-all duration-300 ${!isSidebarExpanded ? 'md:hidden w-0 opacity-0' : 'w-auto opacity-100'}`}>{label}</span>
+            <span className={`text-sm whitespace-nowrap overflow-hidden transition-all duration-300 ${!isSidebarExpanded ? 'md:hidden md:w-0 md:opacity-0 w-auto opacity-100' : 'w-auto opacity-100'}`}>{label}</span>
         </button>
     );
 
@@ -822,7 +825,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-5 md:gap-2">
                     <button id="header-emergency-button" onClick={() => setShowEmergency(true)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full animate-pulse">
                         <ShieldAlert className="w-6 h-6" />
                     </button>
@@ -862,9 +865,11 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             `}>
                 {/* Header (Logo + Close Button) - Mobile Only mostly, or adapted for desktop */}
                 <div className={`
-                    flex items-center 
-                    ${isSidebarExpanded ? 'justify-between p-6' : 'justify-center p-4'}
-                    border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 min-h-[4rem]
+                    flex items-center w-full
+                    justify-between p-6
+                    md:min-h-[4rem]
+                    ${isSidebarExpanded ? 'md:justify-between md:p-6' : 'md:justify-center md:p-4'}
+                    border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 
                 `}>
                     {/* Logo - Show only when expanded */}
                     {isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" />}
@@ -928,6 +933,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     {isStore && (
                         <>
                             <MenuSection title="Minha Loja" />
+                            <MenuButton icon={Power} label="Status da Loja" tab="store_status" />
                             <MenuButton icon={LayoutDashboard} label="Painel" tab="wallet" id="store-wallet-link" />
                             <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
                             <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
@@ -989,9 +995,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
                 <div className={`
                     border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 
-                    ${isSidebarExpanded ? 'p-4 space-y-3' : 'p-2 space-y-2'}
+                    p-4
+                    ${isSidebarExpanded ? 'md:space-y-3' : 'md:space-y-2 md:p-2'}
                 `}>
-                    <div className={`flex items-center ${isSidebarExpanded ? 'justify-between px-2' : 'flex-col gap-2'}`}>
+                    <div className={`flex items-center justify-between md:justify-center w-full ${isSidebarExpanded ? 'md:justify-between md:px-2 md:flex-row' : 'md:flex-col md:gap-2'}`}>
                         <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
                             {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
                         </button>

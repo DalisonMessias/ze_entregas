@@ -1,11 +1,10 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { MapPin, Calculator, Loader2, DollarSign, Navigation, Info, Plus, Trash2, UserX, Phone, Star, X, ShieldCheck, Users, AlertTriangle, Send, Check, Wallet, CheckCircle, Home, Lock } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
+import { StreetAutocomplete } from './StreetAutocomplete'; // Import StreetAutocomplete
 import * as cloud from '../services/cloud';
-import { PartnerFeeSettings, OfflineDriver, StoreDeliveryPartner, LoanConfig } from '../types';
+import { PartnerFeeSettings, OfflineDriver, StoreDeliveryPartner, LoanConfig, ShopSettings } from '../types';
 import { openNavigation } from '../utils/mapHelpers';
 import { LoanModal } from './LoanModal';
 import { estimateDeliveryCosts } from '../utils/estimateDeliveryCosts';
@@ -39,6 +38,8 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
     const [walletBalance, setWalletBalance] = useState(0);
     const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info', message: string, action?: { label: string, onClick: () => void } } | null>(null);
     const [isSuperStore, setIsSuperStore] = useState(false);
+    const [onlineDriversCount, setOnlineDriversCount] = useState<number | null>(null);
+    const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
 
     const [requestType, setRequestType] = useState<'PLATFORM' | 'ASSOCIATE'>('PLATFORM');
     const [pickup, setPickup] = useState<AddressData>({ id: 'pickup', street: '', number: '', complement: '', neighborhood: '', validated: false });
@@ -59,6 +60,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
     const [expiresCountdown, setExpiresCountdown] = useState<number | null>(null);
     const [expiresTimer, setExpiresTimer] = useState<any>(null);
     const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
+    const [isRealRoute, setIsRealRoute] = useState(false);
 
     useEffect(() => {
         const init = async () => {
@@ -78,7 +80,12 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     setActiveLoan(loan);
                 } catch { }
 
-                const profile = await cloud.getClient()?.from('user_profiles').select('city, is_super_store').eq('id', user?.data?.user?.id).single();
+                try {
+                    const settings = await cloud.getShopSettings();
+                    setShopSettings(settings);
+                } catch { }
+
+                const profile = await cloud.getClient()?.from('user_profiles').select('city, is_super_store, address_street, address_number, address_district, address_zip, address_state').eq('id', user?.data?.user?.id).single();
 
                 console.log('[StoreRequest] Profile completo:', profile);
 
@@ -97,26 +104,44 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     const superStatus = profile.data.is_super_store || false;
                     setIsSuperStore(superStatus);
 
-                    // Autofill pickup address from profile data or auth metadata
-                    const metadataAddr: string = (user?.data?.user?.user_metadata?.address as string) || '';
-                    if (metadataAddr) {
-                        const [left, right] = metadataAddr.split('-').map(s => s.trim());
-                        const [streetPart, numberPart] = (left || '').split(',').map(s => s.trim());
-                        const rightParts = (right || '').split(',').map(s => s.trim());
-                        const cepPart = rightParts.find(p => /\d{5}-?\d{3}/.test(p)) || '';
-                        const statePart = rightParts.find(p => /^[A-Z]{2}$/.test(p)) || '';
-                        const neighborhoodPart = rightParts[0] || '';
+                    // Autofill pickup address from profile data (Primary Source) or auth metadata (Fallback)
+                    const pData = profile.data;
+                    const hasProfileAddress = pData.address_street && pData.address_number;
+
+                    if (hasProfileAddress) {
                         setPickup(prev => ({
                             ...prev,
-                            street: streetPart || prev.street,
-                            number: numberPart || prev.number,
-                            neighborhood: neighborhoodPart || prev.neighborhood,
-                            cep: cepPart || prev.cep,
+                            street: pData.address_street || prev.street,
+                            number: pData.address_number || prev.number,
+                            neighborhood: pData.address_district || prev.neighborhood,
+                            cep: pData.address_zip || prev.cep,
                             city: cleanCity || prev.city,
-                            state: statePart || prev.state,
-                            validated: false,
+                            state: pData.address_state || prev.state,
+                            validated: false, // Requer review/clique em validar para garantir lat/lng corretos na nova sessão
                             error: undefined
                         }));
+                    } else {
+                        // Metadata Fallback (Legacy)
+                        const metadataAddr: string = (user?.data?.user?.user_metadata?.address as string) || '';
+                        if (metadataAddr) {
+                            const [left, right] = metadataAddr.split('-').map(s => s.trim());
+                            const [streetPart, numberPart] = (left || '').split(',').map(s => s.trim());
+                            const rightParts = (right || '').split(',').map(s => s.trim());
+                            const cepPart = rightParts.find(p => /\d{5}-?\d{3}/.test(p)) || '';
+                            const statePart = rightParts.find(p => /^[A-Z]{2}$/.test(p)) || '';
+                            const neighborhoodPart = rightParts[0] || '';
+                            setPickup(prev => ({
+                                ...prev,
+                                street: streetPart || prev.street,
+                                number: numberPart || prev.number,
+                                neighborhood: neighborhoodPart || prev.neighborhood,
+                                cep: cepPart || prev.cep,
+                                city: cleanCity || prev.city,
+                                state: statePart || prev.state,
+                                validated: false,
+                                error: undefined
+                            }));
+                        }
                     }
 
                     // Auto-detect associated partners
@@ -148,21 +173,26 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                 setLoading(false);
             }
         };
-        try {
-            const persisted = localStorage.getItem('store_request_state');
-            if (persisted) {
-                const s = JSON.parse(persisted);
-                if (s.requestType) setRequestType(s.requestType);
-                if (s.pickup) setPickup(s.pickup);
-                if (Array.isArray(s.deliveries) && s.deliveries.length) setDeliveries(s.deliveries);
-                if (typeof s.distanceKm === 'number') setDistanceKm(s.distanceKm);
-                if (typeof s.cost === 'number') setCost(s.cost);
-                if (typeof s.partnerNet === 'number') setPartnerNet(s.partnerNet);
-                if (Array.isArray(s.selectedAssociateIds)) setSelectedAssociateIds(s.selectedAssociateIds);
+
+        const checkOnlineDrivers = async () => {
+            if (storeCity) {
+                const count = await cloud.countOnlineDriversInCity(storeCity);
+                setOnlineDriversCount(count);
+                if (count === 0) {
+                    // Optional: setNotification({ type: 'error', message: 'Nenhum entregador online na sua cidade no momento.' });
+                }
             }
-        } catch { }
+        };
+
         init();
     }, []);
+
+    // Effect separate to check drivers when city is loaded/changed
+    useEffect(() => {
+        if (storeCity) {
+            cloud.countOnlineDriversInCity(storeCity).then(setOnlineDriversCount);
+        }
+    }, [storeCity]);
 
     // Debug: monitorar mudanças em storeCity
     useEffect(() => {
@@ -224,7 +254,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
 
 
 
-    const calculateValues = () => {
+    const calculateValues = async () => {
         setCalculating(true);
         setNotification(null);
         try {
@@ -234,11 +264,79 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                 setCalculating(false);
                 return;
             }
+
+            // OSRM Logic
+            const orsKey = shopSettings?.open_route_service_api_key;
+            let realRouteFound = false;
+            let orsDistance = 0;
+
+            if (orsKey && points.length === 2 && requestType === 'PLATFORM') {
+                // Try OSRM for simple A->B routed requests (multiple stops might need different API call or loop)
+                // For now, let's implement for simple point-to-point or just sum segments if we want to be fancy.
+                // To keep consistent with InternalOrders, let's try A->B first.
+                // Actually internal orders only handles 1 delivery. Here we can have many.
+                // Let's stick to simple logic: if OSRM available, try it.
+                // NOTE: ORS free tier has limits.
+                try {
+                    // Build coordinates string: lon,lat|lon,lat...
+                    // ORS expects "start=lon,lat&end=lon,lat" for directions, or "coordinates=[[lon,lat],[lon,lat]]" for POST
+                    // We'll use the GET format loop for segments or just estimatedDeliveryCosts fallback
+                    // For simplicity and robustness, let's do the loop sum for multi-stop if needed,
+                    // but usually it's just Pickup -> Delivery.
+
+                    let totalOrsDist = 0;
+                    let success = true;
+
+                    for (let i = 0; i < points.length - 1; i++) {
+                        const start = points[i];
+                        const end = points[i + 1];
+                        const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${orsKey}&start=${start.lng},${start.lat}&end=${end.lng},${end.lat}`;
+                        const resp = await fetch(url);
+                        const data = await resp.json();
+                        if (data.features && data.features[0]) {
+                            totalOrsDist += (data.features[0].properties.summary.distance / 1000);
+                        } else {
+                            success = false;
+                            break;
+                        }
+                    }
+
+                    if (success) {
+                        orsDistance = totalOrsDist;
+                        realRouteFound = true;
+                    }
+                } catch (err) {
+                    console.error('OSRM Failed', err);
+                }
+            }
+
+            setIsRealRoute(realRouteFound);
+
             const stops = Math.max(0, deliveries.length - 1);
             const calc = estimateDeliveryCosts(points.map(p => ({ lat: p.lat!, lng: p.lng! })), stops, (fees || {}) as PartnerFeeSettings);
-            setDistanceKm(calc.distanceKm);
-            setPartnerNet(calc.partnerNet);
-            setCost(calc.total);
+
+            if (realRouteFound) {
+                // Recalculate cost with real distance
+                // We need to apply the logic from estimateDeliveryCosts manually or update the struct
+                const baseKm = Number(fees?.base_delivery_km || 0);
+                const baseValue = Number(fees?.base_delivery_value || 0);
+                const extraPerKm = Number(fees?.extra_km_value || 0);
+                const stopFeeTotal = Number(fees?.additional_stop_fee || 0) * Math.max(0, stops);
+                const extraKm = Math.max(0, orsDistance - baseKm);
+                const partnerNetCalc = baseValue + (extraKm * extraPerKm) + stopFeeTotal;
+                const feeFixed = Number(fees?.global_tax_fixed || 0);
+                const feePercentValue = Number(fees?.global_tax_percent || 0) * partnerNetCalc;
+                const storeTotal = partnerNetCalc + feeFixed + feePercentValue;
+
+                setDistanceKm(orsDistance);
+                setPartnerNet(Number(partnerNetCalc.toFixed(2)));
+                setCost(Number(storeTotal.toFixed(2)));
+            } else {
+                setDistanceKm(calc.distanceKm);
+                setPartnerNet(calc.partnerNet);
+                setCost(calc.total);
+            }
+
         } catch (e: any) {
             setNotification({ type: 'error', message: e.message || 'Erro ao calcular valores.' });
         } finally {
@@ -265,6 +363,44 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
         };
         try { localStorage.setItem('store_request_state', JSON.stringify(payload)); } catch { }
     }, [requestType, pickup, deliveries, distanceKm, cost, partnerNet, selectedAssociateIds]);
+
+    useEffect(() => {
+        const payload = {
+            requestType,
+            pickup,
+            deliveries,
+            distanceKm,
+            cost,
+            partnerNet,
+            selectedAssociateIds,
+        };
+        try { localStorage.setItem('store_request_state', JSON.stringify(payload)); } catch { }
+    }, [requestType, pickup, deliveries, distanceKm, cost, partnerNet, selectedAssociateIds]);
+
+    // Auto-validation Effect
+    useEffect(() => {
+        const timers: NodeJS.Timeout[] = [];
+
+        const scheduleValidation = (addr: AddressData) => {
+            if (addr.street && addr.number && addr.neighborhood && !addr.validated && !addr.validating) {
+                const t = setTimeout(() => {
+                    validateAddress(addr.id);
+                }, 1500); // 1.5s debounce
+                timers.push(t);
+            }
+        };
+
+        scheduleValidation(pickup);
+        deliveries.forEach(scheduleValidation);
+
+        return () => {
+            timers.forEach(clearTimeout);
+        };
+    }, [
+        pickup.street, pickup.number, pickup.neighborhood, pickup.validated, pickup.validating,
+        // Deep dependency check for deliveries
+        JSON.stringify(deliveries.map(d => ({ id: d.id, s: d.street, n: d.number, b: d.neighborhood, v: d.validated, vg: d.validating })))
+    ]);
 
     useEffect(() => {
         const handler = (e: BeforeUnloadEvent) => {
@@ -548,9 +684,14 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                         <button onClick={() => removeDelivery(addr.id)} className="p-1 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
                     )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-[2fr_0.5fr_1fr_auto] gap-[15px] items-end" style={{ marginBottom: '15px' }}>
+                <div className="grid grid-cols-1 md:grid-cols-[2fr_0.5fr_1fr_auto] gap-[15px] items-center" style={{ marginBottom: '15px' }}>
                     <div className="md:col-start-1 md:row-start-1 md:col-span-1">
-                        <CustomInput type="text" placeholder="Rua / Avenida" value={addr.street} onChange={e => handleInputChange('street', e.target.value)} required />
+                        <StreetAutocomplete
+                            city={storeCity}
+                            value={addr.street}
+                            onChange={val => handleInputChange('street', val)}
+                            placeholder="Rua / Avenida"
+                        />
                     </div>
                     <div className="md:col-start-2 md:row-start-1 md:col-span-1 md:justify-self-center w-full">
                         <CustomInput type="text" placeholder="Número" value={addr.number} onChange={e => handleInputChange('number', e.target.value)} required />
@@ -558,7 +699,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     <div className="md:col-start-3 md:row-start-1 md:col-span-1">
                         <CustomInput type="text" placeholder="Bairro" value={addr.neighborhood} onChange={e => handleInputChange('neighborhood', e.target.value)} required />
                     </div>
-                    <Button variant="primary" size="sm" onClick={() => validateAddress(addr.id)} disabled={addr.validating} className="w-full md:w-auto md:col-start-4 md:row-start-1 md:justify-self-end rounded-lg">
+                    <Button variant="primary" size="sm" onClick={() => validateAddress(addr.id)} disabled={addr.validating} className="w-full md:w-auto md:col-start-4 md:row-start-1 md:justify-self-end rounded-lg h-[46px]">
                         {addr.validating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Validar'}
                     </Button>
                 </div>
@@ -653,7 +794,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                                    <p className="text-xs font-bold text-gray-500">Distância Total</p>
+                                    <p className="text-xs font-bold text-gray-500">Distância Total {isRealRoute ? '(Real)' : '(Reta)'}</p>
                                     <p className="font-bold text-lg">{distanceKm !== null ? `${distanceKm.toFixed(2)} km` : '--'}</p>
                                 </div>
                                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
@@ -692,12 +833,17 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                                 variant="primary"
                                 size="sm"
                                 onClick={handleDispatch}
-                                disabled={isSubmitting || distanceKm === null || cost === null || partnerNet === null || cost <= 0}
+                                disabled={isSubmitting || distanceKm === null || cost === null || partnerNet === null || cost <= 0 || onlineDriversCount === 0}
                                 className="w-full h-10 rounded-lg focus:ring-2 focus:ring-brand-300"
                                 style={{ alignSelf: 'center', justifySelf: 'stretch' }}
                             >
                                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Chamar Entregador Zé'}
                             </Button>
+                            {onlineDriversCount === 0 && (
+                                <p className="col-span-1 md:col-span-2 text-center text-xs font-bold text-red-500 mt-2">
+                                    Não há entregadores online nesta cidade no momento.
+                                </p>
+                            )}
                         </div>
                         <LoanModal
                             isOpen={showLoanModal}
@@ -709,17 +855,29 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     </div >
                 )}
 
-                {associatedDrivers.map(d => (
-                    <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
-                        {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
-                        <div>
-                            <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
-                            <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
-                        </div>
+
+                {requestType === 'ASSOCIATE' && (
+                    <div className="space-y-3 mt-4">
+                        {associatedDrivers.length === 0 ? (
+                            <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
+                                <Users className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                                <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhum entregador fixo associado.</p>
+                                <p className="text-xs text-gray-400 mt-1">Cadastre entregadores fixos no painel de equipe.</p>
+                            </div>
+                        ) : (
+                            associatedDrivers.map(d => (
+                                <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                                    {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
+                                    <div>
+                                        <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
+                                        <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
-                ))}
+                )}
             </div>
         </div>
     )
 }
-

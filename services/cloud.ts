@@ -16,7 +16,7 @@ import {
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqbnhycWVtam96bHBudm94cG1uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NjA2NjEsImV4cCI6MjA4MDEzNjY2MX0.amhZETKiDAo-Io0A-UIjqXrHt7UnmJNGngOjp2elAfE';
 
-let supabase: SupabaseClient | null = null;
+export let supabase: SupabaseClient | null = null;
 
 let client: SupabaseClient | null = null;
 
@@ -396,8 +396,21 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         address_number: userData.address_number,
         address_district: userData.address_district,
         address_state: userData.address_state,
+
+        // Mapeamento de novos campos de loja
+        cover_url: userData.cover_url,
+        store_logo_url: userData.store_logo_url,
+        store_address_zip: userData.store_address_zip,
+        store_address_street: userData.store_address_street,
+        store_address_number: userData.store_address_number,
+        store_address_district: userData.store_address_district,
+        store_address_city: userData.store_address_city,
+        store_address_state: userData.store_address_state,
+        store_address_complement: userData.store_address_complement,
+
         is_super_store: userData.is_super_store,
-        store_name: userData.store_name
+        store_name: userData.store_name,
+        is_open: userData.is_open
     };
 
     return profile;
@@ -414,6 +427,27 @@ export const updateMyPartnerProfile = async (updates: Partial<PartnerProfile>) =
         ...updates,
         updated_at: new Date().toISOString()
     }).eq('id', user.id);
+};
+
+export const uploadStoreAsset = async (file: File, type: 'cover' | 'logo'): Promise<string> => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not ready");
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error("Not logged in");
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `store_${type}_${Date.now()}.${fileExt}`;
+    // Usando bucket avatars por padrão e organizando por usuário
+    const filePath = `avatars/${user.id}/${fileName}`;
+
+    const { error: uploadError } = await sb.storage.from('avatars').upload(filePath, file, { upsert: true });
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = sb.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+    return publicUrl;
 };
 
 export const uploadProfilePicture = async (file: File): Promise<string> => {
@@ -573,8 +607,27 @@ export const getOnlineDrivers = async (lat: number, lng: number, radiusKm: numbe
     const sb = getClient();
     if (!sb) return [];
     // Mock: fetch all active drivers and filter client-side for now, normally use PostGIS
-    const { data } = await sb.from('user_profiles').select('id, name, current_lat, current_lng').eq('role', 'DELIVERY_PARTNER').eq('is_online', true);
+    const { data } = await sb.from('user_profiles').select('id, name').eq('role', 'delivery_partner').eq('is_available', true);
     return data || [];
+};
+
+export const countOnlineDriversInCity = async (city: string): Promise<number> => {
+    const sb = getClient();
+    if (!sb || !city) return 0;
+
+    const { count, error } = await sb
+        .from('user_profiles')
+        .select('*', { count: 'exact', head: true })
+        .in('role', ['delivery_partner', 'delivery_person'])
+        .eq('is_available', true)
+        .eq('status', 'active')
+        .ilike('city', city);
+
+    if (error) {
+        console.error('Error counting online drivers:', JSON.stringify(error));
+        return 0;
+    }
+    return count || 0;
 };
 
 // --- ADMIN SHOP ---
@@ -1347,6 +1400,22 @@ export const getStoreLoans = async (): Promise<any[]> => {
     }));
 };
 
+export const cancelLoan = async (loanId: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error("Not logged in");
+
+    // Must be owner of the loan and status must be PENDING
+    const { error } = await sb.from('partner_loans')
+        .update({ status: 'CANCELLED' })
+        .eq('id', loanId)
+        .eq('user_id', user.id)
+        .eq('status', 'PENDING');
+
+    if (error) throw error;
+};
+
 export const getMaintenanceSettings = async (): Promise<MaintenanceData | null> => {
     const sb = getClient();
     if (!sb) return null;
@@ -1868,40 +1937,54 @@ export const createInfinitePayCheckout = async (orderId: string, amount: number,
     const sb = getClient();
     if (!sb) throw new Error("No client");
 
-    // Call Edge Function
-    console.log('[DEBUG] createInfinitePayCheckout: Invoking infinitepay-checkout with:', {
-        orderId, amount, handle, items, redirectUrl, webhookUrl
+    const { data: { user } } = await sb.auth.getUser();
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token;
+
+    if (!token) {
+        console.error('[DEBUG] createInfinitePayCheckout: No active session token found');
+        throw new Error("Sessão expirada. Por favor, saia e entre novamente no aplicativo.");
+    }
+
+    // Call Edge Function via Fetch for total control over headers
+    console.log('[DEBUG] createInfinitePayCheckout: Invoking with fetch:', {
+        orderId, amount, handle, itemsCount: items?.length, hasToken: !!token
     });
-    const { data, error } = await sb.functions.invoke('infinitepay-checkout', {
-        body: {
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/infinitepay-checkout`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': SUPABASE_KEY
+        },
+        body: JSON.stringify({
             amount,
             order_id: orderId,
             handle,
             items,
             redirect_url: redirectUrl,
             webhook_url: webhookUrl
-        }
+        })
     });
 
-    if (error) {
-        console.error('[DEBUG] createInfinitePayCheckout: Invoke Error Full:', error);
-
-        // Try to extract better error message if available
-        let message = error.message;
-        if (error instanceof Error && 'context' in error && (error as any).context && (error as any).context.json) {
-            try {
-                const body = await (error as any).context.json();
-                if (body && body.error) {
-                    message = body.error;
-                }
-            } catch (e) {
-                // ignore json parse error
-            }
+    if (!response.ok) {
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            errorData = { error: `HTTP ${response.status}` };
         }
 
-        throw new Error(message || "Erro ao processar pagamento InfinitePay");
+        console.error('[DEBUG] Edge Function Error:', errorData);
+        let message = errorData.error || "Erro ao processar pagamento";
+        if (errorData.details || errorData.header) {
+            message += ` (${errorData.details || ''} | Header: ${errorData.header || '?'})`;
+        }
+        throw new Error(message);
     }
 
+    const data = await response.json();
     return data; // Expected { url: "..." }
 };
 
@@ -2671,6 +2754,37 @@ export const closeCollaboratorOrder = async (orderId: string) => {
     }
 };
 
+export const getOrdersTickets = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.from('orders_tickets')
+        .select(`
+            *,
+            orders_collaborators (
+                table_identifier,
+                customer_name
+            )
+        `)
+        .eq('store_id', storeId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+    if (error) {
+        console.error('getOrdersTickets error', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const updateTicketStatus = async (ticketId: string, status: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('orders_tickets').update({ status }).eq('id', ticketId);
+    if (error) {
+        console.error('updateTicketStatus error', error);
+        throw error;
+    }
+};
+
 export const getClosedOrders = async (storeId: string, collaboratorId: string) => {
     const sb = getClient();
     if (!sb) return [];
@@ -3174,7 +3288,8 @@ export const simulateLoan = async (
 export const requestLoan = async (
     amount: number,
     loanTypeId: string,
-    installmentsCount: number
+    installmentsCount: number,
+    disbursementMethod: 'WALLET' | 'BANK_ACCOUNT' = 'WALLET'
 ): Promise<string> => {
     const sb = getClient();
     if (!sb) throw new Error('Client not initialized');
@@ -3195,6 +3310,7 @@ export const requestLoan = async (
             amount_total: simulation.total_amount,
             installments_count: installmentsCount,
             interest_rate_applied: simulation.interest_rate,
+            disbursement_method: disbursementMethod,
             status: 'PENDING'
         })
         .select()
@@ -3289,7 +3405,7 @@ export const adminGetAllLoans = async (): Promise<any[]> => {
         .select(`
             *,
             loan_type:loan_types(*),
-            user:user_profiles!user_id(name, email, partner_level)
+            user:user_profiles!user_id(name, email, partner_level, bank_details, phone_number, cpf, avatar_url, vehicle_type)
         `)
         .order('created_at', { ascending: false });
 

@@ -321,7 +321,48 @@ DROP POLICY IF EXISTS "Admins can manage user profiles" ON public.user_profiles;
 CREATE POLICY "Admins can manage user profiles" ON public.user_profiles
     FOR ALL USING (public.is_admin());
 
+DROP POLICY IF EXISTS "Authenticated users can view delivery partners" ON public.user_profiles;
+CREATE POLICY "Authenticated users can view delivery partners" ON public.user_profiles
+    FOR SELECT USING (role IN ('delivery_partner'::public.user_role, 'delivery_person'::public.user_role) AND is_active = true);
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_profiles TO authenticated;
+
+-- Garantir que a coluna address exista (Fix: erro rota /perfil)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'address') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN address TEXT;
+    END IF;
+    -- Novos campos para Branding da Loja (15/01/2026)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'cover_url') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN cover_url TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_logo_url') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_logo_url TEXT;
+    END IF;
+    -- Novos campos para Endereço da Loja (separado do pessoal)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_zip') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_zip TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_street') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_street TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_number') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_number TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_district') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_district TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_city') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_city TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_state') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_state TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_complement') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_complement TEXT;
+    END IF;
+END $$;
 
 -- Tabela de Dicas do Dia (Adicionada 11/01/2026 e movida para cá para resolver dependência de is_admin)
 CREATE TABLE IF NOT EXISTS public.system_tips (
@@ -3723,12 +3764,39 @@ CREATE TABLE IF NOT EXISTS public.orders_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID NOT NULL REFERENCES public.orders_collaborators(id) ON DELETE CASCADE,
     product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+    name TEXT, -- Armazena o nome do produto (essencial para itens avulsos)
     additional JSONB DEFAULT '[]'::jsonb,
     quantity INT DEFAULT 1,
     unit_price NUMERIC(10, 2) NOT NULL,
     total_price NUMERIC(10, 2) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Garantir coluna name se a tabela j existir
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders_items' AND column_name = 'name') THEN
+        ALTER TABLE public.orders_items ADD COLUMN name TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders_items' AND column_name = 'observation') THEN
+        ALTER TABLE public.orders_items ADD COLUMN observation TEXT;
+    END IF;
+END $$;
+
+-- Tabela de Tickets para Impresso/Cozinha (Novos Pedidos)
+CREATE TABLE IF NOT EXISTS public.orders_tickets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES public.orders_collaborators(id) ON DELETE CASCADE,
+    collaborator_id UUID REFERENCES public.collaborators(id) ON DELETE SET NULL,
+    items JSONB NOT NULL,
+    status TEXT DEFAULT 'pending', -- pending, printed, ready
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.orders_tickets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Stores can manage their tickets" ON public.orders_tickets;
+CREATE POLICY "Stores can manage their tickets" ON public.orders_tickets
+    FOR ALL USING (auth.uid() = store_id);
 ALTER TABLE public.orders_items ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Stores can manage order items" ON public.orders_items;
 CREATE POLICY "Stores can manage order items" ON public.orders_items
@@ -3872,22 +3940,34 @@ BEGIN
     -- Inserir Itens e calcular total para o campo redundante
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
-        v_item_total := (v_item->>'quantity')::INT * (v_item->>'unit_price')::NUMERIC;
+        v_item_total := (v_item->>'quantity')::INT * (COALESCE(v_item->>'unit_price', v_item->>'price'))::NUMERIC;
         v_total := v_total + v_item_total;
         
-        INSERT INTO public.orders_items (order_id, product_id, additional, quantity, unit_price, total_price)
+        INSERT INTO public.orders_items (order_id, product_id, name, observation, additional, quantity, unit_price, total_price)
         VALUES (
             v_order_id,
-            (v_item->>'product_id')::UUID,
+            CASE 
+                WHEN (v_item->>'product_id') LIKE 'custom_%' THEN NULL
+                ELSE (v_item->>'product_id')::UUID
+            END,
+            v_item->>'name',
+            v_item->>'observation',
             COALESCE(v_item->'additional', '[]'::jsonb),
             (v_item->>'quantity')::INT,
-            (v_item->>'unit_price')::NUMERIC,
+            (COALESCE(v_item->>'unit_price', v_item->>'price'))::NUMERIC,
             v_item_total
         );
     END LOOP;
 
+    -- Gerar Ticket de Produção/Impressão para o lote atual
+    INSERT INTO public.orders_tickets (store_id, order_id, collaborator_id, items)
+    VALUES (p_store_id, v_order_id, p_collaborator_id, p_items);
+
     -- Atualizar total acumulado da mesa
-    UPDATE public.orders_collaborators SET total_amount = total_amount + v_total WHERE id = v_order_id;
+    UPDATE public.orders_collaborators 
+    SET total_amount = total_amount + v_total,
+        updated_at = now()
+    WHERE id = v_order_id;
 
     RETURN jsonb_build_object('id', v_order_id, 'status', 'success');
 END;
@@ -3912,13 +3992,15 @@ BEGIN
                 SELECT jsonb_agg(
                     jsonb_build_object(
                         'id', oi.id,
-                        'name', p.name,
+                        'name', COALESCE(oi.name, p.name, 'Produto'),
+                        'observation', oi.observation,
                         'quantity', oi.quantity,
                         'unit_price', oi.unit_price,
+                        'total_price', oi.total_price,
                         'additional', oi.additional
                     )
                 ) FROM public.orders_items oi 
-                JOIN public.products p ON p.id = oi.product_id
+                LEFT JOIN public.products p ON p.id = oi.product_id
                 WHERE oi.order_id = oc.id
             )
         ) ORDER BY oc.created_at DESC
@@ -4866,6 +4948,14 @@ CREATE TABLE IF NOT EXISTS public.partner_loans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Migração segura: adicionar coluna disbursement_method se não existir
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_loans' AND column_name = 'disbursement_method') THEN
+        ALTER TABLE public.partner_loans ADD COLUMN disbursement_method VARCHAR(20) DEFAULT 'WALLET'; -- 'WALLET' or 'BANK_ACCOUNT'
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS partner_loans_user_id_idx ON public.partner_loans (user_id);
 CREATE INDEX IF NOT EXISTS partner_loans_status_idx ON public.partner_loans (status);
 
@@ -4882,6 +4972,10 @@ CREATE POLICY "Users can view their own loans" ON public.partner_loans
 DROP POLICY IF EXISTS "Users can create loan requests" ON public.partner_loans;
 CREATE POLICY "Users can create loan requests" ON public.partner_loans
     FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own loans" ON public.partner_loans;
+CREATE POLICY "Users can update their own loans" ON public.partner_loans
+    FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can manage partner_loans" ON public.partner_loans;
 CREATE POLICY "Admins can manage partner_loans" ON public.partner_loans
@@ -5410,3 +5504,99 @@ CREATE POLICY "Store partners can manage their drivers loans" ON public.partner_
             AND partner_id = partner_loans.user_id
         )
     );
+
+-- ==================================================================
+-- 3.x ATUALIZAÇÕES PARA GESTÃO DE LOJA (15/01/2026)
+-- ==================================================================
+
+-- 1. Adicionar status de loja aberta/fechada no perfil
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'is_open') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN is_open BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
+
+-- Garantir que usuários possam atualizar seu próprio status is_open
+DROP POLICY IF EXISTS "Users can update own is_open" ON public.user_profiles;
+CREATE POLICY "Users can update own is_open" ON public.user_profiles
+    FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+-- 2. Tabela de Relatórios Diários da Loja
+CREATE TABLE IF NOT EXISTS public.store_daily_reports (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    report_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+    total_orders INT DEFAULT 0,
+    total_revenue NUMERIC(10, 2) DEFAULT 0,
+    total_delivery_fees NUMERIC(10, 2) DEFAULT 0,
+    orders_summary JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Índices e Trigger de Updated At
+CREATE INDEX IF NOT EXISTS store_daily_reports_store_id_idx ON public.store_daily_reports (store_id);
+CREATE INDEX IF NOT EXISTS store_daily_reports_date_idx ON public.store_daily_reports (report_date);
+
+-- RLS Policies
+ALTER TABLE public.store_daily_reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas veem seus proprios relatorios diarios" ON public.store_daily_reports;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas veem seus proprios relatorios diarios' AND tablename = 'store_daily_reports') THEN
+        CREATE POLICY "Lojistas veem seus proprios relatorios diarios" ON public.store_daily_reports
+            FOR SELECT USING (auth.uid() = store_id);
+    END IF;
+END $$;
+
+DROP POLICY IF EXISTS "Lojistas criam seus proprios relatorios diarios" ON public.store_daily_reports;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas criam seus proprios relatorios diarios' AND tablename = 'store_daily_reports') THEN
+        CREATE POLICY "Lojistas criam seus proprios relatorios diarios" ON public.store_daily_reports
+            FOR INSERT WITH CHECK (auth.uid() = store_id);
+    END IF;
+END $$;
+
+GRANT SELECT, INSERT ON public.store_daily_reports TO authenticated;
+
+-- Garantir permissões de leitura na tabela orders para lojistas (Correção 2026-01-15)
+GRANT SELECT ON public.orders TO authenticated;
+
+DROP POLICY IF EXISTS "Lojistas leem seus proprios pedidos" ON public.orders;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas leem seus proprios pedidos' AND tablename = 'orders') THEN
+        CREATE POLICY "Lojistas leem seus proprios pedidos" ON public.orders
+            FOR SELECT USING (auth.uid() = store_id OR public.is_admin());
+    END IF;
+END $$;
+
+
+-- Correção para get_products_for_collaborator (15/01/2026)
+-- A relação store_categories não existe, e a tabela store_products usa a coluna 'category' (TEXT).
+CREATE OR REPLACE FUNCTION public.get_products_for_collaborator(p_store_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+BEGIN
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', sp.id,
+            'name', sp.name,
+            'description', sp.description,
+            'price', sp.price,
+            'image_url', sp.image_url,
+            'category_name', COALESCE(sp.category, 'Geral'),
+            'is_active', sp.is_active
+        ) ORDER BY sp.name ASC
+    ) INTO result
+    FROM public.store_products sp
+    WHERE sp.store_id = p_store_id
+      AND sp.is_active = true;
+
+    RETURN COALESCE(result, '[]'::jsonb);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+

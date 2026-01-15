@@ -4,6 +4,7 @@ interface CustomInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
     mask?: 'currency' | 'phone' | 'cpf' | 'cnpj' | 'cep';
     icon?: React.ElementType;
+    helperText?: string;
 }
 
 export const CustomInput: React.FC<CustomInputProps> = ({
@@ -13,6 +14,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
     value,
     onChange,
     className = '',
+    helperText,
     ...props
 }) => {
     const [displayValue, setDisplayValue] = useState('');
@@ -126,9 +128,10 @@ export const CustomInput: React.FC<CustomInputProps> = ({
                     {...props}
                     value={displayValue}
                     onChange={handleChange}
-                    className={`w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all font-bold text-gray-700 dark:text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed ${Icon ? 'pl-10' : ''}`}
+                    className={`w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-gray-700 dark:text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed ${Icon ? 'pl-10' : ''}`}
                 />
             </div>
+            {helperText && <p className="text-[10px] text-gray-400 mt-1 ml-1">{helperText}</p>}
         </div>
     );
 };

@@ -6,7 +6,7 @@ import { PWASettings, PWAIcon, PWAScreenshot, PWAShortcut } from '../types';
 import { getClient } from '../services/cloud';
 
 export const AdminPWASettings: React.FC = () => {
-    const [settings, setSettings] = useState<PWASettings | null>(null);
+    const [settings, setSettings] = useState<PWASettings>({} as PWASettings);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [feedback, setFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -17,8 +17,8 @@ export const AdminPWASettings: React.FC = () => {
             setLoading(true);
             try {
                 const data = await cloud.adminGetPWASettings();
-                console.log("loadSettings: Fetched data from DB:", data);
-                setSettings(data || {});
+                // console.log("loadSettings: Fetched data from DB:", data);
+                setSettings(data || ({} as PWASettings));
             } catch (e) {
                 console.error("Error loading PWA settings:", e);
                 setFeedback({ type: 'error', text: 'Erro ao carregar configurações do PWA.' });

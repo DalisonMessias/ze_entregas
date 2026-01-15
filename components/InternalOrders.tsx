@@ -24,10 +24,11 @@ interface PlatformFeeDetails {
 
 export const InternalOrders: React.FC = () => {
     // View State
-    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES'>('NEW_ORDER');
+    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION'>('NEW_ORDER');
 
     const [products, setProducts] = useState<StoreProduct[]>([]);
     const [activeTables, setActiveTables] = useState<any[]>([]); // Nova: Mesas ativas
+    const [tickets, setTickets] = useState<any[]>([]); // Tickets de produção
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [cart, setCart] = useState<{ product: StoreProduct, quantity: number }[]>([]);
@@ -92,10 +93,19 @@ export const InternalOrders: React.FC = () => {
     // Profile Validation State
     const [profileValid, setProfileValid] = useState<boolean | null>(null);
     const [missingFields, setMissingFields] = useState<string[]>([]);
+    const [hasOnlineCouriers, setHasOnlineCouriers] = useState(false);
 
     useEffect(() => {
         loadProducts();
     }, []);
+
+    const loadTickets = async () => {
+        const storeId = products[0]?.store_id || localStorage.getItem('storeId');
+        if (storeId) {
+            const data = await cloud.getOrdersTickets(storeId);
+            setTickets(data);
+        }
+    };
 
     // Calcular taxa de entrega automaticamente baseado no modo selecionado
     useEffect(() => {
@@ -369,11 +379,12 @@ export const InternalOrders: React.FC = () => {
     const loadProducts = async () => {
         setLoading(true);
         try {
-            const [productsData, profile, settings, fees] = await Promise.all([
+            const [productsData, profile, settings, fees, onlineDrivers] = await Promise.all([
                 cloud.getStoreProducts(),
                 cloud.getMyPartnerProfile(),
                 cloud.getStoreDeliverySettings(),
-                cloud.getStoreNeighborhoodFees()
+                cloud.getStoreNeighborhoodFees(),
+                cloud.getOnlineDrivers(0, 0)
             ]);
 
             setProducts(productsData);
@@ -382,6 +393,9 @@ export const InternalOrders: React.FC = () => {
             if (settings) {
                 setCalculationMode(settings.delivery_mode);
             }
+
+            setHasOnlineCouriers(onlineDrivers && onlineDrivers.length > 0);
+            console.log('[InternalOrders] Entregadores online:', onlineDrivers?.length || 0);
 
             // Carregar taxas globais da plataforma para cálculo do Parceiro Zé
             try {
@@ -824,7 +838,7 @@ export const InternalOrders: React.FC = () => {
 
     // Validação de perfil - redirecionar para configurações se perfil incompleto
     if (profileValid === false) {
-        console.log('[InternalOrders] Exibindo alerta - campos faltantes:', missingFields);
+        // console.log('[InternalOrders] Exibindo alerta - campos faltantes:', missingFields);
         return (
             <ProfileValidationAlert
                 onNavigateToSettings={() => window.location.href = '/loja/configuracoes'}
@@ -853,11 +867,18 @@ export const InternalOrders: React.FC = () => {
                     Mesas Ativas
                 </button>
                 <button
-                    onClick={() => setView('HISTORY')}
+                    onClick={() => { setView('HISTORY'); loadHistory(); }}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'HISTORY' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
                 >
                     <HistoryIcon className="w-4 h-4" />
                     Histórico
+                </button>
+                <button
+                    onClick={() => { setView('PRODUCTION'); loadTickets(); }}
+                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'PRODUCTION' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
+                >
+                    <Printer className="w-4 h-4" />
+                    Produção
                 </button>
             </div>
 
@@ -1018,25 +1039,27 @@ export const InternalOrders: React.FC = () => {
                                                 </p>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                                <button
-                                                    onClick={() => {
-                                                        setDeliveryMode('PLATFORM');
-                                                        setDeliveryFeeStr('0,00');
-                                                        setPlatformFeeDetails(null);
-                                                    }}
-                                                    className={`p-3 bg-white dark:bg-gray-800 rounded-xl border-2 transition-all text-left ${deliveryMode === 'PLATFORM'
-                                                        ? 'border-green-500 ring-2 ring-green-200 dark:ring-green-800'
-                                                        : 'border-green-200 dark:border-green-800 hover:border-green-400'
-                                                        }`}
-                                                >
-                                                    <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">
-                                                        Parceiro Zé {deliveryMode === 'PLATFORM' && '✓'}
-                                                    </p>
-                                                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                                                        Entregador da plataforma
-                                                    </p>
-                                                </button>
+                                            <div className={`grid grid-cols-1 md:${hasOnlineCouriers ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+                                                {hasOnlineCouriers && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setDeliveryMode('PLATFORM');
+                                                            setDeliveryFeeStr('0,00');
+                                                            setPlatformFeeDetails(null);
+                                                        }}
+                                                        className={`p-3 bg-white dark:bg-gray-800 rounded-xl border-2 transition-all text-left ${deliveryMode === 'PLATFORM'
+                                                            ? 'border-green-500 ring-2 ring-green-200 dark:ring-green-800'
+                                                            : 'border-green-200 dark:border-green-800 hover:border-green-400'
+                                                            }`}
+                                                    >
+                                                        <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">
+                                                            Parceiro Zé {deliveryMode === 'PLATFORM' && '✓'}
+                                                        </p>
+                                                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                            Entregador da plataforma
+                                                        </p>
+                                                    </button>
+                                                )}
 
                                                 <button
                                                     onClick={() => setDeliveryMode('OWN')}
@@ -1553,6 +1576,83 @@ export const InternalOrders: React.FC = () => {
                                 )}
                             </div>
                         </div>
+                    ) : view === 'PRODUCTION' ? (
+                        <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 className="text-2xl font-bold dark:text-white uppercase tracking-tight">Fila de Produção</h2>
+                                    <p className="text-gray-500 text-sm">Pedidos enviados pelos garçons para preparo</p>
+                                </div>
+                                <Button size="sm" variant="secondary" onClick={loadTickets} className="rounded-xl h-10 px-4">
+                                    Atualizar Fila
+                                </Button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                {tickets.length === 0 ? (
+                                    <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                        <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                                            <Printer className="w-8 h-8 text-gray-300" />
+                                        </div>
+                                        <p className="text-gray-400 font-bold italic">Nenhum pedido na fila no momento.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
+                                        {tickets.map(ticket => (
+                                            <div key={ticket.id} className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[32px] border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all group">
+                                                <div className="flex justify-between items-start mb-4 pb-4 border-b border-gray-200/50 dark:border-gray-700/50">
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <span className="bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase">
+                                                                {ticket.orders_collaborators?.table_identifier || 'Balcão'}
+                                                            </span>
+                                                            <span className="text-[10px] text-gray-400 font-bold">
+                                                                {new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                        <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">
+                                                            {ticket.orders_collaborators?.customer_name || 'Pedido Cozinha'}
+                                                        </h3>
+                                                    </div>
+                                                    <Button size="sm" onClick={() => {
+                                                        const order = {
+                                                            ...ticket.orders_collaborators,
+                                                            items: ticket.items.map((i: any) => ({
+                                                                ...i,
+                                                                name: i.name || i.product?.name,
+                                                                total_price: i.quantity * (i.unit_price || i.price || 0)
+                                                            })),
+                                                            total_price: ticket.items.reduce((acc: number, i: any) => acc + (i.quantity * (i.unit_price || i.price || 0)), 0),
+                                                            created_at: ticket.created_at
+                                                        };
+                                                        setLastOrder(order);
+                                                        setShowPrintPreview(true);
+                                                    }} className="w-10 h-10 p-0 rounded-xl shadow-lg shadow-brand-500/20">
+                                                        <Printer className="w-4 h-4 text-white" />
+                                                    </Button>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    {ticket.items.map((item: any, idx: number) => (
+                                                        <div key={idx}>
+                                                            <div className="flex justify-between text-sm">
+                                                                <span className="font-black text-gray-700 dark:text-gray-200">{item.quantity}x {item.name || item.product?.name}</span>
+                                                            </div>
+                                                            {item.observation && (
+                                                                <p className="text-[10px] text-orange-600 font-black italic ml-4 mt-1">↳ OBS: {item.observation}</p>
+                                                            )}
+                                                            {item.additional?.map((a: any, ai: number) => (
+                                                                <p key={ai} className="text-[10px] text-gray-400 font-bold ml-4 mt-0.5">↳ {a.value || a.name}</p>
+                                                            ))}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     ) : (
                         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
                             {/* History View */}
@@ -1699,15 +1799,23 @@ export const InternalOrders: React.FC = () => {
                         {/* Simplified Content, usually PrintTicket component */}
                         <div className="bg-white p-6 rounded-lg w-full max-w-sm max-h-[90vh] overflow-y-auto">
                             <h3 className="font-bold text-center mb-4">Pedido #{lastOrder.id.slice(0, 4)}</h3>
-                            <div className="space-y-2 mb-4">
+                            <div className="space-y-3 mb-4">
                                 {lastOrder.items.map((item, i) => (
-                                    <div key={i} className="flex justify-between text-sm">
-                                        <span>{item.quantity}x {item.name}</span>
-                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price * item.quantity)}</span>
+                                    <div key={i} className="border-b border-gray-50 pb-2">
+                                        <div className="flex justify-between text-sm font-bold">
+                                            <span>{item.quantity}x {item.name}</span>
+                                            <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.total_price || (item.price * item.quantity))}</span>
+                                        </div>
+                                        {item.observation && (
+                                            <p className="text-[10px] text-gray-500 italic ml-2">Obs: {item.observation}</p>
+                                        )}
+                                        {item.additional?.map((a: any, ai: number) => (
+                                            <p key={ai} className="text-[10px] text-gray-400 ml-2">↳ {a.value || a.name}</p>
+                                        ))}
                                     </div>
                                 ))}
                             </div>
-                            <div className="border-t pt-2 font-bold flex justify-between">
+                            <div className="border-t pt-3 font-black flex justify-between text-lg">
                                 <span>Total</span>
                                 <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lastOrder.total_price)}</span>
                             </div>

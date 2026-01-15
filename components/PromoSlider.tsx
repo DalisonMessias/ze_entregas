@@ -17,7 +17,7 @@ export const PromoSlider: React.FC<PromoSliderProps> = ({ audience }) => {
         const loadSlides = async () => {
             try {
                 const data = await cloud.getSlides(audience);
-                console.log(`[PromoSlider] Fetched ${data.length} slides for audience: ${audience}`, data);
+                // console.log(`[PromoSlider] Fetched ${data.length} slides for audience: ${audience}`, data);
                 setSlides(data);
             } catch (error) {
                 console.error('[PromoSlider] Error loading promo slides:', error);

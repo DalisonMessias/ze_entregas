@@ -21,7 +21,26 @@ export function useCityStreets(city: string) {
     const fetchStreets = useCallback(async () => {
         if (!city) return;
 
-        // Verificar cache
+        // Check localStorage cache first
+        const cacheKey = `streets_cache_${city}`;
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached);
+                // Optional: Check expiration (e.g. 7 days). For now, simple cache.
+                setData({
+                    ruas: parsed.ruas || [],
+                    bairros: parsed.bairros || [],
+                    loading: false,
+                    error: null
+                });
+                return;
+            } catch (e) {
+                localStorage.removeItem(cacheKey);
+            }
+        }
+
+        // Check in-memory cache (fallback)
         if (streetsCache[city]) {
             setData({
                 ruas: streetsCache[city].ruas,
@@ -84,6 +103,11 @@ export function useCityStreets(city: string) {
 
             // Salvar no cache
             streetsCache[city] = { ruas, bairros: [] };
+            try {
+                localStorage.setItem(`streets_cache_${city}`, JSON.stringify({ ruas, bairros: [] }));
+            } catch (e) {
+                console.warn('Falha ao salvar cache de ruas:', e);
+            }
 
             setData({
                 ruas,

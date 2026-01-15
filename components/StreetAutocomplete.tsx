@@ -69,7 +69,7 @@ export const StreetAutocomplete: React.FC<StreetAutocompleteProps> = ({
     };
 
     return (
-        <div className="relative mb-4" ref={wrapperRef}>
+        <div className="relative" ref={wrapperRef}>
             {label && <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">{label}</label>}
             <div className="relative">
                 <input
@@ -82,8 +82,8 @@ export const StreetAutocomplete: React.FC<StreetAutocompleteProps> = ({
                     onFocus={() => setShowSuggestions(true)}
                     placeholder={placeholder}
                     disabled={disabled}
-                    className="w-full p-2 pl-3 md:p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    autoComplete="off"
+                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400"
+                    autoComplete="new-street-address"
                 />
 
                 {loading && (

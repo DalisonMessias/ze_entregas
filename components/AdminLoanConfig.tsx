@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, Plus, Trash2, Edit, Loader2, Save, DollarSign, Percent, Hash, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Settings, Plus, Trash2, Edit, Loader2, Save, DollarSign, Percent, Hash, CheckCircle, XCircle, Clock, Users, AlertTriangle, Eye, Landmark } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
@@ -135,23 +135,37 @@ export const AdminLoanConfig: React.FC = () => {
         }
     };
 
-    const handleApproveLoan = async (loanId: string) => {
-        setConfirmModal({
-            open: true,
-            title: 'Aprovar Empréstimo',
-            message: 'Deseja aprovar esta solicitação de empréstimo?',
-            type: 'success',
-            action: async () => {
-                try {
-                    await cloud.adminApproveLoan(loanId);
-                    setToast({ type: 'success', message: 'Empréstimo aprovado!' });
-                    loadData();
-                } catch (e: any) {
-                    setToast({ type: 'error', message: e.message || 'Erro ao aprovar' });
-                }
-                setConfirmModal(null);
-            }
-        });
+    // Approval Modal State
+    const [approveModalOpen, setApproveModalOpen] = useState(false);
+    const [loanToApprove, setLoanToApprove] = useState<PartnerLoan | null>(null);
+
+    // ... (existing effects and other handlers)
+
+    const handleApproveLoan = (loanId: string) => {
+        const loan = loans.find(l => l.id === loanId);
+        if (loan) {
+            setLoanToApprove(loan);
+            setApproveModalOpen(true);
+        }
+    };
+
+    const confirmApproveLoan = async () => {
+        if (!loanToApprove) return;
+
+        // Fechar modal antes para feedback instantâneo ou manter aberto com loading?
+        // Vamos manter loading
+        setSaving(true);
+        try {
+            await cloud.adminApproveLoan(loanToApprove.id);
+            setToast({ type: 'success', message: 'Empréstimo aprovado com sucesso!' });
+            setApproveModalOpen(false);
+            setLoanToApprove(null);
+            loadData();
+        } catch (e: any) {
+            setToast({ type: 'error', message: e.message || 'Erro ao aprovar' });
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleRejectLoan = async (loanId: string) => {
@@ -371,6 +385,18 @@ export const AdminLoanConfig: React.FC = () => {
         </div>
     );
 
+    // View Modal State
+    const [viewModalOpen, setViewModalOpen] = useState(false);
+    const [loanToView, setLoanToView] = useState<PartnerLoan | null>(null);
+
+    const handleViewLoan = (loanId: string) => {
+        const loan = loans.find(l => l.id === loanId);
+        if (loan) {
+            setLoanToView(loan);
+            setViewModalOpen(true);
+        }
+    };
+
     const renderLoansTab = () => (
         <div className="space-y-4">
             <h4 className="font-bold text-gray-700 dark:text-gray-300">Solicitações de Empréstimo</h4>
@@ -396,16 +422,21 @@ export const AdminLoanConfig: React.FC = () => {
                                     }`}>
                                     {loan.status}
                                 </span>
-                                {loan.status === 'PENDING' && (
-                                    <div className="flex gap-2">
-                                        <Button size="sm" onClick={() => handleApproveLoan(loan.id)}>
-                                            <CheckCircle className="w-4 h-4 mr-1" />Aprovar
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={() => handleRejectLoan(loan.id)}>
-                                            <XCircle className="w-4 h-4 mr-1" />Rejeitar
-                                        </Button>
-                                    </div>
-                                )}
+                                <div className="flex gap-2">
+                                    <Button size="sm" variant="ghost" onClick={() => handleViewLoan(loan.id)} title="Ver Detalhes">
+                                        <Eye className="w-4 h-4" />
+                                    </Button>
+                                    {loan.status === 'PENDING' && (
+                                        <>
+                                            <Button size="sm" onClick={() => handleApproveLoan(loan.id)}>
+                                                <CheckCircle className="w-4 h-4 mr-1" />Aprovar
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={() => handleRejectLoan(loan.id)}>
+                                                <XCircle className="w-4 h-4 mr-1" />Rejeitar
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -414,21 +445,23 @@ export const AdminLoanConfig: React.FC = () => {
         </div>
     );
 
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>;
-
     return (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-            <div className="flex justify-between items-center">
-                <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                    <Settings className="w-5 h-5" /> Gerenciamento de Empréstimos
-                </h3>
-                <div className="flex gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl">
-                    <Button variant={activeTab === 'types' ? 'primary' : 'ghost'} onClick={() => setActiveTab('types')}>Tipos</Button>
-                    <Button variant={activeTab === 'levels' ? 'primary' : 'ghost'} onClick={() => setActiveTab('levels')}>Níveis</Button>
-                    <Button variant={activeTab === 'loans' ? 'primary' : 'ghost'} onClick={() => setActiveTab('loans')}>Solicitações</Button>
-                </div>
+            <div className="flex gap-2 border-b border-gray-100 dark:border-gray-700 pb-4 overflow-x-auto">
+                <Button variant={activeTab === 'types' ? 'primary' : 'ghost'} onClick={() => setActiveTab('types')}>
+                    <Settings className="w-4 h-4 mr-2" />
+                    Tipos de Empréstimo
+                </Button>
+                <Button variant={activeTab === 'levels' ? 'primary' : 'ghost'} onClick={() => setActiveTab('levels')}>
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Limites por Nível
+                </Button>
+                <Button variant={activeTab === 'loans' ? 'primary' : 'ghost'} onClick={() => setActiveTab('loans')}>
+                    <Clock className="w-4 h-4 mr-2" />
+                    Solicitações
+                </Button>
             </div>
 
             {activeTab === 'types' && renderTypesTab()}
@@ -437,15 +470,23 @@ export const AdminLoanConfig: React.FC = () => {
 
             {/* Modal de Rejeição */}
             {rejectModalOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setRejectModalOpen(false)}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-4">Rejeitar Empréstimo</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Por favor, informe o motivo da rejeição:</p>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setRejectModalOpen(false)}>
+                    {/* ... (existing rejection modal logic) */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col items-center mb-4">
+                            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mb-2">
+                                <XCircle className="w-6 h-6" />
+                            </div>
+                            <h3 className="font-bold text-lg text-gray-800 dark:text-white">Rejeitar Empréstimo</h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 text-center">Informe o motivo da rejeição para notificar o parceiro:</p>
+
                         <textarea
                             value={rejectionReason}
                             onChange={e => setRejectionReason(e.target.value)}
-                            className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 mb-4 min-h-[100px]"
-                            placeholder="Ex: Documentação incompleta, histórico de inadimplência, etc."
+                            className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 mb-4 min-h-[100px] focus:ring-2 focus:ring-red-500 outline-none resize-none"
+                            placeholder="Ex: Histórico financeiro incompatível..."
                             autoFocus
                         />
                         <div className="flex gap-2">
@@ -464,17 +505,366 @@ export const AdminLoanConfig: React.FC = () => {
                                 onClick={confirmRejectLoan}
                                 disabled={!rejectionReason.trim()}
                                 fullWidth
+                                className="bg-red-600 hover:bg-red-700 text-white border-red-600"
                             >
-                                <XCircle className="w-4 h-4 mr-2" />
-                                Rejeitar
+                                Rejeitar Solicitação
                             </Button>
                         </div>
                     </div>
                 </div>
             )}
-            {/* Modal de Confirmação Genérico */}
+
+            {/* Modal Rico de Aprovação */}
+            {approveModalOpen && loanToApprove && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setApproveModalOpen(false)}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-0 max-w-4xl w-full shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full flex items-center justify-center">
+                                    <CheckCircle className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg text-gray-800 dark:text-white">Aprovar Empréstimo</h3>
+                                    <p className="text-xs text-gray-500">Revise os dados antes de confirmar</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setApproveModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <XCircle className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                                {/* Coluna Esquerda: Dados do Empréstimo */}
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Detalhes da Solicitação</h4>
+                                        <div className="bg-gray-50 dark:bg-gray-900/30 rounded-xl p-4 space-y-3">
+                                            <div className="flex justify-between items-center pb-2 border-b border-gray-200 dark:border-gray-700">
+                                                <span className="text-gray-600 dark:text-gray-400">Valor Solicitado</span>
+                                                <span className="font-black text-lg text-gray-800 dark:text-white">{formatCurrency(loanToApprove.amount_requested)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600 dark:text-gray-400">Total a Pagar</span>
+                                                <span className="font-bold text-gray-800 dark:text-white">{formatCurrency(loanToApprove.amount_total)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600 dark:text-gray-400">Juros Aplicados</span>
+                                                <span className="font-bold text-gray-800 dark:text-white">{loanToApprove.interest_rate_applied}% a.m.</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600 dark:text-gray-400">Parcelamento</span>
+                                                <span className="font-bold text-gray-800 dark:text-white">{loanToApprove.installments_count}x de {formatCurrency(loanToApprove.amount_total / loanToApprove.installments_count)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-2">
+                                                <span className="text-gray-600 dark:text-gray-400">Data Solicitação</span>
+                                                <span className="text-sm text-gray-800 dark:text-white">{new Date(loanToApprove.created_at).toLocaleDateString('pt-BR')}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700 mt-2">
+                                                <span className="text-gray-600 dark:text-gray-400">Método de Recebimento</span>
+                                                <span className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-1">
+                                                    {loanToApprove.disbursement_method === 'BANK_ACCOUNT' ? <Landmark className="w-3 h-3" /> : <DollarSign className="w-3 h-3" />}
+                                                    {loanToApprove.disbursement_method === 'BANK_ACCOUNT' ? 'Conta Bancária' : 'Carteira Digital'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Tipo de Empréstimo</h4>
+                                        <div className="border border-indigo-100 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl p-4">
+                                            <p className="font-bold text-indigo-700 dark:text-indigo-300">{loanToApprove.loan_type?.name}</p>
+                                            <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{loanToApprove.loan_type?.description}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Coluna Direita: Dados do Usuário */}
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Dados do Solicitante</h4>
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                {loanToApprove.user?.avatar_url ? (
+                                                    <img src={loanToApprove.user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                                        <Users className="w-6 h-6" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-lg text-gray-900 dark:text-white">{loanToApprove.user?.name || 'Não informado'}</p>
+                                                <div className="flex flex-col gap-1 text-sm text-gray-500 mt-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-gray-700 dark:text-gray-300">Email:</span>
+                                                        <span>{loanToApprove.user?.email}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-gray-700 dark:text-gray-300">CPF:</span>
+                                                        <span>{loanToApprove.user?.cpf || 'Não informado'}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-gray-700 dark:text-gray-300">Telefone:</span>
+                                                        <span>{loanToApprove.user?.phone_number || 'Não informado'}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2 flex gap-2">
+                                                    <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                                                        {loanToApprove.user?.partner_level || 'Nível N/A'}
+                                                    </span>
+                                                    <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800">
+                                                        {loanToApprove.user?.vehicle_type || 'Veículo N/A'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Dados Bancários</h4>
+                                        {loanToApprove.user?.bank_details ? (
+                                            <div className="bg-gray-50 dark:bg-gray-900/30 rounded-xl p-4 text-sm space-y-2 border border-gray-200 dark:border-gray-700">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <span className="block text-xs text-gray-500">Banco</span>
+                                                        <span className="font-medium">{loanToApprove.user.bank_details.bankName}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-gray-500">Tipo Chave PIX</span>
+                                                        <span className="font-medium">{loanToApprove.user.bank_details.pixType}</span>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <span className="block text-xs text-gray-500">Chave PIX</span>
+                                                        <span className="font-medium font-mono bg-white dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 block mt-1">
+                                                            {loanToApprove.user.bank_details.pixKey}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-gray-500">Agência</span>
+                                                        <span className="font-medium">{loanToApprove.user.bank_details.agency}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-gray-500">Conta</span>
+                                                        <span className="font-medium">{loanToApprove.user.bank_details.account}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-800 flex items-center gap-3">
+                                                <AlertTriangle className="w-5 h-5 text-red-500" />
+                                                <p className="text-sm text-red-600 dark:text-red-400">Usuário sem dados bancários cadastrados.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-end gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={() => setApproveModalOpen(false)}
+                                disabled={saving}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={confirmApproveLoan}
+                                disabled={saving}
+                                className="bg-green-600 hover:bg-green-700 text-white border-green-600 pl-6 pr-8"
+                            >
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+                                Confirmar Aprovação
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Detalhes (View Modal) */}
+            {viewModalOpen && loanToView && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setViewModalOpen(false)}>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-0 max-w-4xl w-full shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center">
+                                    <Eye className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg text-gray-800 dark:text-white">Detalhes do Empréstimo</h3>
+                                    <p className="text-xs text-gray-500">Visualizando informações completas</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setViewModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <XCircle className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                                {/* Coluna Esquerda: Dados do Empréstimo */}
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Detalhes da Solicitação</h4>
+                                        <div className="bg-gray-50 dark:bg-gray-900/30 rounded-xl p-4 space-y-3">
+                                            <div className="flex justify-between items-center pb-2 border-b border-gray-200 dark:border-gray-700">
+                                                <span className="text-gray-600 dark:text-gray-400">Valor Solicitado</span>
+                                                <span className="font-black text-lg text-gray-800 dark:text-white">{formatCurrency(loanToView.amount_requested)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600 dark:text-gray-400">Total a Pagar</span>
+                                                <span className="font-bold text-gray-800 dark:text-white">{formatCurrency(loanToView.amount_total)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600 dark:text-gray-400">Juros Aplicados</span>
+                                                <span className="font-bold text-gray-800 dark:text-white">{loanToView.interest_rate_applied}% a.m.</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600 dark:text-gray-400">Parcelamento</span>
+                                                <span className="font-bold text-gray-800 dark:text-white">{loanToView.installments_count}x de {formatCurrency(loanToView.amount_total / loanToView.installments_count)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-2">
+                                                <span className="text-gray-600 dark:text-gray-400">Data Solicitação</span>
+                                                <span className="text-sm text-gray-800 dark:text-white">{new Date(loanToView.created_at).toLocaleDateString('pt-BR')}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700 mt-2">
+                                                <span className="text-gray-600 dark:text-gray-400">Método de Recebimento</span>
+                                                <span className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-1">
+                                                    {loanToView.disbursement_method === 'BANK_ACCOUNT' ? <Landmark className="w-3 h-3" /> : <DollarSign className="w-3 h-3" />}
+                                                    {loanToView.disbursement_method === 'BANK_ACCOUNT' ? 'Conta Bancária' : 'Carteira Digital'}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-2">
+                                                <span className="text-gray-600 dark:text-gray-400">Status Atual</span>
+                                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${loanToView.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                                                    loanToView.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                                                        loanToView.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                                                            'bg-gray-100 text-gray-700'
+                                                    }`}>
+                                                    {loanToView.status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Tipo de Empréstimo</h4>
+                                        <div className="border border-indigo-100 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl p-4">
+                                            <p className="font-bold text-indigo-700 dark:text-indigo-300">{loanToView.loan_type?.name}</p>
+                                            <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{loanToView.loan_type?.description}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Coluna Direita: Dados do Usuário */}
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Dados do Solicitante</h4>
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                {loanToView.user?.avatar_url ? (
+                                                    <img src={loanToView.user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                                        <Users className="w-6 h-6" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-lg text-gray-900 dark:text-white">{loanToView.user?.name || 'Não informado'}</p>
+                                                <div className="flex flex-col gap-1 text-sm text-gray-500 mt-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-gray-700 dark:text-gray-300">Email:</span>
+                                                        <span>{loanToView.user?.email}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-gray-700 dark:text-gray-300">CPF:</span>
+                                                        <span>{loanToView.user?.cpf || 'Não informado'}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-gray-700 dark:text-gray-300">Telefone:</span>
+                                                        <span>{loanToView.user?.phone_number || 'Não informado'}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2 flex gap-2">
+                                                    <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                                                        {loanToView.user?.partner_level || 'Nível N/A'}
+                                                    </span>
+                                                    <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800">
+                                                        {loanToView.user?.vehicle_type || 'Veículo N/A'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Dados Bancários</h4>
+                                        {loanToView.user?.bank_details ? (
+                                            <div className="bg-gray-50 dark:bg-gray-900/30 rounded-xl p-4 text-sm space-y-2 border border-gray-200 dark:border-gray-700">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <span className="block text-xs text-gray-500">Banco</span>
+                                                        <span className="font-medium">{loanToView.user.bank_details.bankName}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-gray-500">Tipo Chave PIX</span>
+                                                        <span className="font-medium">{loanToView.user.bank_details.pixType}</span>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <span className="block text-xs text-gray-500">Chave PIX</span>
+                                                        <span className="font-medium font-mono bg-white dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 block mt-1">
+                                                            {loanToView.user.bank_details.pixKey}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-gray-500">Agência</span>
+                                                        <span className="font-medium">{loanToView.user.bank_details.agency}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-gray-500">Conta</span>
+                                                        <span className="font-medium">{loanToView.user.bank_details.account}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-800 flex items-center gap-3">
+                                                <AlertTriangle className="w-5 h-5 text-red-500" />
+                                                <p className="text-sm text-red-600 dark:text-red-400">Usuário sem dados bancários cadastrados.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-end gap-3">
+                            <Button
+                                onClick={() => setViewModalOpen(false)}
+                                className="bg-gray-800 text-white"
+                            >
+                                Fechar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal genérico (mantido para exclusão etc) */}
             {confirmModal && confirmModal.open && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110]" onClick={() => setConfirmModal(null)}>
+                    {/* ... (existing generic modal) */}
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                         <div className="flex flex-col items-center text-center">
                             <div className={`w-16 h-16 ${confirmModal.type === 'danger' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} rounded-full flex items-center justify-center mb-4`}>

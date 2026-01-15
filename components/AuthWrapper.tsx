@@ -92,7 +92,7 @@ export const AuthWrapper: React.FC = () => {
   };
 
   const handleLogoutAndRedirect = (message: string) => {
-    console.log('[HANDLE_LOGOUT_AND_REDIRECT] called', { message });
+    // console.log('[HANDLE_LOGOUT_AND_REDIRECT] called', { message });
     cloud.signOut();
     setSession(null);
     setUserId(null);

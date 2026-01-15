@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Info, CheckCircle, AlertTriangle, X, User } from 'lucide-react';
+import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Info, CheckCircle, AlertTriangle, X, User, Camera } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { StoreShippingRules } from './StoreShippingRules';
@@ -45,22 +45,29 @@ export const StoreSettings: React.FC = () => {
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
 
+    // Branding State
+    const [coverUrl, setCoverUrl] = useState<string | null>(null);
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [uploadingAsset, setUploadingAsset] = useState<'cover' | 'logo' | null>(null);
+
     // Form State
-    const [userForm, setUserForm] = useState({
-        name: '',
-        email: ''
-    });
+
+
+    // Agora usando store_address_* para a loja, mas inicializando com fallback se vazio
     const [form, setForm] = useState({
         name: '',
         phone_number: '',
         contact_email: '',
         opening_hours: '',
+
+        // Store Address Fields
         address_zip: '',
         address_street: '',
         address_number: '',
         address_district: '',
-        city: '', // City field from profile
-        address_state: ''
+        city: '',
+        address_state: '',
+        address_complement: ''
     });
 
     useEffect(() => {
@@ -76,21 +83,33 @@ export const StoreSettings: React.FC = () => {
                 setAvailableCities(cities);
 
                 if (p) {
-                    setUserForm({
-                        name: p.name || '',
-                        email: p.email || ''
-                    });
+
+
+                    setCoverUrl(p.cover_url || null);
+                    setLogoUrl(p.store_logo_url || null);
+
+                    // Lógica de Fallback Inteligente: Se store_address_* estiver vazio, usa o address_* (migração suave) 
+                    // Se store_address_* estiver preenchido, usa ele.
+                    const useStoreAddr = !!p.store_address_zip || !!p.store_address_street;
+
                     setForm({
                         name: p.store_name || p.name || '',
                         phone_number: p.phone_number || '',
                         contact_email: p.contact_email || p.email || '',
                         opening_hours: p.opening_hours || '',
-                        address_zip: p.address_zip || '',
-                        address_street: p.address_street || '',
-                        address_number: p.address_number || '',
-                        address_district: p.address_district || '',
-                        city: p.city?.split(' - ')[0] || '',
-                        address_state: p.address_state || p.city?.split(' - ')[1] || ''
+
+                        address_zip: useStoreAddr ? (p.store_address_zip || '') : (p.address_zip || ''),
+                        address_street: useStoreAddr ? (p.store_address_street || '') : (p.address_street || ''),
+                        address_number: useStoreAddr ? (p.store_address_number || '') : (p.address_number || ''),
+                        address_district: useStoreAddr ? (p.store_address_district || '') : (p.address_district || ''),
+
+                        // Parse City/State
+                        city: useStoreAddr
+                            ? (p.store_address_city && p.store_address_state ? `${p.store_address_city} - ${p.store_address_state}` : (p.store_address_city || ''))
+                            : (p.city || ''),
+
+                        address_state: useStoreAddr ? (p.store_address_state || '') : (p.address_state || p.city?.split(' - ')[1] || ''),
+                        address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || '') // TODO: Add to generic too if needed
                     });
                 }
 
@@ -113,11 +132,43 @@ export const StoreSettings: React.FC = () => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleAssetUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'cover' | 'logo') => {
+        if (!e.target.files || e.target.files.length === 0) return;
+
+        const file = e.target.files[0];
+        setUploadingAsset(type);
+
+        try {
+            const url = await cloud.uploadStoreAsset(file, type);
+            if (type === 'cover') setCoverUrl(url);
+            else setLogoUrl(url);
+
+            // Auto-save the URL to profile immediately
+            if (type === 'cover') {
+                await cloud.updateMyPartnerProfile({ cover_url: url });
+            } else {
+                await cloud.updateMyPartnerProfile({ store_logo_url: url });
+            }
+
+            setToast({ type: 'success', message: `${type === 'cover' ? 'Capa' : 'Logo'} atualizada com sucesso!` });
+        } catch (err: any) {
+            console.error(err);
+            setToast({ type: 'error', message: "Erro no upload: " + err.message });
+        } finally {
+            setUploadingAsset(null);
+        }
+    };
+
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Construct city string properly if changed
-            const cityFull = form.city && form.address_state ? `${form.city} - ${form.address_state}` : form.city;
+            // Construct city string properly
+            // Form.city is likely "CityName - UF" from the picker
+            // We want to save separate fields for store address
+
+            const cityParts = form.city.split(' - ');
+            const cityName = cityParts[0];
+            const cityState = form.address_state || cityParts[1] || '';
 
             const rawPhone = (form.phone_number || '').replace(/\D/g, '');
             const rawZip = (form.address_zip || '').replace(/\D/g, '');
@@ -127,12 +178,21 @@ export const StoreSettings: React.FC = () => {
                 phone_number: rawPhone,
                 contact_email: form.contact_email,
                 opening_hours: form.opening_hours,
-                address_zip: rawZip,
-                address_street: form.address_street,
-                address_number: form.address_number,
-                address_district: form.address_district,
-                address_state: form.address_state,
-                city: cityFull
+
+                // Saving to NEW Store Address fields
+                store_address_zip: rawZip,
+                store_address_street: form.address_street,
+                store_address_number: form.address_number,
+                store_address_district: form.address_district,
+                store_address_city: cityName,
+                store_address_state: cityState,
+                store_address_complement: form.address_complement,
+
+                // Also update legacy/display 'city' field for compatibility if needed, 
+                // but usually 'city' on profile is for search. Let's keep them synced for now or just update store fields.
+                // Updating regular address fields too? User asked to SEPARATE. 
+                // So we should NOT overwrite 'address_*' (personal) with store address here.
+                // We only save to store_address_*.
             });
 
             setToast({ type: 'success', message: "Dados da loja atualizados com sucesso!" });
@@ -176,36 +236,51 @@ export const StoreSettings: React.FC = () => {
 
             {/* General Settings */}
             {activeTab === 'general' && (
-                <div className="space-y-6">
-                    {/* User Data (ReadOnly) */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
-                        <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
-                            <User className="w-5 h-5 text-gray-400" /> Dados da Conta
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <CustomInput
-                                label="Nome do Responsável"
-                                value={userForm.name}
-                                readOnly
-                                icon={User}
-                                className="opacity-70"
-                            />
-                            <CustomInput
-                                label="Email da Conta"
-                                value={userForm.email}
-                                readOnly
-                                icon={Mail}
-                                className="opacity-70"
-                            />
+                <div className="space-y-10">
+
+                    {/* --- BRANDING SECTION (NEW) --- */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden relative group">
+                        {/* Cover Image */}
+                        <div className="h-40 md:h-52 w-full bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 relative">
+                            {coverUrl && (
+                                <img src={coverUrl} alt="Capa da Loja" className="w-full h-full object-cover" />
+                            )}
+
+                            <label className="absolute bottom-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full cursor-pointer transition-all backdrop-blur-sm">
+                                {uploadingAsset === 'cover' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAssetUpload(e, 'cover')} />
+                            </label>
                         </div>
-                        <p className="text-[10px] text-gray-400">Os dados da conta são fixos. Para alterá-los, entre em contato com o suporte.</p>
+
+                        {/* Store Logo */}
+                        <div className="absolute top-[80px] md:top-[120px] left-6">
+                            <div className="relative group/logo">
+                                <div className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-white dark:border-gray-800 bg-gray-100 dark:bg-gray-700 overflow-hidden shadow-lg flex items-center justify-center">
+                                    {logoUrl ? (
+                                        <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <Store className="w-10 h-10 md:w-12 md:h-12 text-gray-400" />
+                                    )}
+                                </div>
+                                <label className="absolute bottom-0 right-0 bg-brand-600 hover:bg-brand-700 text-white p-2 rounded-full cursor-pointer shadow-md transition-all border-2 border-white dark:border-gray-800">
+                                    {uploadingAsset === 'logo' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAssetUpload(e, 'logo')} />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="mt-16 px-6 pb-6">
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{form.name || 'Nome da Sua Loja'}</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{profile?.email}</p>
+                        </div>
                     </div>
 
+
                     {/* Store Info */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-8">
                         <div>
                             <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
-                                <Store className="w-5 h-5 text-gray-500" /> Informações da Loja
+                                <Store className="w-5 h-5 text-gray-500" /> Informações Básicas
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <CustomInput
@@ -225,12 +300,13 @@ export const StoreSettings: React.FC = () => {
                                     placeholder="Toque para configurar horários"
                                     icon={Clock}
                                     className="cursor-pointer"
+                                    helperText="Defina os horários que sua loja estará aberta no app."
                                 />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <CustomInput
-                                    label="Telefone / WhatsApp"
+                                    label="Telefone / WhatsApp da Loja"
                                     type="tel"
                                     value={form.phone_number}
                                     onChange={e => handleChange('phone_number', e.target.value)}
@@ -249,11 +325,12 @@ export const StoreSettings: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Address */}
-                        <div>
+                        {/* Store Address (Separated) */}
+                        <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
                             <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
-                                <MapPin className="w-5 h-5 text-gray-500" /> Endereço de Coleta
+                                <MapPin className="w-5 h-5 text-gray-500" /> Endereço da Loja
                             </h3>
+                            <p className="text-xs text-gray-500 mb-4 -mt-2">Este endereço será exibido para os clientes e usado para calcular o frete.</p>
 
                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -310,29 +387,42 @@ export const StoreSettings: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <CustomInput
-                                    label="Bairro"
-                                    type="text"
-                                    value={form.address_district}
-                                    onChange={e => handleChange('address_district', e.target.value)}
-                                    placeholder="Centro"
-                                />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <CustomInput
+                                        label="Bairro"
+                                        type="text"
+                                        value={form.address_district}
+                                        onChange={e => handleChange('address_district', e.target.value)}
+                                        placeholder="Centro"
+                                    />
+                                    <CustomInput
+                                        label="Complemento"
+                                        type="text"
+                                        value={form.address_complement}
+                                        onChange={e => handleChange('address_complement', e.target.value)}
+                                        placeholder="Sala 1, Térreo..."
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-8 mb-8">
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 flex items-start gap-3 ">
+                                <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                                <p className="text-xs text-blue-800 dark:text-blue-200">
+                                    Estas informações são exclusivas da <strong>{form.name || 'Loja'}</strong> e não alteram seus dados pessoais de cadastro.
+                                </p>
                             </div>
                         </div>
 
-                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 flex items-start gap-3">
-                            <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-blue-800 dark:text-blue-200">
-                                Mantenha esses dados sempre atualizados para facilitar a coleta dos entregadores e o contato dos clientes.
-                            </p>
-                        </div>
-
                         <Button onClick={handleSave} disabled={saving} fullWidth className="mt-4 py-4">
-                            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Alterações</>}
+                            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Alterações da Loja</>}
                         </Button>
                     </div>
+
+
                 </div>
             )}
+
 
             {/* Shipping Settings */}
             {activeTab === 'shipping' && (
