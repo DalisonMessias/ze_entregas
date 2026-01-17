@@ -31,7 +31,7 @@ export const ExclusiveLock: React.FC<ExclusiveLockProps> = ({ title, description
                     setIsSuperStore(profile?.is_super_store || false);
                 }
             } catch (error) {
-                console.error("Error fetching user data for lock screen:", error);
+                // console.error("Error fetching user data for lock screen:", error);
             } finally {
                 setLoading(false);
             }
@@ -44,7 +44,7 @@ export const ExclusiveLock: React.FC<ExclusiveLockProps> = ({ title, description
             onAction();
             return;
         }
-        console.log('[ExclusiveLock] Dispatching navigateToTab event to: upgrade_to_partner');
+        // console.log('[ExclusiveLock] Dispatching navigateToTab event to: upgrade_to_partner');
         const event = new CustomEvent('navigateToTab', { detail: { tab: 'upgrade_to_partner' } });
         window.dispatchEvent(event);
     };

@@ -34,7 +34,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({ isOpen, onClose, onSub
             await onSubmit(rating, comment);
             onClose();
         } catch (e) {
-            console.error(e);
+            // console.error(e);
         } finally {
             setSubmitting(false);
         }
@@ -43,8 +43,8 @@ export const RatingModal: React.FC<RatingModalProps> = ({ isOpen, onClose, onSub
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl relative animate-in zoom-in-95">
-                <button 
-                    onClick={onClose} 
+                <button
+                    onClick={onClose}
                     className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 hover:text-gray-700 dark:hover:text-white transition-colors"
                 >
                     <X className="w-5 h-5" />
@@ -66,12 +66,11 @@ export const RatingModal: React.FC<RatingModalProps> = ({ isOpen, onClose, onSub
                             onMouseLeave={() => setHoverRating(0)}
                             onClick={() => setRating(star)}
                         >
-                            <Star 
-                                className={`w-10 h-10 transition-colors ${
-                                    star <= (hoverRating || rating) 
-                                    ? 'fill-yellow-400 text-yellow-400' 
-                                    : 'fill-gray-100 text-gray-300 dark:fill-gray-700 dark:text-gray-600'
-                                }`} 
+                            <Star
+                                className={`w-10 h-10 transition-colors ${star <= (hoverRating || rating)
+                                        ? 'fill-yellow-400 text-yellow-400'
+                                        : 'fill-gray-100 text-gray-300 dark:fill-gray-700 dark:text-gray-600'
+                                    }`}
                             />
                         </button>
                     ))}

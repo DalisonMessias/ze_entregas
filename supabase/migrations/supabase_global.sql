@@ -1,5 +1,5 @@
 -- ==================================================================
--- 0.x EXTENSIONS E CONFIGURAÇÕES GERAIS
+-- 0.x EXTENSIONS E CONFIGURAﾃ�髭S GERAIS
 -- ==================================================================
 
 
@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "postgis";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Função genérica para atualizar 'updated_at' automaticamente
+-- Funﾃｧﾃ｣o genﾃｩrica para atualizar 'updated_at' automaticamente
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -23,9 +23,17 @@ $$ language 'plpgsql';
 -- 1.x ENUMS
 -- ==================================================================
 DO $$ BEGIN
-    CREATE TYPE public.user_role AS ENUM ('admin', 'store_partner', 'delivery_partner', 'delivery_person');
+    CREATE TYPE public.user_role AS ENUM ('admin', 'store_partner', 'delivery_partner', 'delivery_person', 'user');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Garantir que 'user' exista no enum (Migraﾃｧﾃ｣o Segura)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.user_role'::regtype AND enumlabel = 'user') THEN
+    ALTER TYPE public.user_role ADD VALUE 'user';
+  END IF;
 END $$;
 
 DO $$ BEGIN
@@ -243,9 +251,9 @@ END $$;
 -- 2.x TABELAS
 -- ==================================================================
 
--- Tabela de perfis de usuários (EXISTENTE - ESQUELETO, sendo completado)
+-- Tabela de perfis de usuﾃ｡rios (EXISTENTE - ESQUELETO, sendo completado)
 CREATE TABLE IF NOT EXISTS public.user_profiles (
-    id UUID PRIMARY KEY, -- Assumindo que o ID do perfil de usuário é o mesmo do auth.users
+    id UUID PRIMARY KEY, -- Assumindo que o ID do perfil de usuﾃ｡rio ﾃｩ o mesmo do auth.users
     email TEXT UNIQUE,
     name TEXT,
     phone_number TEXT,
@@ -258,7 +266,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     vehicle_model TEXT,
     vehicle_year TEXT,
     verification_status TEXT DEFAULT 'NOT_SUBMITTED', -- 'NOT_SUBMITTED' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED'
-    partner_level TEXT, -- Nível de parceiro
+    partner_level TEXT, -- Nﾃｭvel de parceiro
     is_active BOOLEAN DEFAULT TRUE,
     is_super_store BOOLEAN DEFAULT FALSE,
     association_code TEXT UNIQUE,
@@ -266,8 +274,8 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     role public.user_role DEFAULT 'delivery_person'::public.user_role,
     status public.user_status DEFAULT 'active'::public.user_status,
     notification_preferences JSONB DEFAULT '{}'::jsonb,
-    last_known_location GEOMETRY(Point, 4326), -- Para localização de entregadores
-    bank_details JSONB, -- Detalhes bancários (UserBankDetails)
+    last_known_location GEOMETRY(Point, 4326), -- Para localizaﾃｧﾃ｣o de entregadores
+    bank_details JSONB, -- Detalhes bancﾃ｡rios (UserBankDetails)
     automatic_payouts_enabled BOOLEAN DEFAULT FALSE,
     preferred_payout_method_type public.payout_method_type,
     contact_email TEXT,
@@ -294,13 +302,13 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, UPDATE ON public.user_profiles TO authenticated;
 
--- Função para verificar se o usuário é administrador (Com SECURITY DEFINER para evitar recursão)
+-- Funﾃｧﾃ｣o para verificar se o usuﾃ｡rio ﾃｩ administrador (Com SECURITY DEFINER para evitar recursﾃ｣o)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 DECLARE
   v_role public.user_role;
 BEGIN
-  -- 1. Tentar via JWT (Meta-dados do usuário)
+  -- 1. Tentar via JWT (Meta-dados do usuﾃ｡rio)
   IF (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' THEN
     RETURN TRUE;
   END IF;
@@ -340,7 +348,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_logo_url') THEN
         ALTER TABLE public.user_profiles ADD COLUMN store_logo_url TEXT;
     END IF;
-    -- Novos campos para Endereço da Loja (separado do pessoal)
+    -- Novos campos para Endereﾃｧo da Loja (separado do pessoal)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_zip') THEN
         ALTER TABLE public.user_profiles ADD COLUMN store_address_zip TEXT;
     END IF;
@@ -362,9 +370,30 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_complement') THEN
         ALTER TABLE public.user_profiles ADD COLUMN store_address_complement TEXT;
     END IF;
+    -- Novos campos para URLs Amigﾃ｡veis (16/01/2026)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_slug') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_slug TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'city_slug') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN city_slug TEXT;
+    END IF;
+    -- Tempo de preparo da loja (16/01/2026)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN preparation_time INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_min') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN preparation_time_min INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_max') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN preparation_time_max INTEGER DEFAULT 0;
+    END IF;
+    -- Novo campo para vencimento do plano Super Lojista (17/01/2026)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'super_store_expiration') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN super_store_expiration TIMESTAMPTZ;
+    END IF;
 END $$;
 
--- Tabela de Dicas do Dia (Adicionada 11/01/2026 e movida para cá para resolver dependência de is_admin)
+-- Tabela de Dicas do Dia (Adicionada 11/01/2026 e movida para cﾃ｡ para resolver dependﾃｪncia de is_admin)
 CREATE TABLE IF NOT EXISTS public.system_tips (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     message text NOT NULL,
@@ -373,7 +402,7 @@ CREATE TABLE IF NOT EXISTS public.system_tips (
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
--- Migração segura para alterar tipo da coluna caso já exista como enum
+-- Migraﾃｧﾃ｣o segura para alterar tipo da coluna caso jﾃ｡ exista como enum
 DO $$
 BEGIN
     ALTER TABLE public.system_tips ALTER COLUMN target_role TYPE text;
@@ -392,7 +421,7 @@ CREATE POLICY "Admin full access to system_tips" ON public.system_tips FOR ALL U
 GRANT SELECT ON public.system_tips TO anon, authenticated;
 GRANT ALL ON public.system_tips TO authenticated;
 
--- Trigger para criar perfil de usuário após AUTH
+-- Trigger para criar perfil de usuﾃ｡rio apﾃｳs AUTH
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -431,12 +460,12 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Tabela de terminais de usuário (POS físico ou virtual)
+-- Tabela de terminais de usuﾃ｡rio (POS fﾃｭsico ou virtual)
 CREATE TABLE IF NOT EXISTS public.user_terminals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
-    terminal_id TEXT UNIQUE, -- ID físico/lógico do terminal
-    api_key TEXT UNIQUE, -- Chave de API para integração do terminal
+    terminal_id TEXT UNIQUE, -- ID fﾃｭsico/lﾃｳgico do terminal
+    api_key TEXT UNIQUE, -- Chave de API para integraﾃｧﾃ｣o do terminal
     status public.terminal_status NOT NULL DEFAULT 'ACTIVE',
     activated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deactivated_at TIMESTAMPTZ,
@@ -531,7 +560,7 @@ CREATE TABLE IF NOT EXISTS public.categories (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Garantir que a coluna store_id exista (caso a tabela já existisse sem ela)
+-- Garantir que a coluna store_id exista (caso a tabela jﾃ｡ existisse sem ela)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'categories' AND column_name = 'store_id') THEN
@@ -552,6 +581,9 @@ CREATE TRIGGER handle_categories_updated_at BEFORE UPDATE ON public.categories
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON public.categories TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.categories TO authenticated;
 
 -- Políticas de Categorias
 DROP POLICY IF EXISTS "Public can read categories" ON public.categories;
@@ -618,9 +650,9 @@ BEGIN
     END IF;
 END $$;
 GRANT SELECT, INSERT ON public.client_error_logs TO authenticated;
--- Tabela de configurações PWA;
+-- Tabela de configuraﾃｧﾃｵes PWA;
 CREATE TABLE IF NOT EXISTS public.pwa_settings (
-    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma única linha de configurações
+    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma ﾃｺnica linha de configuraﾃｧﾃｵes
     display_name VARCHAR(255),
     short_name VARCHAR(255),
     description TEXT,
@@ -630,9 +662,9 @@ CREATE TABLE IF NOT EXISTS public.pwa_settings (
     orientation VARCHAR(50),
     language VARCHAR(10),
     app_version INT,
-    -- Novos campos para personalização completa
+    -- Novos campos para personalizaﾃｧﾃ｣o completa
     scope VARCHAR(255) DEFAULT '/',
-    icons JSONB DEFAULT '[]'::jsonb, -- Array de ícones
+    icons JSONB DEFAULT '[]'::jsonb, -- Array de ﾃｭcones
     screenshots JSONB DEFAULT '[]'::jsonb, -- Array de screenshots
     shortcuts JSONB DEFAULT '[]'::jsonb, -- Array de atalhos
     categories TEXT[] DEFAULT ARRAY[]::TEXT[],
@@ -645,7 +677,7 @@ CREATE TABLE IF NOT EXISTS public.pwa_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Garantir que colunas existam caso a tabela já tenha sido criada anteriormente (abordagem aditiva)
+-- Garantir que colunas existam caso a tabela jﾃ｡ tenha sido criada anteriormente (abordagem aditiva)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pwa_settings' AND column_name = 'scope') THEN
@@ -704,7 +736,7 @@ GRANT SELECT ON public.pwa_settings TO anon, authenticated;
 GRANT INSERT, UPDATE, DELETE ON public.pwa_settings TO authenticated;
 
 
--- Tabela de transações de terminal de usuário (POS)
+-- Tabela de transaﾃｧﾃｵes de terminal de usuﾃ｡rio (POS)
 CREATE TABLE IF NOT EXISTS public.user_terminal_transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     terminal_id UUID NOT NULL,
@@ -751,7 +783,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage all terminal transactions' AND tablename = 'user_terminal_transactions') THEN
         CREATE POLICY "Admins can manage all terminal transactions" ON public.user_terminal_transactions FOR ALL USING (public.is_admin());
 
--- Tabela para simulações de vendas (compatível com SalesSimulation);
+-- Tabela para simulaﾃｧﾃｵes de vendas (compatﾃｭvel com SalesSimulation);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.sales_simulations (
@@ -772,7 +804,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users manage their own sales simulations' AND tablename = 'sales_simulations') THEN
         CREATE POLICY "Users manage their own sales simulations" ON public.sales_simulations FOR ALL USING (auth.uid() = user_id);
 
--- Tabela para rotas salvas (compatível com SavedRoute);
+-- Tabela para rotas salvas (compatﾃｭvel com SavedRoute);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.saved_routes (
@@ -793,13 +825,13 @@ BEGIN
         CREATE POLICY "Users manage their own saved routes" ON public.saved_routes FOR ALL USING (auth.uid() = user_id);
 
 
--- Tabela de configurações de manutenção (EXISTENTE) - Renomeada para manter consistência;
+-- Tabela de configuraﾃｧﾃｵes de manutenﾃｧﾃ｣o (EXISTENTE) - Renomeada para manter consistﾃｪncia;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.maintenance_settings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     is_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-    title VARCHAR(255) NOT NULL DEFAULT 'Manutenção Programada',
+    title VARCHAR(255) NOT NULL DEFAULT 'Manutenﾃｧﾃ｣o Programada',
     message TEXT NOT NULL DEFAULT 'Estamos realizando melhorias em nosso sistema. Voltaremos em breve!',
     scheduled_downtime TIMESTAMPTZ,
     estimated_recovery_time TIMESTAMPTZ,
@@ -814,7 +846,7 @@ INSERT INTO public.maintenance_settings (id, is_enabled, title, message)
 VALUES (
     'e6e7d8f9-0a1b-4c2d-3e4f-5a6b7c8d9e0f',
     FALSE,
-    'Manutenção Programada',
+    'Manutenﾃｧﾃ｣o Programada',
     'Estamos realizando melhorias em nosso sistema. Voltaremos em breve!'
 )
 ON CONFLICT (id) DO NOTHING;
@@ -831,8 +863,8 @@ GRANT ALL ON public.maintenance_settings TO authenticated;
 
 -- View de compatibilidade esperada pelo frontend: system_maintenance
 -- Mapeia os campos usados na UI para os nomes presentes na tabela
--- Tabela de sistema para manutenção (Compatibilidade com Realtime)
--- Substitui VIEW antiga para permitir publicação no Supabase Realtime e evitar erro 22023
+-- Tabela de sistema para manutenﾃｧﾃ｣o (Compatibilidade com Realtime)
+-- Substitui VIEW antiga para permitir publicaﾃｧﾃ｣o no Supabase Realtime e evitar erro 22023
 DROP TABLE IF EXISTS public.system_maintenance;
 
 CREATE TABLE IF NOT EXISTS public.system_maintenance (
@@ -850,7 +882,7 @@ GRANT SELECT ON public.system_maintenance TO anon, authenticated;
 DROP POLICY IF EXISTS "Public read system_maintenance" ON public.system_maintenance;
 CREATE POLICY "Public read system_maintenance" ON public.system_maintenance FOR SELECT USING (true);
 
--- Função e Trigger para sincronizar
+-- Funﾃｧﾃ｣o e Trigger para sincronizar
 CREATE OR REPLACE FUNCTION public.sync_system_maintenance()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -921,7 +953,7 @@ CREATE TABLE IF NOT EXISTS public.avatars (
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     file_path TEXT NOT NULL,
     uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT unique_avatar_for_user UNIQUE (user_id) -- Apenas um avatar por usuário
+    CONSTRAINT unique_avatar_for_user UNIQUE (user_id) -- Apenas um avatar por usuﾃ｡rio
 );
 ALTER TABLE public.avatars ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can upload their own avatar" ON public.avatars;
@@ -991,13 +1023,13 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE, -- Loja que criou o pedido
-    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Usuário que fez o pedido (se aplicável)
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Usuﾃ｡rio que fez o pedido (se aplicﾃ｡vel)
     status public.order_status NOT NULL,
     items JSONB[] NOT NULL DEFAULT ARRAY[]::JSONB[], -- [{ product_id, name, quantity, price }]
     total_price NUMERIC(10, 2) NOT NULL,
     payment_method public.payment_method NOT NULL,
 
-    shipping_address JSONB, -- Endereço de entrega
+    shipping_address JSONB, -- Endereﾃｧo de entrega
     payment_details JSONB, -- Detalhes adicionais do pagamento
     shipping_cost NUMERIC(10, 2),
     discount NUMERIC(10, 2) DEFAULT 0,
@@ -1033,7 +1065,7 @@ BEGIN
         CREATE POLICY "Admins can manage all orders" ON public.orders FOR ALL USING (public.is_admin());
 
 
--- Tabela de backups de usuário;
+-- Tabela de backups de usuﾃ｡rio;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.user_backups (
@@ -1060,7 +1092,7 @@ BEGIN
         CREATE POLICY "Admins can view all backups" ON public.user_backups FOR SELECT USING (public.is_admin());
 
 
--- Tabela de notificações de aplicativo para usuários;
+-- Tabela de notificaﾃｧﾃｵes de aplicativo para usuﾃ｡rios;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.user_notifications (
@@ -1095,14 +1127,14 @@ BEGIN
         CREATE POLICY "Admins can manage all notifications" ON public.user_notifications FOR ALL USING (public.is_admin());
 
 
--- Tabela de histórico manual de entregas de motoristas;
+-- Tabela de histﾃｳrico manual de entregas de motoristas;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.driver_manual_histories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     date DATE NOT NULL,
-    summary_json JSONB NOT NULL, -- Contém a estrutura de DeliveryRecord
+    summary_json JSONB NOT NULL, -- Contﾃｩm a estrutura de DeliveryRecord
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS driver_manual_histories_user_id_idx ON public.driver_manual_histories (user_id);
@@ -1194,10 +1226,10 @@ CREATE POLICY "Admins can manage products" ON public.products FOR ALL USING (
     EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
--- Tabela de configurações da loja (geral);
+-- Tabela de configuraﾃｧﾃｵes da loja (geral);
 
 CREATE TABLE IF NOT EXISTS public.shop_settings (
-    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma única linha
+    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma ﾃｺnica linha
     is_shop_enabled BOOLEAN DEFAULT FALSE,
     shop_name VARCHAR(255),
     shop_city VARCHAR(255),
@@ -1241,7 +1273,7 @@ CREATE POLICY "Admins can manage shop_settings" ON public.shop_settings FOR ALL 
 
 INSERT INTO public.shop_settings (id) VALUES ('1') ON CONFLICT (id) DO NOTHING;
 
--- Garantir colunas de API se não existirem
+-- Garantir colunas de API se nﾃ｣o existirem
 ALTER TABLE public.shop_settings ADD COLUMN IF NOT EXISTS google_gemini_api_key TEXT;
 ALTER TABLE public.shop_settings ADD COLUMN IF NOT EXISTS open_route_service_api_key TEXT;
 
@@ -1291,7 +1323,7 @@ $$;
 
 
 
--- Tabela de requisições de parceiros (entregas);
+-- Tabela de requisiﾃｧﾃｵes de parceiros (entregas);
 
 CREATE TABLE IF NOT EXISTS public.partner_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -1304,8 +1336,8 @@ CREATE TABLE IF NOT EXISTS public.partner_requests (
     net_value_partner NUMERIC(10, 2) NOT NULL,
     status public.partner_request_status NOT NULL,
     failure_reason TEXT,
-    delivery_code TEXT, -- Código de 4 dígitos para confirmação de entrega
-    expires_at TIMESTAMPTZ, -- Para requisições que expiram se não aceitas
+    delivery_code TEXT, -- Cﾃｳdigo de 4 dﾃｭgitos para confirmaﾃｧﾃ｣o de entrega
+    expires_at TIMESTAMPTZ, -- Para requisiﾃｧﾃｵes que expiram se nﾃ｣o aceitas
     fee_fixed NUMERIC(10, 2),
     fee_percent_value NUMERIC(10, 2),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -1348,7 +1380,7 @@ CREATE TABLE IF NOT EXISTS public.store_delivery_partners (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     partner_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
-    fee NUMERIC(5, 2) DEFAULT 0, -- Taxa percentual específica para este parceiro/loja
+    fee NUMERIC(5, 2) DEFAULT 0, -- Taxa percentual especﾃｭfica para este parceiro/loja
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT unique_store_partner UNIQUE (store_id, partner_id)
 );
@@ -1376,12 +1408,12 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage all store_delivery_partners' AND tablename = 'store_delivery_partners') THEN
         CREATE POLICY "Admins can manage all store_delivery_partners" ON public.store_delivery_partners FOR ALL USING (public.is_admin());
 
--- Política para permitir que parceiros leiam perfis com base em associação ou visibilidade pública;
+-- Polﾃｭtica para permitir que parceiros leiam perfis com base em associaﾃｧﾃ｣o ou visibilidade pﾃｺblica;
     END IF;
 END $$;
 
--- Política para permitir leitura durante avaliação de políticas de outras tabelas
--- Necessária para que delivery_person possa acessar user_profiles sem erro de permissão
+-- Polﾃｭtica para permitir leitura durante avaliaﾃｧﾃ｣o de polﾃｭticas de outras tabelas
+-- Necessﾃ｡ria para que delivery_person possa acessar user_profiles sem erro de permissﾃ｣o
 DROP POLICY IF EXISTS "Authenticated users can read store_delivery_partners" ON public.store_delivery_partners;
 CREATE POLICY "Authenticated users can read store_delivery_partners" 
     ON public.store_delivery_partners 
@@ -1391,7 +1423,7 @@ CREATE POLICY "Authenticated users can read store_delivery_partners"
 DROP POLICY IF EXISTS "Partners and stores can view associated profiles" ON public.user_profiles;
 CREATE POLICY "Partners and stores can view associated profiles" ON public.user_profiles
     FOR SELECT USING (
-        -- Usuários podem ver o próprio perfil (Regra Absoluta)
+        -- Usuﾃ｡rios podem ver o prﾃｳprio perfil (Regra Absoluta)
         auth.uid() = id
         -- Lojistas podem ver perfis de entregadores associados
         OR (
@@ -1431,7 +1463,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can view and manage their own wallet' AND tablename = 'store_wallets') THEN
         CREATE POLICY "Store owners can view and manage their own wallet" ON public.store_wallets FOR ALL USING (auth.uid() = store_id);
     END IF;
-    -- Política de backup para garantir SELECT explícito se o ALL falhar em alguns contextos
+    -- Polﾃｭtica de backup para garantir SELECT explﾃｭcito se o ALL falhar em alguns contextos
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can select their own wallet' AND tablename = 'store_wallets') THEN
         CREATE POLICY "Store owners can select their own wallet" ON public.store_wallets FOR SELECT USING (auth.uid() = store_id);
     END IF;
@@ -1445,7 +1477,7 @@ BEGIN
 END $$;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
 
--- Tabela de notícias da plataforma;
+-- Tabela de notﾃｭcias da plataforma;
 
 CREATE TABLE IF NOT EXISTS public.platform_news (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -1479,7 +1511,7 @@ BEGIN
         CREATE POLICY "Admins can manage platform news" ON public.platform_news FOR ALL USING (public.is_admin());
 
 
--- Tabela de cidades disponíveis;
+-- Tabela de cidades disponﾃｭveis;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.available_cities (
@@ -1512,7 +1544,7 @@ BEGIN
         CREATE POLICY "Admins can manage available cities" ON public.available_cities FOR ALL USING (public.is_admin());
 
 
--- Tabela de requisições de novas cidades;
+-- Tabela de requisiﾃｧﾃｵes de novas cidades;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.city_requests (
@@ -1606,7 +1638,7 @@ BEGIN
         CREATE POLICY "Admins can manage all partner documents" ON public.partner_documents FOR ALL USING (public.is_admin());
 
 
--- Tabela de referências/indicações;
+-- Tabela de referﾃｪncias/indicaﾃｧﾃｵes;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.referrals (
@@ -1685,11 +1717,11 @@ BEGIN
         CREATE POLICY "Admins can manage all shipping rules" ON public.store_shipping_rules FOR ALL USING (public.is_admin());
 
 
--- Tabela de configurações do Cofrinho (investimento);
+-- Tabela de configuraﾃｧﾃｵes do Cofrinho (investimento);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.cofrinho_settings (
-    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma única linha
+    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma ﾃｺnica linha
     yield_frequency public.yield_frequency_type NOT NULL,
     interest_type public.interest_type_type NOT NULL,
     rate_percent NUMERIC(5, 2) NOT NULL,
@@ -1721,14 +1753,14 @@ VALUES ('1', 'monthly', 'compound', 0.5, 30, FALSE, 10.0, 50.0, 'migrate_new')
 ON CONFLICT (id) DO NOTHING;
 
 
--- Tabela de cartões Zebank (virtuais/físicos de parceiros);
+-- Tabela de cartﾃｵes Zebank (virtuais/fﾃｭsicos de parceiros);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.zebank_cards (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
-    card_number TEXT NOT NULL, -- Pode ser mascarado na aplicação
+    card_number TEXT NOT NULL, -- Pode ser mascarado na aplicaﾃｧﾃ｣o
     card_last_four VARCHAR(4) NOT NULL,
     expiration_date VARCHAR(5) NOT NULL, -- MM/YY
     cvv VARCHAR(3) NOT NULL,
@@ -1759,7 +1791,7 @@ BEGIN
         CREATE POLICY "Admins can manage all Zebank cards" ON public.zebank_cards FOR ALL USING (public.is_admin());
 
 
--- Tabela de verificações de identidade;
+-- Tabela de verificaﾃｧﾃｵes de identidade;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.identity_verifications (
@@ -1852,11 +1884,11 @@ BEGIN
         CREATE POLICY "Admins can manage all support claims" ON public.support_claims FOR ALL USING (public.is_admin());
 
 
--- Tabela de configurações de taxas de parceiros;
+-- Tabela de configuraﾃｧﾃｵes de taxas de parceiros;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.partner_fee_settings (
-    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma única linha
+    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma ﾃｺnica linha
     global_tax_fixed NUMERIC(10, 2),
     global_tax_percent NUMERIC(5, 2),
     base_delivery_value NUMERIC(10, 2),
@@ -1897,7 +1929,7 @@ GRANT ALL ON public.partner_fee_settings TO authenticated;
 GRANT ALL ON public.partner_fee_settings TO service_role;
 
 
--- Tabela de avaliações de parceiros;
+-- Tabela de avaliaﾃｧﾃｵes de parceiros;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.partner_ratings (
@@ -1933,12 +1965,12 @@ BEGIN
         CREATE POLICY "Admins can manage all partner ratings" ON public.partner_ratings FOR ALL USING (public.is_admin());
 
 
--- Tabela de usuários na lista negra;
+-- Tabela de usuﾃ｡rios na lista negra;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.blacklisted_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Pode ser NULL se o usuário não existir no sistema
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Pode ser NULL se o usuﾃ｡rio nﾃ｣o existir no sistema
     email VARCHAR(255),
     phone_number VARCHAR(20),
     reason TEXT NOT NULL,
@@ -1961,7 +1993,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage blacklisted users' AND tablename = 'blacklisted_users') THEN
         CREATE POLICY "Admins can manage blacklisted users" ON public.blacklisted_users FOR ALL USING (public.is_admin());
 
--- Tabela de conteúdos institucionais (CMS);
+-- Tabela de conteﾃｺdos institucionais (CMS);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.institutional_contents (
@@ -2002,7 +2034,7 @@ BEGIN
         CREATE POLICY "Admins can manage institutional content" ON public.institutional_contents FOR ALL USING (public.is_admin());
 
 
--- Tabela de imagens de conteúdos institucionais;
+-- Tabela de imagens de conteﾃｺdos institucionais;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.institutional_content_images (
@@ -2029,7 +2061,7 @@ BEGIN
         CREATE POLICY "Admins can manage institutional content images" ON public.institutional_content_images FOR ALL USING (public.is_admin());
 
 
--- Tabela de associação entre conteúdos institucionais e tags;
+-- Tabela de associaﾃｧﾃ｣o entre conteﾃｺdos institucionais e tags;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.institutional_content_tags (
@@ -2053,7 +2085,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage institutional content tags' AND tablename = 'institutional_content_tags') THEN
         CREATE POLICY "Admins can manage institutional content tags" ON public.institutional_content_tags FOR ALL USING (public.is_admin());
 
--- Tabela de versões de conteúdos institucionais (histórico);
+-- Tabela de versﾃｵes de conteﾃｺdos institucionais (histﾃｳrico);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.institutional_content_versions (
@@ -2075,11 +2107,11 @@ BEGIN
         CREATE POLICY "Admins can read institutional content versions" ON public.institutional_content_versions FOR SELECT USING (public.is_admin());
 
 
--- Tabela de níveis de parceiros;
+-- Tabela de nﾃｭveis de parceiros;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.partner_levels (
-    id TEXT PRIMARY KEY, -- Nível (ex: 'BRONZE', 'PRATA')
+    id TEXT PRIMARY KEY, -- Nﾃｭvel (ex: 'BRONZE', 'PRATA')
     display_name VARCHAR(255) NOT NULL,
     min_deliveries INT NOT NULL DEFAULT 0,
     min_rating NUMERIC(2, 1) NOT NULL DEFAULT 0.0,
@@ -2102,7 +2134,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage partner levels' AND tablename = 'partner_levels') THEN
         CREATE POLICY "Admins can manage partner levels" ON public.partner_levels FOR ALL USING (public.is_admin());
--- Inserir níveis padrão se não existirem
+-- Inserir nﾃｭveis padrﾃ｣o se nﾃ｣o existirem
 INSERT INTO public.partner_levels (id, display_name, min_deliveries, min_rating, store_discount_percent, service_fee_reduction_percent) VALUES
 ('BRONZE', 'Bronze', 0, 0.0, 0.0, 0.0),
 ('SILVER', 'Prata', 50, 4.0, 2.0, 1.0),
@@ -2111,13 +2143,13 @@ INSERT INTO public.partner_levels (id, display_name, min_deliveries, min_rating,
 ON CONFLICT (id) DO NOTHING;
 
 
--- Tabela de configurações de repasse (payout);
+-- Tabela de configuraﾃｧﾃｵes de repasse (payout);
     END IF;
 END $$;
 GRANT SELECT ON public.partner_levels TO anon, authenticated;
 GRANT ALL ON public.partner_levels TO authenticated;
 CREATE TABLE IF NOT EXISTS public.payout_settings (
-    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma única linha
+    id TEXT PRIMARY KEY DEFAULT '1', -- Assumindo uma ﾃｺnica linha
     min_payout_amount NUMERIC(10, 2) DEFAULT 0.00,
     automatic_payouts_enabled BOOLEAN DEFAULT FALSE,
     payout_day_of_week public.payout_day_of_week,
@@ -2151,7 +2183,7 @@ CREATE TABLE IF NOT EXISTS public.partner_payments (
     partner_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     amount NUMERIC(10, 2) NOT NULL,
     status public.payment_status NOT NULL,
-    transaction_details JSONB, -- Detalhes da transação
+    transaction_details JSONB, -- Detalhes da transaﾃｧﾃ｣o
     external_transaction_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -2176,7 +2208,7 @@ BEGIN
         CREATE POLICY "Admins can manage all partner payments" ON public.partner_payments FOR ALL USING (public.is_admin());
 
 
--- Tabela de transações da carteira da loja (inclui empréstimos);
+-- Tabela de transaﾃｧﾃｵes da carteira da loja (inclui emprﾃｩstimos);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.store_wallet_transactions (
@@ -2210,7 +2242,7 @@ BEGIN
         CREATE POLICY "Admins can manage all store wallet transactions" ON public.store_wallet_transactions FOR ALL USING (public.is_admin());
 
 
--- Tabela para cartões virtuais de loja;
+-- Tabela para cartﾃｵes virtuais de loja;
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.store_virtual_cards (
@@ -2266,7 +2298,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage all driver wallets' AND tablename = 'driver_wallets') THEN
         CREATE POLICY "Admins can manage all driver wallets" ON public.driver_wallets FOR ALL USING (public.is_admin());
 
--- Tabela para transações da carteira de entregadores (Zebank);
+-- Tabela para transaﾃｧﾃｵes da carteira de entregadores (Zebank);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.driver_wallet_transactions (
@@ -2350,7 +2382,7 @@ GRANT ALL ON public.api_keys TO authenticated;
 GRANT SELECT ON public.api_keys TO anon;
 
 -- ==================================================================
--- 3.x FUNÇÕES (DO BANCO)
+-- 3.x FUNﾃ�髭S (DO BANCO)
 -- ==================================================================
 
 CREATE OR REPLACE FUNCTION public.resolve_login_email(identifier TEXT)
@@ -2389,7 +2421,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION public.get_my_role_and_status() TO authenticated;
 
--- Função: get_partner_financial_summary
+-- Funﾃｧﾃ｣o: get_partner_financial_summary
 CREATE OR REPLACE FUNCTION public.get_partner_financial_summary()
 RETURNS TABLE (total_earnings NUMERIC, available_balance NUMERIC, max_emergency_value NUMERIC, emergency_message TEXT) AS $$
 DECLARE
@@ -2419,7 +2451,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: create_order
+-- Funﾃｧﾃ｣o: create_order
 CREATE OR REPLACE FUNCTION public.create_order(order_details JSONB)
 RETURNS JSONB AS $$
 DECLARE
@@ -2456,7 +2488,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: create_recharge_charge
+-- Funﾃｧﾃ｣o: create_recharge_charge
 CREATE OR REPLACE FUNCTION public.create_recharge_charge(amount NUMERIC, method TEXT)
 RETURNS JSONB AS $$
 BEGIN
@@ -2468,7 +2500,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: store_decide_failed_delivery
+-- Funﾃｧﾃ｣o: store_decide_failed_delivery
 CREATE OR REPLACE FUNCTION public.store_decide_failed_delivery(request_id UUID, decision TEXT)
 RETURNS VOID AS $$
 BEGIN
@@ -2479,7 +2511,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: submit_rating
+-- Funﾃｧﾃ｣o: submit_rating
 CREATE OR REPLACE FUNCTION public.submit_rating(request_id UUID, rating INT, comment TEXT, direction TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -2510,7 +2542,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_partner_requests_available
+-- Funﾃｧﾃ｣o: get_partner_requests_available
 CREATE OR REPLACE FUNCTION public.get_partner_requests_available()
 RETURNS SETOF public.partner_requests AS $$
 BEGIN
@@ -2519,12 +2551,12 @@ BEGIN
     SELECT * FROM public.partner_requests
     WHERE status = 'PENDING' 
       AND (expires_at IS NULL OR expires_at > now())
-      AND (partner_id IS NULL OR partner_id = auth.uid()) -- Visibilidade: Pública (NULL) ou Direcionada (Meu ID)
+      AND (partner_id IS NULL OR partner_id = auth.uid()) -- Visibilidade: Pﾃｺblica (NULL) ou Direcionada (Meu ID)
     ORDER BY created_at DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: accept_partner_request
+-- Funﾃｧﾃ｣o: accept_partner_request
 CREATE OR REPLACE FUNCTION public.accept_partner_request(p_request_id UUID)
 RETURNS VOID AS $$
 DECLARE
@@ -2536,7 +2568,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: partner_confirm_pickup
+-- Funﾃｧﾃ｣o: partner_confirm_pickup
 CREATE OR REPLACE FUNCTION public.partner_confirm_pickup(p_request_id UUID)
 RETURNS VOID AS $$
 BEGIN
@@ -2546,7 +2578,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: partner_confirm_delivery
+-- Funﾃｧﾃ｣o: partner_confirm_delivery
 CREATE OR REPLACE FUNCTION public.partner_confirm_delivery(request_id UUID, p_delivery_code TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -2562,7 +2594,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: confirm_return
+-- Funﾃｧﾃ｣o: confirm_return
 CREATE OR REPLACE FUNCTION public.confirm_return(request_id UUID)
 RETURNS VOID AS $$
 BEGIN
@@ -2572,17 +2604,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: request_emergency_payout
+-- Funﾃｧﾃ｣o: request_emergency_payout
 CREATE OR REPLACE FUNCTION public.request_emergency_payout(payout_details JSONB)
 RETURNS VOID AS $$
 BEGIN
-  -- Lógica a ser implementada, provavelmente envolvendo inserção em partner_payments
+  -- Lﾃｳgica a ser implementada, provavelmente envolvendo inserﾃｧﾃ｣o em partner_payments
   -- e uma chamada de webhook para um processador de pagamento.
   NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: associate_partner_to_store
+-- Funﾃｧﾃ｣o: associate_partner_to_store
 CREATE OR REPLACE FUNCTION public.associate_partner_to_store(p_partner_id UUID, p_fee NUMERIC)
 RETURNS VOID AS $$
 DECLARE
@@ -2594,7 +2626,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_partner_associated_stores
+-- Funﾃｧﾃ｣o: get_partner_associated_stores
 CREATE OR REPLACE FUNCTION public.get_partner_associated_stores()
 RETURNS TABLE (id UUID, name TEXT, city TEXT, avatar_url TEXT) AS $$
 DECLARE
@@ -2608,7 +2640,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: create_partner_request
+-- Funﾃｧﾃ｣o: create_partner_request
 CREATE OR REPLACE FUNCTION public.create_partner_request(
     p_pickup_address TEXT,
     p_delivery_address TEXT,
@@ -2626,17 +2658,17 @@ DECLARE
     v_new_request_id UUID;
     v_expires_at TIMESTAMPTZ;
 BEGIN
-    -- Gerar código de entrega único
+    -- Gerar cﾃｳdigo de entrega ﾃｺnico
     v_delivery_code := '#' || LPAD(FLOOR(random() * 10000)::int::text, 4, '0');
 
-    -- Definir tempo de expiração se for para a plataforma
+    -- Definir tempo de expiraﾃｧﾃ｣o se for para a plataforma
     IF p_request_type = 'PLATFORM' THEN
         v_expires_at := now() + interval '5 minutes';
     ELSE
         v_expires_at := NULL;
     END IF;
 
-    -- Lógica de taxas: Se for ASSOCIATE, taxas da plataforma são ZERO.
+    -- Lﾃｳgica de taxas: Se for ASSOCIATE, taxas da plataforma sﾃ｣o ZERO.
     -- Se for PLATFORM, usa as taxas configuradas.
     IF p_request_type = 'ASSOCIATE' THEN
          INSERT INTO public.partner_requests (
@@ -2660,8 +2692,8 @@ BEGIN
             p_distance_km,
             p_total_charged_store,
             p_net_value_partner,
-            0, -- Taxa fixa ZERO para entregador próprio
-            0, -- Taxa percentual ZERO para entregador próprio
+            0, -- Taxa fixa ZERO para entregador prﾃｳprio
+            0, -- Taxa percentual ZERO para entregador prﾃｳprio
             p_target_partner_id,
             'PENDING'::public.partner_request_status,
             v_delivery_code,
@@ -2706,16 +2738,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: record_store_loan
+-- Funﾃｧﾃ｣o: record_store_loan
 CREATE OR REPLACE FUNCTION public.record_store_loan(p_amount NUMERIC)
 RETURNS VOID AS $$
 DECLARE
     v_store_id UUID := auth.uid();
     v_loan_amount NUMERIC := -ABS(p_amount);
 BEGIN
-    -- Inserir transação de empréstimo
+    -- Inserir transaﾃｧﾃ｣o de emprﾃｩstimo
     INSERT INTO public.store_wallet_transactions(store_id, amount, description, type, status)
-    VALUES (v_store_id, v_loan_amount, 'Empréstimo para Capital de Giro', 'LOAN', 'PENDING');
+    VALUES (v_store_id, v_loan_amount, 'Emprﾃｩstimo para Capital de Giro', 'LOAN', 'PENDING');
 
     -- Atualizar o saldo da carteira da loja
     INSERT INTO public.store_wallets (store_id, balance_decimal)
@@ -2725,7 +2757,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_public_fee_settings
+-- Funﾃｧﾃ｣o: get_public_fee_settings
 CREATE OR REPLACE FUNCTION public.get_public_fee_settings()
 RETURNS SETOF public.partner_fee_settings AS $$
 BEGIN
@@ -2733,7 +2765,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: auto_cancel_unaccepted_request
+-- Funﾃｧﾃ｣o: auto_cancel_unaccepted_request
 CREATE OR REPLACE FUNCTION public.auto_cancel_unaccepted_request(p_request_id UUID)
 RETURNS VOID AS $$
 BEGIN
@@ -2743,7 +2775,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: process_city_request
+-- Funﾃｧﾃ｣o: process_city_request
 CREATE OR REPLACE FUNCTION public.process_city_request(request_id UUID, new_status TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -2768,7 +2800,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_admin_dashboard_stats
+-- Funﾃｧﾃ｣o: get_admin_dashboard_stats
 CREATE OR REPLACE FUNCTION public.get_admin_dashboard_stats()
 RETURNS JSONB AS $$ -- Retorna JSONB para AdminDashboardStats complexo
 DECLARE
@@ -2791,7 +2823,7 @@ BEGIN
   SELECT COUNT(*) INTO v_orders_total FROM public.orders;
   SELECT COALESCE(SUM(total_price), 0) INTO v_gmv FROM public.orders WHERE status <> 'CANCELLED';
   SELECT COALESCE(AVG(total_price), 0) INTO v_avg_ticket FROM public.orders WHERE status <> 'CANCELLED';
-  v_platform_revenue := 0; -- Lógica de cálculo de receita precisa ser definida
+  v_platform_revenue := 0; -- Lﾃｳgica de cﾃ｡lculo de receita precisa ser definida
   SELECT COUNT(*) INTO v_stores_total FROM public.user_profiles WHERE role = 'store_partner';
   SELECT COUNT(*) INTO v_stores_active FROM public.user_profiles WHERE role = 'store_partner' AND is_active = TRUE;
   SELECT COUNT(*) INTO v_drivers_total FROM public.user_profiles WHERE role IN ('delivery_partner','delivery_person');
@@ -2811,7 +2843,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_my_referral_data
+-- Funﾃｧﾃ｣o: get_my_referral_data
 CREATE OR REPLACE FUNCTION public.get_my_referral_data()
 RETURNS JSONB AS $$ -- Retorna JSONB para ReferralData complexo
 DECLARE
@@ -2822,7 +2854,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_my_referral_history
+-- Funﾃｧﾃ｣o: get_my_referral_history
 CREATE OR REPLACE FUNCTION public.get_my_referral_history()
 RETURNS SETOF public.referrals AS $$ -- Retorna SETOF referrals simplificado
 BEGIN
@@ -2830,7 +2862,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: redeem_referral_code
+-- Funﾃｧﾃ｣o: redeem_referral_code
 CREATE OR REPLACE FUNCTION public.redeem_referral_code(code TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -2849,7 +2881,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_store_reports
+-- Funﾃｧﾃ｣o: get_store_reports
 CREATE OR REPLACE FUNCTION public.get_store_reports()
 RETURNS JSONB AS $$ -- Retorna JSONB para StoreReportData complexo
 DECLARE
@@ -2882,7 +2914,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: subscribe_to_super_store
+-- Funﾃｧﾃ｣o: subscribe_to_super_store
 CREATE OR REPLACE FUNCTION public.subscribe_to_super_store(fee NUMERIC)
 RETURNS VOID AS $$
 DECLARE
@@ -2900,7 +2932,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: admin_get_consolidated_wallets
+-- Funﾃｧﾃ｣o: admin_get_consolidated_wallets
 CREATE OR REPLACE FUNCTION public.admin_get_consolidated_wallets()
 RETURNS TABLE (user_id UUID, name TEXT, email TEXT, role public.user_role, balance NUMERIC) AS $$
 BEGIN
@@ -2913,7 +2945,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_pending_payouts_summary
+-- Funﾃｧﾃ｣o: get_pending_payouts_summary
 CREATE OR REPLACE FUNCTION public.get_pending_payouts_summary()
 RETURNS TABLE (
     driver_id UUID,
@@ -2932,14 +2964,14 @@ BEGIN
       u.email,
       COALESCE(u.automatic_payouts_enabled, FALSE),
       COALESCE((SELECT SUM(net_value_partner) FROM public.partner_requests pr WHERE pr.partner_id = u.id AND pr.status = 'COMPLETED'), 0)::NUMERIC,
-      NULL::TIMESTAMPTZ, -- Lógica de data do próximo payout precisa ser definida
+      NULL::TIMESTAMPTZ, -- Lﾃｳgica de data do prﾃｳximo payout precisa ser definida
       (SELECT MAX(pp.created_at) FROM public.partner_payments pp WHERE pp.partner_id = u.id AND pp.status = 'COMPLETED')
     FROM public.user_profiles u
     WHERE u.role IN ('delivery_partner','delivery_person');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: admin_adjust_balance
+-- Funﾃｧﾃ｣o: admin_adjust_balance
 CREATE OR REPLACE FUNCTION public.admin_adjust_balance(p_user_id UUID, p_amount NUMERIC, p_reason TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -2960,13 +2992,13 @@ BEGIN
         INSERT INTO public.store_wallet_transactions (store_id, amount, description, type, status)
         VALUES (p_user_id, p_amount, 'Ajuste administrativo: ' || p_reason, 'ADJUSTMENT', 'COMPLETED');
     ELSE
-        -- Para entregadores, a lógica pode ser diferente (ex: criar tabela driver_wallets)
+        -- Para entregadores, a lﾃｳgica pode ser diferente (ex: criar tabela driver_wallets)
         RAISE EXCEPTION 'Balance adjustment for this user role is not implemented yet.';
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: admin_update_driver_automatic_payouts
+-- Funﾃｧﾃ｣o: admin_update_driver_automatic_payouts
 CREATE OR REPLACE FUNCTION public.admin_update_driver_automatic_payouts(p_user_id UUID, p_enabled BOOLEAN)
 RETURNS VOID AS $$
 BEGIN
@@ -2977,7 +3009,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: admin_update_driver_preferred_payout_method
+-- Funﾃｧﾃ｣o: admin_update_driver_preferred_payout_method
 CREATE OR REPLACE FUNCTION public.admin_update_driver_preferred_payout_method(p_user_id UUID, p_method_type public.payout_method_type)
 RETURNS VOID AS $$
 BEGIN
@@ -2988,16 +3020,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: generate_card_qr_token
+-- Funﾃｧﾃ｣o: generate_card_qr_token
 CREATE OR REPLACE FUNCTION public.generate_card_qr_token(card_id UUID)
 RETURNS TEXT AS $$
 BEGIN
-  -- Apenas um exemplo simples. Para produção, use JWT ou um método mais seguro.
+  -- Apenas um exemplo simples. Para produﾃｧﾃ｣o, use JWT ou um mﾃｩtodo mais seguro.
   RETURN md5(card_id::text || ':' || extract(epoch FROM now())::text || '-' || random()::text);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_zebank_dashboard_data
+-- Funﾃｧﾃ｣o: get_zebank_dashboard_data
 CREATE OR REPLACE FUNCTION public.get_zebank_dashboard_data()
 RETURNS JSONB AS $$
 DECLARE
@@ -3010,7 +3042,7 @@ DECLARE
     v_partner_level TEXT;
 BEGIN
     SELECT COALESCE(balance_decimal, 0) INTO v_balance FROM public.driver_wallets WHERE driver_id = v_user_id;
-    v_savings_balance := 0; -- Lógica do cofrinho a ser implementada
+    v_savings_balance := 0; -- Lﾃｳgica do cofrinho a ser implementada
 
     SELECT association_code, partner_level 
     INTO v_my_code, v_partner_level
@@ -3038,7 +3070,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- Função: zebank_p2p_transfer
+-- Funﾃｧﾃ｣o: zebank_p2p_transfer
 CREATE OR REPLACE FUNCTION public.zebank_p2p_transfer(receiver_code TEXT, amount NUMERIC)
 RETURNS VOID AS $$
 DECLARE
@@ -3070,30 +3102,30 @@ BEGIN
     END IF;
     
     INSERT INTO public.driver_wallet_transactions(driver_id, amount, description, type, status)
-    VALUES (v_sender_id, -amount, 'Transferência para ' || (SELECT name FROM user_profiles WHERE id = v_receiver_id), 'TRANSFER', 'COMPLETED');
+    VALUES (v_sender_id, -amount, 'Transferﾃｪncia para ' || (SELECT name FROM user_profiles WHERE id = v_receiver_id), 'TRANSFER', 'COMPLETED');
 
-    -- Creditar ao destinatário
+    -- Creditar ao destinatﾃ｡rio
     UPDATE public.driver_wallets
     SET balance_decimal = balance_decimal + amount
     WHERE driver_id = v_receiver_id;
     
     INSERT INTO public.driver_wallet_transactions(driver_id, amount, description, type, status)
-    VALUES (v_receiver_id, amount, 'Transferência de ' || (SELECT name FROM user_profiles WHERE id = v_sender_id), 'TRANSFER', 'COMPLETED');
+    VALUES (v_receiver_id, amount, 'Transferﾃｪncia de ' || (SELECT name FROM user_profiles WHERE id = v_sender_id), 'TRANSFER', 'COMPLETED');
 
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- Função: zebank_manage_savings
+-- Funﾃｧﾃ｣o: zebank_manage_savings
 CREATE OR REPLACE FUNCTION public.zebank_manage_savings(action TEXT, amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
-  -- Lógica do cofrinho a ser implementada
+  -- Lﾃｳgica do cofrinho a ser implementada
   NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: admin_update_cofrinho_settings
+-- Funﾃｧﾃ｣o: admin_update_cofrinho_settings
 CREATE OR REPLACE FUNCTION public.admin_update_cofrinho_settings(
     p_yield_frequency TEXT,
     p_interest_type TEXT,
@@ -3126,7 +3158,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: zebank_create_virtual_card
+-- Funﾃｧﾃ｣o: zebank_create_virtual_card
 CREATE OR REPLACE FUNCTION public.zebank_create_virtual_card(card_name TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -3145,16 +3177,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: simulate_card_transaction
+-- Funﾃｧﾃ｣o: simulate_card_transaction
 CREATE OR REPLACE FUNCTION public.simulate_card_transaction(card_id UUID, amount NUMERIC, description TEXT)
 RETURNS VOID AS $$
 BEGIN
-  -- Lógica para simular uma transação de cartão, útil para testes.
+  -- Lﾃｳgica para simular uma transaﾃｧﾃ｣o de cartﾃ｣o, ﾃｺtil para testes.
   NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: send_global_notification
+-- Funﾃｧﾃ｣o: send_global_notification
 CREATE OR REPLACE FUNCTION public.send_global_notification(p_title TEXT, p_message TEXT, p_type TEXT DEFAULT 'info')
 RETURNS VOID AS $$
 DECLARE
@@ -3176,7 +3208,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: activate_my_terminal
+-- Funﾃｧﾃ｣o: activate_my_terminal
 CREATE OR REPLACE FUNCTION public.activate_my_terminal()
 RETURNS SETOF public.user_terminals AS $$
 DECLARE
@@ -3189,7 +3221,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: deactivate_my_terminal
+-- Funﾃｧﾃ｣o: deactivate_my_terminal
 CREATE OR REPLACE FUNCTION public.deactivate_my_terminal()
 RETURNS VOID AS $$
 DECLARE
@@ -3201,7 +3233,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_my_terminal_history
+-- Funﾃｧﾃ｣o: get_my_terminal_history
 CREATE OR REPLACE FUNCTION public.get_my_terminal_history()
 RETURNS SETOF public.user_terminal_transactions AS $$
 BEGIN
@@ -3209,7 +3241,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: update_my_terminal_settings
+-- Funﾃｧﾃ｣o: update_my_terminal_settings
 CREATE OR REPLACE FUNCTION public.update_my_terminal_settings(p_label TEXT)
 RETURNS VOID AS $$
 BEGIN
@@ -3217,7 +3249,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: verify_terminal_pin
+-- Funﾃｧﾃ｣o: verify_terminal_pin
 CREATE OR REPLACE FUNCTION public.verify_terminal_pin(p_pin_code TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -3228,25 +3260,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_zepay_dashboard_data
+-- Funﾃｧﾃ｣o: get_zepay_dashboard_data
 CREATE OR REPLACE FUNCTION public.get_zepay_dashboard_data()
 RETURNS JSONB AS $$
 BEGIN
-  -- Implementação similar a get_zebank_dashboard_data mas para lojistas
+  -- Implementaﾃｧﾃ｣o similar a get_zebank_dashboard_data mas para lojistas
   RETURN '{}'::JSONB;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: zepay_transfer
+-- Funﾃｧﾃ｣o: zepay_transfer
 CREATE OR REPLACE FUNCTION public.zepay_transfer(receiver_code TEXT, amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
-  -- Lógica de transferência entre lojas ou loja->entregador
+  -- Lﾃｳgica de transferﾃｪncia entre lojas ou loja->entregador
   NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: zepay_create_virtual_card
+-- Funﾃｧﾃ｣o: zepay_create_virtual_card
 CREATE OR REPLACE FUNCTION public.zepay_create_virtual_card(card_name TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -3265,7 +3297,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: process_user_pos_payment
+-- Funﾃｧﾃ｣o: process_user_pos_payment
 CREATE OR REPLACE FUNCTION public.process_user_pos_payment(
     p_card_id UUID,
     p_amount NUMERIC,
@@ -3283,13 +3315,13 @@ DECLARE
 BEGIN
     INSERT INTO public.user_terminal_transactions(terminal_id, amount, status, merchant_user_id, payer_id)
     SELECT id, p_amount, 'COMPLETED', p_merchant_user_id, user_id
-    FROM public.user_terminals WHERE id = p_card_id -- Simplificação, a lógica real seria mais complexa
+    FROM public.user_terminals WHERE id = p_card_id -- Simplificaﾃｧﾃ｣o, a lﾃｳgica real seria mais complexa
     RETURNING id INTO v_transaction_id;
   RETURN v_transaction_id::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: log_client_error
+-- Funﾃｧﾃ｣o: log_client_error
 CREATE OR REPLACE FUNCTION public.log_client_error(p_category TEXT, p_message TEXT, p_context JSONB)
 RETURNS VOID AS $$
 BEGIN
@@ -3298,7 +3330,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: save_sales_simulation
+-- Funﾃｧﾃ｣o: save_sales_simulation
 CREATE OR REPLACE FUNCTION public.save_sales_simulation(
     p_sale_value NUMERIC,
     p_fee_payer TEXT,
@@ -3313,7 +3345,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: get_my_sales_simulations
+-- Funﾃｧﾃ｣o: get_my_sales_simulations
 CREATE OR REPLACE FUNCTION public.get_my_sales_simulations()
 RETURNS TABLE (
     id UUID,
@@ -3330,7 +3362,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função: clear_my_sales_simulations
+-- Funﾃｧﾃ｣o: clear_my_sales_simulations
 CREATE OR REPLACE FUNCTION public.clear_my_sales_simulations()
 RETURNS VOID AS $$
 BEGIN
@@ -3339,7 +3371,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- Função: save_route
+-- Funﾃｧﾃ｣o: save_route
 CREATE OR REPLACE FUNCTION public.save_route(
     p_name TEXT,
     p_waypoints TEXT[],
@@ -3359,7 +3391,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ==================================================================
 -- 4.x VIEWS & MATERIALIZED VIEWS
 -- ==================================================================
--- Nenhuma view identificada diretamente ainda, mas reservado o espaço.
+-- Nenhuma view identificada diretamente ainda, mas reservado o espaﾃｧo.
 
 -- ==================================================================
 -- 5.x RLS POLICIES & TRIGGERS ADICIONAIS
@@ -3367,7 +3399,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- ==================================================================
--- ALTERAÇÕES EM TABELAS EXISTENTES (Non-destructive)
+-- ALTERAﾃ�髭S EM TABELAS EXISTENTES (Non-destructive)
 -- ==================================================================
 
 -- Adicionar rejection_reason em partner_loans
@@ -3379,10 +3411,10 @@ BEGIN
 END $$;
 
 -- ==================================================================
--- 6.x STORAGE (BUCKETS E POLÍTICAS)
+-- 6.x STORAGE (BUCKETS E POLﾃ控ICAS)
 -- ==================================================================
 
--- Inserir buckets se não existirem
+-- Inserir buckets se nﾃ｣o existirem
 INSERT INTO storage.buckets (id, name, public, owner)
 VALUES
     ('avatars', 'avatars', TRUE, NULL),
@@ -3391,7 +3423,7 @@ VALUES
     ('public-files', 'public-files', TRUE, NULL)
 ON CONFLICT (id) DO NOTHING;
 
--- Políticas para o bucket 'avatars'
+-- Polﾃｭticas para o bucket 'avatars'
 DROP POLICY IF EXISTS "Avatar images are publicly accessible." ON storage.objects;
 CREATE POLICY "Avatar images are publicly accessible."
     ON storage.objects FOR SELECT
@@ -3414,7 +3446,7 @@ CREATE POLICY "Anyone can delete their own avatar."
     USING (auth.uid() = owner);
 
 
--- Políticas para o bucket 'documents' (documentos de parceiros)
+-- Polﾃｭticas para o bucket 'documents' (documentos de parceiros)
 DROP POLICY IF EXISTS "Users can view their own documents." ON storage.objects;
 CREATE POLICY "Users can view their own documents."
     ON storage.objects FOR SELECT
@@ -3431,7 +3463,7 @@ CREATE POLICY "Admins can view all documents."
     USING (bucket_id = 'documents' AND public.is_admin());
 
 
--- Políticas para o bucket 'identity_verifications'
+-- Polﾃｭticas para o bucket 'identity_verifications'
 DROP POLICY IF EXISTS "Users can upload their own identity verification." ON storage.objects;
 CREATE POLICY "Users can upload their own identity verification."
     ON storage.objects FOR INSERT
@@ -3443,7 +3475,7 @@ CREATE POLICY "Admins can view all identity verifications."
     USING (bucket_id = 'identity_verifications' AND public.is_admin());
 
 
--- Políticas para o bucket 'public-files'
+-- Polﾃｭticas para o bucket 'public-files'
 DROP POLICY IF EXISTS "Public files are publicly accessible." ON storage.objects;
 CREATE POLICY "Public files are publicly accessible."
     ON storage.objects FOR SELECT
@@ -3460,7 +3492,7 @@ CREATE POLICY "Admins can manage public files."
 CREATE TABLE IF NOT EXISTS public.qrcode_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Quem escaneou
-    content TEXT NOT NULL, -- Conteúdo do QR Code
+    content TEXT NOT NULL, -- Conteﾃｺdo do QR Code
     scanned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     status VARCHAR(50) DEFAULT 'SUCCESS', -- SUCCESS, ERROR, INVALID
     metadata JSONB DEFAULT '{}'::jsonb, -- Contexto adicional (local, app version, etc)
@@ -3497,7 +3529,7 @@ BEGIN
 END $$;
 
 -- ==================================================================
--- Atualizações para o Módulo de Comandas Internas
+-- Atualizaﾃｧﾃｵes para o Mﾃｳdulo de Comandas Internas
 -- ==================================================================
 
 -- 1. Atualizar Enum 'payment_method'
@@ -3536,7 +3568,7 @@ BEGIN
 END $$;
 
 -- ==================================================================
--- MÓDULO DE PEDIDOS INTERNOS - PRODUTOS DA LOJA
+-- Mﾃ泥ULO DE PEDIDOS INTERNOS - PRODUTOS DA LOJA
 -- ==================================================================
 
 CREATE TABLE IF NOT EXISTS public.store_products (
@@ -3565,7 +3597,7 @@ ALTER TABLE public.store_products ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
-    -- Permitir que a loja gerencie seus próprios produtos
+    -- Permitir que a loja gerencie seus prﾃｳprios produtos
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store partners can manage their own products' AND tablename = 'store_products') THEN
         CREATE POLICY "Store partners can manage their own products" ON public.store_products
         FOR ALL
@@ -3582,7 +3614,7 @@ BEGIN
 END $$;
 
 -- ==================================================================
--- Atualização da função create_order para suportar novos campos
+-- Atualizaﾃｧﾃ｣o da funﾃｧﾃ｣o create_order para suportar novos campos
 -- ==================================================================
 CREATE OR REPLACE FUNCTION public.create_order(order_details JSONB)
 RETURNS JSONB AS $$
@@ -3639,10 +3671,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- ==================================================================
--- UPDATES: M�dulo de Importa��o Universal e Colaboradores
+-- UPDATES: M�ｽdulo de Importa�ｽ�ｽo Universal e Colaboradores
 -- ==================================================================
 
--- Atualiza��o do ENUM user_role com 'collaborator'
+-- Atualiza�ｽ�ｽo do ENUM user_role com 'collaborator'
 DO $$
 BEGIN
   ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'collaborator';
@@ -3651,7 +3683,7 @@ EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
 
--- Atualiza��o da tabela products (Campos para Importador Universal)
+-- Atualiza�ｽ�ｽo da tabela products (Campos para Importador Universal)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'internal_code') THEN
@@ -3727,6 +3759,9 @@ DROP POLICY IF EXISTS "Anon can check collaborator login" ON public.collaborator
 CREATE POLICY "Anon can check collaborator login" ON public.collaborators
     FOR SELECT TO anon, authenticated USING (true);
 
+GRANT ALL ON public.collaborators TO authenticated;
+GRANT ALL ON public.collaborators TO service_role;
+
 -- Tabela de Pedidos de Mesa/Colaborador
 CREATE TABLE IF NOT EXISTS public.orders_collaborators (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -3749,6 +3784,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders_collaborators' AND column_name = 'total_amount') THEN
         ALTER TABLE public.orders_collaborators ADD COLUMN total_amount NUMERIC(10, 2) DEFAULT 0;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders_collaborators' AND column_name = 'collaborator_name') THEN
+        ALTER TABLE public.orders_collaborators ADD COLUMN collaborator_name TEXT;
+    END IF;
 END $$;
 DROP TRIGGER IF EXISTS handle_orders_collaborators_updated_at ON public.orders_collaborators;
 CREATE TRIGGER handle_orders_collaborators_updated_at BEFORE UPDATE ON public.orders_collaborators
@@ -3758,6 +3796,9 @@ ALTER TABLE public.orders_collaborators ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Stores can manage table orders" ON public.orders_collaborators;
 CREATE POLICY "Stores can manage table orders" ON public.orders_collaborators
     FOR ALL USING (auth.uid() = store_id);
+
+GRANT ALL ON public.orders_collaborators TO authenticated;
+GRANT ALL ON public.orders_collaborators TO service_role;
 
 -- Tabela de Itens do Pedido de Mesa
 CREATE TABLE IF NOT EXISTS public.orders_items (
@@ -3783,6 +3824,16 @@ BEGIN
     END IF;
 END $$;
 
+ALTER TABLE public.orders_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Stores can manage order items" ON public.orders_items;
+CREATE POLICY "Stores can manage order items" ON public.orders_items
+    FOR ALL USING (
+        EXISTS (SELECT 1 FROM public.orders_collaborators oc WHERE oc.id = order_id AND oc.store_id = auth.uid())
+    );
+
+GRANT ALL ON public.orders_items TO authenticated;
+GRANT ALL ON public.orders_items TO service_role;
+
 -- Tabela de Tickets para Impresso/Cozinha (Novos Pedidos)
 CREATE TABLE IF NOT EXISTS public.orders_tickets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -3797,12 +3848,9 @@ ALTER TABLE public.orders_tickets ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Stores can manage their tickets" ON public.orders_tickets;
 CREATE POLICY "Stores can manage their tickets" ON public.orders_tickets
     FOR ALL USING (auth.uid() = store_id);
-ALTER TABLE public.orders_items ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Stores can manage order items" ON public.orders_items;
-CREATE POLICY "Stores can manage order items" ON public.orders_items
-    FOR ALL USING (
-        EXISTS (SELECT 1 FROM public.orders_collaborators oc WHERE oc.id = order_id AND oc.store_id = auth.uid())
-    );
+
+GRANT ALL ON public.orders_tickets TO authenticated;
+GRANT ALL ON public.orders_tickets TO service_role;
 
 -- Funes de Autenticao de Colaborador (usando pgcrypto)
 DROP FUNCTION IF EXISTS public.login_collaborator(TEXT, TEXT);
@@ -3866,7 +3914,7 @@ BEGIN
     END IF;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- RPC para alteração de senha segura (exige senha antiga)
+-- RPC para alteraﾃｧﾃ｣o de senha segura (exige senha antiga)
 DROP FUNCTION IF EXISTS public.update_collaborator_password(UUID, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.update_collaborator_password(
     p_collaborator_id UUID,
@@ -3877,7 +3925,7 @@ RETURNS BOOLEAN AS $$
 DECLARE
     v_valid BOOLEAN;
 BEGIN
-    -- Verifica se a senha antiga está correta
+    -- Verifica se a senha antiga estﾃ｡ correta
     SELECT (password_hash = crypt(p_old_password, password_hash)) INTO v_valid
     FROM public.collaborators
     WHERE id = p_collaborator_id;
@@ -3905,13 +3953,15 @@ END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- RPC para enviar pedido de mesa (Permite criar nova ou adicionar a uma aberta)
 DROP FUNCTION IF EXISTS public.place_collaborator_order(UUID, UUID, TEXT, JSONB);
 DROP FUNCTION IF EXISTS public.place_collaborator_order(UUID, UUID, TEXT, TEXT, JSONB);
+DROP FUNCTION IF EXISTS public.place_collaborator_order(UUID, UUID, TEXT, TEXT, JSONB, UUID);
 CREATE OR REPLACE FUNCTION public.place_collaborator_order(
     p_store_id UUID,
     p_collaborator_id UUID,
     p_table_identifier TEXT,
     p_customer_name TEXT,
     p_items JSONB, -- Array de itens [{product_id, quantity, unit_price, additional}]
-    p_order_id UUID DEFAULT NULL -- Se enviado, adiciona nessa mesa
+    p_order_id UUID DEFAULT NULL, -- Se enviado, adiciona nessa mesa
+    p_collaborator_name TEXT DEFAULT NULL -- Nome do colaborador para rastreabilidade
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -3929,12 +3979,16 @@ BEGIN
 
     -- Se ainda no tem order_id, cria um novo
     IF v_order_id IS NULL THEN
-        INSERT INTO public.orders_collaborators (store_id, collaborator_id, table_identifier, customer_name, status)
-        VALUES (p_store_id, p_collaborator_id, p_table_identifier, p_customer_name, 'sent')
+        INSERT INTO public.orders_collaborators (store_id, collaborator_id, collaborator_name, table_identifier, customer_name, status)
+        VALUES (p_store_id, p_collaborator_id, p_collaborator_name, p_table_identifier, p_customer_name, 'sent')
         RETURNING id INTO v_order_id;
     ELSE
         -- Se j existe, garante que o nome do cliente seja atualizado se enviado
-        UPDATE public.orders_collaborators SET customer_name = COALESCE(p_customer_name, customer_name), status = 'sent' WHERE id = v_order_id;
+        UPDATE public.orders_collaborators 
+        SET customer_name = COALESCE(p_customer_name, customer_name), 
+            collaborator_name = COALESCE(p_collaborator_name, collaborator_name),
+            status = 'sent' 
+        WHERE id = v_order_id;
     END IF;
 
     -- Inserir Itens e calcular total para o campo redundante
@@ -3959,7 +4013,7 @@ BEGIN
         );
     END LOOP;
 
-    -- Gerar Ticket de Produção/Impressão para o lote atual
+    -- Gerar Ticket de Produﾃｧﾃ｣o/Impressﾃ｣o para o lote atual
     INSERT INTO public.orders_tickets (store_id, order_id, collaborator_id, items)
     VALUES (p_store_id, v_order_id, p_collaborator_id, p_items);
 
@@ -4021,7 +4075,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- RPC para listar histórico de mesas fechadas do colaborador
+-- RPC para listar histﾃｳrico de mesas fechadas do colaborador
 DROP FUNCTION IF EXISTS public.get_closed_orders(UUID, UUID);
 CREATE OR REPLACE FUNCTION public.get_closed_orders(p_store_id UUID, p_collaborator_id UUID)
 RETURNS JSONB AS $$
@@ -4191,7 +4245,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- Atualiza��o da Tabela store_products (Para garantir compatibilidade com Importa��o Universal)
+-- Atualiza�ｽ�ｽo da Tabela store_products (Para garantir compatibilidade com Importa�ｽ�ｽo Universal)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_products' AND column_name = 'internal_code') THEN
@@ -4259,11 +4313,11 @@ CREATE TABLE IF NOT EXISTS public.slides (
 -- Habilitar RLS
 ALTER TABLE public.slides ENABLE ROW LEVEL SECURITY;
 
--- Permissões de acesso
+-- Permissﾃｵes de acesso
 GRANT SELECT ON public.slides TO anon, authenticated;
-GRANT ALL ON public.slides TO authenticated; -- Permite que usuários autenticados (admins) gerenciem via políticas RLS
+GRANT ALL ON public.slides TO authenticated; -- Permite que usuﾃ｡rios autenticados (admins) gerenciem via polﾃｭticas RLS
 
--- PolÃ­ticas de RLS
+-- Polﾃδｭticas de RLS
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policy WHERE polname = 'Slides are viewable by everyone') THEN
@@ -4282,25 +4336,25 @@ END $$;
 
 -- Inserir Slides de Exemplo (Seed Data)
 INSERT INTO public.slides (name, image_url, link, target_audience, is_active)
-SELECT 'Bem-vindo ao Zé Entregas', 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?auto=format&fit=crop&q=80&w=1600&h=400', '/profile', 'both', true
-WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Bem-vindo ao Zé Entregas');
+SELECT 'Bem-vindo ao Zﾃｩ Entregas', 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?auto=format&fit=crop&q=80&w=1600&h=400', '/profile', 'both', true
+WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Bem-vindo ao Zﾃｩ Entregas');
 
 INSERT INTO public.slides (name, image_url, link, target_audience, is_active)
-SELECT 'Novas Taxas Disponíveis', 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&q=80&w=1600&h=400', '/partner', 'drivers', true
-WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Novas Taxas Disponíveis');
+SELECT 'Novas Taxas Disponﾃｭveis', 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&q=80&w=1600&h=400', '/partner', 'drivers', true
+WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Novas Taxas Disponﾃｭveis');
 
 INSERT INTO public.slides (name, image_url, link, target_audience, is_active)
-SELECT 'Gestão de Estoque Facilitada', 'https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=1600&h=400', '/shop', 'merchants', true
-WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Gestão de Estoque Facilitada');
+SELECT 'Gestﾃ｣o de Estoque Facilitada', 'https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=1600&h=400', '/shop', 'merchants', true
+WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Gestﾃ｣o de Estoque Facilitada');
 
 INSERT INTO public.slides (name, image_url, link, target_audience, is_active)
 SELECT 'Suporte 24h', 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=1600&h=400', '/support', 'both', true
 WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Suporte 24h');
 
 -- Garantir links em slides que foram inseridos sem link anteriormente
-UPDATE public.slides SET link = '/profile' WHERE name = 'Bem-vindo ao Zé Entregas' AND link IS NULL;
-UPDATE public.slides SET link = '/partner' WHERE name = 'Novas Taxas Disponíveis' AND link IS NULL;
-UPDATE public.slides SET link = '/shop' WHERE name = 'Gestão de Estoque Facilitada' AND link IS NULL;
+UPDATE public.slides SET link = '/profile' WHERE name = 'Bem-vindo ao Zﾃｩ Entregas' AND link IS NULL;
+UPDATE public.slides SET link = '/partner' WHERE name = 'Novas Taxas Disponﾃｭveis' AND link IS NULL;
+UPDATE public.slides SET link = '/shop' WHERE name = 'Gestﾃ｣o de Estoque Facilitada' AND link IS NULL;
 
 
 
@@ -4314,7 +4368,7 @@ CREATE TABLE IF NOT EXISTS public.marketing_templates (
     name TEXT NOT NULL,
     category TEXT NOT NULL, -- 'promotion', 'new_product', 'info', etc.
     format TEXT NOT NULL, -- 'square', 'story', 'horizontal'
-    config JSONB NOT NULL, -- Configurações padrão (cores, fontes, posições)
+    config JSONB NOT NULL, -- Configuraﾃｧﾃｵes padrﾃ｣o (cores, fontes, posiﾃｧﾃｵes)
     thumbnail_url TEXT,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -4325,21 +4379,21 @@ CREATE TABLE IF NOT EXISTS public.marketing_designs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     template_id UUID REFERENCES public.marketing_templates(id),
-    name TEXT NOT NULL DEFAULT 'Sem título',
-    config JSONB NOT NULL, -- Configurações personalizadas (textos, cores, imagens)
-    last_image_url TEXT, -- URL da última exportação salva (opcional)
+    name TEXT NOT NULL DEFAULT 'Sem tﾃｭtulo',
+    config JSONB NOT NULL, -- Configuraﾃｧﾃｵes personalizadas (textos, cores, imagens)
+    last_image_url TEXT, -- URL da ﾃｺltima exportaﾃｧﾃ｣o salva (opcional)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- RLS e Permissões
+-- RLS e Permissﾃｵes
 ALTER TABLE public.marketing_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.marketing_designs ENABLE ROW LEVEL SECURITY;
 
 GRANT SELECT ON public.marketing_templates TO anon, authenticated;
 GRANT ALL ON public.marketing_designs TO authenticated;
 
--- Políticas para Templates
+-- Polﾃｭticas para Templates
 DROP POLICY IF EXISTS "Anyone can view active templates" ON public.marketing_templates;
 CREATE POLICY "Anyone can view active templates" ON public.marketing_templates
     FOR SELECT USING (is_active = true);
@@ -4348,7 +4402,7 @@ DROP POLICY IF EXISTS "Admins can manage templates" ON public.marketing_template
 CREATE POLICY "Admins can manage templates" ON public.marketing_templates
     FOR ALL USING (public.is_admin());
 
--- Políticas para Designs
+-- Polﾃｭticas para Designs
 DROP POLICY IF EXISTS "Users can manage their own designs" ON public.marketing_designs;
 CREATE POLICY "Users can manage their own designs" ON public.marketing_designs
     FOR ALL USING (auth.uid() = user_id);
@@ -4360,31 +4414,31 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Seed de Templates Iniciais
 INSERT INTO public.marketing_templates (name, category, format, config, is_active)
-SELECT 'Promoção Relâmpago', 'promotion', 'square', '{
+SELECT 'Promoﾃｧﾃ｣o Relﾃ｢mpago', 'promotion', 'square', '{
     "backgroundColor": "#f43f5e",
     "textColor": "#ffffff",
     "format": "post",
     "elements": [
-        {"type": "text", "id": "title", "text": "PROMOÇÃO RELÂMPAGO", "x": 90, "y": 100, "width": 900, "height": 120, "fontSize": 64, "fontWeight": "black", "color": "#ffffff", "zIndex": 2},
+        {"type": "text", "id": "title", "text": "PROMOﾃ�グ RELﾃ�PAGO", "x": 90, "y": 100, "width": 900, "height": 120, "fontSize": 64, "fontWeight": "black", "color": "#ffffff", "zIndex": 2},
         {"type": "text", "id": "subtitle", "text": "Aproveite agora!", "x": 90, "y": 240, "width": 900, "height": 60, "fontSize": 36, "color": "#ffffff", "zIndex": 2},
         {"type": "image", "id": "product", "shape": "circle", "x": 290, "y": 400, "width": 500, "height": 500, "zIndex": 1},
         {"type": "text", "id": "contact", "text": "(00) 00000-0000", "x": 90, "y": 950, "width": 900, "height": 50, "fontSize": 28, "color": "#ffffff", "zIndex": 2}
     ]
 }'::jsonb, true
-WHERE NOT EXISTS (SELECT 1 FROM public.marketing_templates WHERE name = 'Promoção Relâmpago');
+WHERE NOT EXISTS (SELECT 1 FROM public.marketing_templates WHERE name = 'Promoﾃｧﾃ｣o Relﾃ｢mpago');
 
 INSERT INTO public.marketing_templates (name, category, format, config, is_active)
-SELECT 'Novo no Cardápio', 'new_product', 'square', '{
+SELECT 'Novo no Cardﾃ｡pio', 'new_product', 'square', '{
     "backgroundColor": "#ffffff",
     "textColor": "#1f2937",
     "format": "post",
     "elements": [
         {"type": "text", "id": "title", "text": "NOVIDADE!", "x": 90, "y": 80, "width": 900, "height": 100, "fontSize": 56, "fontWeight": "black", "color": "#7c3aed", "zIndex": 2},
         {"type": "image", "id": "product", "shape": "square", "x": 240, "y": 300, "width": 600, "height": 600, "zIndex": 1},
-        {"type": "text", "id": "contact", "text": "Peça pelo WhatsApp", "x": 90, "y": 950, "width": 900, "height": 50, "fontSize": 28, "color": "#1f2937", "zIndex": 2}
+        {"type": "text", "id": "contact", "text": "Peﾃｧa pelo WhatsApp", "x": 90, "y": 950, "width": 900, "height": 50, "fontSize": 28, "color": "#1f2937", "zIndex": 2}
     ]
 }'::jsonb, true
-WHERE NOT EXISTS (SELECT 1 FROM public.marketing_templates WHERE name = 'Novo no Cardápio');
+WHERE NOT EXISTS (SELECT 1 FROM public.marketing_templates WHERE name = 'Novo no Cardﾃ｡pio');
 
 -- ==================================================================
 -- STORAGE: MARKETING ASSETS
@@ -4417,12 +4471,12 @@ END $$;
 -- Garantir colunas para produtos e pedidos de lojista
 DO $$
 BEGIN
-    -- Coluna store_id na tabela products (se não existir)
+    -- Coluna store_id na tabela products (se nﾃ｣o existir)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'store_id') THEN
         ALTER TABLE public.products ADD COLUMN store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE;
     END IF;
 
-    -- Coluna origin na tabela orders (se não existir)
+    -- Coluna origin na tabela orders (se nﾃ｣o existir)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'origin') THEN
         ALTER TABLE public.orders ADD COLUMN origin VARCHAR(50) DEFAULT 'APP';
     END IF;
@@ -4440,12 +4494,12 @@ BEGIN
         ALTER TABLE public.orders ADD COLUMN custom_payment_label VARCHAR(100);
     END IF;
 
-    -- Coluna category na tabela products (se não existir, para compatibilidade com o frontend)
+    -- Coluna category na tabela products (se nﾃ｣o existir, para compatibilidade com o frontend)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'category') THEN
         ALTER TABLE public.products ADD COLUMN category VARCHAR(255);
     END IF;
 
-    -- Coluna image_url na tabela products (se não existir, para compatibilidade com o frontend)
+    -- Coluna image_url na tabela products (se nﾃ｣o existir, para compatibilidade com o frontend)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'image_url') THEN
         ALTER TABLE public.products ADD COLUMN image_url TEXT;
     END IF;
@@ -4481,7 +4535,7 @@ CREATE POLICY "Auth Delete Products" ON storage.objects
     FOR DELETE USING (bucket_id = 'products' AND auth.role() = 'authenticated');
 
 -- ==================================================================
--- 3.x API / INTEGRAÇÃO (Adicionado em 2026-01-07)
+-- 3.x API / INTEGRAﾃ�グ (Adicionado em 2026-01-07)
 -- ==================================================================
 
 -- Tabela de Chaves de API
@@ -4490,7 +4544,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     key_token TEXT UNIQUE NOT NULL, -- O token em si (sk_...)
-    service_name TEXT, -- Nome do serviço (ex: google_gemini_api_key)
+    service_name TEXT, -- Nome do serviﾃｧo (ex: google_gemini_api_key)
     encrypted_key TEXT, -- A chave de API propiamente dita
     permissions JSONB DEFAULT '{"all": true}'::jsonb,
     is_active BOOLEAN DEFAULT TRUE,
@@ -4500,7 +4554,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Garantir colunas em api_keys (Migração Segura)
+-- Garantir colunas em api_keys (Migraﾃｧﾃ｣o Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'user_id') THEN
@@ -4529,15 +4583,15 @@ END $$;
 CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON public.api_keys (user_id);
 CREATE INDEX IF NOT EXISTS api_keys_key_token_idx ON public.api_keys (key_token);
 
--- Correção de Constraints (Fix para duplicidade global)
+-- Correﾃｧﾃ｣o de Constraints (Fix para duplicidade global)
 DO $$
 BEGIN
-    -- Remover constraint antiga incorreta (que forçava service_name único globalmente)
+    -- Remover constraint antiga incorreta (que forﾃｧava service_name ﾃｺnico globalmente)
     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'api_keys_service_name_key') THEN
         ALTER TABLE public.api_keys DROP CONSTRAINT api_keys_service_name_key;
     END IF;
 
-    -- Adicionar constraint correta (único por usuário e serviço)
+    -- Adicionar constraint correta (ﾃｺnico por usuﾃ｡rio e serviﾃｧo)
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'api_keys_user_service_key') THEN
         ALTER TABLE public.api_keys ADD CONSTRAINT api_keys_user_service_key UNIQUE (user_id, service_name);
     END IF;
@@ -4580,7 +4634,7 @@ CREATE TABLE IF NOT EXISTS public.api_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Garantir colunas em api_logs (Migração Segura)
+-- Garantir colunas em api_logs (Migraﾃｧﾃ｣o Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_logs' AND column_name = 'user_id') THEN
@@ -4613,7 +4667,7 @@ DROP POLICY IF EXISTS "Authenticated users can insert api logs" ON public.api_lo
 CREATE POLICY "Authenticated users can insert api logs" ON public.api_logs
     FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
--- Garantir colunas da InfinitePay em shop_settings (Migração Segura)
+-- Garantir colunas da InfinitePay em shop_settings (Migraﾃｧﾃ｣o Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shop_settings' AND column_name = 'infinitepay_handle') THEN
@@ -4624,7 +4678,7 @@ BEGIN
     END IF;
 END $$;
 
--- Garantir colunas da InfinitePay em orders (Migração Segura)
+-- Garantir colunas da InfinitePay em orders (Migraﾃｧﾃ｣o Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'infinitepay_id') THEN
@@ -4646,7 +4700,7 @@ END $$;
 -- ==================================================================
 
 -- Tabela de Carteira Unificada (Antiga store_wallets, agora para todos)
--- Mantemos o nome 'store_wallets' para evitar migrações destrutivas, mas conceitualmente é 'user_wallets'
+-- Mantemos o nome 'store_wallets' para evitar migraﾃｧﾃｵes destrutivas, mas conceitualmente ﾃｩ 'user_wallets'
 CREATE TABLE IF NOT EXISTS public.store_wallets (
     store_id UUID PRIMARY KEY REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     balance_decimal NUMERIC(10, 2) DEFAULT 0.00,
@@ -4667,23 +4721,23 @@ BEGIN
         CREATE POLICY "Admins can manage store wallets" ON public.store_wallets FOR ALL USING (public.is_admin());
     END IF;
     
-    -- Política ajustada para permitir que qualquer usuário veja SUAS PRÓPRIA carteira (seja loja ou entregador)
+    -- Polﾃｭtica ajustada para permitir que qualquer usuﾃ｡rio veja SUAS PRﾃ撤RIA carteira (seja loja ou entregador)
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view own wallet' AND tablename = 'store_wallets') THEN
         CREATE POLICY "Users can view own wallet" ON public.store_wallets FOR SELECT USING (auth.uid() = store_id);
     END IF;
     
-    -- Remover política antiga restrita se existir (opcional, mas boa prática manter limpo)
+    -- Remover polﾃｭtica antiga restrita se existir (opcional, mas boa prﾃ｡tica manter limpo)
     -- DROP POLICY IF EXISTS "Stores can view own wallet" ON public.store_wallets;
 END $$;
 
--- Remover courier_wallets se foi criada anteriormente (Reversão)
+-- Remover courier_wallets se foi criada anteriormente (Reversﾃ｣o)
 DROP TABLE IF EXISTS public.courier_wallets CASCADE;
 
--- Conceder permissões para a role authenticated
+-- Conceder permissﾃｵes para a role authenticated
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO service_role;
 
--- Garantir criação automática de carteiras para TODOS usuários relevantes
+-- Garantir criaﾃｧﾃ｣o automﾃ｡tica de carteiras para TODOS usuﾃ｡rios relevantes
 DO $$
 DECLARE
     r RECORD;
@@ -4697,8 +4751,8 @@ BEGIN
     END LOOP;
 END $$;
 
--- Função RPC para Ajuste de Saldo (ZeBank)
--- Permite saldos negativos conforme solicitado (representando dívida)
+-- Funﾃｧﾃ｣o RPC para Ajuste de Saldo (ZeBank)
+-- Permite saldos negativos conforme solicitado (representando dﾃｭvida)
 CREATE OR REPLACE FUNCTION public.adjust_wallet_balance(
     p_user_id UUID,
     p_amount NUMERIC(10, 2),
@@ -4711,7 +4765,7 @@ AS $$
 DECLARE
     v_new_balance NUMERIC(10, 2);
 BEGIN
-    -- 1. Verificar se é admin
+    -- 1. Verificar se ﾃｩ admin
     IF NOT public.is_admin() THEN
         RAISE EXCEPTION 'Acesso negado. Apenas administradores podem ajustar saldos.';
     END IF;
@@ -4744,7 +4798,7 @@ GRANT EXECUTE ON FUNCTION public.adjust_wallet_balance(UUID, NUMERIC, TEXT) TO s
 -- 3.x SECURITY MODULE TABLES (Adicionado 11/01/2026)
 -- ==================================================================
 
--- Tabela de Verificação de Identidade
+-- Tabela de Verificaﾃｧﾃ｣o de Identidade
 CREATE TABLE IF NOT EXISTS public.identity_verifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -4802,7 +4856,7 @@ CREATE POLICY "Admins can manage fraud alerts" ON public.fraud_alerts
 GRANT ALL ON public.fraud_alerts TO authenticated;
 GRANT ALL ON public.fraud_alerts TO service_role;
 
--- Tabela para Notificações Individuais do Usuário (Adicionada em 2026-01-11)
+-- Tabela para Notificaﾃｧﾃｵes Individuais do Usuﾃ｡rio (Adicionada em 2026-01-11)
 CREATE TABLE IF NOT EXISTS public.app_notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -4836,17 +4890,17 @@ GRANT ALL ON public.app_notifications TO service_role;
 
 
 -- ==================================================================
--- MÓDULO DE EMPRÉSTIMOS (2026-01-11)
+-- Mﾃ泥ULO DE EMPRﾃ唄TIMOS (2026-01-11)
 -- ==================================================================
 
--- Tabela de Tipos de Empréstimo
+-- Tabela de Tipos de Emprﾃｩstimo
 CREATE TABLE IF NOT EXISTS public.loan_types (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     description TEXT,
     interest_rate_monthly NUMERIC(5, 2) NOT NULL DEFAULT 0,
     max_installments INT NOT NULL DEFAULT 1,
-    max_amount NUMERIC(10, 2), -- Limite específico do tipo (opcional)
+    max_amount NUMERIC(10, 2), -- Limite especﾃｭfico do tipo (opcional)
     target_audience VARCHAR(20) DEFAULT 'BOTH', -- 'STORE', 'COURIER', 'BOTH'
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -4877,7 +4931,7 @@ GRANT ALL ON public.loan_types TO authenticated;
 GRANT ALL ON public.loan_types TO service_role;
 
 
--- Tabela de Limites por Nível de Parceiro
+-- Tabela de Limites por Nﾃｭvel de Parceiro
 CREATE TABLE IF NOT EXISTS public.loan_level_limits (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_type VARCHAR(20) NOT NULL DEFAULT 'DELIVERY', -- 'DELIVERY', 'STORE'
@@ -4890,7 +4944,7 @@ CREATE TABLE IF NOT EXISTS public.loan_level_limits (
     CONSTRAINT loan_level_limits_user_type_partner_level_key UNIQUE (user_type, partner_level)
 );
 
--- Migração segura: adicionar coluna user_type se não existir
+-- Migraﾃｧﾃ｣o segura: adicionar coluna user_type se nﾃ｣o existir
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'loan_level_limits' AND column_name = 'user_type') THEN
@@ -4930,7 +4984,7 @@ GRANT ALL ON public.loan_level_limits TO authenticated;
 GRANT ALL ON public.loan_level_limits TO service_role;
 
 
--- Tabela de Solicitações/Contratos de Empréstimo
+-- Tabela de Solicitaﾃｧﾃｵes/Contratos de Emprﾃｩstimo
 CREATE TABLE IF NOT EXISTS public.partner_loans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -4948,7 +5002,7 @@ CREATE TABLE IF NOT EXISTS public.partner_loans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Migração segura: adicionar coluna disbursement_method se não existir
+-- Migraﾃｧﾃ｣o segura: adicionar coluna disbursement_method se nﾃ｣o existir
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_loans' AND column_name = 'disbursement_method') THEN
@@ -4985,7 +5039,7 @@ GRANT ALL ON public.partner_loans TO authenticated;
 GRANT ALL ON public.partner_loans TO service_role;
 
 
--- Tabela de Parcelas do Empréstimo
+-- Tabela de Parcelas do Emprﾃｩstimo
 CREATE TABLE IF NOT EXISTS public.loan_installments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     loan_id UUID NOT NULL REFERENCES public.partner_loans(id) ON DELETE CASCADE,
@@ -5020,7 +5074,7 @@ GRANT ALL ON public.loan_installments TO authenticated;
 GRANT ALL ON public.loan_installments TO service_role;
 
 
--- Tabela de Logs de Auditoria de Empréstimos
+-- Tabela de Logs de Auditoria de Emprﾃｩstimos
 CREATE TABLE IF NOT EXISTS public.loan_audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     loan_id UUID REFERENCES public.partner_loans(id) ON DELETE SET NULL,
@@ -5045,7 +5099,7 @@ GRANT ALL ON public.loan_audit_logs TO authenticated;
 -- LOAN PAYMENT PROCESSING FUNCTION (2026-01-11)
 -- ==================================================================
 
--- Função para processar pagamento de parcelas de empréstimo
+-- Funﾃｧﾃ｣o para processar pagamento de parcelas de emprﾃｩstimo
 -- Deve ser chamada durante o processamento de repasses semanais
 CREATE OR REPLACE FUNCTION public.process_loan_installment_payments(
     p_user_id UUID,
@@ -5064,7 +5118,7 @@ DECLARE
     v_allow_negative BOOLEAN := FALSE;
     v_partner_level TEXT;
 BEGIN
-    -- Buscar nível do parceiro e verificar se permite saldo negativo
+    -- Buscar nﾃｭvel do parceiro e verificar se permite saldo negativo
     SELECT partner_level INTO v_partner_level 
     FROM public.user_profiles 
     WHERE id = p_user_id;
@@ -5117,7 +5171,7 @@ BEGIN
                     p_user_id
                 );
                 
-            -- Se o repasse não cobre, mas permite saldo negativo
+            -- Se o repasse nﾃ｣o cobre, mas permite saldo negativo
             ELSIF v_allow_negative THEN
                 -- Pagar parcela mesmo ficando negativo
                 UPDATE public.loan_installments
@@ -5146,7 +5200,7 @@ BEGIN
                     p_user_id
                 );
                 
-            -- Se não cobre e não permite negativo
+            -- Se nﾃ｣o cobre e nﾃ｣o permite negativo
             ELSE
                 -- Marcar como atrasada
                 UPDATE public.loan_installments
@@ -5170,7 +5224,7 @@ BEGIN
         END;
     END LOOP;
     
-    -- Verificar se algum empréstimo foi totalmente pago
+    -- Verificar se algum emprﾃｩstimo foi totalmente pago
     UPDATE public.partner_loans pl
     SET status = 'PAID'
     WHERE pl.user_id = p_user_id
@@ -5185,7 +5239,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Garantir permissões
+-- Garantir permissﾃｵes
 GRANT EXECUTE ON FUNCTION public.process_loan_installment_payments(UUID, NUMERIC) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.process_loan_installment_payments(UUID, NUMERIC) TO service_role;
 
@@ -5193,7 +5247,7 @@ GRANT EXECUTE ON FUNCTION public.process_loan_installment_payments(UUID, NUMERIC
 -- SEEDS & BACKFILLS (LOANS MODULE) - Adicionado em 2026-01-12
 -- ==================================================================
 
--- 1. Inserir Limites por Nível e Tipo de Usuário (Se não existirem)
+-- 1. Inserir Limites por Nﾃｭvel e Tipo de Usuﾃ｡rio (Se nﾃ｣o existirem)
 -- Limites para Entregadores
 INSERT INTO public.loan_level_limits (user_type, partner_level, max_limit, max_installments, allow_negative_balance)
 VALUES
@@ -5218,25 +5272,25 @@ SET max_limit = EXCLUDED.max_limit,
     max_installments = EXCLUDED.max_installments,
     allow_negative_balance = EXCLUDED.allow_negative_balance;
 
--- 2. Backfill: Garantir que usuários tenham nível 'BRONZE' se estiver nulo
+-- 2. Backfill: Garantir que usuﾃ｡rios tenham nﾃｭvel 'BRONZE' se estiver nulo
 UPDATE public.user_profiles
 SET partner_level = 'BRONZE'
 WHERE partner_level IS NULL OR partner_level = '';
 
--- 3. Inserir Tipos de Empréstimo Padrão (Evitando duplicidade)
+-- 3. Inserir Tipos de Emprﾃｩstimo Padrﾃ｣o (Evitando duplicidade)
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Antecipação de Recebíveis', 'Antecipe seus ganhos futuros com taxas reduzidas.', 2.50, 4, 1000.00, 'BOTH', true
-WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Antecipação de Recebíveis');
+SELECT 'Antecipaﾃｧﾃ｣o de Recebﾃｭveis', 'Antecipe seus ganhos futuros com taxas reduzidas.', 2.50, 4, 1000.00, 'BOTH', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Antecipaﾃｧﾃ｣o de Recebﾃｭveis');
 
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Capital de Giro', 'Empréstimo para impulsionar seu negócio.', 3.90, 12, 5000.00, 'STORE', true
+SELECT 'Capital de Giro', 'Emprﾃｩstimo para impulsionar seu negﾃｳcio.', 3.90, 12, 5000.00, 'STORE', true
 WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Capital de Giro');
 
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Crédito Pessoal', 'Dinheiro rápido para emergências.', 4.50, 6, 2000.00, 'COURIER', true
-WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Crédito Pessoal');
+SELECT 'Crﾃｩdito Pessoal', 'Dinheiro rﾃ｡pido para emergﾃｪncias.', 4.50, 6, 2000.00, 'COURIER', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Crﾃｩdito Pessoal');
 
--- 4. Correção RLS: Permitir INSERT em loan_installments pelo usuário dono do empréstimo
+-- 4. Correﾃｧﾃ｣o RLS: Permitir INSERT em loan_installments pelo usuﾃ｡rio dono do emprﾃｩstimo
 DROP POLICY IF EXISTS "Users can create loan installments" ON public.loan_installments;
 CREATE POLICY "Users can create loan installments" ON public.loan_installments
     FOR INSERT WITH CHECK (
@@ -5248,6 +5302,7 @@ CREATE POLICY "Users can create loan installments" ON public.loan_installments
     );
 -- Adicionando coluna order_type para controle de pedidos (Local, Retirada, Entrega)
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS order_type text DEFAULT 'LOCAL';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS collaborator_name text;
 
 
 -- Liberar RLS para tabela orders (Lojistas) e definir policies corretas
@@ -5272,7 +5327,7 @@ FOR UPDATE
 USING (auth.uid() = store_id);
 
 -- ==================================================================
--- CONFIGURAÇÕES DE ENTREGA DA LOJA (Adicionado em 2026-01-14)
+-- CONFIGURAﾃ�髭S DE ENTREGA DA LOJA (Adicionado em 2026-01-14)
 -- ==================================================================
 
 -- Tabela para configurar modo de entrega e taxas
@@ -5295,7 +5350,7 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 -- RLS para store_delivery_settings
 ALTER TABLE public.store_delivery_settings ENABLE ROW LEVEL SECURITY;
 
--- Garantir permissões de leitura para authenticated
+-- Garantir permissﾃｵes de leitura para authenticated
 GRANT SELECT ON public.store_delivery_settings TO authenticated;
 GRANT SELECT ON public.store_delivery_settings TO anon;
 GRANT ALL ON public.store_delivery_settings TO service_role;
@@ -5333,7 +5388,7 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 -- RLS para store_neighborhood_fees
 ALTER TABLE public.store_neighborhood_fees ENABLE ROW LEVEL SECURITY;
 
--- Garantir permissões de leitura para authenticated
+-- Garantir permissﾃｵes de leitura para authenticated
 GRANT SELECT ON public.store_neighborhood_fees TO authenticated;
 GRANT SELECT ON public.store_neighborhood_fees TO anon;
 GRANT ALL ON public.store_neighborhood_fees TO service_role;
@@ -5350,26 +5405,26 @@ DROP POLICY IF EXISTS "Authenticated users can view neighborhood fees" ON public
 CREATE POLICY "Authenticated users can view neighborhood fees" ON public.store_neighborhood_fees
     FOR SELECT TO authenticated USING (true);
 
--- Permissões adicionais para permitir salvamento pelos lojistas
+-- Permissﾃｵes adicionais para permitir salvamento pelos lojistas
 GRANT ALL ON public.store_delivery_settings TO authenticated;
 GRANT ALL ON public.store_neighborhood_fees TO authenticated;
 
 
 
 -- ==================================================================
--- RPCs para Gestão de Usuários (Admin) - Adicionado em 14/01/2026
+-- RPCs para Gestﾃ｣o de Usuﾃ｡rios (Admin) - Adicionado em 14/01/2026
 -- ==================================================================
 
--- RPC: Atualizar senha de usuário (Admin Only)
+-- RPC: Atualizar senha de usuﾃ｡rio (Admin Only)
 CREATE OR REPLACE FUNCTION public.admin_update_user_password(
     p_user_id UUID,
     p_new_password TEXT
 )
 RETURNS BOOLEAN AS $$
 BEGIN
-    -- Verifica se quem chama é admin
+    -- Verifica se quem chama ﾃｩ admin
     IF NOT public.is_admin() THEN
-        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem alterar senhas de outros usuários.';
+        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem alterar senhas de outros usuﾃ｡rios.';
     END IF;
 
     -- Atualiza a senha na tabela auth.users
@@ -5381,13 +5436,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Garantir permissões
+-- Garantir permissﾃｵes
 GRANT EXECUTE ON FUNCTION public.admin_update_user_password(UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_update_user_password(UUID, TEXT) TO service_role;
 
 
--- RPC: Criar usuário manualmente (Admin Only)
--- Permite criar usuário passando metadados completos sem logar automaticamente
+-- RPC: Criar usuﾃ｡rio manualmente (Admin Only)
+-- Permite criar usuﾃ｡rio passando metadados completos sem logar automaticamente
 CREATE OR REPLACE FUNCTION public.admin_create_user_manual(
     p_email TEXT,
     p_password TEXT,
@@ -5397,14 +5452,14 @@ RETURNS UUID AS $$
 DECLARE
     v_user_id UUID;
 BEGIN
-    -- Verifica se quem chama é admin
+    -- Verifica se quem chama ﾃｩ admin
     IF NOT public.is_admin() THEN
-        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem criar usuários manualmente.';
+        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem criar usuﾃ｡rios manualmente.';
     END IF;
 
-    -- Verifica se usuário já existe
+    -- Verifica se usuﾃ｡rio jﾃ｡ existe
     IF EXISTS (SELECT 1 FROM auth.users WHERE email = p_email) THEN
-        RAISE EXCEPTION 'Email já cadastrado.';
+        RAISE EXCEPTION 'Email jﾃ｡ cadastrado.';
     END IF;
 
     -- Gera novo UUID
@@ -5441,7 +5496,7 @@ BEGIN
         ''
     );
 
-    -- Insere na tabela identity (necessário para login funcionar corretamente em alguns casos do Supabase)
+    -- Insere na tabela identity (necessﾃ｡rio para login funcionar corretamente em alguns casos do Supabase)
     INSERT INTO auth.identities (
         id,
         user_id,
@@ -5462,19 +5517,19 @@ BEGIN
         now()
     );
 
-    -- O trigger handle_new_user será disparado automaticamente após insert em auth.users
+    -- O trigger handle_new_user serﾃ｡ disparado automaticamente apﾃｳs insert em auth.users
     -- preenchendo user_profiles e outras tabelas
 
     RETURN v_user_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Garantir permissões
+-- Garantir permissﾃｵes
 GRANT EXECUTE ON FUNCTION public.admin_create_user_manual(TEXT, TEXT, JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_create_user_manual(TEXT, TEXT, JSONB) TO service_role;
 
 -- ==================================================================
--- ASSOCIAÇÃO DE LOJISTAS E PARCEIROS (Adicionado em 14/01/2026)
+-- ASSOCIAﾃ�グ DE LOJISTAS E PARCEIROS (Adicionado em 14/01/2026)
 -- ==================================================================
 
 CREATE TABLE IF NOT EXISTS public.store_partners (
@@ -5494,7 +5549,7 @@ CREATE POLICY "Store owners manage their partners" ON public.store_partners
 GRANT ALL ON public.store_partners TO authenticated;
 GRANT ALL ON public.store_partners TO service_role;
 
--- Nova política para permitir que lojistas gerenciem empréstimos de seus parceiros associados
+-- Nova polﾃｭtica para permitir que lojistas gerenciem emprﾃｩstimos de seus parceiros associados
 DROP POLICY IF EXISTS "Store partners can manage their drivers loans" ON public.partner_loans;
 CREATE POLICY "Store partners can manage their drivers loans" ON public.partner_loans
     FOR ALL USING (
@@ -5506,7 +5561,7 @@ CREATE POLICY "Store partners can manage their drivers loans" ON public.partner_
     );
 
 -- ==================================================================
--- 3.x ATUALIZAÇÕES PARA GESTÃO DE LOJA (15/01/2026)
+-- 3.x ATUALIZAﾃ�髭S PARA GESTﾃグ DE LOJA (15/01/2026)
 -- ==================================================================
 
 -- 1. Adicionar status de loja aberta/fechada no perfil
@@ -5517,12 +5572,12 @@ BEGIN
     END IF;
 END $$;
 
--- Garantir que usuários possam atualizar seu próprio status is_open
+-- Garantir que usuﾃ｡rios possam atualizar seu prﾃｳprio status is_open
 DROP POLICY IF EXISTS "Users can update own is_open" ON public.user_profiles;
 CREATE POLICY "Users can update own is_open" ON public.user_profiles
     FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
--- 2. Tabela de Relatórios Diários da Loja
+-- 2. Tabela de Relatﾃｳrios Diﾃ｡rios da Loja
 CREATE TABLE IF NOT EXISTS public.store_daily_reports (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -5534,7 +5589,7 @@ CREATE TABLE IF NOT EXISTS public.store_daily_reports (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Índices e Trigger de Updated At
+-- ﾃ肱dices e Trigger de Updated At
 CREATE INDEX IF NOT EXISTS store_daily_reports_store_id_idx ON public.store_daily_reports (store_id);
 CREATE INDEX IF NOT EXISTS store_daily_reports_date_idx ON public.store_daily_reports (report_date);
 
@@ -5561,7 +5616,7 @@ END $$;
 
 GRANT SELECT, INSERT ON public.store_daily_reports TO authenticated;
 
--- Garantir permissões de leitura na tabela orders para lojistas (Correção 2026-01-15)
+-- Garantir permissﾃｵes de leitura na tabela orders para lojistas (Correﾃｧﾃ｣o 2026-01-15)
 GRANT SELECT ON public.orders TO authenticated;
 
 DROP POLICY IF EXISTS "Lojistas leem seus proprios pedidos" ON public.orders;
@@ -5573,9 +5628,24 @@ BEGIN
     END IF;
 END $$;
 
+DROP POLICY IF EXISTS "Colaboradores leem pedidos da loja" ON public.orders;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Colaboradores leem pedidos da loja' AND tablename = 'orders') THEN
+        CREATE POLICY "Colaboradores leem pedidos da loja" ON public.orders
+            FOR SELECT USING (
+                EXISTS (
+                    SELECT 1 FROM public.collaborators
+                    WHERE id = auth.uid()
+                    AND store_id = public.orders.store_id
+                )
+            );
+    END IF;
+END $$;
 
--- Correção para get_products_for_collaborator (15/01/2026)
--- A relação store_categories não existe, e a tabela store_products usa a coluna 'category' (TEXT).
+
+-- Correﾃｧﾃ｣o para get_products_for_collaborator (15/01/2026)
+-- A relaﾃｧﾃ｣o store_categories nﾃ｣o existe, e a tabela store_products usa a coluna 'category' (TEXT).
 CREATE OR REPLACE FUNCTION public.get_products_for_collaborator(p_store_id UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -5600,3 +5670,429 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+
+-- ==================================================================
+-- 4.x GESTﾃグ DE MESAS E QR CODES (16/01/2026)
+-- ==================================================================
+
+-- 1. Tabela store_tables
+CREATE TABLE IF NOT EXISTS public.store_tables (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    identifier TEXT NOT NULL,
+    qr_code_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(store_id, identifier)
+);
+
+-- ﾃ肱dices e Trigger
+CREATE INDEX IF NOT EXISTS store_tables_store_id_idx ON public.store_tables (store_id);
+DROP TRIGGER IF EXISTS handle_store_tables_updated_at ON public.store_tables;
+CREATE TRIGGER handle_store_tables_updated_at BEFORE UPDATE ON public.store_tables
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS Policies
+ALTER TABLE public.store_tables ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas gerenciam suas proprias mesas" ON public.store_tables;
+CREATE POLICY "Lojistas gerenciam suas proprias mesas" ON public.store_tables
+    FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Colaboradores veem mesas da loja" ON public.store_tables;
+CREATE POLICY "Colaboradores veem mesas da loja" ON public.store_tables
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.collaborators
+            WHERE id = auth.uid()
+            AND store_id = public.store_tables.store_id
+        )
+    );
+
+-- Permissﾃｵes
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_tables TO authenticated;
+
+
+-- 2. Storage Bucket para QR Codes
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('qr-codes', 'qr-codes', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Policies para Storage
+DROP POLICY IF EXISTS "QR Codes Public Access" ON storage.objects;
+CREATE POLICY "QR Codes Public Access"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'qr-codes' );
+
+DROP POLICY IF EXISTS "Lojistas Upload QR Codes" ON storage.objects;
+CREATE POLICY "Lojistas Upload QR Codes"
+ON storage.objects FOR INSERT
+WITH CHECK (
+    bucket_id = 'qr-codes' AND
+    auth.role() = 'authenticated'
+);
+
+DROP POLICY IF EXISTS "Lojistas Delete Own QR Codes" ON storage.objects;
+CREATE POLICY "Lojistas Delete Own QR Codes"
+ON storage.objects FOR DELETE
+USING (
+    bucket_id = 'qr-codes' AND
+    auth.role() = 'authenticated' AND
+    (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- 3. RPC para buscar pedidos internos (Bypass RLS para Colaboradores)
+CREATE OR REPLACE FUNCTION public.get_store_internal_orders_rpc(p_store_id UUID)
+RETURNS SETOF public.orders
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT * FROM public.orders
+  WHERE store_id = p_store_id
+  AND origin = 'INTERNAL'
+  ORDER BY created_at DESC
+  LIMIT 50;
+$$;
+
+
+-- 4. Tabelas de Notificaﾃｧﾃｵes
+-- Tabela de Preferﾃｪncias de Notificaﾃｧﾃ｣o
+CREATE TABLE IF NOT EXISTS public.notification_preferences (
+    user_id UUID PRIMARY KEY REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    email_enabled BOOLEAN DEFAULT true,
+    push_enabled BOOLEAN DEFAULT true,
+    sms_enabled BOOLEAN DEFAULT false,
+    categories JSONB DEFAULT '["orders", "system", "promotions"]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RLS para notification_preferences
+ALTER TABLE public.notification_preferences ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage own notification preferences" ON public.notification_preferences;
+CREATE POLICY "Users can manage own notification preferences" ON public.notification_preferences
+    FOR ALL USING (auth.uid() = user_id);
+
+GRANT ALL ON public.notification_preferences TO authenticated;
+GRANT ALL ON public.notification_preferences TO service_role;
+
+-- Tabela de Notificaﾃｧﾃｵes do Usuﾃ｡rio
+CREATE TABLE IF NOT EXISTS public.user_notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'info', -- info, success, warning, error
+    read BOOLEAN DEFAULT false,
+    link TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Garantir colunas em user_notifications (Migraﾃｧﾃ｣o Segura)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'read') THEN
+        ALTER TABLE public.user_notifications ADD COLUMN "read" BOOLEAN DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'title') THEN
+        ALTER TABLE public.user_notifications ADD COLUMN title TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'message') THEN
+        ALTER TABLE public.user_notifications ADD COLUMN message TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'type') THEN
+        ALTER TABLE public.user_notifications ADD COLUMN type VARCHAR(50) DEFAULT 'info';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'link') THEN
+        ALTER TABLE public.user_notifications ADD COLUMN link TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'metadata') THEN
+        ALTER TABLE public.user_notifications ADD COLUMN metadata JSONB DEFAULT '{}'::jsonb;
+    END IF;
+END $$;
+
+-- ﾃ肱dices
+CREATE INDEX IF NOT EXISTS user_notifications_user_id_idx ON public.user_notifications(user_id);
+CREATE INDEX IF NOT EXISTS user_notifications_read_idx ON public.user_notifications("read");
+
+-- RLS para user_notifications
+ALTER TABLE public.user_notifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage own notifications" ON public.user_notifications;
+CREATE POLICY "Users can manage own notifications" ON public.user_notifications
+    FOR ALL USING (auth.uid() = user_id);
+
+GRANT ALL ON public.user_notifications TO authenticated;
+GRANT ALL ON public.user_notifications TO service_role;
+
+
+-- RPC para buscar perfil da loja (Bypass RLS para Colaboradores) - 17/01/2026
+CREATE OR REPLACE FUNCTION public.get_store_profile_for_collaborator_rpc(p_store_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    v_profile RECORD;
+BEGIN
+    -- Selecionar apenas colunas que garantidamente existem para evitar erros de campo inexistente
+    SELECT id, name, store_name, city, store_address_city, address_street, store_address_street, is_open 
+    INTO v_profile 
+    FROM public.user_profiles 
+    WHERE id = p_store_id;
+    
+    IF v_profile.id IS NOT NULL THEN
+        RETURN jsonb_build_object(
+            'id', v_profile.id,
+            'name', COALESCE(v_profile.store_name, v_profile.name),
+            'city', COALESCE(v_profile.city, v_profile.store_address_city, ''),
+            'address_street', COALESCE(v_profile.address_street, v_profile.store_address_street, ''),
+            'is_open', COALESCE(v_profile.is_open, true)
+        );
+    ELSE
+        RETURN NULL;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+
+-- �ｽndices para otimiza�ｽ�ｽo de performance (Partner Requests)
+CREATE INDEX IF NOT EXISTS partner_requests_created_at_idx ON public.partner_requests (created_at DESC);
+CREATE INDEX IF NOT EXISTS partner_requests_store_status_idx ON public.partner_requests (store_id, status);
+
+
+
+-- Arquivo de esquema global do Supabase.
+-- Todas as alteraﾃｧﾃｵes de banco de dados devem ser adicionadas aqui de forma nﾃ｣o destrutiva.
+-- Nﾃ｣o remova ou altere cﾃｳdigo existente, apenas adicione novas estruturas ou modificaﾃｧﾃｵes.
+
+-- Escrevendo as novas tabelas para o chat do WhatsApp
+
+-- Tabela para armazenar sessﾃｵes de autenticaﾃｧﾃ｣o do WhatsApp
+CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+    session_id TEXT PRIMARY KEY,
+    session_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE whatsapp_sessions IS 'Armazena os dados da sessﾃ｣o de autenticaﾃｧﾃ｣o do Baileys para permitir a persistﾃｪncia.';
+COMMENT ON COLUMN whatsapp_sessions.session_id IS 'Identificador ﾃｺnico da sessﾃ｣o, pode ser o JID do WhatsApp.';
+COMMENT ON COLUMN whatsapp_sessions.session_data IS 'Dados completos da sessﾃ｣o de autenticaﾃｧﾃ｣o em formato JSON.';
+
+-- Tabela para gerenciar as conversas ativas
+CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+    conversation_id TEXT PRIMARY KEY,
+    contact_name TEXT,
+    unread_count INTEGER DEFAULT 0,
+    last_message_timestamp TIMESTAMPTZ,
+    last_message_content TEXT,
+    profile_pic_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ﾃ肱dices para whatsapp_conversations
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conv_last_msg ON whatsapp_conversations(last_message_timestamp DESC);
+
+COMMENT ON TABLE whatsapp_conversations IS 'Gerencia as conversas ativas do WhatsApp, servindo como um ﾃｭndice de chats.';
+COMMENT ON COLUMN whatsapp_conversations.conversation_id IS 'JID (Jabber ID) do contato ou grupo, usado como chave primﾃ｡ria.';
+COMMENT ON COLUMN whatsapp_conversations.contact_name IS 'Nome do contato, conforme salvo ou retornado pela API.';
+COMMENT ON COLUMN whatsapp_conversations.unread_count IS 'Contador de mensagens nﾃ｣o lidas para a conversa.';
+COMMENT ON COLUMN whatsapp_conversations.last_message_timestamp IS 'Timestamp da ﾃｺltima mensagem recebida ou enviada.';
+COMMENT ON COLUMN whatsapp_conversations.last_message_content IS 'Preview do conteﾃｺdo da ﾃｺltima mensagem.';
+COMMENT ON COLUMN whatsapp_conversations.profile_pic_url IS 'URL da foto de perfil do contato.';
+
+
+-- Tabela para armazenar o histﾃｳrico de mensagens
+CREATE TABLE IF NOT EXISTS whatsapp_messages (
+    message_id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    content TEXT,
+    media_url TEXT,
+    media_type TEXT,
+    status TEXT,
+    message_timestamp TIMESTAMPTZ NOT NULL,
+    is_from_me BOOLEAN NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_conversation
+      FOREIGN KEY(conversation_id) 
+	  REFERENCES whatsapp_conversations(conversation_id)
+      ON DELETE CASCADE
+);
+
+-- ﾃ肱dices para whatsapp_messages
+CREATE INDEX IF NOT EXISTS idx_whatsapp_msg_conv_id ON whatsapp_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_msg_timestamp ON whatsapp_messages(message_timestamp ASC);
+
+COMMENT ON TABLE whatsapp_messages IS 'Armazena o histﾃｳrico de todas as mensagens trocadas.';
+COMMENT ON COLUMN whatsapp_messages.message_id IS 'ID ﾃｺnico da mensagem, fornecido pelo WhatsApp.';
+COMMENT ON COLUMN whatsapp_messages.conversation_id IS 'FK para a tabela de conversas, vinculando a mensagem a um chat.';
+COMMENT ON COLUMN whatsapp_messages.sender_id IS 'JID de quem enviou a mensagem.';
+COMMENT ON COLUMN whatsapp_messages.content IS 'Conteﾃｺdo textual da mensagem.';
+COMMENT ON COLUMN whatsapp_messages.media_url IS 'URL de armazenamento da mﾃｭdia (se aplicﾃ｡vel).';
+COMMENT ON COLUMN whatsapp_messages.media_type IS 'Tipo da mﾃｭdia, ex: image, audio, video, document.';
+COMMENT ON COLUMN whatsapp_messages.status IS 'Status da mensagem: sent, delivered, read, error.';
+COMMENT ON COLUMN whatsapp_messages.message_timestamp IS 'Timestamp original da mensagem, fornecido pelo WhatsApp.';
+COMMENT ON COLUMN whatsapp_messages.is_from_me IS 'Indica se a mensagem foi enviada pela nossa instﾃ｢ncia (true) ou recebida (false).';
+
+
+-- Adicionar triggers para atualizar o campo updated_at automaticamente
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Remover triggers existentes para evitar erro de duplicaﾃｧﾃ｣o
+DROP TRIGGER IF EXISTS update_whatsapp_sessions_updated_at ON whatsapp_sessions;
+DROP TRIGGER IF EXISTS update_whatsapp_conversations_updated_at ON whatsapp_conversations;
+DROP TRIGGER IF EXISTS update_whatsapp_messages_updated_at ON whatsapp_messages;
+
+CREATE TRIGGER update_whatsapp_sessions_updated_at
+BEFORE UPDATE ON whatsapp_sessions
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_whatsapp_conversations_updated_at
+BEFORE UPDATE ON whatsapp_conversations
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_whatsapp_messages_updated_at
+BEFORE UPDATE ON whatsapp_messages
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Tabela para contatos salvos do WhatsApp
+CREATE TABLE IF NOT EXISTS whatsapp_contacts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    email VARCHAR(255),
+    notes TEXT,
+    tags VARCHAR(100)[],
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(store_id, phone_number)
+);
+
+-- ﾃ肱dices para whatsapp_contacts
+CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_store ON whatsapp_contacts(store_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_phone ON whatsapp_contacts(phone_number);
+
+-- Garantir que o upsert por phone_number funcione (Unicidade global por nﾃｺmero se store_id for nulo)
+-- Nota: Mantemos o UNIQUE(store_id, phone_number) existente e adicionamos este para o serviﾃｧo global.
+ALTER TABLE whatsapp_contacts DROP CONSTRAINT IF EXISTS whatsapp_contacts_phone_number_key;
+ALTER TABLE whatsapp_contacts ADD CONSTRAINT whatsapp_contacts_phone_number_key UNIQUE (phone_number);
+
+-- Trigger para updated_at em whatsapp_contacts
+DROP TRIGGER IF EXISTS update_whatsapp_contacts_updated_at ON whatsapp_contacts;
+CREATE TRIGGER update_whatsapp_contacts_updated_at
+    BEFORE UPDATE ON whatsapp_contacts
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Permissﾃｵes e Seguranﾃｧa para o mﾃｳdulo de WhatsApp
+-- Garantir acesso total ﾃ� role de serviﾃｧo
+GRANT ALL ON TABLE public.whatsapp_sessions TO service_role;
+GRANT ALL ON TABLE public.whatsapp_conversations TO service_role;
+GRANT ALL ON TABLE public.whatsapp_messages TO service_role;
+GRANT ALL ON TABLE public.whatsapp_contacts TO service_role;
+
+-- Desabilitar RLS para estas tabelas (Caso esteja bloqueando o service_role)
+ALTER TABLE public.whatsapp_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_conversations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_messages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_contacts DISABLE ROW LEVEL SECURITY;
+
+-- Fim das tabelas de chat do WhatsApp
+
+
+-- ===============================================================
+-- SCRIPT DE CORREﾇﾃO MANUAL - COLUNAS UPDATED_AT FALTANTES
+-- ===============================================================
+
+ALTER TABLE public.whatsapp_messages 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.whatsapp_conversations 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.whatsapp_sessions 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.whatsapp_contacts 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+
+-- ==================================================================
+-- INTEGRAÇÃO BRASIL ABERTO (Adicionado em 2026-01-17)
+-- ==================================================================
+
+-- Tabela de Bairros (Distritos) importados da API
+CREATE TABLE IF NOT EXISTS public.city_districts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    city_id UUID NOT NULL REFERENCES public.available_cities(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(city_id, name)
+);
+
+-- Índices
+CREATE INDEX IF NOT EXISTS city_districts_city_id_idx ON public.city_districts (city_id);
+
+-- RLS
+ALTER TABLE public.city_districts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read access to city_districts" ON public.city_districts;
+CREATE POLICY "Public read access to city_districts" ON public.city_districts FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage city_districts" ON public.city_districts;
+CREATE POLICY "Admins can manage city_districts" ON public.city_districts FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.city_districts TO anon, authenticated;
+GRANT ALL ON public.city_districts TO authenticated;
+
+-- available_cities setup
+CREATE TABLE IF NOT EXISTS public.available_cities (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    name text NOT NULL,
+    state text NOT NULL,
+    is_active boolean DEFAULT true,
+    ibge_code text
+);
+
+-- Ensure RLS is enabled
+ALTER TABLE public.available_cities ENABLE ROW LEVEL SECURITY;
+
+-- Policies
+DROP POLICY IF EXISTS "Public read access to cities" ON public.available_cities;
+CREATE POLICY "Public read access to cities" ON public.available_cities FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can insert cities" ON public.available_cities;
+CREATE POLICY "Admins can insert cities" ON public.available_cities FOR INSERT WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can update cities" ON public.available_cities;
+CREATE POLICY "Admins can update cities" ON public.available_cities FOR UPDATE USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can delete cities" ON public.available_cities;
+CREATE POLICY "Admins can delete cities" ON public.available_cities FOR DELETE USING (public.is_admin());
+
+-- Grants
+GRANT SELECT ON public.available_cities TO anon, authenticated;
+GRANT ALL ON public.available_cities TO authenticated;
+
+-- Add column if missing (legacy block kept for safety)
+DO $$ BEGIN
+    ALTER TABLE public.available_cities ADD COLUMN IF NOT EXISTS ibge_code text;
+EXCEPTION
+    WHEN duplicate_column THEN NULL;
+END $$;

@@ -12,9 +12,10 @@ const playNotificationSound = () => {
     try {
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
         audio.volume = 0.5;
-        audio.play().catch(e => console.log('Audio play failed', e));
+        // audio.play().catch(e => console.log('Audio play failed', e));
+        audio.play().catch(() => { }); // Falha silenciosa
     } catch (e) {
-        console.error(e);
+        // console.error(e);
     }
 };
 
@@ -45,7 +46,7 @@ export const initNotificationService = async (userId: string, role: UserRole) =>
     try {
         prefs = await cloud.getNotificationPreferences();
     } catch (e) {
-        console.warn('Falha ao buscar preferências remotas, usando local.', e);
+        // console.warn('Falha ao buscar preferências remotas, usando local.', e);
         prefs = storage.getNotificationPreferences();
     }
     storage.saveNotificationPreferences(prefs); // Cache local
@@ -61,7 +62,7 @@ export const initNotificationService = async (userId: string, role: UserRole) =>
         const profile = await cloud.getMyPartnerProfile();
         userCity = profile?.city || '';
     } catch (e) {
-        console.warn('Falha ao buscar perfil remoto, usando cache local de cidade.', e);
+        // console.warn('Falha ao buscar perfil remoto, usando cache local de cidade.', e);
         userCity = localStorage.getItem('user_city') || '';
     }
 
@@ -140,7 +141,7 @@ export const initNotificationService = async (userId: string, role: UserRole) =>
         )
         .subscribe();
 
-    console.log("Notification Service Initialized for", role, "City:", userCity);
+    // console.log("Notification Service Initialized for", role, "City:", userCity);
 };
 
 const handleRequestUpdate = (

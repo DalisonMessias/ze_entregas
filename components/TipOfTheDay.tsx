@@ -20,7 +20,7 @@ export const TipOfTheDay: React.FC<TipOfTheDayProps> = ({ role, className = '' }
                 const data = await cloud.getSystemTips(role);
                 setTips(data);
             } catch (error) {
-                console.error("Failed to load tips", error);
+                // console.error("Failed to load tips", error);
             }
         };
         fetchTips();

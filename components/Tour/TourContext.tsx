@@ -37,13 +37,13 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children }) => {
     setStepIndex(index);
     setCurrentTourKey(tourKey);
     setRun(true);
-    console.log(`Tour: Iniciando tour '${tourKey}' com ${tourSteps.length} passos.`);
+    // console.log(`Tour: Iniciando tour '${tourKey}' com ${tourSteps.length} passos.`);
   }, []);
 
   const stopTour = useCallback(() => {
     setRun(false);
     setCurrentTourKey('');
-    console.log('Tour: Parado manualmente.');
+    // console.log('Tour: Parado manualmente.');
   }, []);
 
   const handleJoyrideCallback = (data: CallBackProps) => {
@@ -52,7 +52,7 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children }) => {
 
     if (finishedStatuses.includes(status)) {
       if (currentTourKey) {
-        console.log(`Tour: Marcando tour '${currentTourKey}' como concluído.`);
+        // console.log(`Tour: Marcando tour '${currentTourKey}' como concluído.`);
         localStorage.setItem(`tour-completed-${currentTourKey}`, 'true');
       }
       setRun(false);

@@ -37,7 +37,7 @@ export const ReferralProgram: React.FC<ReferralProgramProps> = ({ userRole, onCl
             setData(referralData);
             setHistory(referralHistory);
         } catch (e) {
-            console.error(e);
+            // console.error(e);
         } finally {
             setLoading(false);
         }

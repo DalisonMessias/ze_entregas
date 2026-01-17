@@ -19,7 +19,7 @@ const checkBusinessHours = (start: string, end: string): boolean => {
     const day = now.getDay(); // 0 = Domingo, 6 = Sábado
     const hour = now.getHours();
     const minute = now.getMinutes();
-    
+
     // Parse times e.g. "09:00"
     const [startH, startM] = start.split(':').map(Number);
     const [endH, endM] = end.split(':').map(Number);
@@ -38,7 +38,7 @@ const checkBusinessHours = (start: string, end: string): boolean => {
 const getNextBusinessDayMessage = (): string => {
     const now = new Date();
     let nextDate = new Date(now);
-    
+
     // Lógica simples para encontrar próximo dia útil às 09h
     if (now.getDay() === 5 && now.getHours() >= 18) { // Sexta a noite -> Segunda
         nextDate.setDate(now.getDate() + 3);
@@ -47,7 +47,7 @@ const getNextBusinessDayMessage = (): string => {
     } else { // Domingo ou dia de semana
         nextDate.setDate(now.getDate() + 1);
     }
-    
+
     // Se cair no domingo (caso raro na lógica acima), ajusta pra segunda
     if (nextDate.getDay() === 0) nextDate.setDate(nextDate.getDate() + 1);
 
@@ -84,7 +84,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                     if (settings.support_phone) {
                         setSupportPhone(settings.support_phone);
                     }
-                    
+
                     // Determine Status
                     const override = settings.support_status_override || 'AUTO';
                     if (override === 'OPEN') {
@@ -103,7 +103,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                     setIsOpen(checkBusinessHours('09:00', '18:00'));
                 }
             } catch (e) {
-                console.error("Error fetching settings", e);
+                // console.error("Error fetching settings", e);
                 setIsOpen(checkBusinessHours('09:00', '18:00')); // Fallback on error
             } finally {
                 setLoadingSettings(false);
@@ -119,7 +119,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
             const data = await cloud.getMyClaims();
             setClaims(data || []);
         } catch (e) {
-            console.error(e);
+            // console.error(e);
             setClaims([]);
         } finally {
             setLoadingClaims(false);
@@ -151,13 +151,13 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
         setIsSubmitting(true);
         try {
             // Se for agendamento, adiciona tag na descrição
-            const finalDesc = isScheduling 
-                ? `[AGENDAMENTO FORA DE HORÁRIO] ${ticketDesc}` 
+            const finalDesc = isScheduling
+                ? `[AGENDAMENTO FORA DE HORÁRIO] ${ticketDesc}`
                 : ticketDesc;
 
             // FIX: Chamada da API para createClaim
             await cloud.createClaim(ticketType, finalDesc);
-            
+
             if (isScheduling) {
                 await alert({ title: "Agendamento Confirmado", message: "Agendamento realizado! Nossa equipe responderá no próximo dia útil." });
                 setShowClosedModal(false);
@@ -165,7 +165,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
             } else {
                 await alert({ title: "Chamado Enviado", message: "Chamado aberto com sucesso!" });
             }
-            
+
             setTicketDesc('');
             setActiveTab('history');
         } catch (e: any) {
@@ -176,7 +176,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
     };
 
     const handleOpenWhatsapp = () => {
-        const number = supportPhone || "5511999999999"; 
+        const number = supportPhone || "5511999999999";
         const message = encodeURIComponent("Olá, preciso de ajuda com o app Zé Entregas.");
         window.open(`https://wa.me/${number}?text=${message}`, '_blank');
     };
@@ -206,15 +206,15 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                 </div>
                 <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2">Como podemos ajudar?</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {loadingSettings ? "Verificando disponibilidade..." : 
-                        isOpen 
-                        ? "Estamos online! Escolha uma opção abaixo." 
-                        : "Estamos offline no momento. Atendimento Seg-Sex 09h-18h."}
+                    {loadingSettings ? "Verificando disponibilidade..." :
+                        isOpen
+                            ? "Estamos online! Escolha uma opção abaixo."
+                            : "Estamos offline no momento. Atendimento Seg-Sex 09h-18h."}
                 </p>
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-                <button 
+                <button
                     onClick={() => handleInteraction('chat')}
                     className={`flex items-center gap-4 p-4 rounded-2xl border transition-colors ${isOpen ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-80'}`}
                 >
@@ -224,14 +224,14 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                     <div className="text-left flex-1">
                         <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             Chat ao Vivo
-                            {!isOpen && <Lock className="w-3 h-3 text-gray-400"/>}
+                            {!isOpen && <Lock className="w-3 h-3 text-gray-400" />}
                         </h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Fale com um atendente agora</p>
                     </div>
                     {isOpen ? <ChevronRight className="w-5 h-5 text-blue-500" /> : <span className="text-[10px] font-bold bg-gray-200 px-2 py-1 rounded text-gray-500">FECHADO</span>}
                 </button>
 
-                <button 
+                <button
                     onClick={() => handleInteraction('whatsapp')}
                     className={`flex items-center gap-4 p-4 rounded-2xl border transition-colors ${isOpen ? 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-80'}`}
                 >
@@ -241,14 +241,14 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                     <div className="text-left flex-1">
                         <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             WhatsApp
-                            {!isOpen && <Lock className="w-3 h-3 text-gray-400"/>}
+                            {!isOpen && <Lock className="w-3 h-3 text-gray-400" />}
                         </h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Canal alternativo</p>
                     </div>
                     {isOpen ? <ExternalLink className="w-5 h-5 text-green-500" /> : <span className="text-[10px] font-bold bg-gray-200 px-2 py-1 rounded text-gray-500">FECHADO</span>}
                 </button>
 
-                <button 
+                <button
                     onClick={() => setActiveTab('faq')}
                     className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
@@ -262,7 +262,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                 </button>
 
-                <button 
+                <button
                     onClick={() => handleInteraction('ticket')}
                     className={`flex items-center gap-4 p-4 rounded-2xl border transition-colors ${isOpen ? 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700' : 'bg-gray-50 dark:bg-gray-800 opacity-80'}`}
                 >
@@ -272,14 +272,14 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                     <div className="text-left flex-1">
                         <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             Abrir Chamado
-                            {!isOpen && <CalendarClock className="w-3 h-3 text-gray-400"/>}
+                            {!isOpen && <CalendarClock className="w-3 h-3 text-gray-400" />}
                         </h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Relate um problema técnico</p>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                 </button>
 
-                <button 
+                <button
                     onClick={() => setActiveTab('history')}
                     className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
@@ -314,7 +314,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                 />
                 <div>
                     <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Descrição Detalhada</label>
-                    <textarea 
+                    <textarea
                         value={ticketDesc}
                         onChange={e => setTicketDesc(e.target.value)}
                         className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500 dark:text-white h-32 resize-none"
@@ -322,7 +322,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                     />
                 </div>
                 <Button fullWidth onClick={() => handleSubmitTicket(false)} disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5 mr-2" />}
+                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 mr-2" />}
                     {isSubmitting ? 'Enviando...' : 'Enviar Chamado'}
                 </Button>
             </div>
@@ -370,28 +370,27 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                         <div key={claim.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                             <div className="flex justify-between items-start mb-2">
                                 <span className="font-bold text-sm dark:text-white uppercase tracking-wide">{claim.type.replace('_', ' ')}</span>
-                                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                                    claim.status === 'resolved' ? 'bg-green-100 text-green-700' : 
-                                    claim.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 
-                                    'bg-gray-100 text-gray-600'
-                                }`}>
+                                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${claim.status === 'resolved' ? 'bg-green-100 text-green-700' :
+                                        claim.status === 'open' ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-gray-100 text-gray-600'
+                                    }`}>
                                     {claim.status === 'open' ? 'Aberto' : claim.status === 'resolved' ? 'Resolvido' : claim.status}
                                 </span>
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{claim.description}</p>
-                            
+
                             {/* Admin Response Section */}
                             {claim.admin_response && (
                                 <div className="mt-3 mb-3 p-3 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-100 dark:border-brand-900/30">
                                     <div className="text-xs font-bold text-brand-600 dark:text-brand-400 mb-1 flex items-center gap-1">
-                                        <Headphones className="w-3 h-3"/> Resposta do Suporte:
+                                        <Headphones className="w-3 h-3" /> Resposta do Suporte:
                                     </div>
                                     <p className="text-xs text-gray-700 dark:text-gray-300 italic">"{claim.admin_response}"</p>
                                 </div>
                             )}
 
                             <div className="text-xs text-gray-400">
-                                {new Date(claim.created_at).toLocaleDateString('pt-BR')} às {new Date(claim.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute:'2-digit' })}
+                                {new Date(claim.created_at).toLocaleDateString('pt-BR')} às {new Date(claim.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                             </div>
                         </div>
                     ))}
@@ -422,7 +421,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                         </div>
 
                         <div className="space-y-3">
-                            <button 
+                            <button
                                 onClick={goToAssistant}
                                 className="w-full flex items-center p-4 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-xl hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors"
                             >
@@ -442,7 +441,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                                         Podemos registrar sua solicitação agora e nossa equipe responderá no {getNextBusinessDayMessage()}.
                                     </p>
-                                    
+
                                     <div className="space-y-2">
                                         {pendingAction === 'whatsapp' || pendingAction === 'chat' ? (
                                             <p className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded text-center">
@@ -450,7 +449,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                                             </p>
                                         ) : (
                                             <>
-                                                <textarea 
+                                                <textarea
                                                     value={ticketDesc}
                                                     onChange={e => setTicketDesc(e.target.value)}
                                                     className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none h-20"
@@ -464,7 +463,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                                     </div>
                                 </div>
                             ) : (
-                                <button 
+                                <button
                                     onClick={() => setPendingAction('ticket')}
                                     className="w-full flex items-center p-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                                 >
@@ -488,10 +487,10 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
             )}
 
             {showLiveChat && (
-                <ChatWindow 
-                    type="SUPPORT" 
-                    onClose={() => setShowLiveChat(false)} 
-                    title="Suporte ao Vivo" 
+                <ChatWindow
+                    type="SUPPORT"
+                    onClose={() => setShowLiveChat(false)}
+                    title="Suporte ao Vivo"
                 />
             )}
         </div>

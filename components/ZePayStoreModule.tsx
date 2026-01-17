@@ -103,7 +103,7 @@ export const ZePayStore: React.FC = () => {
                 setData(null);
             }
         } catch (e: any) {
-            console.error(e);
+            // console.error(e);
             setToast({ type: 'error', message: "Erro ao carregar dados." });
         } finally {
             setLoading(false);

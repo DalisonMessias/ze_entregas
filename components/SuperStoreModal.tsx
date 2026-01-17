@@ -37,7 +37,7 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
                 setFees(settings);
                 setWallet(walletData);
             } catch (e) {
-                console.error(e);
+                // console.error(e);
                 setError('Erro ao carregar valores.');
             } finally {
                 setLoading(false);

@@ -163,7 +163,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     }
                 }
             } catch (e: any) {
-                console.error("Failed to load partner area:", e);
+                // console.error("Failed to load partner area:", e);
                 setError("Não foi possível carregar os dados do painel. Verifique sua conexão e tente novamente.");
             } finally {
                 setLoading(false);
@@ -211,7 +211,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             // Update ref
             previousRequestIds.current = new Set(filtered.map(r => r.id));
             setRequests(filtered);
-        } catch (e) { console.error(e); } finally { setLoading(false); }
+        } catch (e) { /* console.error(e); */ } finally { setLoading(false); }
     };
 
     useEffect(() => {
@@ -221,7 +221,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     const s = await cloud.getPartnerFinancialSummary();
                     setSummary(s);
                 } catch (e) {
-                    console.error(e);
+                    // console.error(e);
                 }
             })();
         }
@@ -261,7 +261,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     // Also update DB occasionally for last known location
                     cloud.updateUserLocation(latitude, longitude);
                 },
-                (err) => console.error("Error watching position", err),
+                (err) => { /* console.error("Error watching position", err) */ },
                 { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
             );
         } else {

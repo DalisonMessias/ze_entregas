@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Shield, Search, Edit2, UserX, Loader2, UserCheck, UserCog, CheckCircle, AlertTriangle, Power, PowerOff, X, MapPin, Phone, ShieldCheck, ShieldOff, Plus, Settings, Banknote, Star } from 'lucide-react';
+import { Shield, Search, Edit2, UserX, Loader2, UserCheck, UserCog, CheckCircle, AlertTriangle, Power, PowerOff, X, MapPin, Phone, ShieldCheck, ShieldOff, Plus, Settings, Banknote, Star, Trash2 } from 'lucide-react';
 import {
     getAllUsers,
     adminUpdateUserProfile,
@@ -13,6 +13,7 @@ import {
     adminAddCity,
     adminUpdateCityStatus,
     adminEditCity,
+    adminDeleteCity,
     adminProcessCityRequest,
     adminUpdateUserPassword,
     adminCreateUserManual
@@ -23,6 +24,7 @@ import { CustomSelect } from './CustomSelect';
 import { CitySelector } from './CitySelector';
 import { useDialog } from '../utils/dialogService';
 import { Switch } from './Switch';
+import { CitiesAndDistricts } from '../pages/admin/CitiesAndDistricts';
 
 // Imported Modules (from Common/HEAD)
 import { AdminDashboard } from './AdminDashboard';
@@ -79,6 +81,8 @@ const getRoleColor = (role: string) => {
         default: return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600';
     }
 };
+
+
 
 const getStatusLabel = (status: string) => {
     const map: Record<string, string> = {
@@ -147,6 +151,7 @@ const UserManagement: React.FC = () => {
         verification_status: '',
         partner_level: '',
         is_super_store: false,
+        super_store_expiration: '',
         password: ''
     });
     const [isSaving, setIsSaving] = useState(false);
@@ -201,6 +206,7 @@ const UserManagement: React.FC = () => {
             verification_status: user.verification_status || 'NOT_SUBMITTED',
             partner_level: user.partner_level || 'BRONZE',
             is_super_store: user.is_super_store || false,
+            super_store_expiration: user.super_store_expiration ? user.super_store_expiration.split('T')[0] : '', // Format YYYY-MM-DD
             password: '' // Reset password field
         });
         setIsEditingCity(false); // Reset edit city toggle
@@ -222,7 +228,8 @@ const UserManagement: React.FC = () => {
                 city: editForm.city,
                 verification_status: editForm.verification_status,
                 partner_level: editForm.partner_level,
-                is_super_store: editForm.is_super_store
+                is_super_store: editForm.is_super_store,
+                super_store_expiration: editForm.is_super_store && editForm.super_store_expiration ? new Date(editForm.super_store_expiration).toISOString() : null
             };
 
             await adminUpdateUserProfile(selectedUser.id, updates);
@@ -497,13 +504,32 @@ const UserManagement: React.FC = () => {
                                         />
                                     </div>
                                     <div className="md:col-span-2">
-                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Super Lojista</label>
                                         <Switch
                                             checked={editForm.is_super_store}
-                                            onChange={val => setEditForm(prev => ({ ...prev, is_super_store: val }))}
+                                            onChange={val => {
+                                                const nextState = { ...editForm, is_super_store: val };
+                                                if (val && !nextState.super_store_expiration) {
+                                                    const date = new Date();
+                                                    date.setDate(date.getDate() + 30);
+                                                    nextState.super_store_expiration = date.toISOString().split('T')[0];
+                                                }
+                                                setEditForm(nextState);
+                                            }}
                                             label="Ativar Super Lojista"
                                         />
                                     </div>
+                                    {editForm.is_super_store && (
+                                        <div className="md:col-span-2 animate-in fade-in slide-in-from-top-2">
+                                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Validade do Plano</label>
+                                            <input
+                                                type="date"
+                                                value={editForm.super_store_expiration}
+                                                onChange={e => setEditForm(prev => ({ ...prev, super_store_expiration: e.target.value }))}
+                                                className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-amber-200 dark:border-amber-900/50 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                                            />
+                                            <p className="text-[10px] text-gray-400 mt-1">Defina até quando o status de Super Lojista estará ativo.</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -515,8 +541,8 @@ const UserManagement: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            )}
-
+            )
+            }
 
             {
                 isAddingUser && (
@@ -774,20 +800,23 @@ const PartnerVerification: React.FC = () => {
 
 // --- CITY MANAGEMENT MODULE ---
 const CityManagement: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'active' | 'inactive' | 'requests'>('active');
+    const [activeTab, setActiveTab] = useState<'active' | 'inactive' | 'requests' | 'districts'>('active');
     const [cities, setCities] = useState<City[]>([]);
     const [requests, setRequests] = useState<CityRequest[]>([]);
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
     // Add City Form
+    const [isAddCityModalOpen, setIsAddCityModalOpen] = useState(false);
     const [newName, setNewName] = useState('');
     const [newState, setNewState] = useState('');
+    const [newIbgeCode, setNewIbgeCode] = useState('');
 
     // Edit City Modal
     const [editingCity, setEditingCity] = useState<City | null>(null);
     const [editName, setEditName] = useState('');
     const [editState, setEditState] = useState('');
+    const [editIbgeCode, setEditIbgeCode] = useState('');
     const { confirm: dialogConfirm } = useDialog();
 
     useEffect(() => {
@@ -813,15 +842,24 @@ const CityManagement: React.FC = () => {
     };
 
     const handleAddCity = async () => {
-        if (!newName || !newState) return setToast({ type: 'error', message: "Preencha nome e estado." });
+        if (!newName || !newState) {
+            console.warn('[handleAddCity] Campos vazios');
+            return setToast({ type: 'error', message: "Preencha nome e estado." });
+        }
         try {
-            await adminAddCity(newName, newState);
+            console.log('[handleAddCity] Chamando adminAddCity...');
+            await adminAddCity(newName, newState, newIbgeCode);
+            console.log('[handleAddCity] Sucesso!');
+
             setNewName('');
             setNewState('');
+            setNewIbgeCode('');
+            setIsAddCityModalOpen(false); // Close modal
             loadData();
             setToast({ type: 'success', message: "Cidade adicionada com sucesso!" });
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro: " + e.message });
+            console.error('[handleAddCity] Erro capturado:', e);
+            setToast({ type: 'error', message: e.message || "Erro desconhecido ao adicionar." });
         }
     };
 
@@ -843,16 +881,30 @@ const CityManagement: React.FC = () => {
         }
     };
 
+    const handleDeleteCity = async (city: City) => {
+        const ok = await dialogConfirm({ title: 'Excluir Cidade', message: `Tem certeza que deseja EXCLUIR DEFINITIVAMENTE a cidade ${city.name}? Essa ação não pode ser desfeita e pode afetar bairros vinculados.` });
+        if (!ok) return;
+        try {
+            await adminDeleteCity(city.id);
+            setCities(prev => prev.filter(c => c.id !== city.id));
+            setToast({ type: 'success', message: "Cidade excluída com sucesso!" });
+            loadData();
+        } catch (e: any) {
+            setToast({ type: 'error', message: "Erro ao excluir: " + e.message });
+        }
+    };
+
     const openEditModal = (city: City) => {
         setEditingCity(city);
         setEditName(city.name);
         setEditState(city.state);
+        setEditIbgeCode(city.ibge_code || '');
     };
 
     const handleSaveChanges = async () => {
         if (!editingCity || !editName || !editState) return;
         try {
-            await adminEditCity(editingCity.id, editName, editState);
+            await adminEditCity(editingCity.id, editName, editState, editIbgeCode);
             setEditingCity(null);
             loadData();
             setToast({ type: 'success', message: "Cidade editada com sucesso!" });
@@ -881,16 +933,17 @@ const CityManagement: React.FC = () => {
                 <button onClick={() => setActiveTab('active')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'active' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Ativas</button>
                 <button onClick={() => setActiveTab('inactive')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'inactive' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Desativadas</button>
                 <button onClick={() => setActiveTab('requests')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Solicitações</button>
+                <button onClick={() => setActiveTab('districts')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'districts' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Bairros / API</button>
             </div>
+
+            {activeTab === 'districts' && <CitiesAndDistricts />}
 
             {(activeTab === 'active' || activeTab === 'inactive') && (
                 <div className="space-y-6">
-                    {/* Add Form - Show only on active tab or both? Showing on active seems cleaner or both. Let's show on both to allow re-activating via add if needed, or just adding new */}
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-3 items-center">
-                        <input type="text" placeholder="Cidade" value={newName} onChange={e => setNewName(e.target.value)} className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" />
-                        <input type="text" placeholder="UF" maxLength={2} value={newState} onChange={e => setNewState(e.target.value.toUpperCase())} className="w-20 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" />
-                        <Button onClick={handleAddCity} className="whitespace-nowrap px-4">
-                            <Plus className="w-4 h-4 mr-2" /> Adicionar
+                    {/* Add City Button */}
+                    <div className="flex justify-end">
+                        <Button onClick={() => setIsAddCityModalOpen(true)} className="px-6">
+                            <Plus className="w-4 h-4 mr-2" /> Nova Cidade
                         </Button>
                     </div>
 
@@ -927,6 +980,9 @@ const CityManagement: React.FC = () => {
                                             <Button size="sm" variant={city.is_active ? 'danger' : 'success'} onClick={() => handleToggleStatus(city)}>
                                                 {city.is_active ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
                                                 <span className="ml-1">{city.is_active ? 'Desativar' : 'Ativar'}</span>
+                                            </Button>
+                                            <Button size="sm" variant="danger" title="Excluir" onClick={() => handleDeleteCity(city)}>
+                                                <Trash2 className="w-3 h-3" />
                                             </Button>
                                         </td>
                                     </tr>
@@ -980,11 +1036,49 @@ const CityManagement: React.FC = () => {
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl space-y-4">
                         <h3 className="font-bold text-lg dark:text-white">Editar Cidade</h3>
-                        <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nome" />
-                        <input type="text" value={editState} onChange={e => setEditState(e.target.value.toUpperCase())} maxLength={2} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="UF" />
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 mb-1 block">Nome da Cidade</label>
+                            <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: São Paulo" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">Estado (UF)</label>
+                                <input type="text" value={editState} onChange={e => setEditState(e.target.value.toUpperCase())} maxLength={2} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: SP" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">Código IBGE</label>
+                                <input type="text" value={editIbgeCode} onChange={e => setEditIbgeCode(e.target.value.replace(/\D/g, ''))} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono" placeholder="Opcional" />
+                            </div>
+                        </div>
                         <div className="flex gap-2 justify-end mt-4">
                             <Button variant="outline" onClick={() => setEditingCity(null)}>Cancelar</Button>
-                            <Button onClick={handleSaveChanges}>Salvar</Button>
+                            <Button onClick={handleSaveChanges}>Salvar Alterações</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isAddCityModalOpen && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl space-y-4">
+                        <h3 className="font-bold text-lg dark:text-white">Adicionar Nova Cidade</h3>
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 mb-1 block">Nome da Cidade</label>
+                            <input type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: São Paulo" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">Estado (UF)</label>
+                                <input type="text" value={newState} onChange={e => setNewState(e.target.value.toUpperCase())} maxLength={2} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: SP" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">Código IBGE</label>
+                                <input type="text" value={newIbgeCode} onChange={e => setNewIbgeCode(e.target.value.replace(/\D/g, ''))} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono" placeholder="Opcional" />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 justify-end mt-4">
+                            <Button variant="outline" onClick={() => setIsAddCityModalOpen(false)}>Cancelar</Button>
+                            <Button onClick={handleAddCity}>Adicionar Cidade</Button>
                         </div>
                     </div>
                 </div>

@@ -3,15 +3,14 @@
 
 $globalSqlPath = "supabase/migrations/supabase_global.sql"
 $checklistPath = "checklist.txt"
-$taskPath = "documentation/TASK_LIST.md"
 
 # 1. Corrigir codificação e remover caminhos do Windows injetados
 Write-Host "Corrigindo supabase_global.sql..."
 if (Test-Path $globalSqlPath) {
-    $content = Get-Content -Path $globalSqlPath
-    $fixedContent = $content -replace "c:\\Users\\Dalison Messias\\Documents\\GitHub\\ze_entregas\\supabase\\migrations", "$$"
-    $fixedContent | Set-Content -Path $globalSqlPath -Encoding UTF8
-    Write-Host "✅ Caminhos removidos e arquivo convertido para UTF-8."
+  $content = Get-Content -Path $globalSqlPath
+  $fixedContent = $content -replace "c:\\Users\\Dalison Messias\\Documents\\GitHub\\ze_entregas\\supabase\\migrations", "$$"
+  $fixedContent | Set-Content -Path $globalSqlPath -Encoding UTF8
+  Write-Host "✅ Caminhos removidos e arquivo convertido para UTF-8."
 }
 
 # 2. Conteúdo para Unificação
@@ -120,16 +119,16 @@ Add-Content -Path $globalSqlPath -Value $permissionsContent
 Add-Content -Path $globalSqlPath -Value $docsContent
 
 $filesToDelete = @(
-    "supabase/migrations/fix_pwa_column_manual.sql",
-    "supabase/migrations/fix_permissions_manual.sql",
-    "supabase/migrations/fix_partner_documents_permissions.sql"
+  "supabase/migrations/fix_pwa_column_manual.sql",
+  "supabase/migrations/fix_permissions_manual.sql",
+  "supabase/migrations/fix_partner_documents_permissions.sql"
 )
 
 foreach ($file in $filesToDelete) {
-    if (Test-Path $file) {
-        Remove-Item $file
-        Write-Host "✅ Arquivo deletado: $file"
-    }
+  if (Test-Path $file) {
+    Remove-Item $file
+    Write-Host "✅ Arquivo deletado: $file"
+  }
 }
 
 # 4. Atualizar Checklist

@@ -1,17 +1,13 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { UserRole, AppNotification, DailySummary, DailyTransaction, MaintenanceSettings, PartnerProfile } from '../types';
-import * as cloud from '../services/cloud';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare } from 'lucide-react';
+import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile } from '../types';
 import * as storage from '../services/storage';
+import * as cloud from '../services/cloud';
 import * as logger from '../services/logger';
 import { initNotificationService, stopNotificationService } from '../services/notificationService';
-
-// Tour Imports
-import { useTour } from './Tour/TourContext';
-import TourComponent from './Tour/Tour';
-import { tourSteps } from './Tour/tourSteps';
-
-// Icons
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power } from 'lucide-react';
+import { useTour } from '../components/Tour/TourContext';
+import TourComponent from '../components/Tour/Tour';
+import { tourSteps } from '../components/Tour/tourSteps';
 
 // Components
 import { Logo } from './Logo';
@@ -31,6 +27,7 @@ const PartnerArea = React.lazy(() => import('./PartnerArea').then(module => ({ d
 const StoreWalletModule = React.lazy(() => import('./StoreWallet'));
 const InternalOrders = React.lazy(() => import('./InternalOrders').then(module => ({ default: module.InternalOrders })));
 const StoreCatalog = React.lazy(() => import('./StoreCatalog').then(module => ({ default: module.StoreCatalog })));
+const WhatsappContainer = React.lazy(() => import('./Whatsapp/WhatsappContainer'));
 
 const StoreRequest = React.lazy(() => import('./StoreRequest').then(module => ({ default: module.StoreRequest })));
 const OrderHistory = React.lazy(() => import('./OrderHistory').then(module => ({ default: module.OrderHistory })));
@@ -85,7 +82,7 @@ export type ActiveTab =
     | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides' | 'admin_tips'
+    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp'
     | 'profile'
     | 'support'
     | 'shop'
@@ -132,7 +129,11 @@ export type ActiveTab =
     | 'streets_list'
     | 'store_loans'
     | 'loans'
-    | 'collaborator_area';
+    | 'collaborator_area'
+    | 'whatsapp_chat'
+    | 'login'
+    | 'signup'
+    | 'forgot_password';
 
 
 interface AppProps {
@@ -606,7 +607,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     const isDriver = isNormalDriver || isPartner;
 
     const generalTabs = new Set<ActiveTab>([
-        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner'
+        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'whatsapp_chat'
     ]);
 
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
@@ -622,7 +623,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             'admin_dashboard', 'admin_users', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
             'admin_ai_config', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
-            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config'
+            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
+            'admin_whatsapp'
         ]),
         store_partner: new Set<ActiveTab>([
             'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans'
@@ -709,6 +711,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                         userRole={effectiveRole}
                         onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')}
                     />;
+                case 'admin_whatsapp': return <WhatsappContainer />;
+                case 'whatsapp_chat': return <WhatsappContainer />;
 
                 // Store Specific
                 case 'store_status': return <div className="max-w-4xl mx-auto"><h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">Gerenciar Loja</h1><StoreStatus /></div>;
@@ -774,14 +778,21 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     };
 
     // Helper to render sidebar button
-    const MenuButton = ({ icon: Icon, label, tab, onClick, id }: { icon: any, label: string, tab?: ActiveTab, onClick?: () => void, id?: string }) => (
+    const MenuButton = ({ icon: Icon, label, tab, onClick, id, badge }: { icon: any, label: string, tab?: ActiveTab, onClick?: () => void, id?: string, badge?: number }) => (
         <button
             id={id}
             title={!isSidebarExpanded ? label : undefined}
             onClick={() => onClick ? onClick() : navigate(tab!)}
-            className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${activeTab === tab ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300 font-bold' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'} ${!isSidebarExpanded ? 'md:justify-center md:px-2' : ''}`}
+            className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-all duration-200 relative group ${activeTab === tab ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300 font-bold shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'} ${!isSidebarExpanded ? 'md:justify-center md:px-2' : ''}`}
         >
-            <Icon className={`w-5 h-5 ${activeTab === tab ? 'text-brand-600' : 'text-gray-500'} flex-shrink-0`} />
+            <div className="relative">
+                <Icon className={`w-5 h-5 ${activeTab === tab ? 'text-brand-600' : 'text-gray-500'} flex-shrink-0 group-hover:scale-110 transition-transform`} />
+                {badge !== undefined && badge > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900 px-1 animate-pulse">
+                        {badge > 99 ? '99+' : badge}
+                    </span>
+                )}
+            </div>
             <span className={`text-sm whitespace-nowrap overflow-hidden transition-all duration-300 ${!isSidebarExpanded ? 'md:hidden md:w-0 md:opacity-0 w-auto opacity-100' : 'w-auto opacity-100'}`}>{label}</span>
         </button>
     );
@@ -902,6 +913,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                             <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
                             <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
+                            <MenuButton icon={MessageSquare} label="Atendimento WhatsApp" tab="admin_whatsapp" />
 
                             <MenuSection title="Conteúdo & App" />
                             <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
@@ -937,6 +949,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuButton icon={LayoutDashboard} label="Painel" tab="wallet" id="store-wallet-link" />
                             <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
                             <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
+                            <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" />
                             <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
 
@@ -957,6 +970,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
                             <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
                             <MenuButton icon={Wallet} label="Zebank" tab="zebank" />
+                            <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
                             <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
 
@@ -981,6 +995,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     <MenuButton icon={User} label="Meu Perfil" tab="profile" />
                     <MenuButton icon={Headphones} label="Suporte" tab="support" />
                     <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
+                    <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" badge={3} />
                     <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
                     <MenuButton icon={Info} label="Sobre o App" tab="about" />
 
@@ -1022,7 +1037,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
             </div>
 
             {/* Main Content Area */}
-            <main className={`pt-20 px-4 pb-24 mx-auto transition-all duration-300 ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
+            <main className={`pt-20 px-4 mx-auto transition-all duration-300 ${activeTab !== 'whatsapp_chat' ? 'pb-24' : ''} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
                 <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
                     {renderContent()}
                 </Suspense>

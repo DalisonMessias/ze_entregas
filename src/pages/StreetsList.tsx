@@ -46,7 +46,7 @@ export default function StreetsList() {
     const [selectedCity, setSelectedCity] = useState<string>('');
     const [isManualMode, setIsManualMode] = useState(false);
 
-    console.log('[StreetsList] Component mounted. baseURL:', baseURL, 'city:', city);
+
 
     // Inicializa a cidade selecionada com a cidade do usuário
     useEffect(() => {
@@ -70,11 +70,11 @@ export default function StreetsList() {
                 return;
             }
 
-            console.log('[StreetsList] Fetching data for city:', searchTarget);
+
 
             // Step 1: Get city info from Nominatim
             const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=1&q=${encodeURIComponent(searchTarget)}`;
-            console.log('[StreetsList] Calling Nominatim:', nominatimUrl);
+            // console.log('[StreetsList] Calling Nominatim:', nominatimUrl);
 
             const nominatimRes = await fetch(nominatimUrl, {
                 headers: { 'User-Agent': 'OSM-Ruas-V2/1.0 (educativo)' }
@@ -85,7 +85,7 @@ export default function StreetsList() {
             }
 
             const nominatimData = await nominatimRes.json();
-            console.log('[StreetsList] Nominatim response:', nominatimData);
+            // console.log('[StreetsList] Nominatim response:', nominatimData);
 
             if (!nominatimData || nominatimData.length === 0) {
                 throw new Error('Cidade não encontrada. Tente "Cidade, Estado".');
@@ -103,7 +103,7 @@ export default function StreetsList() {
             // Query otimizada para buscar APENAS ruas (way["highway"]["name"])
             const overpassQuery = `[out:json][timeout:90];(way["highway"]["name"](${bbox.south},${bbox.west},${bbox.north},${bbox.east}););out tags;`;
 
-            console.log('[StreetsList] Calling Overpass API');
+            // console.log('[StreetsList] Calling Overpass API');
 
             const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
                 method: 'POST',
@@ -119,10 +119,10 @@ export default function StreetsList() {
             }
 
             const responseText = await overpassRes.text();
-            console.log('[StreetsList] Overpass raw response starts with:', responseText.substring(0, 50));
+            // console.log('[StreetsList] Overpass raw response starts with:', responseText.substring(0, 50));
 
             const overpassData = JSON.parse(responseText);
-            console.log('[StreetsList] Overpass response elements:', overpassData.elements?.length);
+            // console.log('[StreetsList] Overpass response elements:', overpassData.elements?.length);
 
             // Extract unique street names
             const ruasSet = new Set<string>();
@@ -139,7 +139,7 @@ export default function StreetsList() {
 
             const ruas = Array.from(ruasSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-            console.log('[StreetsList] Extracted', ruas.length, 'streets');
+            // console.log('[StreetsList] Extracted', ruas.length, 'streets');
 
             setData({
                 cidade: cityInfo.name || searchTarget,
@@ -165,7 +165,7 @@ export default function StreetsList() {
             setError(null);
         } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
-            console.error('[StreetsList] Error:', errMsg, 'Retries remaining:', retries - 1);
+            // console.error('[StreetsList] Error:', errMsg, 'Retries remaining:', retries - 1);
 
             if (retries > 0) {
                 const delay = Math.pow(2, 3 - retries) * 1000;
@@ -253,7 +253,7 @@ export default function StreetsList() {
             }, 1000);
 
         } catch (err) {
-            console.error('Erro ao copiar:', err);
+            // console.error('Erro ao copiar:', err);
             alert('Erro ao copiar para a área de transferência');
         }
     };

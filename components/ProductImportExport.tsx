@@ -93,7 +93,7 @@ export const ProductImportExport: React.FC = () => {
             setStep(2);
 
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             await alert({ title: 'Erro', message: 'Falha ao ler arquivo. Verifique se é um CSV ou Excel válido.' });
             setFile(null);
         } finally {
@@ -202,7 +202,7 @@ export const ProductImportExport: React.FC = () => {
                     }
 
                 } catch (err) {
-                    console.error("Row import error", err);
+                    // console.error("Row import error", err);
                     failed++;
                 }
             }
@@ -211,7 +211,7 @@ export const ProductImportExport: React.FC = () => {
             setStep(3);
 
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             await alert({ title: 'Erro Crítico', message: 'Erro durante o processo de importação.' });
         } finally {
             setProcessing(false);
@@ -238,7 +238,7 @@ export const ProductImportExport: React.FC = () => {
             XLSX.writeFile(wb, "produtos_exportacao.xlsx");
 
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             await alert({ title: 'Erro', message: 'Falha ao exportar produtos.' });
         } finally {
             setProcessing(false);

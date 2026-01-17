@@ -15,10 +15,19 @@ export default defineConfig(({ mode }) => {
 
       proxy: {
         '/api': {
-          target: 'http://localhost:3001',
+          target: 'http://127.0.0.1:4000',
           changeOrigin: true,
           secure: false,
-          ws: false,
+        },
+        '/socket.io': {
+          target: 'http://127.0.0.1:4000',
+          ws: true,
+        },
+        // Configuração genérica para o WebSocket do WhatsApp
+        '/ws-whatsapp': {
+          target: 'ws://127.0.0.1:4000',
+          ws: true,
+          rewrite: (path) => path.replace(/^\/ws-whatsapp/, '')
         }
       }
     },

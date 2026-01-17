@@ -1,0 +1,38 @@
+
+// Estrutura de dados para uma conversa na lista de conversas
+export interface WhatsappConversation {
+  conversation_id: string;
+  contact_name: string | null;
+  unread_count: number;
+  last_message_content: string | null;
+  last_message_timestamp: string | null; // ISO String
+  profile_pic_url: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Estrutura de dados para uma única mensagem no chat
+export interface WhatsappMessage {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string | null;
+  media_url: string | null;
+  media_type: string | null;
+  status: 'sent' | 'delivered' | 'read' | 'received' | 'error' | null;
+  message_timestamp: string; // ISO String
+  is_from_me: boolean;
+  created_at?: string;
+}
+
+// Estrutura para o status da conexão do WhatsApp vindo do backend
+export interface WhatsappStatus {
+  status: 'CONNECTED' | 'CONNECTING' | 'DISCONNECTED' | 'WAITING_QR';
+  qrCode?: string;
+}
+
+// Estrutura da mensagem recebida via WebSocket
+export interface WebSocketMessagePayload {
+  type: string;
+  payload: any;
+}

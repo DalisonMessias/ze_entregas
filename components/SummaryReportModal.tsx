@@ -77,7 +77,7 @@ export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ onClose,
 
             alert({ title: 'Sucesso', message: 'Relatório PDF baixado com sucesso!' });
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             alert({ title: 'Erro', message: 'Falha ao gerar PDF.' });
         }
     };
@@ -102,8 +102,8 @@ export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ onClose,
                             key={p}
                             onClick={() => setPeriod(p)}
                             className={`flex-1 py-2 rounded-lg text-sm font-bold capitalize transition-all ${period === p
-                                    ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400'
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                                ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
                                 }`}
                         >
                             {p === 'daily' ? 'Hoje' : p === 'weekly' ? 'Semana' : 'Mês'}

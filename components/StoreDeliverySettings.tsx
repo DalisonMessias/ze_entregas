@@ -66,13 +66,13 @@ export const StoreDeliverySettings: React.FC = () => {
             setMissingFields(validation.missingFields);
 
             if (s) {
-                console.log('[StoreDeliverySettings] Settings carregadas:', s);
+                // console.log('[StoreDeliverySettings] Settings carregadas:', s);
                 setSettings(s);
                 setFixedFeeStr(formatCurrency(s.fixed_fee || 0));
             }
             setFees(f);
         } catch (e) {
-            console.error('[StoreDeliverySettings] Erro ao carregar dados:', e);
+            // console.error('[StoreDeliverySettings] Erro ao carregar dados:', e);
             setProfileValid(false);
         } finally {
             setLoading(false);
@@ -86,7 +86,7 @@ export const StoreDeliverySettings: React.FC = () => {
             fixed_fee: parseCurrency(fixedFeeStr),
             allow_outside_city: settings.allow_outside_city
         };
-        console.log('[StoreDeliverySettings] Salvando payload:', payload);
+        // console.log('[StoreDeliverySettings] Salvando payload:', payload);
         try {
             await cloud.updateStoreDeliverySettings(payload);
             await alert({ title: "Sucesso", message: "Configurações de entrega salvas com sucesso!" });

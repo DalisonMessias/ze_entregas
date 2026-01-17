@@ -4,14 +4,14 @@ export const uploadMarketingAsset = async (file: File): Promise<string> => {
     const sb = getClient();
     if (!sb) throw new Error("Cliente Supabase não inicializado");
 
-    console.log(`[Upload] Iniciando: ${file.name} (${file.size} bytes)`);
+    // console.log(`[Upload] Iniciando: ${file.name} (${file.size} bytes)`);
 
     // 1. ler arquivo como ArrayBuffer (seguro contra timeouts de stream)
     let fileBody: ArrayBuffer;
     try {
         fileBody = await file.arrayBuffer();
     } catch (e: any) {
-        console.error("Erro ao ler arquivo:", e);
+        // console.error("Erro ao ler arquivo:", e);
         throw new Error("Falha na leitura do arquivo.");
     }
 
@@ -34,7 +34,7 @@ export const uploadMarketingAsset = async (file: File): Promise<string> => {
     let targetBucket = 'marketing-assets';
 
     if (uploadError) {
-        console.warn(`[Upload] Falha primária ('marketing-assets'): ${uploadError.message}. Tentando fallback...`);
+        // console.warn(`[Upload] Falha primária ('marketing-assets'): ${uploadError.message}. Tentando fallback...`);
 
         // 3. Fallback para 'avatars'
         const { error: fallbackError } = await sb.storage
@@ -45,14 +45,14 @@ export const uploadMarketingAsset = async (file: File): Promise<string> => {
             });
 
         if (fallbackError) {
-            console.error(`[Upload] Fallback falhou: ${fallbackError.message}`);
+            // console.error(`[Upload] Fallback falhou: ${fallbackError.message}`);
             throw new Error(`Erro no upload: ${uploadError.message} / ${fallbackError.message}`);
         }
 
         targetBucket = 'avatars';
-        console.log(`[Upload] Salvo em fallback: ${targetBucket}`);
+        // console.log(`[Upload] Salvo em fallback: ${targetBucket}`);
     } else {
-        console.log(`[Upload] Salvo em primária: ${targetBucket}`);
+        // console.log(`[Upload] Salvo em primária: ${targetBucket}`);
     }
 
     const { data: { publicUrl } } = sb.storage

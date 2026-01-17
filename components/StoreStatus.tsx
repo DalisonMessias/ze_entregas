@@ -43,7 +43,7 @@ export const StoreStatus: React.FC = () => {
 
     const handleToggleStore = async () => {
         if (!profile?.id) {
-            console.error("Tentativa de alterar status sem perfil carregado.");
+            // console.error("Tentativa de alterar status sem perfil carregado.");
             showError("Erro: Perfil não carregado. Recarregue a página.");
             return;
         }
@@ -88,7 +88,7 @@ export const StoreStatus: React.FC = () => {
             setProfile(prev => prev ? { ...prev, is_open: newState } : null);
 
         } catch (error) {
-            console.error("Erro ao alterar status da loja:", error);
+            // console.error("Erro ao alterar status da loja:", error);
             showError("Erro ao alterar status. Tente novamente.");
         } finally {
             setIsLoading(false);
@@ -118,7 +118,7 @@ export const StoreStatus: React.FC = () => {
                 .in('status', ['COMPLETED']); // Filtrar apenas concluídos?
 
             if (error) {
-                console.error("Erro ao buscar pedidos para relatório:", error);
+                // console.error("Erro ao buscar pedidos para relatório:", error);
                 return; // Não impede o fechamento, mas loga erro
             }
 
@@ -154,7 +154,7 @@ export const StoreStatus: React.FC = () => {
             if (showHistory) fetchHistory();
 
         } catch (err) {
-            console.error("Erro ao gerar relatório:", err);
+            // console.error("Erro ao gerar relatório:", err);
             showError("Erro ao salvar relatório diário.");
         }
     };
@@ -173,7 +173,7 @@ export const StoreStatus: React.FC = () => {
             if (error) throw error;
             setHistory(data || []);
         } catch (err) {
-            console.error("Erro ao buscar histórico:", err);
+            // console.error("Erro ao buscar histórico:", err);
         } finally {
             setLoadingHistory(false);
         }

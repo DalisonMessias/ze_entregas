@@ -166,7 +166,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
                 const settings = await cloud.getShopSettings();
                 setShopSettings(settings);
             } catch (e: any) {
-                console.error("Error loading shop settings:", e);
+                // console.error("Error loading shop settings:", e);
             }
         };
 

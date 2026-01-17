@@ -88,7 +88,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             setCategories(data.categories || []);
             setSettings(data.settings || null);
         } catch (err: any) {
-            console.error('[Shop] Load Error:', err);
+            // console.error('[Shop] Load Error:', err);
             setError("Não foi possível carregar a vitrine agora.");
         } finally {
             setLoading(false);
@@ -111,15 +111,15 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
     const addToCart = () => {
         if (!selectedProduct) return;
         setCart(prevCart => {
-            const existingItem = prevCart.find(item => item.id === selectedProduct.id);
+            const existingItem = prevCart.find(item => item.product.id === selectedProduct.id);
             if (existingItem) {
                 return prevCart.map(item =>
-                    item.id === selectedProduct.id
+                    item.product.id === selectedProduct.id
                         ? { ...item, quantity: Math.min(selectedProduct.stock_quantity || 999, item.quantity + productQuantity) }
                         : item
                 );
             }
-            return [...prevCart, { ...selectedProduct, quantity: productQuantity }];
+            return [...prevCart, { product: selectedProduct, quantity: productQuantity }];
         });
         setSelectedProduct(null);
     };
@@ -127,7 +127,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
     const updateCartQuantity = (productId: string, delta: number) => {
         setCart(prevCart => {
             const updated = prevCart.map(item => {
-                if (item.id === productId) {
+                if (item.product.id === productId) {
                     const product = products.find(p => p.id === productId);
                     const max = product?.stock_quantity || 999;
                     return { ...item, quantity: Math.min(max, Math.max(0, item.quantity + delta)) };
@@ -139,7 +139,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
     };
 
     // Calculations
-    const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0), [cart]);
+    const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0), [cart]);
     const discountAmount = useMemo(() => (subtotal * appliedDiscount) / 100, [subtotal, appliedDiscount]);
     const total = useMemo(() => {
         let t = subtotal - discountAmount;
@@ -231,7 +231,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             }
 
         } catch (e: any) {
-            console.error(e);
+            // console.error(e);
             setShippingError("Erro ao calcular frete. Tente novamente.");
         } finally {
             setCalculatingShipping(false);
@@ -274,7 +274,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
         try {
             // 1. Create Order Locally
             const order = await cloud.createOrder({
-                items: cart.map(item => ({ product_id: item.id, name: item.name, quantity: item.quantity, price: item.price })),
+                items: cart.map(item => ({ product_id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price })),
                 total_price: total,
                 payment_method: 'PENDING', // Will be updated by webhook
                 shipping_address: shippingAddress,
@@ -292,9 +292,9 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 total,
                 settings.infinitepay_handle,
                 cart.map(i => ({
-                    description: i.name,
+                    description: i.product.name,
                     quantity: i.quantity,
-                    price: Math.round(i.price * 100) // Cents handled here? No, function handles it? 
+                    price: Math.round(i.product.price * 100) // Cents handled here? No, function handles it? 
                     // Let's check function again. "amount" param is total. "items" param.
                     // Implementation plan said function converts.
                     // cloud.ts: createInfinitePayCheckout(id, amount, handle, items, redirect, webhook)
@@ -580,21 +580,21 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Seus Itens</h3>
                     <div className="space-y-4">
                         {cart.map(item => (
-                            <div key={item.id} className="flex gap-4 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                            <div key={item.product.id} className="flex gap-4 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
                                 <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
-                                    <img src={item.images?.[0]} className="w-full h-full object-cover" />
+                                    <img src={item.product.images?.[0]} className="w-full h-full object-cover" />
                                 </div>
                                 <div className="flex-1 flex flex-col justify-between">
                                     <div className="flex justify-between items-start">
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white line-clamp-2">{item.name}</p>
-                                        <p className="font-bold text-gray-900 dark:text-white">{formatCurrency(item.price * item.quantity)}</p>
+                                        <p className="font-bold text-sm text-gray-900 dark:text-white line-clamp-2">{item.product.name}</p>
+                                        <p className="font-bold text-gray-900 dark:text-white">{formatCurrency(item.product.price * item.quantity)}</p>
                                     </div>
                                     <div className="flex items-center justify-between mt-2">
-                                        <p className="text-xs text-gray-400">{formatCurrency(item.price)} un</p>
+                                        <p className="text-xs text-gray-400">{formatCurrency(item.product.price)} un</p>
                                         <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-1">
-                                            <button onClick={() => updateCartQuantity(item.id, -1)} className="p-1 text-gray-500 hover:text-red-500"><Minus className="w-3 h-3" /></button>
+                                            <button onClick={() => updateCartQuantity(item.product.id, -1)} className="p-1 text-gray-500 hover:text-red-500"><Minus className="w-3 h-3" /></button>
                                             <span className="text-xs font-bold dark:text-white">{item.quantity}</span>
-                                            <button onClick={() => updateCartQuantity(item.id, 1)} className="p-1 text-gray-500 hover:text-green-500"><Plus className="w-3 h-3" /></button>
+                                            <button onClick={() => updateCartQuantity(item.product.id, 1)} className="p-1 text-gray-500 hover:text-green-500"><Plus className="w-3 h-3" /></button>
                                         </div>
                                     </div>
                                 </div>

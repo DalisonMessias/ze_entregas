@@ -87,18 +87,18 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
 
                 const profile = await cloud.getClient()?.from('user_profiles').select('city, is_super_store, address_street, address_number, address_district, address_zip, address_state').eq('id', user?.data?.user?.id).single();
 
-                console.log('[StoreRequest] Profile completo:', profile);
+                // console.log('[StoreRequest] Profile completo:', profile);
 
                 if (profile?.error) {
-                    console.error('[StoreRequest] Erro ao buscar perfil:', profile.error);
+                    // console.error('[StoreRequest] Erro ao buscar perfil:', profile.error);
                 }
 
                 if (profile?.data) {
-                    console.log('[StoreRequest] profile.data:', profile.data);
+                    // console.log('[StoreRequest] profile.data:', profile.data);
                     const rawCity = profile.data.city || '';
                     // Aceita tanto "Cidade - UF" quanto "Cidade" (formato antigo)
                     const cleanCity = rawCity.includes(' - ') ? rawCity.split(' - ')[0].trim() : rawCity.trim();
-                    console.log('[StoreRequest] rawCity:', rawCity, 'cleanCity:', cleanCity);
+                    // console.log('[StoreRequest] rawCity:', rawCity, 'cleanCity:', cleanCity);
                     setStoreCity(cleanCity);
 
                     const superStatus = profile.data.is_super_store || false;
@@ -154,7 +154,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                             setNotification({ type: 'info', message: `${associates.length} entregador(es) fixo(s) disponível(is). Você pode escolher entre Parceiro Zé ou Entregador Fixo.` });
                         }
                     } catch (e) {
-                        console.error('Failed to load associates:', e);
+                        // console.error('Failed to load associates:', e);
                     }
                 } else {
                     setNotification({
@@ -167,7 +167,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     });
                 }
             } catch (e) {
-                console.error(e);
+                // console.error(e);
                 setNotification({ type: 'error', message: "Erro ao carregar configurações." });
             } finally {
                 setLoading(false);
@@ -196,7 +196,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
 
     // Debug: monitorar mudanças em storeCity
     useEffect(() => {
-        console.log('[StoreRequest] storeCity atualizado para:', storeCity);
+        // console.log('[StoreRequest] storeCity atualizado para:', storeCity);
     }, [storeCity]);
 
     useEffect(() => {
@@ -204,7 +204,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
             setLoadingAssociates(true);
             cloud.getStoreAssociatedPartners()
                 .then(setAssociatedDrivers)
-                .catch(console.error)
+                .catch(() => { /* console.error */ })
                 .finally(() => setLoadingAssociates(false));
         } else {
             setSelectedAssociateIds([]);
@@ -306,7 +306,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                         realRouteFound = true;
                     }
                 } catch (err) {
-                    console.error('OSRM Failed', err);
+                    // console.error('OSRM Failed', err);
                 }
             }
 
@@ -616,7 +616,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                         setCurrentRequestId(null);
                         setExpiresCountdown(null);
                     } catch (err: any) {
-                        console.error('Erro ao cancelar solicitação expirada:', err);
+                        // console.error('Erro ao cancelar solicitação expirada:', err);
                         setNotification({ type: 'error', message: 'Erro ao cancelar entrega expirada.' });
                     }
                 }
@@ -664,6 +664,8 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
     };
 
 
+    const [isEditingPickup, setIsEditingPickup] = useState(false);
+
     const renderAddressInputs = (addr: AddressData, isPickup: boolean) => {
         const handleInputChange = (field: keyof AddressData, value: string) => {
             if (isPickup) {
@@ -673,44 +675,70 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
             }
         };
 
+        const showForm = !isPickup || isEditingPickup;
+
         return (
             <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl space-y-3">
                 <div className="flex justify-between items-center">
                     <label className="text-xs font-bold text-gray-500 flex items-center gap-2">
                         {isPickup ? <Home className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-                        {isPickup ? 'Endereço de Coleta' : 'Endereço de Entrega'}
+                        {isPickup ? `Endereço de Coleta ${pickup.street ? `(${pickup.street}, ${pickup.number})` : ''}` : 'Endereço de Entrega'}
                     </label>
-                    {!isPickup && deliveries.length > 1 && (
-                        <button onClick={() => removeDelivery(addr.id)} className="p-1 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {isPickup && (
+                            <button
+                                onClick={() => setIsEditingPickup(!isEditingPickup)}
+                                className="text-[10px] font-bold text-brand-600 hover:underline uppercase tracking-wider"
+                            >
+                                {isEditingPickup ? 'Ocultar campos' : 'Trocar endereço de coleta'}
+                            </button>
+                        )}
+                        {!isPickup && deliveries.length > 1 && (
+                            <button onClick={() => removeDelivery(addr.id)} className="p-1 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                        )}
+                    </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-[2fr_0.5fr_1fr_auto] gap-[15px] items-center" style={{ marginBottom: '15px' }}>
-                    <div className="md:col-start-1 md:row-start-1 md:col-span-1">
-                        <StreetAutocomplete
-                            city={storeCity}
-                            value={addr.street}
-                            onChange={val => handleInputChange('street', val)}
-                            placeholder="Rua / Avenida"
-                        />
-                    </div>
-                    <div className="md:col-start-2 md:row-start-1 md:col-span-1 md:justify-self-center w-full">
-                        <CustomInput type="text" placeholder="Número" value={addr.number} onChange={e => handleInputChange('number', e.target.value)} required />
-                    </div>
-                    <div className="md:col-start-3 md:row-start-1 md:col-span-1">
-                        <CustomInput type="text" placeholder="Bairro" value={addr.neighborhood} onChange={e => handleInputChange('neighborhood', e.target.value)} required />
-                    </div>
-                    <Button variant="primary" size="sm" onClick={() => validateAddress(addr.id)} disabled={addr.validating} className="w-full md:w-auto md:col-start-4 md:row-start-1 md:justify-self-end rounded-lg h-[46px]">
-                        {addr.validating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Validar'}
-                    </Button>
-                </div>
-                {addr.error && <p className="text-xs font-bold text-red-500 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {addr.error}</p>}
-                {addr.validated && (
-                    <div className="flex items-center justify-between text-xs text-green-600 mt-1 font-bold p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <span className="flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Endereço válido</span>
-                        <button onClick={() => openNavigation(addr.lat!, addr.lng!)} className="p-1 hover:bg-green-100 rounded-full" title="Abrir no Waze">
-                            <Navigation className="w-4 h-4" />
 
-                        </button>
+                {showForm && (
+                    <div className="animate-in slide-in-from-top-2 duration-300">
+                        <div className="grid grid-cols-1 md:grid-cols-[2fr_0.5fr_1fr_auto] gap-[15px] items-center" style={{ marginBottom: '15px' }}>
+                            <div className="md:col-start-1 md:row-start-1 md:col-span-1">
+                                <StreetAutocomplete
+                                    city={storeCity}
+                                    value={addr.street}
+                                    onChange={val => handleInputChange('street', val)}
+                                    placeholder="Rua / Avenida"
+                                />
+                            </div>
+                            <div className="md:col-start-2 md:row-start-1 md:col-span-1 md:justify-self-center w-full">
+                                <CustomInput type="text" placeholder="Número" value={addr.number} onChange={e => handleInputChange('number', e.target.value)} required />
+                            </div>
+                            <div className="md:col-start-3 md:row-start-1 md:col-span-1">
+                                <CustomInput type="text" placeholder="Bairro" value={addr.neighborhood} onChange={e => handleInputChange('neighborhood', e.target.value)} required />
+                            </div>
+                            <Button variant="primary" size="sm" onClick={() => validateAddress(addr.id)} disabled={addr.validating} className="w-full md:w-auto md:col-start-4 md:row-start-1 md:justify-self-end rounded-lg h-[46px]">
+                                {addr.validating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Validar'}
+                            </Button>
+                        </div>
+                        {addr.error && <p className="text-xs font-bold text-red-500 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {addr.error}</p>}
+                        {addr.validated && (
+                            <div className="flex items-center justify-between text-xs text-green-600 mt-1 font-bold p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                <span className="flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Endereço válido</span>
+                                <button onClick={() => openNavigation(addr.lat!, addr.lng!)} className="p-1 hover:bg-green-100 rounded-full" title="Abrir no Waze">
+                                    <Navigation className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {isPickup && !isEditingPickup && pickup.validated && (
+                    <div className="p-3 bg-brand-50/50 dark:bg-brand-900/10 rounded-lg border border-brand-100 dark:border-brand-800 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs text-brand-700 dark:text-brand-300 font-medium">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            <span>Coleta em: <strong>{pickup.street}, {pickup.number}</strong></span>
+                        </div>
+                        <Check className="w-4 h-4 text-green-500" />
                     </div>
                 )}
             </div>

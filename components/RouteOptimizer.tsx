@@ -22,7 +22,7 @@ const RouteOptimizer: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [optimizedRoute, setOptimizedRoute] = useState<{ stops: string[], distance: number, duration: number } | null>(null);
 
   const [orsApiKey, setOrsApiKey] = useState<string | null>(null);
@@ -40,7 +40,7 @@ const RouteOptimizer: React.FC = () => {
           setError("A chave da API de roteamento não está configurada. Vá para o painel de administração para adicioná-la.");
         }
       } catch (e) {
-        console.error("Error loading ORS API key:", e);
+        // console.error("Error loading ORS API key:", e);
         setError("Não foi possível carregar a configuração de roteamento.");
       } finally {
         setIsKeyLoading(false);
@@ -77,23 +77,23 @@ const RouteOptimizer: React.FC = () => {
       }
       return null;
     } catch (e) {
-      console.error('Geocoding error:', e);
+      // console.error('Geocoding error:', e);
       return null;
     }
   };
 
   const handleOptimizeRoute = async () => {
     if (!orsApiKey) {
-        setError("A chave da API de roteamento não está configurada.");
-        return;
+      setError("A chave da API de roteamento não está configurada.");
+      return;
     }
     if (!startAddress.trim()) {
       setError('O endereço de partida é obrigatório.');
       return;
     }
     if (intermediateStops.every(stop => stop.trim() === '')) {
-        setError('Adicione pelo menos um ponto de parada.');
-        return;
+      setError('Adicione pelo menos um ponto de parada.');
+      return;
     }
 
     setIsLoading(true);
@@ -162,38 +162,38 @@ const RouteOptimizer: React.FC = () => {
       }],
       locations: coordinates.map(coord => [coord!.longitude, coord!.latitude]) // All coordinates still provided here
     };
-    
-    console.log('OpenRouteService Request Body:', JSON.stringify(orsRequestBody, null, 2));
+
+    // console.log('OpenRouteService Request Body:', JSON.stringify(orsRequestBody, null, 2));
     try {
-        const response = await fetch('https://api.openrouteservice.org/optimization', {
-            method: 'POST',
-            headers: {
-                'Authorization': orsApiKey,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(orsRequestBody),
-        });
+      const response = await fetch('https://api.openrouteservice.org/optimization', {
+        method: 'POST',
+        headers: {
+          'Authorization': orsApiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orsRequestBody),
+      });
 
-        const data = await response.json();
+      const data = await response.json();
 
-        if (!response.ok || data.error) {
-            throw new Error(data.error?.message || 'Erro ao otimizar a rota.');
-        }
-        
-        const route = data.routes[0];
-        const orderedIndices = route.steps.filter((step: any) => step.type === 'job').map((step: any) => step.id);
-        const orderedStops = orderedIndices.map((jobId: number) => filteredIntermediateStops[jobId - 1]);
-        
-        setOptimizedRoute({
-            stops: orderedStops,
-            distance: route.summary.distance,
-            duration: route.summary.duration,
-        });
+      if (!response.ok || data.error) {
+        throw new Error(data.error?.message || 'Erro ao otimizar a rota.');
+      }
+
+      const route = data.routes[0];
+      const orderedIndices = route.steps.filter((step: any) => step.type === 'job').map((step: any) => step.id);
+      const orderedStops = orderedIndices.map((jobId: number) => filteredIntermediateStops[jobId - 1]);
+
+      setOptimizedRoute({
+        stops: orderedStops,
+        distance: route.summary.distance,
+        duration: route.summary.duration,
+      });
 
     } catch (e: any) {
-        setError(e.message || 'Ocorreu um erro desconhecido.');
+      setError(e.message || 'Ocorreu um erro desconhecido.');
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -216,7 +216,7 @@ const RouteOptimizer: React.FC = () => {
       setIntermediateStops(optimizedRoute.stops);
     }
   }, [optimizedRoute]);
-  
+
   const handleSelectFromAddressBook = (addresses: SavedAddress[]) => {
     const newStops = addresses.map(addr => addr.fullAddress);
     const currentStops = intermediateStops.filter(stop => stop.trim() !== '');
@@ -244,7 +244,7 @@ const RouteOptimizer: React.FC = () => {
         );
         await alert({ title: 'Sucesso', message: 'Rota salva com sucesso!' });
       } catch (e: any) {
-        console.error("Error saving route:", e);
+        // console.error("Error saving route:", e);
         await alert({ title: 'Erro', message: `Não foi possível salvar a rota: ${e.message}` });
       } finally {
         setIsSaving(false);
@@ -340,64 +340,64 @@ const RouteOptimizer: React.FC = () => {
         </div>
 
         {error && (
-            <div className="mt-4 p-3 rounded-lg text-sm font-bold flex items-center gap-2 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300">
-                <AlertTriangle className="w-4 h-4"/>
-                {error}
+          <div className="mt-4 p-3 rounded-lg text-sm font-bold flex items-center gap-2 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300">
+            <AlertTriangle className="w-4 h-4" />
+            {error}
           </div>
         )}
 
         {optimizedRoute && (
-            <div className="mt-6 p-4 bg-white rounded-lg shadow-inner space-y-4">
-                <h3 className="text-lg font-bold text-gray-800">Rota Otimizada</h3>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                        <p className="text-sm text-gray-500">Paradas</p>
-                        <p className="text-xl font-bold">{optimizedRoute.stops.length}</p>
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500">Distância</p>
-                        <p className="text-xl font-bold">{(optimizedRoute.distance / 1000).toFixed(2)} km</p>
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500">Tempo Estimado</p>
-                        <p className="text-xl font-bold">{Math.floor(optimizedRoute.duration / 3600)}h {Math.round((optimizedRoute.duration % 3600) / 60)}min</p>
-                    </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                    <Button onClick={handleNavigate} variant="outline" className="w-full flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
-                        Navegar
-                    </Button>
-                    <Button onClick={handleSaveRoute} className="w-full flex items-center gap-2" disabled={isSaving}>
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Salvar Rota
-                    </Button>
-                </div>
+          <div className="mt-6 p-4 bg-white rounded-lg shadow-inner space-y-4">
+            <h3 className="text-lg font-bold text-gray-800">Rota Otimizada</h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-sm text-gray-500">Paradas</p>
+                <p className="text-xl font-bold">{optimizedRoute.stops.length}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Distância</p>
+                <p className="text-xl font-bold">{(optimizedRoute.distance / 1000).toFixed(2)} km</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Tempo Estimado</p>
+                <p className="text-xl font-bold">{Math.floor(optimizedRoute.duration / 3600)}h {Math.round((optimizedRoute.duration % 3600) / 60)}min</p>
+              </div>
             </div>
+            <div className="flex gap-2 mt-4">
+              <Button onClick={handleNavigate} variant="outline" className="w-full flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                Navegar
+              </Button>
+              <Button onClick={handleSaveRoute} className="w-full flex items-center gap-2" disabled={isSaving}>
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Salvar Rota
+              </Button>
+            </div>
+          </div>
         )}
 
         <div className="mt-6">
-          <Button 
-            onClick={handleOptimizeRoute} 
-            className="w-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center gap-2" 
+          <Button
+            onClick={handleOptimizeRoute}
+            className="w-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center gap-2"
             disabled={isLoading || !orsApiKey}
           >
             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Otimizar Rota"}
           </Button>
           {!orsApiKey && !isKeyLoading && (
             <p className="text-xs text-center text-red-500 mt-2 flex items-center justify-center gap-1">
-                <Settings className="w-3 h-3" />
-                A API de Roteamento precisa ser configurada pelo administrador.
+              <Settings className="w-3 h-3" />
+              A API de Roteamento precisa ser configurada pelo administrador.
             </p>
           )}
         </div>
       </div>
-      
+
       <BaseModal isOpen={isAddressBookOpen} onClose={() => setIsAddressBookOpen(false)} title="Selecionar Endereços da Agenda">
-        <AddressBook 
-          isSelectionMode={true} 
-          onSelectionComplete={handleSelectFromAddressBook} 
-          onClose={() => setIsAddressBookOpen(false)} 
+        <AddressBook
+          isSelectionMode={true}
+          onSelectionComplete={handleSelectFromAddressBook}
+          onClose={() => setIsAddressBookOpen(false)}
         />
       </BaseModal>
     </>

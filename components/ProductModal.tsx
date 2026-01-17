@@ -42,7 +42,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             const data = await cloud.getStoreCategories();
             setCategories(data);
         } catch (error) {
-            console.error("Erro ao carregar categorias:", error);
+            // console.error("Erro ao carregar categorias:", error);
         }
     };
 
@@ -56,7 +56,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             setEditingProduct(prev => ({ ...prev, image_url: publicUrl }));
             setWasUploaded(true);
         } catch (error) {
-            console.error("Erro ao subir imagem:", error);
+            // console.error("Erro ao subir imagem:", error);
             alert("Não foi possível carregar a imagem. Verifique se o bucket de 'products' está configurado.");
         } finally {
             setUploadingImage(false);
@@ -66,8 +66,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl animate-in zoom-in duration-300 border border-gray-100 dark:border-gray-700 overflow-y-auto max-h-[95vh]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] w-full max-w-4xl p-8 shadow-2xl animate-in zoom-in duration-300 border border-gray-100 dark:border-gray-700 overflow-y-auto max-h-[95vh] scrollbar-none [&::-webkit-scrollbar]:hidden">
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h3 className="text-2xl font-black dark:text-white">
@@ -75,7 +75,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         </h3>
                         <p className="text-gray-500 text-sm">Preencha as informações do item abaixo</p>
                     </div>
-                    <button onClick={onClose} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-2xl transition-colors">
+                    <button type="button" onClick={onClose} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-2xl transition-colors">
                         <X className="w-6 h-6" />
                     </button>
                 </div>
@@ -203,7 +203,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 </div>
 
                 <div className="mt-8 flex gap-4 pb-2 border-t border-gray-100 dark:border-gray-800 pt-6">
-                    <Button variant="outline" className="flex-1 py-4 rounded-2xl" onClick={onClose}>Cancelar</Button>
+                    <Button variant="outline" className="flex-1 py-4 rounded-2xl" onClick={onClose} type="button">Cancelar</Button>
                     <Button
                         className="flex-1 py-4 rounded-2xl shadow-lg shadow-brand-500/20"
                         onClick={() => onSave(editingProduct)}

@@ -22,7 +22,7 @@ export class SectionErrorBoundary extends Component<Props, State> {
     }
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        console.error(`[SectionErrorBoundary] Error in ${this.props.componentName || 'component'}:`, error, errorInfo);
+        // console.error(`[SectionErrorBoundary] Error in ${this.props.componentName || 'component'}:`, error, errorInfo);
     }
 
     private handleRetry = () => {

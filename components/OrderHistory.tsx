@@ -124,7 +124,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
             if (statsRes) setStats(statsRes);
 
         } catch (e) {
-            console.error(e);
+            // console.error(e);
         } finally {
             setLoading(false);
         }

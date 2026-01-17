@@ -56,7 +56,7 @@ export const StoreCollaborators = () => {
             resetForm();
             load();
         } catch (e: any) {
-            console.error(e);
+            // console.error(e);
             await alert({
                 title: 'Erro',
                 message: e.message?.includes('unique_store_email')

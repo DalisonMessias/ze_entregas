@@ -29,7 +29,7 @@ export const StoreIntegrations: React.FC<StoreIntegrationsProps> = ({ onNavigate
                     await fetchKey(user.data.user.id);
                 }
             } catch (e) {
-                console.error(e);
+                // console.error(e);
             } finally {
                 setLoading(false);
             }
@@ -97,7 +97,7 @@ export const StoreIntegrations: React.FC<StoreIntegrationsProps> = ({ onNavigate
                 setKeyId(data.id);
             }
         } catch (e: any) {
-            console.error("Erro detalhado ao gerar chave:", e);
+            // console.error("Erro detalhado ao gerar chave:", e);
         } finally {
             setGenerating(false);
         }

@@ -41,7 +41,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ onCl
             }
             onClose();
         } catch (e) {
-            console.error(e);
+            // console.error(e);
         } finally {
             setLoading(false);
         }

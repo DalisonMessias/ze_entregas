@@ -23,6 +23,18 @@
   --color-gray-700: #374151;
   --color-gray-800: #1f2937;
   --color-gray-900: #111827;
+
+  /* WhatsApp Palette */
+  --color-whatsapp-primary: #25D366;
+  --color-whatsapp-teal: #075E54;
+  --color-whatsapp-teal-dark: #054c44;
+  --color-whatsapp-light: #DCF8C6;
+  --color-whatsapp-bg: #ECE5DD;
+  --color-whatsapp-app-bg: #F0F2F5; /* Background geral do app (zapping web) */
+  --color-whatsapp-secondary: #8696A0;
+  --color-whatsapp-incoming: #FFFFFF;
+  --color-whatsapp-header: #F0F2F5;
+  --color-whatsapp-input-bg: #FFFFFF;
 }
 
 button, [role="button"] {

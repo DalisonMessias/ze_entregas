@@ -49,7 +49,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
             const publicUrl = await cloud.uploadGenericImage(file, bucketName, folderPath);
             onImageUploaded(publicUrl);
         } catch (err: any) {
-            console.error('Upload failed:', err);
+            // console.error('Upload failed:', err);
             setError('Falha no upload. Tente novamente.');
             setPreview(currentImageUrl || null); // Revert preview
         } finally {

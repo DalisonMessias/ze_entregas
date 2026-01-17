@@ -20,7 +20,7 @@ export const PromoSlider: React.FC<PromoSliderProps> = ({ audience }) => {
                 // console.log(`[PromoSlider] Fetched ${data.length} slides for audience: ${audience}`, data);
                 setSlides(data);
             } catch (error) {
-                console.error('[PromoSlider] Error loading promo slides:', error);
+                // console.error('[PromoSlider] Error loading promo slides:', error);
             } finally {
                 setLoading(false);
             }

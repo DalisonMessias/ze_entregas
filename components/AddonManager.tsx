@@ -139,6 +139,30 @@ export const AddonManager: React.FC = () => {
                                 </div>
                             </div>
 
+                            {/* Options Preview */}
+                            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3 space-y-2">
+                                {group.options.slice(0, 4).map((opt, idx) => (
+                                    <div key={idx} className="flex justify-between text-sm">
+                                        <span className="text-gray-700 dark:text-gray-300 truncate pr-2">{opt.name}</span>
+                                        <span className="text-gray-500 font-medium whitespace-nowrap">
+                                            {opt.price > 0
+                                                ? `+ ${opt.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                                                : 'Grátis'}
+                                        </span>
+                                    </div>
+                                ))}
+                                {group.options.length > 4 && (
+                                    <div className="text-xs text-center text-gray-400 font-medium pt-1 border-t border-dashed border-gray-200 dark:border-gray-700">
+                                        + {group.options.length - 4} opções
+                                    </div>
+                                )}
+                                {group.options.length === 0 && (
+                                    <div className="text-xs text-center text-gray-400 italic">
+                                        Nenhuma opção adicionada
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="flex gap-2 mt-auto pt-2 border-t border-gray-100 dark:border-gray-700">
                                 <button
                                     onClick={() => handleEdit(group)}
@@ -155,8 +179,9 @@ export const AddonManager: React.FC = () => {
                                 </button>
                             </div>
                         </div>
-                    ))}
-                </div>
+                    ))
+                    }
+                </div >
             )}
 
             <AddonModal
@@ -165,6 +190,6 @@ export const AddonManager: React.FC = () => {
                 groupToEdit={editingGroup}
                 onSave={loadGroups}
             />
-        </div>
+        </div >
     );
 };

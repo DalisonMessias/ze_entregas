@@ -13,25 +13,25 @@ validateEnvConfig();
 window.addEventListener('url-policy-blocked', (e: any) => {
   try {
     const d = e?.detail || {};
-    console.warn('URL bloqueada em desenvolvimento', d.url || '');
+    // console.warn('URL bloqueada em desenvolvimento', d.url || '');
   } catch { }
 });
 window.addEventListener('url-policy-allowed', (e: any) => {
   try {
     const d = e?.detail || {};
-    console.log('URL liberada em desenvolvimento', d.url || '');
+    // console.log('URL liberada em desenvolvimento', d.url || '');
   } catch { }
 });
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   (window as any).deferredPrompt = e;
-  console.log("PWA Install Prompt captured in index.tsx");
+  // console.log("PWA Install Prompt captured in index.tsx");
 });
 
 // Global error handlers to catch unhandled exceptions and promise rejections
 window.addEventListener('error', (event: ErrorEvent) => {
   try {
-    console.error('Global error captured:', event.error || event.message, event);
+    // console.error('Global error captured:', event.error || event.message, event);
     const detail = { ts: Date.now(), message: event.message, stack: (event.error && event.error.stack) || null };
     // persist locally to help debugging in production if needed
     try {
@@ -45,7 +45,7 @@ window.addEventListener('error', (event: ErrorEvent) => {
 
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
   try {
-    console.error('Unhandled rejection captured:', event.reason);
+    // console.error('Unhandled rejection captured:', event.reason);
     const detail = { ts: Date.now(), reason: event.reason };
     try {
       const logs = JSON.parse(localStorage.getItem('__appLogs') || '[]');
@@ -69,7 +69,7 @@ if ('serviceWorker' in navigator) {
 
       // If there's an updated worker already waiting, ask it to skip waiting
       if (registration.waiting) {
-        try { registration.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) { console.warn('Failed to message waiting SW', e); }
+        try { registration.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) { /* console.warn('Failed to message waiting SW', e); */ }
       }
 
       // Listen for new SW being installed
@@ -80,8 +80,8 @@ if ('serviceWorker' in navigator) {
           if (newWorker.state === 'installed') {
             // If there's an existing controller, new worker is waiting -> activate it
             if (navigator.serviceWorker.controller) {
-              console.log('New service worker installed and waiting; requesting skipWaiting');
-              try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch (e) { console.warn(e); }
+              // console.log('New service worker installed and waiting; requesting skipWaiting');
+              try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch (e) { /* console.warn(e); */ }
             }
           }
         });
@@ -89,11 +89,11 @@ if ('serviceWorker' in navigator) {
 
       // When the new SW takes control, reload to apply updated assets/state
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('Service worker controller changed — reloading to apply update');
+        // console.log('Service worker controller changed — reloading to apply update');
         window.location.reload();
       });
     } catch (err) {
-      console.log('ServiceWorker registration failed: ', err);
+      // console.log('ServiceWorker registration failed: ', err);
     }
   });
 }

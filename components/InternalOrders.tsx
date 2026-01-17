@@ -22,9 +22,11 @@ interface PlatformFeeDetails {
     totalDistance: number;
 }
 
+import { TablesManager } from './TablesManager';
+
 export const InternalOrders: React.FC = () => {
     // View State
-    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION'>('NEW_ORDER');
+    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'TABLES_MANAGE'>('NEW_ORDER');
 
     const [products, setProducts] = useState<StoreProduct[]>([]);
     const [activeTables, setActiveTables] = useState<any[]>([]); // Nova: Mesas ativas
@@ -95,9 +97,21 @@ export const InternalOrders: React.FC = () => {
     const [missingFields, setMissingFields] = useState<string[]>([]);
     const [hasOnlineCouriers, setHasOnlineCouriers] = useState(false);
 
+    // Auth State
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+    useEffect(() => {
+        cloud.getClient()?.auth.getUser().then(({ data }) => {
+            if (data.user) setCurrentUserId(data.user.id);
+        });
+    }, []);
+
     useEffect(() => {
         loadProducts();
     }, []);
+
+
+
 
     const loadTickets = async () => {
         const storeId = products[0]?.store_id || localStorage.getItem('storeId');
@@ -109,26 +123,26 @@ export const InternalOrders: React.FC = () => {
 
     // Calcular taxa de entrega automaticamente baseado no modo selecionado
     useEffect(() => {
-        console.log('[InternalOrders] Cálculo automático:', { orderType, deliveryMode, addressStreet, addressNumber, addressDistrict, platformFees });
+        // console.log('[InternalOrders] Cálculo automático:', { orderType, deliveryMode, addressStreet, addressNumber, addressDistrict, platformFees });
 
         if (orderType !== 'DELIVERY' || !deliveryMode || !addressDistrict) {
-            console.log('[InternalOrders] Condições não atendidas para cálculo');
+            // console.log('[InternalOrders] Condições não atendidas para cálculo');
             return;
         }
 
-        console.log('[InternalOrders] Iniciando cálculo para modo:', deliveryMode, 'neighborhoodFees:', neighborhoodFees.length, 'platformFees:', platformFees);
+        // console.log('[InternalOrders] Iniciando cálculo para modo:', deliveryMode, 'neighborhoodFees:', neighborhoodFees.length, 'platformFees:', platformFees);
 
         // ASSOCIATE ou OWN: Usa as configurações de entrega própria da loja
         if (deliveryMode === 'ASSOCIATE' || deliveryMode === 'OWN') {
             const currentCalcMode = calculationMode || deliverySettings?.delivery_mode || 'FIXED';
-            console.log('[InternalOrders] Modo ASSOCIATE/OWN - Usando modo de cálculo:', currentCalcMode);
+            // console.log('[InternalOrders] Modo ASSOCIATE/OWN - Usando modo de cálculo:', currentCalcMode);
 
             if (currentCalcMode === 'FIXED') {
                 const fee = deliverySettings?.fixed_fee || 0;
                 setDeliveryFeeStr(fee.toFixed(2).replace('.', ','));
                 setIsDeliveryFeeEditable(false);
             } else {
-                console.log('[InternalOrders] Buscando bairro:', addressDistrict);
+                // console.log('[InternalOrders] Buscando bairro:', addressDistrict);
                 const neighborhoodFee = neighborhoodFees.find(
                     f => f.neighborhood_name.toLowerCase() === addressDistrict.toLowerCase()
                 );
@@ -153,7 +167,7 @@ export const InternalOrders: React.FC = () => {
             const partnerNet = baseValue;
             const storeTotal = partnerNet + taxFixed + (partnerNet * taxPercent);
 
-            console.log('[InternalOrders] Taxa plataforma calculada:', storeTotal, 'Base:', baseValue, 'Fixa:', taxFixed, '%:', taxPercent);
+            // console.log('[InternalOrders] Taxa plataforma calculada:', storeTotal, 'Base:', baseValue, 'Fixa:', taxFixed, '%:', taxPercent);
             setDeliveryFeeStr(storeTotal.toFixed(2).replace('.', ','));
             setIsDeliveryFeeEditable(false);
         } else if (deliveryMode === 'PLATFORM') {
@@ -281,7 +295,7 @@ export const InternalOrders: React.FC = () => {
                 const orsKey = shopSettings?.open_route_service_api_key;
 
                 if (orsKey) {
-                    console.log('[InternalOrders] Usando OpenRouteService para rota real...');
+                    // console.log('[InternalOrders] Usando OpenRouteService para rota real...');
                     const orsUrl = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${orsKey}&start=${storeLng},${storeLat}&end=${deliveryLng},${deliveryLat}`;
                     const orsResp = await fetch(orsUrl);
                     const orsData = await orsResp.json();
@@ -290,11 +304,11 @@ export const InternalOrders: React.FC = () => {
                         // Distância vem em metros, converter para km
                         distanceKmResult = Number((orsData.features[0].properties.summary.distance / 1000).toFixed(2));
                         realRouteResult = true;
-                        console.log('[InternalOrders] Rota real calculada:', distanceKmResult, 'km');
+                        // console.log('[InternalOrders] Rota real calculada:', distanceKmResult, 'km');
                     }
                 }
             } catch (orsError) {
-                console.error('[InternalOrders] Erro ao usar ORS, caindo para linha reta:', orsError);
+                // console.error('[InternalOrders] Erro ao usar ORS, caindo para linha reta:', orsError);
             }
 
             setIsRealRoute(realRouteResult);
@@ -361,7 +375,7 @@ export const InternalOrders: React.FC = () => {
                 setIsDeliveryFeeEditable(true);
             }
         } catch (error: any) {
-            console.error('[InternalOrders] Erro ao calcular:', error);
+            // console.error('[InternalOrders] Erro ao calcular:', error);
             showAlert({ title: 'Erro ao calcular', message: error.message || 'Não foi possível realizar o cálculo.' });
         } finally {
             setProcessing(false);
@@ -395,21 +409,21 @@ export const InternalOrders: React.FC = () => {
             }
 
             setHasOnlineCouriers(onlineDrivers && onlineDrivers.length > 0);
-            console.log('[InternalOrders] Entregadores online:', onlineDrivers?.length || 0);
+            // console.log('[InternalOrders] Entregadores online:', onlineDrivers?.length || 0);
 
             // Carregar taxas globais da plataforma para cálculo do Parceiro Zé
             try {
-                console.log('[InternalOrders] Carregando taxas da plataforma...');
+                // console.log('[InternalOrders] Carregando taxas da plataforma...');
                 const globalFees = await cloud.getPublicFeeSettings();
-                console.log('[InternalOrders] Taxas carregadas:', globalFees);
+                // console.log('[InternalOrders] Taxas carregadas:', globalFees);
                 setPlatformFees(globalFees);
             } catch (error) {
-                console.error('[InternalOrders] Erro ao carregar taxas da plataforma:', error);
+                // console.error('[InternalOrders] Erro ao carregar taxas da plataforma:', error);
             }
 
             // Validar perfil completo
             const validation = validateStoreProfile(profile);
-            console.log('[InternalOrders] Validação:', validation);
+            // console.log('[InternalOrders] Validação:', validation);
 
             setProfileValid(validation.isValid);
             setMissingFields(validation.missingFields);
@@ -420,7 +434,7 @@ export const InternalOrders: React.FC = () => {
                 setAddressCity(profile.city || '');
             }
         } catch (error) {
-            console.error('[InternalOrders] Erro ao carregar:', error);
+            // console.error('[InternalOrders] Erro ao carregar:', error);
             setProfileValid(false);
             setMissingFields(['Erro ao carregar perfil']);
         } finally {
@@ -434,7 +448,7 @@ export const InternalOrders: React.FC = () => {
             const data = await cloud.getInternalOrders();
             setHistoryOrders(data);
         } catch (error) {
-            console.error(error);
+            // console.error(error);
         } finally {
             setLoadingHistory(false);
         }
@@ -451,7 +465,7 @@ export const InternalOrders: React.FC = () => {
             const data = await cloud.getOpenOrders(user.id);
             setActiveTables(data || []);
         } catch (error) {
-            console.error(error);
+            // console.error(error);
         } finally {
             setLoading(false);
         }
@@ -500,7 +514,7 @@ export const InternalOrders: React.FC = () => {
             await loadProducts();
             setIsProductModalOpen(false);
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             showAlert({ title: 'Erro', message: 'Erro ao salvar produto' });
         } finally {
             setIsSavingProduct(false);
@@ -521,7 +535,7 @@ export const InternalOrders: React.FC = () => {
                 await loadProducts();
                 removeFromCart(id);
             } catch (error) {
-                console.error(error);
+                // console.error(error);
             } finally {
                 setLoading(false);
             }
@@ -731,7 +745,7 @@ export const InternalOrders: React.FC = () => {
             setCustomPaymentLabel('');
 
         } catch (error) {
-            console.error('Checkout error:', error);
+            // console.error('Checkout error:', error);
             showAlert({ title: 'Erro', message: 'Erro ao finalizar pedido.' });
         } finally {
             setProcessing(false);
@@ -879,6 +893,13 @@ export const InternalOrders: React.FC = () => {
                 >
                     <Printer className="w-4 h-4" />
                     Produção
+                </button>
+                <button
+                    onClick={() => setView('TABLES_MANAGE')}
+                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'TABLES_MANAGE' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
+                >
+                    <LayoutList className="w-4 h-4" />
+                    Mesas/QR
                 </button>
             </div>
 
@@ -1508,7 +1529,7 @@ export const InternalOrders: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1">
                     {view === 'TABLES' ? (
                         <div className="h-full bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col overflow-hidden">
                             <div className="flex justify-between items-center mb-6">
@@ -1549,7 +1570,9 @@ export const InternalOrders: React.FC = () => {
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-[9px] text-gray-400 font-black uppercase mb-1">Total Acumulado</p>
-                                                        <p className="text-xl font-black text-brand-600 italic">R$ {table.total_amount?.toFixed(2)}</p>
+                                                        <p className="text-xl font-black text-brand-600 italic">
+                                                            R$ {(table.total_amount || table.items?.reduce((acc: number, i: any) => acc + (i.total_price || (i.price * i.quantity) || 0), 0) || 0).toFixed(2)}
+                                                        </p>
                                                     </div>
                                                 </div>
 
@@ -1653,7 +1676,7 @@ export const InternalOrders: React.FC = () => {
                                 )}
                             </div>
                         </div>
-                    ) : (
+                    ) : view === 'HISTORY' ? (
                         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
                             {/* History View */}
                             <h2 className="text-2xl font-bold dark:text-white mb-6">Histórico de Pedidos Internos</h2>
@@ -1722,10 +1745,14 @@ export const InternalOrders: React.FC = () => {
                                 )}
                             </div>
                         </div>
-                    )}
+                    ) : view === 'TABLES_MANAGE' && currentUserId ? (
+                        <div className="flex-1 h-full overflow-y-auto custom-scrollbar p-1">
+                            <TablesManager storeId={currentUserId} />
+                        </div>
+                    ) : null
+                    }
                 </div>
-            )
-            }
+            )}
 
             {/* Custom Product Modal */}
             {
@@ -1792,6 +1819,9 @@ export const InternalOrders: React.FC = () => {
                 onClose={() => setIsHelpModalOpen(false)}
             />
 
+            {/* Tables Management View */}
+
+
             {/* Print Preview Modal */}
             {
                 showPrintPreview && lastOrder && (
@@ -1827,6 +1857,6 @@ export const InternalOrders: React.FC = () => {
                     </div>
                 )
             }
-        </div >
+        </div>
     );
 };

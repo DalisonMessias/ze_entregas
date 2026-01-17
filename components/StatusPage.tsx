@@ -36,7 +36,7 @@ export const StatusPage: React.FC<StatusPageProps> = ({ onBack }) => {
             else setSystemStatus('offline');
 
         } catch (e) {
-            console.error(e);
+            // console.error(e);
             setSystemStatus('offline');
         } finally {
             setLoading(false);

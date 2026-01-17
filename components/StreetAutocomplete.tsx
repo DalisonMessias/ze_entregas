@@ -9,6 +9,7 @@ interface StreetAutocompleteProps {
     placeholder?: string;
     disabled?: boolean;
     label?: string;
+    className?: string; // Permitir estilos customizados
 }
 
 export const StreetAutocomplete: React.FC<StreetAutocompleteProps> = ({
@@ -17,7 +18,8 @@ export const StreetAutocomplete: React.FC<StreetAutocompleteProps> = ({
     onChange,
     placeholder = "Digite o nome da rua",
     disabled = false,
-    label
+    label,
+    className
 }) => {
     const { ruas, loading, error } = useCityStreets(city);
     const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -74,7 +76,7 @@ export const StreetAutocomplete: React.FC<StreetAutocompleteProps> = ({
             <div className="relative">
                 <input
                     type="text"
-                    value={value}
+                    value={value || ''}
                     onChange={(e) => {
                         onChange(e.target.value);
                         setShowSuggestions(true);
@@ -82,7 +84,7 @@ export const StreetAutocomplete: React.FC<StreetAutocompleteProps> = ({
                     onFocus={() => setShowSuggestions(true)}
                     placeholder={placeholder}
                     disabled={disabled}
-                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400"
+                    className={className || "w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400"}
                     autoComplete="new-street-address"
                 />
 

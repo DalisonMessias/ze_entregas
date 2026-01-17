@@ -9,15 +9,15 @@ import { Button } from './Button';
 import { useDialog } from '../utils/dialogService'; // Import useDialog
 
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
-  let value = e.target.value.replace(/\D/g, "");
-  if (!value) { setter(""); return; }
-  const amount = Number(value) / 100;
-  setter(amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
+    let value = e.target.value.replace(/\D/g, "");
+    if (!value) { setter(""); return; }
+    const amount = Number(value) / 100;
+    setter(amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
 };
 
 const parseCurrency = (val: string): number => {
-  if (!val) return 0;
-  return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+    if (!val) return 0;
+    return parseFloat(val.replace(/\./g, '').replace(',', '.'));
 };
 
 export const LocalHistoryPage: React.FC = () => {
@@ -25,7 +25,7 @@ export const LocalHistoryPage: React.FC = () => {
     const [history, setHistory] = useState<DeliveryRecord[]>([]);
     const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
     const [expenseFilter, setExpenseFilter] = useState<'all' | 'with' | 'without'>('all');
-    
+
     // Modal State
     const [showAddModal, setShowAddModal] = useState(false);
     const [newRecord, setNewRecord] = useState({ date: '', value: '', count: '', km: '' });
@@ -49,11 +49,11 @@ export const LocalHistoryPage: React.FC = () => {
 
     const handleAddRecord = async () => {
         if (!newRecord.date || !newRecord.value) { await alert({ title: "Dados Incompletos", message: "Preencha data e valor." }); return; }
-        
+
         const dateObj = new Date(newRecord.date);
         const dateParts = newRecord.date.split('-'); // YYYY-MM-DD
         const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-        
+
         const value = parseCurrency(newRecord.value);
         const count = parseInt(newRecord.count) || 1;
         const km = parseFloat(newRecord.km.replace(',', '.')) || 0;
@@ -83,14 +83,14 @@ export const LocalHistoryPage: React.FC = () => {
         };
 
         const updatedHistory = [record, ...history].sort((a, b) => b.timestamp - a.timestamp);
-        
+
         setHistory(updatedHistory);
         storage.saveHistory(updatedHistory);
-        
+
         try {
             await cloud.saveManualHistory(record);
         } catch (e) {
-            console.error("Failed to sync manual record", e);
+            // console.error("Failed to sync manual record", e);
         } finally {
             setShowAddModal(false);
             setNewRecord({ date: '', value: '', count: '', km: '' });
@@ -99,15 +99,15 @@ export const LocalHistoryPage: React.FC = () => {
 
     const handleExport = async () => {
         if (history.length === 0) { await alert({ title: "Nenhum Registro", message: "Nada para exportar." }); return; }
-        
+
         const headers = "Data,Hora,Entregas,Valor Total,KM Total,Gastos,Lucro Liquido";
         const rows = history.map(r => {
-            const expenses = (Object.values(r.expenseBreakdown || {}) as number[]).reduce((a,b)=>a+b,0);
+            const expenses = (Object.values(r.expenseBreakdown || {}) as number[]).reduce((a, b) => a + b, 0);
             return `${r.formattedDate},${r.formattedTime},${r.count},${(r.totalValue + expenses).toFixed(2)},${r.totalKm.toFixed(1)},${expenses.toFixed(2)},${r.totalValue.toFixed(2)}`;
         }).join("\n");
-        
+
         const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + rows;
-        
+
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -120,15 +120,15 @@ export const LocalHistoryPage: React.FC = () => {
     // Filter Logic
     const filteredHistory = history.filter(record => {
         const recordDate = new Date(record.date);
-        
+
         if (dateFilter.start) {
             const startDate = new Date(dateFilter.start);
-            startDate.setHours(0,0,0,0);
+            startDate.setHours(0, 0, 0, 0);
             const recordDateOnly = new Date(recordDate);
-            recordDateOnly.setHours(0,0,0,0);
+            recordDateOnly.setHours(0, 0, 0, 0);
             if (recordDateOnly < startDate) return false;
         }
-        
+
         if (dateFilter.end) {
             const endDate = new Date(dateFilter.end);
             endDate.setHours(23, 59, 59, 999);
@@ -151,9 +151,9 @@ export const LocalHistoryPage: React.FC = () => {
                 </p>
             </div>
 
-            <HistoryTable 
-                history={filteredHistory} 
-                onClear={handleClear} 
+            <HistoryTable
+                history={filteredHistory}
+                onClear={handleClear}
                 onExport={handleExport}
                 onAdd={() => setShowAddModal(true)}
                 dateFilter={dateFilter}
@@ -178,10 +178,10 @@ export const LocalHistoryPage: React.FC = () => {
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Data</label>
                                 <div className="relative">
                                     <Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                                    <input 
-                                        type="date" 
+                                    <input
+                                        type="date"
                                         value={newRecord.date}
-                                        onChange={e => setNewRecord({...newRecord, date: e.target.value})}
+                                        onChange={e => setNewRecord({ ...newRecord, date: e.target.value })}
                                         className="w-full pl-10 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
                                     />
                                 </div>
@@ -191,10 +191,10 @@ export const LocalHistoryPage: React.FC = () => {
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Lucro Total (R$)</label>
                                 <div className="relative">
                                     <DollarSign className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                                    <input 
-                                        type="tel" 
+                                    <input
+                                        type="tel"
                                         value={newRecord.value}
-                                        onChange={e => handleCurrencyMask(e, val => setNewRecord({...newRecord, value: val}))}
+                                        onChange={e => handleCurrencyMask(e, val => setNewRecord({ ...newRecord, value: val }))}
                                         placeholder="0,00"
                                         className="w-full pl-10 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white font-bold text-lg"
                                     />
@@ -206,10 +206,10 @@ export const LocalHistoryPage: React.FC = () => {
                                     <label className="block text-xs font-bold text-gray-500 mb-1">Entregas</label>
                                     <div className="relative">
                                         <Package className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                                        <input 
-                                            type="number" 
+                                        <input
+                                            type="number"
                                             value={newRecord.count}
-                                            onChange={e => setNewRecord({...newRecord, count: e.target.value})}
+                                            onChange={e => setNewRecord({ ...newRecord, count: e.target.value })}
                                             placeholder="0"
                                             className="w-full pl-10 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
                                         />
@@ -219,10 +219,10 @@ export const LocalHistoryPage: React.FC = () => {
                                     <label className="block text-xs font-bold text-gray-500 mb-1">KM Total</label>
                                     <div className="relative">
                                         <Gauge className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                                        <input 
-                                            type="number" 
+                                        <input
+                                            type="number"
                                             value={newRecord.km}
-                                            onChange={e => setNewRecord({...newRecord, km: e.target.value})}
+                                            onChange={e => setNewRecord({ ...newRecord, km: e.target.value })}
                                             placeholder="0"
                                             className="w-full pl-10 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
                                         />

@@ -26,7 +26,7 @@ const geocodeAddress = async (address: string): Promise<{ lat: number; lng: numb
         }
         return null;
     } catch (e) {
-        console.error("Geocoding error:", e);
+        // console.error("Geocoding error:", e);
         return null;
     }
 };

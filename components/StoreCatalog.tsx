@@ -48,7 +48,7 @@ export const StoreCatalog: React.FC = () => {
             setProfileValid(validation.isValid);
             setMissingFields(validation.missingFields);
         } catch (error) {
-            console.error("Erro ao carregar produtos:", error);
+            // console.error("Erro ao carregar produtos:", error);
             setProfileValid(false);
             setMissingFields(['Erro ao carregar perfil']);
         } finally {
@@ -67,7 +67,7 @@ export const StoreCatalog: React.FC = () => {
             setIsProductModalOpen(false);
             loadProducts();
         } catch (error: any) {
-            console.error("Erro ao salvar produto:", error);
+            // console.error("Erro ao salvar produto:", error);
             if (error.code === '42501') {
                 showMessage({
                     title: 'Erro de Permissão',
@@ -93,7 +93,7 @@ export const StoreCatalog: React.FC = () => {
                 await cloud.deleteStoreProduct(id);
                 loadProducts();
             } catch (error) {
-                console.error("Erro ao excluir:", error);
+                // console.error("Erro ao excluir:", error);
                 alert("Erro ao excluir produto.");
             }
         }

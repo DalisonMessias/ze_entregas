@@ -80,7 +80,7 @@ const CardQROverlay = ({ cardId, onClose }: { cardId: string, onClose: () => voi
             } catch (e: any) {
                 const msg = e?.message || 'Falha ao gerar QR do cartão';
                 setQrError(msg);
-                console.error('[error] QR Card', msg);
+                // console.error('[error] QR Card', msg);
             }
         };
         generate();
@@ -137,7 +137,7 @@ const CardQROverlay = ({ cardId, onClose }: { cardId: string, onClose: () => voi
         } catch (e: any) {
             const msg = e?.message || 'Falha ao renderizar QR';
             setQrError(msg);
-            console.error('[error] QR Render', msg);
+            // console.error('[error] QR Render', msg);
         }
     }, [qrValue, computedQrSize]);
 
@@ -464,7 +464,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
             const d = await cloud.getZebankDashboardData();
             setData(d);
         } catch (e: any) {
-            console.error('[Zebank] Load Error:', e);
+            // console.error('[Zebank] Load Error:', e);
             setToast({ type: 'error', message: 'Falha ao carregar dados do banco.' });
         } finally {
             setLoading(false);

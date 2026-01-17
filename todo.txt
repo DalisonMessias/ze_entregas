@@ -1,0 +1,7 @@
+# Tarefas para correção de erros em StoreReports.tsx
+
+- [x] Atualizar interface `StoreReportData` em `types.ts`
+- [x] Atualizar função `getStoreReportsData` em `services/cloud.ts` para refletir a nova interface
+- [x] Validar se os erros em `StoreReports.tsx` foram resolvidos
+- [] Atualizar `checklist.txt`
+- [] Gerar arquivo final `documentation/TASK_LIST.md`

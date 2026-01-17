@@ -79,16 +79,13 @@ export const CitySelector: React.FC<CitySelectorProps> = ({ onSelect, selectedCi
                 Cidade de Atuação
             </label>
 
-            <div className="relative">
-                <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400 z-10" />
-                <CustomInput
-                    type="text"
-                    placeholder="Buscar cidade..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-10"
-                />
-            </div>
+            <CustomInput
+                type="text"
+                placeholder="Buscar cidade..."
+                icon={Search}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+            />
 
             <div className="max-h-60 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 custom-scrollbar">
                 {loading ? (

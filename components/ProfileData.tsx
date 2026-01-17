@@ -47,7 +47,7 @@ const MyOrders: React.FC = () => {
             const userOrders = await cloud.getMyOrders();
             setOrders(userOrders);
         } catch (error) {
-            console.error("Failed to fetch orders:", error);
+            // console.error("Failed to fetch orders:", error);
             setError(true);
         } finally {
             setLoading(false);
@@ -230,7 +230,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                 const { data: profileData, error } = await client.from('user_profiles').select('*').eq('id', user.id).single();
 
                 if (error) {
-                    console.error('[ProfileData] DB Error:', error);
+                    // console.error('[ProfileData] DB Error:', error);
                 }
 
                 if (profileData) {
@@ -300,7 +300,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                 throw new Error("Usuário não autenticado");
             }
         } catch (e: any) {
-            console.error('[ProfileData] Critical Error:', e);
+            // console.error('[ProfileData] Critical Error:', e);
             setProfileError("Falha ao carregar dados do perfil.");
         } finally {
             setIsLoading(false);
@@ -407,7 +407,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                     text: `Minha chave PIX (${bankDetails.pixType || 'Chave'}): ${bankDetails.pixKey}\nBanco: ${bankDetails.bankName || 'Não informado'}`,
                 });
             } catch (err) {
-                console.error(err);
+                // console.error(err);
             }
         } else {
             copyPixKey();

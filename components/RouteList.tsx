@@ -94,7 +94,7 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
         try {
             recognition.start();
         } catch (e) {
-            console.error(e);
+            // console.error(e);
         }
     };
 
@@ -115,7 +115,7 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     setFeedback({ type: 'error', message: 'Sua cidade de atuação não está configurada no perfil.' });
                 }
             } catch (e) {
-                console.error("Failed to fetch profile for city", e);
+                // console.error("Failed to fetch profile for city", e);
                 setFeedback({ type: 'error', message: 'Erro ao carregar dados do seu perfil.' });
             } finally {
                 setIsProfileLoading(false);

@@ -65,6 +65,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/comanda': 'internal_orders',
     '/loja/dashboard': 'wallet',
     '/loja/colaborador': 'collaborator_area',
+    '/loja/whatsapp': 'whatsapp_chat',
 
     // Delivery Partner/Person Routes
     '/entregador/inicio': 'daily_panel',
@@ -80,7 +81,12 @@ const routeMap: Record<string, ActiveTab> = {
     // Public/Misc
     '/instalar': 'install_app',
     '/upgrade': 'upgrade_to_partner',
-    '/ruas': 'streets_list'
+    '/ruas': 'streets_list',
+
+    // Authentication Routes
+    '/login': 'login',
+    '/cadastro': 'signup',
+    '/recuperar-senha': 'forgot_password'
 };
 
 // Inverte o mapa para buscar URL a partir da Tab

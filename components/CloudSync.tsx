@@ -53,7 +53,7 @@ export const CloudSync: React.FC = () => {
           setUser(data.session?.user ?? null);
         }
       } catch (err) {
-        console.error("Erro ao verificar sessão:", err);
+        // console.error("Erro ao verificar sessão:", err);
       } finally {
         if (isMounted) {
           setInitialized(true);
@@ -82,7 +82,7 @@ export const CloudSync: React.FC = () => {
         try {
           authListener.subscription.unsubscribe();
         } catch (e) {
-          console.warn("Erro ao remover listener de auth:", e);
+          // console.warn("Erro ao remover listener de auth:", e);
         }
       }
     };
@@ -156,7 +156,7 @@ export const CloudSync: React.FC = () => {
       }
 
     } catch (e: any) {
-      console.error(e);
+      // console.error(e);
       let errorText = getErrorMessage(e);
       let errorType: 'error' | 'info' = 'error';
 

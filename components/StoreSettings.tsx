@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Info, CheckCircle, AlertTriangle, X, User, Camera } from 'lucide-react';
+import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { StoreShippingRules } from './StoreShippingRules';
@@ -42,6 +42,7 @@ export const StoreSettings: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [isSuperStore, setIsSuperStore] = useState(false);
+    const [expirationDate, setExpirationDate] = useState<string | null>(null);
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
 
@@ -59,6 +60,8 @@ export const StoreSettings: React.FC = () => {
         phone_number: '',
         contact_email: '',
         opening_hours: '',
+        preparation_time_min: '0',
+        preparation_time_max: '0',
 
         // Store Address Fields
         address_zip: '',
@@ -97,6 +100,8 @@ export const StoreSettings: React.FC = () => {
                         phone_number: p.phone_number || '',
                         contact_email: p.contact_email || p.email || '',
                         opening_hours: p.opening_hours || '',
+                        preparation_time_min: String(p.preparation_time_min || 0),
+                        preparation_time_max: String(p.preparation_time_max || 0),
 
                         address_zip: useStoreAddr ? (p.store_address_zip || '') : (p.address_zip || ''),
                         address_street: useStoreAddr ? (p.store_address_street || '') : (p.address_street || ''),
@@ -116,11 +121,14 @@ export const StoreSettings: React.FC = () => {
                 // Check super store status
                 const user = await cloud.getClient()?.auth.getUser();
                 if (user?.data.user) {
-                    const data = await cloud.getClient()?.from('user_profiles').select('is_super_store').eq('id', user.data.user.id).single();
-                    if (data?.data) setIsSuperStore(data.data.is_super_store);
+                    const data = await cloud.getClient()?.from('user_profiles').select('is_super_store, super_store_expiration').eq('id', user.data.user.id).single();
+                    if (data?.data) {
+                        setIsSuperStore(data.data.is_super_store);
+                        setExpirationDate(data.data.super_store_expiration);
+                    }
                 }
             } catch (e) {
-                console.error(e);
+                // console.error(e);
             } finally {
                 setLoading(false);
             }
@@ -152,7 +160,7 @@ export const StoreSettings: React.FC = () => {
 
             setToast({ type: 'success', message: `${type === 'cover' ? 'Capa' : 'Logo'} atualizada com sucesso!` });
         } catch (err: any) {
-            console.error(err);
+            // console.error(err);
             setToast({ type: 'error', message: "Erro no upload: " + err.message });
         } finally {
             setUploadingAsset(null);
@@ -178,6 +186,8 @@ export const StoreSettings: React.FC = () => {
                 phone_number: rawPhone,
                 contact_email: form.contact_email,
                 opening_hours: form.opening_hours,
+                preparation_time_min: parseInt(form.preparation_time_min) || 0,
+                preparation_time_max: parseInt(form.preparation_time_max) || 0,
 
                 // Saving to NEW Store Address fields
                 store_address_zip: rawZip,
@@ -233,6 +243,24 @@ export const StoreSettings: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Super Store Expiration Banner */}
+            {isSuperStore && expirationDate && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-4 rounded-xl border border-amber-100 dark:border-amber-800/30 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-full text-amber-600 dark:text-amber-400">
+                            <Zap className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-amber-800 dark:text-amber-300 text-sm">Super Lojista Ativo</h4>
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                                Seu plano vence em: <strong>{new Date(expirationDate).toLocaleDateString('pt-BR')}</strong>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* General Settings */}
             {activeTab === 'general' && (
@@ -302,6 +330,26 @@ export const StoreSettings: React.FC = () => {
                                     className="cursor-pointer"
                                     helperText="Defina os horários que sua loja estará aberta no app."
                                 />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <CustomInput
+                                        label="Preparo Mínimo (min)"
+                                        type="number"
+                                        value={form.preparation_time_min}
+                                        onChange={e => handleChange('preparation_time_min', e.target.value)}
+                                        placeholder="Min"
+                                        icon={Zap}
+                                        helperText="Ex: 10 min"
+                                    />
+                                    <CustomInput
+                                        label="Preparo Máximo (min)"
+                                        type="number"
+                                        value={form.preparation_time_max}
+                                        onChange={e => handleChange('preparation_time_max', e.target.value)}
+                                        placeholder="Max"
+                                        icon={Zap}
+                                        helperText="Ex: 20 min"
+                                    />
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

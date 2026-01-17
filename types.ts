@@ -230,6 +230,10 @@ export interface ManagedUser {
     completed_deliveries?: number;
     association_code?: string;
     balance?: number;
+    preparation_time?: number;
+    preparation_time_min?: number;
+    preparation_time_max?: number;
+    super_store_expiration?: string;
 }
 
 export interface CompanyInfo {
@@ -381,6 +385,7 @@ export interface Order {
 
     store?: any;
     partner?: any;
+    collaborator_name?: string;
     created_at: string;
 }
 
@@ -544,6 +549,7 @@ export interface City {
     id: string;
     name: string;
     state: string;
+    ibge_code?: string;
     is_active: boolean;
 }
 
@@ -602,6 +608,10 @@ export interface PartnerProfile {
     is_super_store?: boolean;
     store_name?: string;
     is_open?: boolean;
+    preparation_time?: number;
+    preparation_time_min?: number;
+    preparation_time_max?: number;
+    super_store_expiration?: string;
 }
 
 export interface StoreDailyReport {
@@ -775,7 +785,7 @@ export interface CofrinhoAccount {
     lock_until?: string | null;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips';
+export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp';
 
 export interface AppNotification {
     id: string;
@@ -833,6 +843,9 @@ export interface WorkShift {
 export interface StoreReportData {
     totalRequests: number;
     totalValue: number;
+    completedCount: number;
+    cancelledCount: number;
+    failedCount: number;
     peakHours: { hour: number, count: number }[];
     driverPerformance: { partner_id: string, partner_name: string, count: number }[];
 }

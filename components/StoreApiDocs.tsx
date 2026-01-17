@@ -535,7 +535,7 @@ print(response.json())`
                                             storeId = keyData.user_id;
 
                                         } catch (e: any) {
-                                            console.warn("Falha na validação online da chave:", e.message);
+                                            // console.warn("Falha na validação online da chave:", e.message);
 
                                             // Se for GET, precisamos do banco, então repassamos o erro
                                             if (method === 'GET') {
@@ -548,12 +548,12 @@ print(response.json())`
                                             // Se for POST, aceitamos rodar em modo 100% OFF-LINE (Simulação)
                                             // Apenas avisamos no log
                                             if (method === 'POST') {
-                                                console.log("Prosseguindo com POST em modo offline/simulado.");
+                                                // console.log("Prosseguindo com POST em modo offline/simulado.");
                                             }
                                         }
 
                                         // Atualizar visualmente o Store ID se houver onde mostrar (vou adicionar no log)
-                                        console.log("Store ID Identificado:", storeId);
+                                        // console.log("Store ID Identificado:", storeId);
 
                                         let responseData: any;
                                         let status = 200;
@@ -625,7 +625,7 @@ print(response.json())`
                                         if (output) output.innerText = JSON.stringify(finalOutput, null, 2);
 
                                     } catch (error: any) {
-                                        console.error(error);
+                                        // console.error(error);
                                         // Se for erro de permissão (RLS bloqueando leitura de chave de outro user)
                                         // Mas aqui o usuário deve estar logado como ele mesmo, então deve ver as próprias chaves.
                                         let msg = error.message;

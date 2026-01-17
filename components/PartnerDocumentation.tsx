@@ -123,7 +123,7 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
                     setDocuments(docs);
                 }
             } catch (e) {
-                console.error(e);
+                // console.error(e);
                 if (isMounted) {
                     setDocError('Falha ao carregar documentos. Verifique sua conexão.');
                 }

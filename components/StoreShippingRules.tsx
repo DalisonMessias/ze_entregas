@@ -47,7 +47,7 @@ export const StoreShippingRules: React.FC = () => {
             const data = await cloud.getStoreShippingRules();
             setRules(data);
         } catch (e) {
-            console.error(e);
+            // console.error(e);
         } finally {
             setLoading(false);
         }

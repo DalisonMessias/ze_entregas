@@ -38,7 +38,7 @@ export const ConnectionStatus: React.FC = () => {
                 try {
                     const client = cloud.getClient();
                     // Simple ping
-                    if(client) {
+                    if (client) {
                         const { error } = await client.from('pwa_settings').select('id').limit(1);
                         if (!error) {
                             // Success!
@@ -66,10 +66,10 @@ export const ConnectionStatus: React.FC = () => {
             } else {
                 // Sync failed (maybe partial), but technically online?
                 // Let's assume online but keep trying sync later
-                setTimeout(() => setStatus('online'), 3000); 
+                setTimeout(() => setStatus('online'), 3000);
             }
         } catch (e) {
-            console.error("Sync error", e);
+            // console.error("Sync error", e);
             setStatus('offline');
         }
     };
@@ -77,11 +77,10 @@ export const ConnectionStatus: React.FC = () => {
     if (status === 'online') return null;
 
     return (
-        <div className={`fixed top-0 left-0 right-0 z-[100] p-2 flex items-center justify-center gap-2 text-xs font-bold text-white shadow-md transition-colors duration-500 ${
-            status === 'offline' ? 'bg-red-600' :
-            status === 'reconnecting' ? 'bg-yellow-500 text-yellow-900' :
-            'bg-green-600'
-        }`}>
+        <div className={`fixed top-0 left-0 right-0 z-[100] p-2 flex items-center justify-center gap-2 text-xs font-bold text-white shadow-md transition-colors duration-500 ${status === 'offline' ? 'bg-red-600' :
+                status === 'reconnecting' ? 'bg-yellow-500 text-yellow-900' :
+                    'bg-green-600'
+            }`}>
             {status === 'offline' && (
                 <>
                     <WifiOff className="w-4 h-4" />

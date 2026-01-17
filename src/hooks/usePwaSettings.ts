@@ -20,7 +20,7 @@ export function usePwaSettings() {
             .on('postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'pwa_settings' },
                 (payload) => {
-                    console.log('PWA Settings updated in DB:', payload);
+                    // console.log('PWA Settings updated in DB:', payload);
                     setSettings(payload.new as PWASettings);
                     applyPwaUpdates(payload.new as PWASettings);
                 }
@@ -47,7 +47,7 @@ export function usePwaSettings() {
                 applyPwaUpdates(data);
             }
         } catch (error) {
-            console.error('Error fetching PWA settings:', error);
+            // console.error('Error fetching PWA settings:', error);
         } finally {
             setLoading(false);
         }
@@ -133,9 +133,9 @@ export function usePwaSettings() {
                 link.href = manifestURL;
                 document.head.appendChild(link);
             }
-            console.log('Manifest updated dynamically');
+            // console.log('Manifest updated dynamically');
         } catch (e) {
-            console.error('Failed to update manifest:', e);
+            // console.error('Failed to update manifest:', e);
         }
     };
 

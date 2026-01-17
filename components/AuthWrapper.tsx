@@ -5,7 +5,7 @@ import * as logger from '../services/logger';
 import { useDialog } from '../utils/dialogService';
 import { App } from './App';
 import { UserRole } from '../types';
-import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin } from 'lucide-react';
+import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin, Mail, Lock, User, Phone, FileText, Store as StoreIcon, Home } from 'lucide-react';
 import { Button } from './Button';
 import { LandingPage } from './LandingPage';
 import { CitySelector } from './CitySelector';
@@ -15,6 +15,27 @@ import { CustomInput } from './CustomInput';
 import { CollaboratorModule } from './CollaboratorModule';
 
 type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_password';
+
+// Helper simples para navegar e atualizar URL sem reload (apenas auth flows que não estão no App.tsx router principal)
+const updateAuthUrl = (view: AuthView) => {
+  let path = '/';
+  if (view === 'login') path = '/login';
+  else if (view === 'signup_city' || view === 'signup_form') path = '/cadastro';
+  else if (view === 'forgot_password') path = '/recuperar-senha';
+  else path = '/'; // landing
+
+  if (window.location.pathname !== path) {
+    window.history.pushState({ authView: view }, '', path);
+  }
+};
+
+const getAuthViewFromUrl = (): AuthView => {
+  const path = window.location.pathname;
+  if (path === '/login') return 'login';
+  if (path === '/cadastro') return 'signup_city';
+  if (path === '/recuperar-senha') return 'forgot_password';
+  return 'landing';
+};
 
 export const AuthWrapper: React.FC = () => {
   const [session, setSession] = useState<any | null>(null);
@@ -37,7 +58,23 @@ export const AuthWrapper: React.FC = () => {
     }
   }, [collaboratorSession]);
 
-  const [view, setView] = useState<AuthView>('landing');
+  // Inicializa view baseado na URL
+  const [view, setView] = useState<AuthView>(() => getAuthViewFromUrl());
+
+  // Sincroniza URL quando view muda
+  useEffect(() => {
+    updateAuthUrl(view);
+  }, [view]);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      const newView = getAuthViewFromUrl();
+      setView(newView);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const [signupType, setSignupType] = useState<'STORE_PARTNER' | 'DELIVERY_PARTNER' | null>(null);
 
   const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -144,7 +181,7 @@ export const AuthWrapper: React.FC = () => {
         if (initialSession) {
           try {
             const { status, role } = await cloud.getInitialUserData();
-            console.log('[AUTH_INIT] getInitialUserData result', { userId: initialSession.user.id, status, role });
+            // console.log('[AUTH_INIT] getInitialUserData result', { userId: initialSession.user.id, status, role });
             if (!mounted) return;
 
             if (status === ('error' as any)) {
@@ -404,7 +441,9 @@ export const AuthWrapper: React.FC = () => {
       return;
     }
 
-    const commonFieldsMissing = !trimmedName || !trimmedEmail || !password || !trimmedPhone;
+    // CPF agora é obrigatório para todos (exceto talvez se o lojista usar CNPJ no StoreDocument, mas o campo CPF pessoal do responsável continua lá)
+    // Vamos assumir obrigatório como pedido.
+    const commonFieldsMissing = !trimmedName || !trimmedEmail || !password || !trimmedPhone || !trimmedCpf;
     const storeFieldsMissing = signupType === 'STORE_PARTNER' && (!storeName || !storeDocument || !addressStreet || !addressNumber || !addressNeighborhood);
     if (commonFieldsMissing || storeFieldsMissing) {
       setAuthMessage({ type: 'error', text: 'Preencha todos os campos obrigatórios.' });
@@ -478,7 +517,7 @@ export const AuthWrapper: React.FC = () => {
         password,
         trimmedName,
         phoneDigits,
-        cpfDigits || '',
+        cpfDigits,
         roleToSend,
         city,
         {
@@ -606,6 +645,7 @@ export const AuthWrapper: React.FC = () => {
               <CustomInput
                 label="Senha"
                 type={showPassword ? 'text' : 'password'}
+                icon={Lock}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
@@ -680,6 +720,7 @@ export const AuthWrapper: React.FC = () => {
             <CustomInput
               type="text"
               placeholder="Nome Completo"
+              icon={User}
               value={name}
               onChange={e => setName(e.target.value)}
               autoComplete="name"
@@ -688,6 +729,7 @@ export const AuthWrapper: React.FC = () => {
             <CustomInput
               type="email"
               placeholder="Email"
+              icon={Mail}
               value={email}
               onChange={e => setEmail(e.target.value)}
               autoComplete="email"
@@ -695,6 +737,7 @@ export const AuthWrapper: React.FC = () => {
             <CustomInput
               type="tel"
               placeholder="Telefone (WhatsApp)"
+              icon={Phone}
               value={phone}
               onChange={e => setPhone(formatPhoneNumber(e.target.value))}
               maxLength={15}
@@ -703,7 +746,8 @@ export const AuthWrapper: React.FC = () => {
             />
             <CustomInput
               type="text"
-              placeholder="CPF (Opcional)"
+              placeholder="CPF"
+              icon={FileText}
               value={cpf}
               onChange={e => setCpf(formatCpf(e.target.value))}
               autoComplete="off"
@@ -714,14 +758,14 @@ export const AuthWrapper: React.FC = () => {
             {signupType === 'STORE_PARTNER' && (
               <>
                 <p className="text-sm font-bold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">Dados da Loja</p>
-                <CustomInput type="text" placeholder="Nome da Loja" value={storeName} onChange={e => setStoreName(e.target.value)} />
-                <CustomInput type="text" placeholder="CPF/CNPJ da Loja" value={storeDocument} onChange={e => setStoreDocument(formatCnpjCpf(e.target.value))} maxLength={18} />
-                <CustomInput type="text" placeholder="CEP (Opcional)" value={addressZip} onChange={e => setAddressZip(e.target.value)} />
+                <CustomInput type="text" placeholder="Nome da Loja" icon={StoreIcon} value={storeName} onChange={e => setStoreName(e.target.value)} />
+                <CustomInput type="text" placeholder="CPF/CNPJ da Loja" icon={FileText} value={storeDocument} onChange={e => setStoreDocument(formatCnpjCpf(e.target.value))} maxLength={18} />
+                <CustomInput type="text" placeholder="CEP (Opcional)" icon={MapPin} value={addressZip} onChange={e => setAddressZip(e.target.value)} />
                 <div className="grid grid-cols-3 gap-4">
-                  <CustomInput type="text" placeholder="Rua" value={addressStreet} onChange={e => setAddressStreet(e.target.value)} className="col-span-2" />
+                  <CustomInput type="text" placeholder="Rua" icon={Home} value={addressStreet} onChange={e => setAddressStreet(e.target.value)} className="col-span-2" />
                   <CustomInput type="text" placeholder="Nº" value={addressNumber} onChange={e => setAddressNumber(e.target.value)} className="col-span-1" />
                 </div>
-                <CustomInput type="text" placeholder="Bairro" value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} />
+                <CustomInput type="text" placeholder="Bairro" icon={MapPin} value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} />
               </>
             )}
 
@@ -729,6 +773,7 @@ export const AuthWrapper: React.FC = () => {
               <CustomInput
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Senha (mín. 6 caracteres)"
+                icon={Lock}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSignup()}

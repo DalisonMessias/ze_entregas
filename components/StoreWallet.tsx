@@ -143,73 +143,68 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
         } catch { }
     }, [favoriteShortcuts]);
 
-    const fetchWallet = async () => {
-        setLoadingWallet(true);
-        setErrorWallet(null);
-        try {
-            const data = await cloud.getMyWallet();
-            setWallet(data);
-        } catch (e) {
-            console.error('[StoreWallet] Error fetching wallet:', e);
-            setErrorWallet('Falha ao carregar saldo.');
-        } finally {
-            setLoadingWallet(false);
+    const loadAllData = async (isPolling = false) => {
+        if (!isPolling) {
+            setLoadingWallet(true);
+            setLoadingRequests(true);
+            setErrorWallet(null);
         }
-    };
 
-    const fetchRequests = async () => {
-        setLoadingRequests(true);
         try {
-            const data = await cloud.getStoreRequests();
-            setRequests(data);
-        } catch (e) {
-            console.error('[StoreWallet] Error fetching requests:', e);
-        } finally {
-            setLoadingRequests(false);
-        }
-    };
-
-    const fetchOtherData = async () => {
-        try {
-            const [feesData, profileData] = await Promise.all([
+            // Executa todas as promessas em paralelo
+            const [walletData, requestsData, feesData, profileData] = await Promise.all([
+                cloud.getMyWallet().catch(e => { return null; }),
+                cloud.getStoreRequests(50).catch(e => { return []; }), // Limit to 50
                 cloud.getPublicFeeSettings().catch(() => null),
                 cloud.getMyPartnerProfile().catch(() => null)
             ]);
+
+            // Atualiza estados
+            if (walletData) setWallet(walletData);
+            if (!walletData && !isPolling) setErrorWallet('Falha ao carregar saldo.'); // Apenas mostra erro se não for polling
+
+            setRequests(requestsData || []);
+
             if (feesData) setFees(feesData);
+
             if (profileData) {
+                // Perfil carregado
                 setIsSuperStore(profileData?.is_super_store || false);
-                // Validar perfil completo
                 const validation = validateStoreProfile(profileData);
                 setProfileValid(validation.isValid);
                 setMissingFields(validation.missingFields);
-            } else {
+            } else if (!isPolling) {
                 setProfileValid(false);
                 setMissingFields(['Perfil não encontrado']);
             }
         } catch (e) {
-            console.error('[StoreWallet] Error fetching common data:', e);
+            // Erro geral silencioso ou tratado na UI
+        } finally {
+            if (!isPolling) {
+                setLoadingWallet(false);
+                setLoadingRequests(false);
+            }
         }
     };
 
     useEffect(() => {
-        fetchWallet();
-        fetchRequests();
-        fetchOtherData();
+        // Carregamento inicial paralelo
+        loadAllData(false);
 
-        // Setup polling
+        // Setup polling otimizado
         const interval = setInterval(() => {
-            // Silently refresh requests and wallet
-            cloud.getStoreRequests().then(setRequests).catch(console.error);
-            cloud.getMyWallet().then(setWallet).catch(console.error);
+            // Polling silencioso apenas de dados voláteis (Carteira e Pedidos)
+            Promise.all([
+                cloud.getStoreRequests(50).catch(() => []),
+                cloud.getMyWallet().catch(() => null)
+            ]).then(([reqs, wal]) => {
+                if (reqs) setRequests(reqs as any);
+                if (wal) setWallet(wal as any);
+            });
         }, 15000);
+
         return () => clearInterval(interval);
     }, []);
-
-    const loadAllData = () => {
-        fetchWallet();
-        fetchRequests();
-        fetchOtherData();
-    };
 
     // const handleRecharge = (amount: number, method: 'PIX') => cloud.createRechargeCharge(amount, method);
 
@@ -260,7 +255,7 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                 <DataErrorDisplay
                     title="Erro na Carteira"
                     message={errorWallet}
-                    onRetry={fetchWallet}
+                    onRetry={() => loadAllData(false)}
                 />
             )}
 

@@ -93,14 +93,14 @@ export const MarketingModule: React.FC = () => {
                 cloud.getMyPartnerProfile()
             ]);
 
-            console.log('Templates carregados:', templatesData.data);
-            console.log('Designs carregados:', designsData.data);
+            // console.log('Templates carregados:', templatesData.data);
+            // console.log('Designs carregados:', designsData.data);
 
             if (templatesData.error) {
-                console.error('Erro ao carregar templates:', templatesData.error);
+                // console.error('Erro ao carregar templates:', templatesData.error);
             }
             if (designsData.error) {
-                console.error('Erro ao carregar designs:', designsData.error);
+                // console.error('Erro ao carregar designs:', designsData.error);
             }
 
             setTemplates(templatesData.data || []);
@@ -113,7 +113,7 @@ export const MarketingModule: React.FC = () => {
                 setProfileValid(false);
             }
         } catch (error) {
-            console.error('Error loading marketing data:', error);
+            // console.error('Error loading marketing data:', error);
             setTemplates([]);
             setMyDesigns([]);
             setProfileValid(false);

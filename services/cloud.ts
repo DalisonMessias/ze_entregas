@@ -335,6 +335,17 @@ export const updateCollaboratorPassword = async (collaboratorId: string, oldPass
 };
 
 
+export const getStoreProfileForCollaborator = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data, error } = await sb.rpc('get_store_profile_for_collaborator_rpc', { p_store_id: storeId });
+    if (error) {
+        console.error('[Cloud] Erro ao buscar perfil para colaborador:', error);
+        return null;
+    }
+    return data;
+};
+
 export const getProductsForCollaborator = async (storeId: string) => {
     const sb = getClient();
     if (!sb) return [];
@@ -1083,17 +1094,61 @@ export const adminGetCityRequests = async (): Promise<CityRequest[]> => {
     return data || [];
 };
 
-export const adminAddCity = async (name: string, state: string) => {
+export const adminAddCity = async (name: string, state: string, ibge_code?: string) => {
     const sb = getClient();
     if (!sb) throw new Error("Cliente Supabase não inicializado");
-    const { error } = await sb.from('available_cities').insert({ name, state, is_active: true });
+
+    console.log(`[adminAddCity] Tentando adicionar: ${name}, ${state}, IBGE: ${ibge_code}`);
+
+    // Check if exists
+    const { data: existing, error: queryError } = await sb.from('available_cities')
+        .select('id')
+        .ilike('name', name)
+        .eq('state', state)
+        .maybeSingle();
+
+    if (queryError) {
+        console.error('[adminAddCity] Erro ao verificar existência:', queryError);
+        throw new Error('Erro ao verificar cidade: ' + queryError.message);
+    }
+
+    if (existing) throw new Error('Cidade já cadastrada.');
+
+    // Preparar objeto de inserção
+    const payload: any = {
+        name,
+        state,
+        is_active: true
+    };
+    if (ibge_code) payload.ibge_code = ibge_code;
+
+    const { error } = await sb.from('available_cities').insert(payload);
+
+    if (error) {
+        console.error('[adminAddCity] Erro no insert:', error);
+        throw new Error('Erro ao adicionar cidade: ' + error.message);
+    }
+};
+
+export const adminEditCity = async (id: string, name: string, state: string, ibge_code?: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Cliente Supabase não inicializado");
+    const { error } = await sb.from('available_cities').update({
+        name,
+        state,
+        ibge_code: ibge_code || null
+    }).eq('id', id);
     if (error) throw error;
 };
 
-export const adminEditCity = async (id: string, name: string, state: string) => {
+export const adminDeleteCity = async (id: string) => {
     const sb = getClient();
     if (!sb) throw new Error("Cliente Supabase não inicializado");
-    const { error } = await sb.from('available_cities').update({ name, state }).eq('id', id);
+
+    // First delete related districts? Or assume CASCADE? 
+    // Usually better to let DB handle CASCADE if configured, or delete manually.
+    // Let's try simple delete first.
+    const { error } = await sb.from('available_cities').delete().eq('id', id);
     if (error) throw error;
 };
 
@@ -1603,36 +1658,50 @@ export const adminAdjustBalance = async (userId: string, amount: number, reason:
 
 // --- PARTNER REQUESTS ---
 
-export const getStoreRequests = async (): Promise<PartnerRequest[]> => {
+export const getStoreRequests = async (limit: number = 50): Promise<PartnerRequest[]> => {
     const sb = getClient();
     if (!sb) return [];
     try {
         const { data: { user } } = await sb.auth.getUser();
         if (!user) return [];
-        const { data, error } = await sb.from('partner_requests').select('*').eq('store_id', user.id).neq('status', 'COMPLETED');
+        // Otimização: buscar apenas os mais recentes e limitar quantidade
+        const { data, error } = await sb
+            .from('partner_requests')
+            .select('*')
+            .eq('store_id', user.id)
+            .neq('status', 'COMPLETED') // Mantém filtro de ativos
+            .order('created_at', { ascending: false })
+            .limit(limit); // Limite hardcoded para evitar sobrecarga
+
         if (error) {
-            console.error('[getStoreRequests] error:', error);
+            // console.error('[getStoreRequests] error:', error);
             return [];
         }
         return data || [];
     } catch (err) {
-        console.error('[getStoreRequests] exception:', err);
+        // console.error('[getStoreRequests] exception:', err);
         return [];
     }
 };
 
-export const getPartnerRequestsAvailable = async (): Promise<PartnerRequest[]> => {
+export const getPartnerRequestsAvailable = async (limit: number = 50): Promise<PartnerRequest[]> => {
     const sb = getClient();
     if (!sb) return [];
     try {
-        const { data, error } = await sb.from('partner_requests').select('*').eq('status', 'PENDING');
+        const { data, error } = await sb
+            .from('partner_requests')
+            .select('*')
+            .eq('status', 'PENDING')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
         if (error) {
-            console.error('[getPartnerRequestsAvailable] error:', error);
+            // console.error('[getPartnerRequestsAvailable] error:', error);
             return [];
         }
         return data || [];
     } catch (err) {
-        console.error('[getPartnerRequestsAvailable] exception:', err);
+        // console.error('[getPartnerRequestsAvailable] exception:', err);
         return [];
     }
 };
@@ -1947,9 +2016,9 @@ export const createInfinitePayCheckout = async (orderId: string, amount: number,
     }
 
     // Call Edge Function via Fetch for total control over headers
-    console.log('[DEBUG] createInfinitePayCheckout: Invoking with fetch:', {
-        orderId, amount, handle, itemsCount: items?.length, hasToken: !!token
-    });
+    // Call Edge Function via Fetch for total control over headers
+    // Log removido
+
 
     const response = await fetch(`${SUPABASE_URL}/functions/v1/infinitepay-checkout`, {
         method: 'POST',
@@ -1976,7 +2045,7 @@ export const createInfinitePayCheckout = async (orderId: string, amount: number,
             errorData = { error: `HTTP ${response.status}` };
         }
 
-        console.error('[DEBUG] Edge Function Error:', errorData);
+        // console.error('[DEBUG] Edge Function Error:', errorData);
         let message = errorData.error || "Erro ao processar pagamento";
         if (errorData.details || errorData.header) {
             message += ` (${errorData.details || ''} | Header: ${errorData.header || '?'})`;
@@ -1996,8 +2065,28 @@ export const getNotificationPreferences = async (): Promise<NotificationPreferen
     if (!sb) return { new_orders: true, order_updates: true, system_alerts: true, marketing: true, sound_enabled: true };
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return { new_orders: true, order_updates: true, system_alerts: true, marketing: true, sound_enabled: true };
-    const { data } = await sb.from('notification_preferences').select('*').eq('user_id', user.id).single();
-    return data || { new_orders: true, order_updates: true, system_alerts: true, marketing: true, sound_enabled: true };
+    const { data, error } = await sb.from('notification_preferences').select('*').eq('user_id', user.id).maybeSingle();
+
+    if (!data) {
+        // Se não existir, cria padrão e retorna
+        const defaults = {
+            email_enabled: true,
+            push_enabled: true,
+            sms_enabled: false,
+            categories: ["orders", "system", "promotions"]
+        };
+        // Tenta criar (ignora erro se já existir concorrente)
+        await sb.from('notification_preferences').upsert({ user_id: user.id, ...defaults }).select('*').maybeSingle();
+        return defaults as any;
+    }
+
+    return {
+        new_orders: data.categories?.includes('orders') ?? true,
+        order_updates: data.categories?.includes('orders') ?? true,
+        system_alerts: data.categories?.includes('system') ?? true,
+        marketing: data.categories?.includes('promotions') ?? true,
+        sound_enabled: true // Campo local, não do banco por enquanto
+    };
 };
 
 export const updateNotificationPreferences = async (prefs: NotificationPreferences) => {
@@ -2251,7 +2340,7 @@ export const getAdminDashboardStats = async (): Promise<AdminDashboardStats | nu
             }
         };
     } catch (error) {
-        console.error("Error fetching admin stats:", error);
+        // console.error("Error fetching admin stats:", error);
         return null;
     }
 };
@@ -2282,7 +2371,15 @@ export const adminGetReferrals = async () => {
 };
 
 export const getStoreReportsData = async (): Promise<StoreReportData | null> => {
-    return { totalRequests: 0, totalValue: 0, peakHours: [], driverPerformance: [] };
+    return {
+        totalRequests: 0,
+        totalValue: 0,
+        completedCount: 0,
+        cancelledCount: 0,
+        failedCount: 0,
+        peakHours: [],
+        driverPerformance: []
+    };
 };
 
 export const getStoreShippingRules = async (): Promise<StoreShippingRule[]> => {
@@ -2322,12 +2419,12 @@ export const getZebankDashboardData = async () => {
         // 1. Buscar carteira
         const { data: wallet, error: walletError } = await sb.from('driver_wallets').select('*').eq('driver_id', user.id).single();
         if (walletError && walletError.code !== 'PGRST116') {
-            console.error('[getWalletInfo] Wallet Error:', walletError);
+            // console.error('[getWalletInfo] Wallet Error:', walletError);
         }
 
         // 2. Buscar cartões
         const { data: cards, error: cardsError } = await sb.from('zebank_cards').select('*').eq('user_id', user.id);
-        if (cardsError) console.error('[getWalletInfo] Cards Error:', cardsError);
+        // if (cardsError) console.error('[getWalletInfo] Cards Error:', cardsError);
 
         // 3. Buscar transações
         const { data: transactions, error: transError } = await sb.from('driver_wallet_transactions')
@@ -2335,11 +2432,11 @@ export const getZebankDashboardData = async () => {
             .eq('driver_id', user.id)
             .order('created_at', { ascending: false })
             .limit(10);
-        if (transError) console.error('[getWalletInfo] Trans Error:', transError);
+        // if (transError) console.error('[getWalletInfo] Trans Error:', transError);
 
         // 4. Buscar nível e código no profile
         const { data: profile, error: profileError } = await sb.from('user_profiles').select('partner_level,association_code').eq('id', user.id).single();
-        if (profileError && profileError.code !== 'PGRST116') console.error('[getWalletInfo] Profile Error:', profileError);
+        // if (profileError && profileError.code !== 'PGRST116') console.error('[getWalletInfo] Profile Error:', profileError);
 
         return {
             balance: wallet?.balance_decimal || 0,
@@ -2350,7 +2447,7 @@ export const getZebankDashboardData = async () => {
             recent_transactions: transactions || []
         };
     } catch (err) {
-        console.error('[getWalletInfo] Global exception:', err);
+        // console.error('[getWalletInfo] Global exception:', err);
         return {
             balance: 0,
             savings_balance: 0,
@@ -2406,11 +2503,11 @@ export const getSlides = async (audience: 'drivers' | 'merchants'): Promise<AppS
     const { data, error } = await query;
 
     if (error) {
-        console.error('[cloud.ts] Error fetching slides from DB:', error);
+        // console.error('[cloud.ts] Error fetching slides from DB:', error);
         return [];
     }
 
-    console.log('[cloud.ts] Raw slides from DB:', data?.length, data);
+    // console.log('[cloud.ts] Raw slides from DB:', data?.length, data);
 
     if (!data) return [];
 
@@ -2420,11 +2517,11 @@ export const getSlides = async (audience: 'drivers' | 'merchants'): Promise<AppS
         const now = new Date();
         const expires = new Date(slide.expires_at);
         const isValid = expires > now;
-        if (!isValid) console.log(`[cloud.ts] Filtered out expired slide: ${slide.name} (Expired: ${slide.expires_at})`);
+        // if (!isValid) console.log(`[cloud.ts] Filtered out expired slide: ${slide.name} (Expired: ${slide.expires_at})`);
         return isValid;
     });
 
-    console.log('[cloud.ts] Final filtered slides:', filtered.length);
+    // console.log('[cloud.ts] Final filtered slides:', filtered.length);
     return filtered;
 };
 
@@ -2438,7 +2535,7 @@ export const adminGetSlides = async (): Promise<AppSlide[]> => {
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error('Error fetching admin slides:', error);
+        // console.error('Error fetching admin slides:', error);
         return [];
     }
     return data || [];
@@ -2712,7 +2809,7 @@ export const generateCardQRToken = async (cardId: string): Promise<string> => {
 
 // --- CLIENT EXPORTS (FIXES) ---
 
-export const placeCollaboratorOrder = async (storeId: string, collaboratorId: string, tableIdentifier: string, items: any[], customerName?: string, orderId?: string) => {
+export const placeCollaboratorOrder = async (storeId: string, collaboratorId: string, tableIdentifier: string, items: any[], customerName?: string, orderId?: string, collaboratorName?: string) => {
     const sb = getClient();
     if (!sb) throw new Error("No client");
 
@@ -2723,7 +2820,8 @@ export const placeCollaboratorOrder = async (storeId: string, collaboratorId: st
         p_table_identifier: tableIdentifier,
         p_customer_name: customerName || null,
         p_items: items,
-        p_order_id: orderId || null
+        p_order_id: orderId || null,
+        p_collaborator_name: collaboratorName || null
     });
 
     if (error) {
@@ -2792,6 +2890,34 @@ export const getClosedOrders = async (storeId: string, collaboratorId: string) =
     if (error) {
         console.error('getClosedOrders error', error);
         return [];
+    }
+    return data || [];
+};
+
+export const getStoreInternalOrders = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    // Busca via RPC para garantir acesso a colaboradores (Bypass RLS)
+    const { data, error } = await sb.rpc('get_store_internal_orders_rpc', { p_store_id: storeId });
+
+    if (error) {
+        console.error('getStoreInternalOrders RPC error', error);
+
+        // Fallback para query direta (para Lojistas autenticados funcionarem mesmo se RPC falhar)
+        const { data: directData, error: directError } = await sb
+            .from('orders')
+            .select('*')
+            .eq('store_id', storeId)
+            .eq('origin', 'INTERNAL')
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (directError) {
+            console.error('getStoreInternalOrders Direct error', directError);
+            return [];
+        }
+        return directData || [];
     }
     return data || [];
 };
@@ -3038,7 +3164,7 @@ export const processPosPayment = async (
 };
 
 export const logQrCodeScan = async (cardId: string, status: string, metadata: any): Promise<void> => {
-    console.log("QR Code Scanned:", cardId, status, metadata);
+    // console.log("QR Code Scanned:", cardId, status, metadata);
     // Optional: Log to a specific table if needed
 };
 
@@ -3059,7 +3185,7 @@ export const getMyTerminalHistoryPaged = async (page: number, limit: number): Pr
         .range(from, to);
 
     if (error) {
-        console.error('Error fetching terminal history:', error);
+        // console.error('Error fetching terminal history:', error);
         return [];
     }
 
@@ -3103,7 +3229,7 @@ export const getMySalesSimulations = async (): Promise<SalesSimulation[]> => {
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error('Error fetching sales simulations:', error);
+        // console.error('Error fetching sales simulations:', error);
         return [];
     }
     return data || [];
@@ -3133,7 +3259,7 @@ export const adminGetFraudAlerts = async (): Promise<any[]> => {
         if (error) throw error;
         return data || [];
     } catch (e) {
-        console.warn('adminGetFraudAlerts: Tabela não existe ou erro, retornando array vazio.', e);
+        // console.warn('adminGetFraudAlerts: Tabela não existe ou erro, retornando array vazio.', e);
         return [];
     }
 };
@@ -3148,7 +3274,7 @@ export const adminGetIdentityVerifications = async (): Promise<any[]> => {
         if (error) throw error;
         return data || [];
     } catch (e) {
-        console.warn('adminGetIdentityVerifications: erro ou tabela inexistente.', e);
+        // console.warn('adminGetIdentityVerifications: erro ou tabela inexistente.', e);
         return [];
     }
 };
@@ -3159,7 +3285,7 @@ export const adminUpdateFraudAlert = async (id: string, status: string) => {
     try {
         await sb.from('fraud_alerts').update({ status }).eq('id', id);
     } catch (e) {
-        console.error('adminUpdateFraudAlert failed', e);
+        // console.error('adminUpdateFraudAlert failed', e);
         throw e;
     }
 };
@@ -3170,7 +3296,7 @@ export const adminUpdateIdentityVerification = async (id: string, status: string
     try {
         await sb.from('identity_verifications').update({ status, admin_notes: notes }).eq('id', id);
     } catch (e) {
-        console.error('adminUpdateIdentityVerification failed', e);
+        // console.error('adminUpdateIdentityVerification failed', e);
         throw e;
     }
 };
@@ -3339,7 +3465,7 @@ export const requestLoan = async (
         .insert(installments);
 
     if (installmentsError) {
-        console.error('Error creating installments:', installmentsError);
+        // console.error('Error creating installments:', installmentsError);
         throw new Error('Erro ao criar parcelas do empréstimo');
     }
 
@@ -3372,7 +3498,7 @@ export const getUserLoans = async (): Promise<any[]> => {
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error('Error fetching user loans:', error);
+        // console.error('Error fetching user loans:', error);
         return [];
     }
     return data || [];
@@ -3389,7 +3515,7 @@ export const getLoanInstallments = async (loanId: string): Promise<any[]> => {
         .order('installment_number');
 
     if (error) {
-        console.error('Error fetching loan installments:', error);
+        // console.error('Error fetching loan installments:', error);
         return [];
     }
     return data || [];
@@ -3410,7 +3536,7 @@ export const adminGetAllLoans = async (): Promise<any[]> => {
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error('Error fetching all loans:', error);
+        // console.error('Error fetching all loans:', error);
         return [];
     }
     return data || [];
@@ -3424,7 +3550,7 @@ export const adminApproveLoan = async (loanId: string): Promise<void> => {
     if (!user) throw new Error('Usuário não autenticado');
 
     // Get loan details
-    console.log('[DEBUG] adminApproveLoan: Fetching loan with ID:', loanId);
+    // console.log('[DEBUG] adminApproveLoan: Fetching loan with ID:', loanId);
     const { data: loan, error: fetchError } = await sb
         .from('partner_loans')
         .select('*')
@@ -3432,8 +3558,8 @@ export const adminApproveLoan = async (loanId: string): Promise<void> => {
         .single();
 
     if (fetchError || !loan) {
-        console.error('[DEBUG] adminApproveLoan: Fetch loan error:', fetchError);
-        console.log('[DEBUG] adminApproveLoan: Loan data:', loan);
+        // console.error('[DEBUG] adminApproveLoan: Fetch loan error:', fetchError);
+        // console.log('[DEBUG] adminApproveLoan: Loan data:', loan);
         throw new Error('Empréstimo não encontrado');
     }
 
@@ -3604,7 +3730,7 @@ export const getStoreDeliverySettings = async (): Promise<StoreDeliverySettings 
         .single();
 
     if (error && error.code !== 'PGRST116') { // Ignore not found error
-        console.error("Error fetching delivery settings:", error);
+        // console.error("Error fetching delivery settings:", error);
     }
 
     return data;
@@ -3641,7 +3767,7 @@ export const getStoreNeighborhoodFees = async (): Promise<StoreNeighborhoodFee[]
         .order('neighborhood_name', { ascending: true });
 
     if (error) {
-        console.error("Error fetching neighborhood fees:", error);
+        // console.error("Error fetching neighborhood fees:", error);
         return [];
     }
     return data || [];
@@ -3692,7 +3818,7 @@ export const getServiceConfig = async (serviceName: string): Promise<ServiceConf
         .maybeSingle();
 
     if (error) {
-        console.error(`Error fetching config for ${serviceName}:`, error);
+        // console.error(`Error fetching config for ${serviceName}:`, error);
         return null;
     }
 
@@ -3755,9 +3881,142 @@ export const saveServiceConfig = async (serviceName: string, config: ServiceConf
     }
 };
 
+// --- Store Tables Management ---
+
+export const getStoreTables = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('store_tables')
+        .select('*')
+        .eq('store_id', storeId)
+        .order('identifier', { ascending: true });
+
+    if (error) {
+        // console.error('Error fetching tables:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const createTable = async (identifier: string, qrCodeUrl: string | null) => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await sb
+        .from('store_tables')
+        .insert({
+            store_id: user.id,
+            identifier,
+            qr_code_url: qrCodeUrl
+        })
+        .select()
+        .single();
+
+    if (error) {
+        // console.error('Error creating table:', error);
+        throw error;
+    }
+    return data;
+};
+
+export const deleteTable = async (tableId: string) => {
+    const sb = getClient();
+    if (!sb) return;
+
+    // First get the table to delete the image from storage if needed
+    const { data: table } = await sb.from('store_tables').select('qr_code_url').eq('id', tableId).single();
+
+    const { error } = await sb
+        .from('store_tables')
+        .delete()
+        .eq('id', tableId);
+
+    if (error) throw error;
+
+    // Optional: Delete image from storage
+    if (table?.qr_code_url) {
+        try {
+            const path = table.qr_code_url.split('/').pop(); // Very simple extraction, might need improvement
+            if (path) {
+                // Assuming path structure. Usually works if path is filename.
+            }
+        } catch (e) {
+            // console.error('Error cleaning up storage:', e);
+        }
+    }
+};
+
+export const uploadQRCode = async (blob: Blob, fileName: string): Promise<string | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    const filePath = `${user.id}/${fileName}`;
+
+    const { error: uploadError } = await sb.storage
+        .from('qr-codes')
+        .upload(filePath, blob, {
+            upsert: true,
+            contentType: 'image/png'
+        });
+
+    if (uploadError) {
+        console.error('Error uploading QR Code:', uploadError);
+        throw uploadError;
+    }
+
+    const { data } = sb.storage.from('qr-codes').getPublicUrl(filePath);
+    return data.publicUrl;
+};
+
+export const getStoreProfile = async (storeId: string): Promise<{ avatar_url: string | null; store_logo_url: string | null; name: string } | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data, error } = await sb.from('user_profiles').select('avatar_url, store_logo_url, name').eq('id', storeId).maybeSingle();
+    if (error) {
+        console.error('Error getStoreProfile', error);
+        return null;
+    }
+    return data;
+};
 
 
 
+
+// Temporary backup functions (placeholders for full implementation)
+export const downloadBackup = async (userId: string): Promise<boolean> => {
+    // Placeholder: In a full implementation, this would download user data from Supabase
+    // and restore it to local storage
+    return false;
+};
+
+export const uploadGenericImage = async (file: File, bucketName: string = 'public-files', folderPath: string = 'uploads'): Promise<string> => {
+    const sb = getClient();
+    if (!sb) throw new Error('Supabase client not initialized');
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${folderPath}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+    const { data, error } = await sb.storage
+        .from(bucketName)
+        .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = sb.storage
+        .from(bucketName)
+        .getPublicUrl(fileName);
+
+    return publicUrl;
+};
 
 
 

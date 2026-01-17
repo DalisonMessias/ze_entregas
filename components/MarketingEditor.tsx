@@ -190,7 +190,7 @@ export const MarketingEditor: React.FC<MarketingEditorProps> = ({ template, desi
             setIsAiModalOpen(false);
             setAiPrompt('');
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             alert('Erro ao gerar design. Tente novamente.');
         } finally {
             setIsGeneratingAi(false);
@@ -299,7 +299,7 @@ export const MarketingEditor: React.FC<MarketingEditorProps> = ({ template, desi
             }
             alert('Design salvo com sucesso!');
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             alert('Erro ao salvar design');
         } finally {
             setIsSaving(false);
@@ -320,7 +320,7 @@ export const MarketingEditor: React.FC<MarketingEditorProps> = ({ template, desi
             link.href = canvas.toDataURL('image/png');
             link.click();
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             alert('Erro ao exportar imagem');
         } finally {
             setIsExporting(false);

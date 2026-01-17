@@ -19,29 +19,35 @@ export function validateStoreProfile(profile: PartnerProfile | null): ProfileVal
 
     const missingFields: string[] = [];
 
-    // Validar campos obrigatórios
+    // Validar campos obrigatórios EXCLUSIVAMENTE da loja
     if (!profile.store_name || profile.store_name.trim() === '') {
         missingFields.push('Nome da Loja');
     }
 
+    // Usamos phone_number pois geralmente é único para o perfil, mas poderíamos usar um store_phone se existisse
     if (!profile.phone_number || profile.phone_number.trim() === '') {
-        missingFields.push('Telefone');
+        missingFields.push('Telefone de Contato');
     }
 
-    if (!profile.city || profile.city.trim() === '') {
-        missingFields.push('Cidade');
+    // Validar Endereço da LOJA (separado do endereço pessoal)
+    if (!profile.store_address_zip || profile.store_address_zip.trim() === '') {
+        missingFields.push('CEP da Loja');
     }
 
-    if (!profile.address_street || profile.address_street.trim() === '') {
-        missingFields.push('Rua');
+    if (!profile.store_address_street || profile.store_address_street.trim() === '') {
+        missingFields.push('Rua da Loja');
     }
 
-    if (!profile.address_number || profile.address_number.trim() === '') {
-        missingFields.push('Número');
+    if (!profile.store_address_number || profile.store_address_number.trim() === '') {
+        missingFields.push('Número da Loja');
     }
 
-    if (!profile.address_district || profile.address_district.trim() === '') {
-        missingFields.push('Bairro');
+    if (!profile.store_address_district || profile.store_address_district.trim() === '') {
+        missingFields.push('Bairro da Loja');
+    }
+
+    if (!profile.store_address_city || profile.store_address_city.trim() === '') {
+        missingFields.push('Cidade da Loja');
     }
 
     return {

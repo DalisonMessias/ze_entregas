@@ -3,10 +3,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, ShieldAlert, FileCheck, FileX, Eye, X, RefreshCw, AlertTriangle, CheckCircle, Clock, User, MapPin } from 'lucide-react';
 import * as cloud from '../services/cloud';
-import { FraudAlert, IdentityVerification } from '../types';
+import { FraudAlert } from '../types';
 import { Button } from './Button';
-import { Switch } from './Switch'; 
-import { useDialog } from '../utils/dialogService'; // Import useDialog
+import { Switch } from './Switch';
+import { useDialog } from '../utils/dialogService';
+
+// Tipo local enquanto não existe em types.ts
+interface IdentityVerification {
+    id: string;
+    user_id: string;
+    status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+    created_at: string;
+    photo_url?: string;
+    location_data?: { lat: number; lng: number; accuracy: number };
+    admin_notes?: string;
+}
 
 const formatDateTime = (isoString: string) => new Date(isoString).toLocaleString('pt-BR');
 
@@ -58,7 +69,7 @@ export const SecurityManagement: React.FC = () => {
                 setIdentityVerifications(verifications);
             }
         } catch (e) {
-            console.error("Error loading security data:", e);
+            // console.error("Error loading security data:", e);
         } finally {
             setLoading(false);
         }
@@ -75,7 +86,7 @@ export const SecurityManagement: React.FC = () => {
             await loadData();
             setSelectedFraudAlert(null);
         } catch (e) {
-            console.error(e);
+            // console.error(e);
             await alert({ title: "Erro", message: "Erro ao atualizar status do alerta de fraude." });
         } finally {
             setProcessingFraud(false);
@@ -90,7 +101,7 @@ export const SecurityManagement: React.FC = () => {
             setSelectedVerification(null);
             setAdminNotes('');
         } catch (e) {
-            console.error(e);
+            // console.error(e);
             await alert({ title: "Erro", message: "Erro ao atualizar status da verificação de identidade." });
         } finally {
             setProcessingVerification(false);
@@ -115,7 +126,7 @@ export const SecurityManagement: React.FC = () => {
                 <div className="flex gap-3 mt-4">
                     {alert.status === 'OPEN' ? (
                         <Button fullWidth onClick={() => handleUpdateFraudStatus(alert.id, 'RESOLVED')} disabled={processingFraud}>
-                            {processingFraud ? <Loader2 className="animate-spin"/> : 'Marcar como Resolvido'}
+                            {processingFraud ? <Loader2 className="animate-spin" /> : 'Marcar como Resolvido'}
                         </Button>
                     ) : (
                         <Button fullWidth variant="outline" onClick={onClose}>Fechar</Button>
@@ -136,7 +147,7 @@ export const SecurityManagement: React.FC = () => {
                     <p><strong>ID Usuário:</strong> {verification.user_id}</p>
                     <p><strong>Status:</strong> <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusChipColor(verification.status)}`}>{verification.status}</span></p>
                     <p><strong>Criado em:</strong> {formatDateTime(verification.created_at)}</p>
-                    
+
                     {verification.photo_url && (
                         <div>
                             <p><strong>Foto:</strong></p>
@@ -148,11 +159,11 @@ export const SecurityManagement: React.FC = () => {
                             <p><strong>Localização:</strong></p>
                             <p className="text-sm">Lat: {verification.location_data.lat}, Lng: {verification.location_data.lng} (Acurácia: {verification.location_data.accuracy}m)</p>
                             <a href={`https://www.google.com/maps?q=${verification.location_data.lat},${verification.location_data.lng}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 text-sm flex items-center gap-1 mt-1">
-                                <MapPin className="w-4 h-4"/> Ver no Mapa
+                                <MapPin className="w-4 h-4" /> Ver no Mapa
                             </a>
                         </div>
                     )}
-                    
+
                     {verification.status === 'REJECTED' && verification.admin_notes && (
                         <div>
                             <p><strong>Notas do Admin:</strong></p>
@@ -164,14 +175,14 @@ export const SecurityManagement: React.FC = () => {
                         <>
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Notas (para rejeição)</label>
-                                <textarea value={adminNotes} onChange={e => setAdminNotes(e.target.value)} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 h-20" placeholder="Motivo da rejeição, etc."/>
+                                <textarea value={adminNotes} onChange={e => setAdminNotes(e.target.value)} className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 h-20" placeholder="Motivo da rejeição, etc." />
                             </div>
                             <div className="flex gap-3 mt-4">
                                 <Button fullWidth variant="danger" onClick={() => handleUpdateIdentityStatus(verification.id, 'REJECTED')} disabled={processingVerification}>
-                                    {processingVerification ? <Loader2 className="animate-spin"/> : 'Rejeitar'}
+                                    {processingVerification ? <Loader2 className="animate-spin" /> : 'Rejeitar'}
                                 </Button>
                                 <Button fullWidth variant="success" onClick={() => handleUpdateIdentityStatus(verification.id, 'VERIFIED')} disabled={processingVerification}>
-                                    {processingVerification ? <Loader2 className="animate-spin"/> : 'Aprovar'}
+                                    {processingVerification ? <Loader2 className="animate-spin" /> : 'Aprovar'}
                                 </Button>
                             </div>
                         </>
@@ -222,7 +233,7 @@ export const SecurityManagement: React.FC = () => {
                                                 <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusChipColor(alert.status)}`}>{alert.status}</span></td>
                                                 <td className="px-4 py-3 text-right">
                                                     <Button size="sm" variant="outline" onClick={() => setSelectedFraudAlert(alert)} className="px-3 py-1.5 text-xs">
-                                                        <Eye className="w-4 h-4 mr-1"/> Ver
+                                                        <Eye className="w-4 h-4 mr-1" /> Ver
                                                     </Button>
                                                 </td>
                                             </tr>
@@ -260,7 +271,7 @@ export const SecurityManagement: React.FC = () => {
                                                 <td className="px-4 py-3 text-xs text-gray-500">{formatDateTime(verification.created_at)}</td>
                                                 <td className="px-4 py-3 text-right">
                                                     <Button size="sm" variant="outline" onClick={() => setSelectedVerification(verification)} className="px-3 py-1.5 text-xs">
-                                                        <Eye className="w-4 h-4 mr-1"/> Ver
+                                                        <Eye className="w-4 h-4 mr-1" /> Ver
                                                     </Button>
                                                 </td>
                                             </tr>

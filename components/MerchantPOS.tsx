@@ -411,7 +411,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         cloud.syncOfflineData();
 
         const handleOnline = () => {
-            console.log('Online detected, syncing...');
+            // console.log('Online detected, syncing...');
             cloud.syncOfflineData();
         };
         window.addEventListener('online', handleOnline);

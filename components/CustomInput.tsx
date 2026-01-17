@@ -28,7 +28,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
             if (!valStr.includes(',')) {
                 const num = Number(valStr);
                 if (!isNaN(num)) {
-                    setDisplayValue(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+                    setDisplayValue(num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
                 } else {
                     setDisplayValue(valStr);
                 }
@@ -57,9 +57,11 @@ export const CustomInput: React.FC<CustomInputProps> = ({
                 return;
             }
             const amount = Number(digits) / 100;
-            const formatted = amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+            const formatted = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             setDisplayValue(formatted);
             if (onChange) {
+                // Passa o valor formatado para o onChange. O pai deve saber lidar ou limpar se quiser o raw.
+                // Idealmente, componentes controlados deveriam receber o valor raw, mas aqui estamos emulando máscara.
                 const syntheticEvent = { ...e, target: { ...e.target, value: formatted } } as any;
                 onChange(syntheticEvent);
             }

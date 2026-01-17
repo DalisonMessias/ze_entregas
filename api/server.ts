@@ -1,31 +1,22 @@
+import './config.js'; // DEVE SER O PRIMEIRO IMPORT
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+import http from 'http';
+
 import streetsNeighborhoodsRoutes from './routes/streetsNeighborhoods.js';
 import integrationRoutes from './routes/integration.js';
+import whatsappRoutes from './routes/whatsapp.js'; // Importar rotas do WhatsApp
+import { initializeWebSocket } from './websocket.js';
+import './services/whatsappService.js'; // Importa para inicializar o serviço
+import { supabaseAdmin } from './services/supabaseClient.js';
 
-// Configurar dotenv com caminho explícito
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const envPath = path.resolve(__dirname, '../.env');
-
-const result = dotenv.config({ path: envPath });
-
-console.log(`🔌 Tentando carregar .env de: ${envPath}`);
-if (result.error) {
-  console.error("❌ Erro ao carregar .env:", result.error);
-} else {
-  console.log("✅ .env carregado. Variáveis encontradas:", Object.keys(result.parsed || {}).length);
-}
-
-// Debug das variáveis críticas
-console.log("🔍 SUPABASE_URL:", process.env.SUPABASE_URL ? "Definido" : "NÃO DEFINIDO");
-console.log("🔍 VITE_SUPABASE_URL:", process.env.VITE_SUPABASE_URL ? "Definido" : "NÃO DEFINIDO");
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 // Middleware
 app.use(cors());
@@ -33,7 +24,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Middleware de autenticação simulado (para desenvolvimento)
-// Em produção, isso deve ser substituído por autenticação real via Supabase
 app.use((req, res, next) => {
   // Simular usuário autenticado para desenvolvimento
   (req as any).user = {
@@ -46,6 +36,7 @@ app.use((req, res, next) => {
 // Rotas
 app.use('/api/streets-neighborhoods', streetsNeighborhoodsRoutes);
 app.use('/api/v1', integrationRoutes);
+app.use('/api/whatsapp', whatsappRoutes); // Usar rotas do WhatsApp
 
 // Rota de health check
 app.get('/health', (req, res) => {
@@ -59,7 +50,8 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      streetsNeighborhoods: '/api/streets-neighborhoods'
+      streetsNeighborhoods: '/api/streets-neighborhoods',
+      whatsapp: '/api/whatsapp/status'
     }
   });
 });
@@ -73,12 +65,32 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
+// Criar servidor HTTP e anexar WebSocket
+const server = http.createServer(app);
+initializeWebSocket(server);
+
 // Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  const base = process.env.API_BASE_URL || `http://${process.env.HOST || '0.0.0.0'}:${PORT}`;
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log(`\n🚀 SERVIDOR WHATSAPP LIGADO`);
+  console.log(`🔌 Porta: ${PORT}`);
+
+  // Teste básico de Supabase no boot
+  try {
+    const { error, data } = await supabaseAdmin.from('whatsapp_sessions').select('count', { count: 'exact', head: true });
+    if (error) {
+      console.error('❌ ERRO DE CONEXÃO COM SUPABASE:', error);
+      console.error('👉 Código do erro:', error.code);
+      console.error('👉 Detalhes:', error.details || error.message);
+    } else {
+      console.log('✅ Conexão com Supabase: OK');
+    }
+  } catch (e: any) {
+    console.error('🔥 FALHA CATASTRÓFICA AO ACESSAR SUPABASE:', e);
+  }
+
+  const base = `http://localhost:${PORT}`;
   console.log(`📍 Health check: ${base}/health`);
-  console.log(`🗺️  Streets API: ${base}/api/streets-neighborhoods`);
+  console.log(`💬 WhatsApp API: ${base}/api/whatsapp/status\n`);
 });
 
 export default app;

@@ -51,12 +51,18 @@ export const StoreReports: React.FC = () => {
                 // 1. Verificar se é Superlogista
                 const user = await cloud.getClient()?.auth.getUser();
                 if (user?.data.user) {
-                    const profileData = await cloud.getClient()?.from('user_profiles').select('is_super_store, city, address').eq('id', user.data.user.id).single();
-                    const isSuper = profileData?.data?.is_super_store || false;
+                    const profileData = await cloud.getClient()?.from('user_profiles')
+                        .select('is_super_store, store_name, phone_number, store_address_zip, store_address_street, store_address_number, store_address_district, store_address_city, store_address_state')
+                        .eq('id', user.data.user.id)
+                        .single();
+
+                    const profile = profileData?.data;
+                    const isSuper = profile?.is_super_store || false;
                     setIsSuperStore(isSuper);
 
-                    // Validar perfil completo
-                    const validation = validateStoreProfile(profileData?.data as any);
+                    // Validar perfil completo focado na loja
+                    const validation = validateStoreProfile(profile as any);
+                    // console.log('[StoreReports] Validação de perfil:', validation);
                     setProfileValid(validation.isValid);
                     setMissingFields(validation.missingFields);
 
@@ -67,7 +73,7 @@ export const StoreReports: React.FC = () => {
                     }
                 }
             } catch (e) {
-                console.error(e);
+                // console.error(e);
             } finally {
                 setLoading(false);
             }

@@ -27,7 +27,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
         cloud.getNotificationPreferences().then(p => {
             if (p) setPrefs(p);
         }).catch(err => {
-            console.error("Failed to load settings", err);
+            // console.error("Failed to load settings", err);
             alert({ title: "Erro", message: "Não foi possível carregar suas configurações." });
         }).finally(() => {
             setLoading(false);
@@ -43,7 +43,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
             }
             await alert({ title: "Sucesso", message: "Configurações salvas!" });
         } catch (e) {
-            console.error(e);
+            // console.error(e);
             alert({ title: "Erro", message: "Não foi possível salvar suas configurações." });
         } finally {
             setIsSaving(false);
@@ -65,7 +65,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
     return (
         <div className="space-y-6 animate-in fade-in pb-24">
             <div className="flex items-center justify-between">
-                 <h2 className="text-2xl font-black text-gray-900 dark:text-white">Configurações</h2>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white">Configurações</h2>
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
@@ -84,21 +84,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
                         </div>
                         <Switch checked={prefs.new_orders} onChange={c => update('new_orders', c)} />
                     </div>
-                     <div className="flex items-center justify-between p-4">
+                    <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-4">
                             <Truck className="w-5 h-5 text-gray-400" />
                             <span className="text-sm font-medium dark:text-white">Status da Entrega</span>
                         </div>
                         <Switch checked={prefs.order_updates} onChange={c => update('order_updates', c)} />
                     </div>
-                     <div className="flex items-center justify-between p-4">
+                    <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-4">
                             <AlertCircle className="w-5 h-5 text-gray-400" />
                             <span className="text-sm font-medium dark:text-white">Alertas do Sistema</span>
                         </div>
                         <Switch checked={prefs.system_alerts} onChange={c => update('system_alerts', c)} />
                     </div>
-                     <div className="flex items-center justify-between p-4">
+                    <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-4">
                             <Mail className="w-5 h-5 text-gray-400" />
                             <span className="text-sm font-medium dark:text-white">Novidades e Dicas</span>
@@ -107,20 +107,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
                     </div>
                     <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-4">
-                             {prefs.sound_enabled ? <Volume2 className="w-5 h-5 text-gray-400"/> : <VolumeX className="w-5 h-5 text-gray-400"/>}
+                            {prefs.sound_enabled ? <Volume2 className="w-5 h-5 text-gray-400" /> : <VolumeX className="w-5 h-5 text-gray-400" />}
                             <span className="text-sm font-medium dark:text-white">Sons</span>
                         </div>
                         <Switch checked={prefs.sound_enabled} onChange={c => update('sound_enabled', c)} />
                     </div>
                 </div>
-                
+
                 <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">
-                     <Button fullWidth size="lg" onClick={handleSave} disabled={isSaving}>
+                    <Button fullWidth size="lg" onClick={handleSave} disabled={isSaving}>
                         {isSaving ? 'Salvando...' : 'Salvar Alterações'}
                     </Button>
                 </div>
             </div>
-            
+
             <button onClick={onBack} className="w-full text-center text-sm font-bold text-gray-500 hover:text-brand-600 p-4">
                 Voltar
             </button>

@@ -70,7 +70,7 @@ export const StoreTeam: React.FC = () => {
             setProfileValid(validation.isValid);
             setMissingFields(validation.missingFields);
         } catch (e) {
-            console.error(e);
+            // console.error(e);
             setProfileValid(false);
             setMissingFields(['Erro ao carregar perfil']);
         } finally {
@@ -94,7 +94,7 @@ export const StoreTeam: React.FC = () => {
                 await alert({ title: "Entregador não encontrado", message: "Entregador não encontrado com este código." });
             }
         } catch (e) {
-            console.error(e);
+            // console.error(e);
             await alert({ title: "Erro na Busca", message: "Erro ao buscar." });
         } finally {
             setSearching(false);

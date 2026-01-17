@@ -25,11 +25,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose
                 useCORS: true
             });
             const link = document.createElement('a');
-            link.download = `comprovante_${transaction.id.substring(0,8)}.png`;
+            link.download = `comprovante_${transaction.id.substring(0, 8)}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
         } catch (e) {
-            console.error(e);
+            // console.error(e);
             await alert({ title: "Erro ao Gerar Imagem", message: "Erro ao gerar imagem." });
         }
     };
@@ -40,11 +40,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                
+
                 {/* Actions Header */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-900 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
                     <h3 className="font-bold text-gray-900 dark:text-white">Comprovante</h3>
-                    <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"><X className="w-5 h-5"/></button>
+                    <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"><X className="w-5 h-5" /></button>
                 </div>
 
                 {/* Printable Receipt Area */}
@@ -73,9 +73,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose
                         <div className="flex justify-between items-center">
                             <span className="text-sm text-gray-500">Status</span>
                             <div className="flex items-center gap-1">
-                                {transaction.status === 'COMPLETED' && <CheckCircle className="w-4 h-4 text-green-500"/>}
-                                {transaction.status === 'PENDING' && <Clock className="w-4 h-4 text-yellow-500"/>}
-                                {transaction.status === 'FAILED' && <AlertTriangle className="w-4 h-4 text-red-500"/>}
+                                {transaction.status === 'COMPLETED' && <CheckCircle className="w-4 h-4 text-green-500" />}
+                                {transaction.status === 'PENDING' && <Clock className="w-4 h-4 text-yellow-500" />}
+                                {transaction.status === 'FAILED' && <AlertTriangle className="w-4 h-4 text-red-500" />}
                                 <span className="text-sm font-bold text-gray-800">{transaction.status}</span>
                             </div>
                         </div>
@@ -97,7 +97,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ transaction, onClose
                 {/* Footer Buttons */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-700">
                     <Button fullWidth onClick={handleDownload} className="flex items-center justify-center gap-2">
-                        <Download className="w-4 h-4"/> Baixar Comprovante
+                        <Download className="w-4 h-4" /> Baixar Comprovante
                     </Button>
                 </div>
             </div>

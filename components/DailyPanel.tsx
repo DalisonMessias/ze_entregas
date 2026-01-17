@@ -106,7 +106,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             const p = await cloud.getMyPartnerProfile();
             setProfile(p);
         } catch (e) {
-            console.error('[DailyPanel] Error fetching profile:', e);
+            // console.error('[DailyPanel] Error fetching profile:', e);
             // We don't block the UI as this is non-essential for daily tracking
         }
     };
@@ -243,7 +243,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             setShowEndConfirm(false);
             setShowShareCard(true);
         } catch (e) {
-            console.error("Error saving day", e);
+            // console.error("Error saving day", e);
             await alert({ title: 'Salvar', message: 'Erro ao salvar. Tente novamente.' });
         } finally {
             setIsSaving(false);

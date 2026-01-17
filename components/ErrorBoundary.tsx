@@ -23,7 +23,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // You can also log the error to an error reporting service
-    console.error("Uncaught error:", error, errorInfo);
+    // console.error("Uncaught error:", error, errorInfo);
   }
 
   public render() {
@@ -41,16 +41,16 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
           <div className="flex gap-3 mb-4">
             <button onClick={() => window.location.reload()} className="px-4 py-2 bg-brand-600 text-white rounded-lg">Recarregar</button>
             <button onClick={async () => {
-                try {
-                  const reg = await navigator.serviceWorker.getRegistration();
-                  if (reg && reg.waiting) {
-                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                    navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
-                    return;
-                  }
-                } catch {}
-                window.location.reload();
-              }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg">Forçar atualização</button>
+              try {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (reg && reg.waiting) {
+                  reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
+                  return;
+                }
+              } catch { }
+              window.location.reload();
+            }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg">Forçar atualização</button>
           </div>
           {this.state.error && (
             <details className="text-xs text-red-500 max-w-lg p-4 bg-red-50 dark:bg-red-900/20 rounded-md">

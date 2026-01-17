@@ -21,15 +21,15 @@ export const SecurityCheckModal: React.FC<SecurityCheckModalProps> = ({ onVerifi
     useEffect(() => {
         const startCamera = async () => {
             try {
-                const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'user' } 
+                const mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' }
                 });
                 setStream(mediaStream);
                 if (videoRef.current) {
                     videoRef.current.srcObject = mediaStream;
                 }
             } catch (e) {
-                console.error(e);
+                // console.error(e);
                 setStep('error');
                 setErrorMsg("Erro ao acessar câmera. Permissão necessária.");
             }
@@ -53,7 +53,7 @@ export const SecurityCheckModal: React.FC<SecurityCheckModalProps> = ({ onVerifi
         const canvas = canvasRef.current;
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        
+
         const ctx = canvas.getContext('2d');
         if (ctx) {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -101,7 +101,7 @@ export const SecurityCheckModal: React.FC<SecurityCheckModalProps> = ({ onVerifi
 
         try {
             const file = new File([photoBlob], "selfie.jpg", { type: "image/jpeg" });
-            
+
             await cloud.uploadIdentityVerification(file, {
                 lat: coords.latitude,
                 lng: coords.longitude,
@@ -122,7 +122,7 @@ export const SecurityCheckModal: React.FC<SecurityCheckModalProps> = ({ onVerifi
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[80] flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl relative flex flex-col max-h-[90vh]">
-                
+
                 {/* Header */}
                 <div className="p-6 bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 text-center">
                     <ShieldCheck className="w-10 h-10 text-brand-600 mx-auto mb-2" />
@@ -131,7 +131,7 @@ export const SecurityCheckModal: React.FC<SecurityCheckModalProps> = ({ onVerifi
                 </div>
 
                 <div className="p-6 flex flex-col items-center justify-center flex-1 min-h-[300px]">
-                    
+
                     {step === 'camera' && (
                         <div className="w-full flex flex-col items-center">
                             <p className="text-sm text-center mb-4 text-gray-600 dark:text-gray-300">

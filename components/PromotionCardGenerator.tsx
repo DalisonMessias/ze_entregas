@@ -732,7 +732,7 @@ export const PromotionCardGenerator: React.FC = () => {
                 link.href = canvas.toDataURL('image/png');
                 link.click();
             } catch (error) {
-                console.error(error);
+                // console.error(error);
                 await alert({ title: "Erro ao Gerar Imagem", message: "Erro ao gerar a imagem. Tente novamente." });
             } finally {
                 setIsGenerating(false);

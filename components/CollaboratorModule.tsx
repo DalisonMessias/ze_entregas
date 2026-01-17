@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Product, CartItem } from '../types';
 import * as cloud from '../services/cloud';
-import { Loader2, Search, Plus, Minus, ShoppingBag, Send, LogOut, Coffee, LayoutGrid, ClipboardList, CheckCircle, User, Clock, TrendingUp, History, Home, X, ArrowLeft, Printer, Truck, MapPin, RotateCcw, Check } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Loader2, Search, Plus, Minus, ShoppingBag, Send, LogOut, Coffee, LayoutGrid, ClipboardList, CheckCircle, User, Clock, TrendingUp, History, Home, X, ArrowLeft, Printer, Truck, MapPin, RotateCcw, Check, Scan } from 'lucide-react';
+import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 import { Logo } from './Logo';
@@ -33,10 +35,10 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     const [isExternalOrder, setIsExternalOrder] = useState(false);
     const [deliveryMethod, setDeliveryMethod] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
     const [shippingCost, setShippingCost] = useState(0);
+    const [addressStreet, setAddressStreet] = useState('');
+    const [addressNumber, setAddressNumber] = useState('');
+    const [addressNeighborhood, setAddressNeighborhood] = useState('');
     const [address, setAddress] = useState({
-        street: '',
-        number: '',
-        neighborhood: '',
         city: '',
         state: '',
         lat: 0,
@@ -49,6 +51,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     const [fees, setFees] = useState<any>(null);
     const [shippingRules, setShippingRules] = useState<any[]>([]);
     const [storeProfile, setStoreProfile] = useState<any>(null);
+    const [storeCity, setStoreCity] = useState(''); // Estado estável para a cidade
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
     const [showObservations, setShowObservations] = useState<number | null>(null); // Index do item no carrinho
@@ -64,6 +67,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     // Custom Product State
     const [isCustomProductModalOpen, setIsCustomProductModalOpen] = useState(false);
     const [customProduct, setCustomProduct] = useState({ name: '', price: '', quantity: 1 });
+    const [isScannerOpen, setIsScannerOpen] = useState(false); // Novo Scanner State
 
     useEffect(() => {
         setCurrentAvatarUrl(collaborator.avatar_url);
@@ -79,14 +83,17 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     const loadData = async () => {
         setLoading(true);
         try {
-            const [ordersData, profile, f, rules] = await Promise.all([
-                cloud.getOpenOrders(collaborator.store_id), // Changed to collaborator.store_id
-                cloud.getClient()?.from('user_profiles').select('*').eq('id', collaborator.store_id).single(), // Changed to collaborator.store_id
+            const [ordersData, storeProfileData, f, rules] = await Promise.all([
+                cloud.getOpenOrders(collaborator.store_id),
+                cloud.getStoreProfileForCollaborator(collaborator.store_id),
                 cloud.getPublicFeeSettings(),
                 cloud.getStoreShippingRules()
             ]);
             setOrders(ordersData);
-            if (profile?.data) setStoreProfile(profile.data);
+            if (storeProfileData) {
+                setStoreProfile(storeProfileData);
+                setStoreCity(storeProfileData.city || '');
+            }
             setFees(f);
             setShippingRules(rules || []);
 
@@ -99,7 +106,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                 loadSummary()
             ]);
         } catch (error) {
-            console.error(error);
+            // console.error(error);
         } finally {
             setLoading(false);
         }
@@ -148,7 +155,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                 await alert({ title: 'Sucesso', message: 'Foto de perfil atualizada!' });
             }
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             await alert({ title: 'Erro', message: 'Falha ao enviar a foto.' });
         } finally {
             setUploadingPhoto(false);
@@ -182,7 +189,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
 
     const loadClosedOrders = async () => {
         try {
-            const data = await cloud.getClosedOrders(collaborator.store_id, collaborator.id);
+            const data = await cloud.getStoreInternalOrders(collaborator.store_id);
             setClosedOrders(data);
         } catch (error) { console.error(error); }
     };
@@ -259,7 +266,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     };
 
     const validateAddress = async () => {
-        if (!address.street || !address.number) {
+        if (!addressStreet || !addressNumber) {
             await alert({ title: 'Erro', message: 'Preencha a rua e o número.' });
             return;
         }
@@ -272,7 +279,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
 
         setAddress(prev => ({ ...prev, validating: true, error: '' }));
         try {
-            const query = `${address.street}, ${address.number}, ${address.neighborhood || ''}, ${city}, Brazil`;
+            const query = `${addressStreet}, ${addressNumber}, ${addressNeighborhood || ''}, ${city}, Brazil`;
             const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=1`;
 
             const response = await fetch(url, {
@@ -294,35 +301,51 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                 await alert({ title: 'Erro', message: 'Endereço não localizado no mapa.' });
             }
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             setAddress(prev => ({ ...prev, validating: false, error: 'Erro ao validar.' }));
             await alert({ title: 'Erro', message: 'Falha na comunicação com serviço de mapas.' });
         }
     };
 
-    const calculateShipping = () => {
-        if (!address.validated || !fees) return;
+    const calculateShipping = async () => {
+        if (!address.validated || !fees || !storeProfile) return;
 
-        // Simulação baseada na lógica de HouseRequest/StoreRequest
         // Se for parceiro Zé (global_tax_fixed > 0 indica sistema de parceiros)
         const isPartnerSystem = fees.global_tax_fixed > 0;
 
         if (isPartnerSystem) {
-            const points = [
-                { lat: storeProfile.lat || 0, lng: storeProfile.lng || 0 }, // Ponto de partida
-                { lat: address.lat, lng: address.lng } // Destino
-            ];
+            let storeLat = storeProfile.lat || 0;
+            let storeLng = storeProfile.lng || 0;
+
+            // Se não tiver coordenadas, tenta geocodificar o endereço da loja
+            if (!storeLat || !storeLng) {
+                try {
+                    const storeAddress = storeProfile.address_street ? `${storeProfile.address_street}, ${storeProfile.city || ''}, Brazil` : `${storeProfile.city || ''}, Brazil`;
+                    const storeQuery = encodeURIComponent(storeAddress);
+                    const storeUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${storeQuery}`;
+                    const storeResp = await fetch(storeUrl, { headers: { 'Accept-Language': 'pt-BR' } });
+                    const storeData = await storeResp.json();
+                    if (storeData && storeData.length > 0) {
+                        storeLat = parseFloat(storeData[0].lat);
+                        storeLng = parseFloat(storeData[0].lon);
+                    }
+                } catch (e) {
+                    // console.error('[CollaboratorModule] Erro ao geocodificar loja:', e);
+                }
+            }
+
+            if (!storeLat || !storeLng) return;
 
             const baseKm = Number(fees.base_delivery_km || 0);
             const baseValue = Number(fees.base_delivery_value || 0);
             const extraPerKm = Number(fees.extra_km_value || 0);
 
-            // Haversine simplificado
+            // Haversine
             const toRad = (v: number) => v * Math.PI / 180;
             const R = 6371;
-            const dLat = toRad(address.lat - (storeProfile.lat || 0));
-            const dLon = toRad(address.lng - (storeProfile.lng || 0));
-            const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(storeProfile.lat || 0)) * Math.cos(toRad(address.lat)) * Math.sin(dLon / 2) ** 2;
+            const dLat = toRad(address.lat - storeLat);
+            const dLon = toRad(address.lng - storeLng);
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(storeLat)) * Math.cos(toRad(address.lat)) * Math.sin(dLon / 2) ** 2;
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             const distance = R * c;
 
@@ -356,6 +379,15 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     const handleSendOrder = async () => {
         if (cart.length === 0) return;
 
+        // --- TRAVA DE LOJA FECHADA ---
+        if (storeProfile && !storeProfile.is_open) {
+            await alert({
+                title: 'Loja Fechada',
+                message: 'Não é possível realizar pedidos enquanto a loja estiver marcada como fechada no sistema.'
+            });
+            return;
+        }
+
         if (!isExternalOrder && !tableName.trim()) {
             await alert({ title: 'Atenção', message: 'Identifique a mesa ou comanda.' });
             return;
@@ -386,9 +418,9 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     total_price: subtotal + shippingCost,
                     payment_method: 'OTHER', // Collaborator doesn't process payment here usually, or it's pending
                     shipping_address: deliveryMethod === 'DELIVERY' ? {
-                        street: address.street,
-                        number: address.number,
-                        neighborhood: address.neighborhood,
+                        street: addressStreet,
+                        number: addressNumber,
+                        neighborhood: addressNeighborhood,
                         city: address.city || (storeProfile?.city?.split(' - ')[0].trim())
                     } : {},
                     shipping_cost: shippingCost,
@@ -396,6 +428,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     store_id: collaborator.store_id,
                     customer_name: customerName,
                     customer_phone: customerPhone,
+                    collaborator_name: collaborator.name, // RASTREABILIDADE
                     observation: 'Pedido via Garçom Premium' + (deliveryMethod === 'PICKUP' ? ' (RETIRADA)' : ''),
                     origin: 'INTERNAL'
                 });
@@ -409,7 +442,8 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     tableName,
                     items,
                     customerName,
-                    selectedOrderId || undefined
+                    selectedOrderId || undefined,
+                    collaborator.name // RASTREABILIDADE
                 );
                 await alert({ title: 'Sucesso', message: selectedOrderId ? 'Pedido atualizado!' : 'Pedido enviado para a cozinha!' });
             }
@@ -424,11 +458,14 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
             setCustomerPhone('');
             setIsExternalOrder(false);
             setDeliveryMethod('PICKUP');
-            setAddress({ street: '', number: '', neighborhood: '', city: '', state: '', lat: 0, lng: 0, validated: false, validating: false, error: '' });
+            setAddressStreet('');
+            setAddressNumber('');
+            setAddressNeighborhood('');
+            setAddress({ city: '', state: '', lat: 0, lng: 0, validated: false, validating: false, error: '' });
             setShippingCost(0);
             setView('dashboard');
         } catch (error) {
-            console.error(error);
+            // console.error(error);
             await alert({ title: 'Erro', message: 'Falha ao enviar pedido.' });
         } finally {
             setSending(false);
@@ -484,18 +521,23 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     <h2 className="text-2xl font-black mb-1">Olá, {collaborator.name?.split(' ')[0] || 'Colaborador'}! 👋</h2>
                     <p className="text-brand-100 text-sm font-medium mb-6">Veja como está seu desempenho hoje.</p>
 
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="bg-white/10 backdrop-blur-md p-3 rounded-3xl border border-white/10">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-brand-200 mb-1">Vendas</p>
-                            <p className="text-sm font-black truncate">R$ {summary.total_sales?.toFixed(2)}</p>
+                    <div className="grid grid-cols-1 gap-3">
+                        <div className="bg-white/10 backdrop-blur-md p-4 rounded-3xl border border-white/10 flex justify-between items-center">
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-brand-200 mb-1">Vendas Hoje</p>
+                                <p className="text-xl font-black">R$ {summary.total_sales?.toFixed(2)}</p>
+                            </div>
+                            <TrendingUp className="w-8 h-8 text-brand-200 opacity-50" />
                         </div>
-                        <div className="bg-white/10 backdrop-blur-md p-3 rounded-3xl border border-white/10">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-brand-200 mb-1">Mesas</p>
-                            <p className="text-sm font-black">{summary.total_orders}</p>
-                        </div>
-                        <div className="bg-white/10 backdrop-blur-md p-3 rounded-3xl border border-white/10">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-brand-200 mb-1">Ticket</p>
-                            <p className="text-sm font-black truncate">R$ {summary.avg_ticket?.toFixed(2)}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-3xl border border-white/10 flex flex-col">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-brand-200 mb-1">Mesas</p>
+                                <p className="text-xl font-black">{summary.total_orders}</p>
+                            </div>
+                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-3xl border border-white/10 flex flex-col">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-brand-200 mb-1">Ticket Médio</p>
+                                <p className="text-xl font-black">R$ {summary.avg_ticket?.toFixed(2)}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -512,6 +554,17 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                         <Plus className="w-7 h-7" />
                     </div>
                     <span className="font-black text-gray-800 dark:text-gray-200 text-sm">Abrir Mesa</span>
+                </button>
+
+                <button
+                    onClick={() => setIsScannerOpen(true)}
+                    className="bg-white dark:bg-gray-800 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center gap-3 hover:shadow-xl hover:-translate-y-1 transition-all group lg:col-span-2 relative overflow-hidden"
+                >
+                    <div className="absolute inset-0 bg-brand-600 opacity-0 group-hover:opacity-100 transition-opacity z-0" />
+                    <div className="w-14 h-14 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-2xl flex items-center justify-center group-hover:bg-white group-hover:text-brand-600 transition-colors z-10">
+                        <Scan className="w-7 h-7" />
+                    </div>
+                    <span className="font-black text-gray-800 dark:text-gray-200 group-hover:text-white text-sm z-10 transition-colors">Ler QR Code Mesa</span>
                 </button>
 
                 <button
@@ -575,16 +628,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     <span className="text-[10px] text-gray-400 font-bold -mt-2">Delivery / Retirada</span>
                 </button>
 
-                <button
-                    onClick={() => { setView('orders'); loadTickets(); }}
-                    className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all flex flex-col items-center gap-3 group active:scale-95"
-                >
-                    <div className="w-14 h-14 bg-orange-50 dark:bg-orange-900/20 rounded-2xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                        <Printer className="w-7 h-7" />
-                    </div>
-                    <span className="text-xs font-black dark:text-white uppercase tracking-tighter">Pedidos / Cozinha</span>
-                    <span className="text-[10px] text-gray-400 font-bold -mt-2">Fila de Impressão</span>
-                </button>
+                {/* Botão de Impressão removido para colaboradores */}
             </div>
         </div>
     );
@@ -620,9 +664,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                                         {ticket.orders_collaborators?.customer_name || 'Mesa'}
                                     </h3>
                                 </div>
-                                <Button size="sm" onClick={() => setShowTicketPrint(ticket)} className="rounded-xl h-10 w-10 p-0 bg-orange-500 hover:bg-orange-600 border-none shadow-md shadow-orange-500/20">
-                                    <Printer className="w-4 h-4 text-white" />
-                                </Button>
+                                {/* Botão de impressão removido */}
                             </div>
                             <div className="space-y-1.5 pt-2 border-t border-gray-50 dark:border-gray-700/50">
                                 {(Array.isArray(ticket.items) ? ticket.items : []).map((item: any, idx: number) => (
@@ -780,13 +822,15 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-[9px] text-gray-400 font-black uppercase mb-1">Total</p>
-                                                <p className="text-xl font-black text-brand-600 italic">R$ {order.total_amount?.toFixed(2)}</p>
+                                                <p className="text-xl font-black text-brand-600 italic">
+                                                    R$ {(order.total_amount || order.items?.reduce((acc: number, i: any) => acc + (i.total_price || (i.price * i.quantity) || 0), 0) || 0).toFixed(2)}
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
                                             <Button fullWidth variant="secondary" onClick={() => handleSelectOrder(order)} className="rounded-2xl text-xs py-3">Add Itens</Button>
                                             <Button fullWidth onClick={() => setShowPreCheck(order)} className="rounded-2xl text-xs py-3 bg-orange-500 hover:bg-orange-600 text-white border-none shadow-lg shadow-orange-500/20">Conferir</Button>
-                                            <Button fullWidth onClick={() => handleCloseOrder(order)} className="rounded-2xl text-xs py-3 bg-green-600 hover:bg-green-700">Encerrar</Button>
+                                            {/* Botão de Encerrar removido para colaboradores */}
                                         </div>
                                     </div>
                                 ))}
@@ -1020,22 +1064,33 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                                             <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
                                                 <div className="grid grid-cols-3 gap-2">
                                                     <div className="col-span-2">
-                                                        <input
-                                                            type="text" placeholder="Rua" value={address.street}
-                                                            onChange={e => setAddress(prev => ({ ...prev, street: e.target.value, validated: false }))}
-                                                            className="w-full bg-white dark:bg-gray-900 p-3 rounded-xl text-[10px] font-bold outline-none border border-gray-100 dark:border-gray-800"
+                                                        <StreetAutocomplete
+                                                            city={storeCity}
+                                                            value={addressStreet}
+                                                            onChange={val => {
+                                                                setAddressStreet(val);
+                                                                setAddress(prev => ({ ...prev, validated: false }));
+                                                            }}
+                                                            className="w-full bg-white dark:bg-gray-900 p-3 rounded-xl text-[10px] font-bold outline-none border border-gray-100 dark:border-gray-800 dark:text-white"
+                                                            placeholder="Rua"
                                                         />
                                                     </div>
                                                     <input
-                                                        type="text" placeholder="Nº" value={address.number}
-                                                        onChange={e => setAddress(prev => ({ ...prev, number: e.target.value, validated: false }))}
-                                                        className="w-full bg-white dark:bg-gray-900 p-3 rounded-xl text-[10px] font-bold outline-none border border-gray-100 dark:border-gray-800"
+                                                        type="text" placeholder="Nº" value={addressNumber}
+                                                        onChange={e => {
+                                                            setAddressNumber(e.target.value);
+                                                            setAddress(prev => ({ ...prev, validated: false }));
+                                                        }}
+                                                        className="w-full bg-white dark:bg-gray-900 p-3 rounded-xl text-[10px] font-bold outline-none border border-gray-100 dark:border-gray-800 dark:text-white"
                                                     />
                                                 </div>
                                                 <input
-                                                    type="text" placeholder="Bairro" value={address.neighborhood}
-                                                    onChange={e => setAddress(prev => ({ ...prev, neighborhood: e.target.value, validated: false }))}
-                                                    className="w-full bg-white dark:bg-gray-900 p-3 rounded-xl text-[10px] font-bold outline-none border border-gray-100 dark:border-gray-800"
+                                                    type="text" placeholder="Bairro" value={addressNeighborhood}
+                                                    onChange={e => {
+                                                        setAddressNeighborhood(e.target.value);
+                                                        setAddress(prev => ({ ...prev, validated: false }));
+                                                    }}
+                                                    className="w-full bg-white dark:bg-gray-900 p-3 rounded-xl text-[10px] font-bold outline-none border border-gray-100 dark:border-gray-800 dark:text-white"
                                                 />
 
                                                 <button
@@ -1273,6 +1328,92 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     </div>
                 </div>
             )}
+            {/* Scanner Modal */}
+            {isScannerOpen && (
+                <div className="fixed inset-0 bg-black/90 z-[110] flex flex-col items-center justify-center p-4">
+                    <button
+                        onClick={() => setIsScannerOpen(false)}
+                        className="absolute top-4 right-4 p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors z-[120]"
+                    >
+                        <X className="w-8 h-8" />
+                    </button>
+
+                    <h2 className="text-white text-xl font-bold mb-6 flex items-center gap-2">
+                        <Scan className="w-6 h-6 text-brand-500" />
+                        Escanear Mesa
+                    </h2>
+
+                    <div className="w-full max-w-sm bg-black rounded-3xl overflow-hidden border border-gray-800 relative aspect-square shadow-2xl shadow-brand-500/10">
+                        <div id="reader" className="w-full h-full"></div>
+                        <div className="absolute inset-0 pointer-events-none border-2 border-brand-500/30 rounded-3xl" />
+                        {/* Overlay indicativo */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-white/50 rounded-xl" />
+                    </div>
+
+                    <p className="text-gray-400 text-sm mt-8 text-center max-w-xs font-medium">
+                        Aponte a câmera para o QR Code da mesa para iniciar.
+                    </p>
+
+                    <ScannerLogic
+                        onScan={(decodedText) => {
+                            try {
+                                const data = JSON.parse(decodedText);
+                                if (data.action === 'open_table' && data.table_identifier) {
+                                    setIsScannerOpen(false);
+
+                                    // Feedback visual/sonoro poderia ser adicionado aqui
+
+                                    // Definir mesa e mudar view
+                                    setTableName(data.table_identifier);
+                                    setView('menu');
+
+                                    // Limpar estados de novo pedido
+                                    setIsExternalOrder(false);
+                                    setSelectedOrderId(null);
+                                    setCustomerName('');
+
+                                    alert({ title: 'Mesa Identificada', message: `Mesa ${data.table_identifier} aberta com sucesso!` });
+                                }
+                            } catch (e) {
+                                // console.log('QR Code scan error or invalid format', e);
+                            }
+                        }}
+                        onClose={() => setIsScannerOpen(false)}
+                    />
+                </div>
+            )}
         </div >
     );
+};
+
+// Logica separada para garantir cleanup correto do scanner
+const ScannerLogic = ({ onScan, onClose }: { onScan: (text: string) => void, onClose: () => void }) => {
+    useEffect(() => {
+        const scanner = new Html5QrcodeScanner(
+            "reader",
+            {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+                showTorchButtonIfSupported: true
+            },
+            /* verbose= */ false
+        );
+
+        scanner.render(
+            (decodedText) => {
+                onScan(decodedText);
+                scanner.clear().catch(console.error);
+            },
+            (error) => {
+                // console.warn(error);
+            }
+        );
+
+        return () => {
+            scanner.clear().catch(console.error);
+        };
+    }, []);
+
+    return null;
 };
