@@ -804,6 +804,7 @@ const CityManagement: React.FC = () => {
     const [cities, setCities] = useState<City[]>([]);
     const [requests, setRequests] = useState<CityRequest[]>([]);
     const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
     // Add City Form
@@ -846,6 +847,9 @@ const CityManagement: React.FC = () => {
             console.warn('[handleAddCity] Campos vazios');
             return setToast({ type: 'error', message: "Preencha nome e estado." });
         }
+        if (submitting) return; // Prevent double click
+
+        setSubmitting(true);
         try {
             console.log('[handleAddCity] Chamando adminAddCity...');
             await adminAddCity(newName, newState, newIbgeCode);
@@ -855,11 +859,18 @@ const CityManagement: React.FC = () => {
             setNewState('');
             setNewIbgeCode('');
             setIsAddCityModalOpen(false); // Close modal
-            loadData();
+
             setToast({ type: 'success', message: "Cidade adicionada com sucesso!" });
+
+            // Refresh list separately without blocking UI
+            if (activeTab === 'active' || activeTab === 'inactive') {
+                loadData();
+            }
         } catch (e: any) {
             console.error('[handleAddCity] Erro capturado:', e);
             setToast({ type: 'error', message: e.message || "Erro desconhecido ao adicionar." });
+        } finally {
+            setSubmitting(false);
         }
     };
 

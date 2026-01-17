@@ -1,63 +1,64 @@
-[15/01/2026] - Melhoria: Adicionado botão "Adicionar Produtos Avulsos" no CollaboratorModule.tsx com cor de destaque (brand-600).
-[15/01/2026] - Ajuste: Removido botão flutuante "+" do dashboard do colaborador.
+[15/01/2026] - Melhoria: Adicionado botÃ£o "Adicionar Produtos Avulsos" no CollaboratorModule.tsx com cor de destaque (brand-600).
+[15/01/2026] - Ajuste: Removido botÃ£o flutuante "+" do dashboard do colaborador.
 [15/01/2026] - Melhoria: Adicionado resumo de itens (quantidade) nos cards de mesas ativas.
-[15/01/2026] - Melhoria: Alterada a cor do botão "Conferir" para laranja (bg-orange-500) para melhor visibilidade.
-[15/01/2026] - Melhoria: As observações dos itens (ex: "Sem cebola") agora são exibidas no modal de conferência.
-[15/01/2026] - Correção: Adicionada coluna 'name' e 'observation' em orders_items para persistir detalhes do pedido.
-[15/01/2026] - Correção: Atualizado RPC get_open_orders para listar observações na conferência da mesa.
-[15/01/2026] - Correção: Ajustada tipagem do objeto Product em CollaboratorModule.tsx (created_at, updated_at, stock_quantity).
-[15/01/2026] - Correção: Atualizado RPC get_products_for_collaborator em supabase_global.sql para referenciar 'sp.category'.
-[15/01/2026] - Correção: Atualizado RPC place_collaborator_order para suportar itens avulsos, nomes e observações.
-[15/01/2026] - Correção: Ajustado CollaboratorModule.tsx para enviar 'unit_price' no JSON de itens.
-[15/01/2026] - Correção: Ajustada sintaxe SQL em supabase_global.sql (fechamento de bloco DO).
-[16/01/2026] - Novo: Criada tabela public.orders_tickets para fila de produção em supabase_global.sql.
-[16/01/2026] - Novo: RPC place_collaborator_order agora gera tickets de produção automaticamente.
-[16/01/2026] - Melhoria: Modal de "Conferência" no lojista atualizado para mostrar observações e adicionais corretamente.
-[16/01/2026] - Novo: Aba "Pedidos / Cozinha" no colaborador para visualização/re-impressão de comandas.
-[16/01/2026] - Novo: Aba "Produção" no painel do lojista (InternalOrders.tsx) para gestão da fila de tickets.
-[16/01/2026] - Novo: Implementadas funções getOrdersTickets e updateTicketStatus no cloud.ts para suporte ao backend.
-[16/01/2026] - Correção: Corrigido erro de sintaxe JSX no CollaboratorModule.tsx (tags de botões).
-[16/01/2026] - Correção: Atualizada interface OrderItem no types.ts para incluir campos faltantes.
+[15/01/2026] - Melhoria: Alterada a cor do botÃ£o "Conferir" para laranja (bg-orange-500) para melhor visibilidade.
+[15/01/2026] - Melhoria: As observaÃ§Ãµes dos itens (ex: "Sem cebola") agora sÃ£o exibidas no modal de conferÃªncia.
+[15/01/2026] - CorreÃ§Ã£o: Adicionada coluna 'name' e 'observation' em orders_items para persistir detalhes do pedido.
+[15/01/2026] - CorreÃ§Ã£o: Atualizado RPC get_open_orders para listar observaÃ§Ãµes na conferÃªncia da mesa.
+[15/01/2026] - CorreÃ§Ã£o: Ajustada tipagem do objeto Product em CollaboratorModule.tsx (created_at, updated_at, stock_quantity).
+[15/01/2026] - CorreÃ§Ã£o: Atualizado RPC get_products_for_collaborator em supabase_global.sql para referenciar 'sp.category'.
+[15/01/2026] - CorreÃ§Ã£o: Atualizado RPC place_collaborator_order para suportar itens avulsos, nomes e observaÃ§Ãµes.
+[15/01/2026] - CorreÃ§Ã£o: Ajustado CollaboratorModule.tsx para enviar 'unit_price' no JSON de itens.
+[15/01/2026] - CorreÃ§Ã£o: Ajustada sintaxe SQL em supabase_global.sql (fechamento de bloco DO).
+[16/01/2026] - Novo: Criada tabela public.orders_tickets para fila de produÃ§Ã£o em supabase_global.sql.
+[16/01/2026] - Novo: RPC place_collaborator_order agora gera tickets de produÃ§Ã£o automaticamente.
+[16/01/2026] - Melhoria: Modal de "ConferÃªncia" no lojista atualizado para mostrar observaÃ§Ãµes e adicionais corretamente.
+[16/01/2026] - Novo: Aba "Pedidos / Cozinha" no colaborador para visualizaÃ§Ã£o/re-impressÃ£o de comandas.
+[16/01/2026] - Novo: Aba "ProduÃ§Ã£o" no painel do lojista (InternalOrders.tsx) para gestÃ£o da fila de tickets.
+[16/01/2026] - Novo: Implementadas funÃ§Ãµes getOrdersTickets e updateTicketStatus no cloud.ts para suporte ao backend.
+[16/01/2026] - CorreÃ§Ã£o: Corrigido erro de sintaxe JSX no CollaboratorModule.tsx (tags de botÃµes).
+[16/01/2026] - CorreÃ§Ã£o: Atualizada interface OrderItem no types.ts para incluir campos faltantes.
 [16/01/2026] - Novo: Adicionados campos collaborator_name em orders_collaborators e orders para rastreabilidade.
-[16/01/2026] - Segurança: Implementada trava no colaborador que impede pedidos se a loja estiver fechada (is_open = false).
+[16/01/2026] - SeguranÃ§a: Implementada trava no colaborador que impede pedidos se a loja estiver fechada (is_open = false).
 [16/01/2026] - Melhoria: RPC place_collaborator_order agora armazena o nome do colaborador para auditoria.
 [16/01/2026] - Melhoria: Layout do dashboard do colaborador empilhado para mobile (vendas, mesas, ticket).
-[16/01/2026] - Melhoria: Endereço: Autocomplete de ruas baseado na cidade da loja integrado no colaborador e lojista.
-[16/01/2026] - Correção: Corrigido loop de carregamento e cidade vazia no InternalOrders.tsx (adicionado useEffect faltante).
+[16/01/2026] - Melhoria: EndereÃ§o: Autocomplete de ruas baseado na cidade da loja integrado no colaborador e lojista.
+[16/01/2026] - CorreÃ§Ã£o: Corrigido loop de carregamento e cidade vazia no InternalOrders.tsx (adicionado useEffect faltante).
 [17/01/2026] - Novo: Adicionado RPC get_store_profile_for_collaborator_rpc para permitir que colaboradores acessem dados da loja ignorando RLS.
-[17/01/2026] - Correção: Corrigida cidade vazia no autocomplete do colaborador configurando storeCity via novo RPC.
-[17/01/2026] - Melhoria: Refatorado estado de endereço no colaborador para campos individuais (rua, número, bairro) visando performance.
-[17/01/2026] - Correção: Resolvido erro "v_profile has no field lat" no RPC através da seleção explícita de colunas.
-[17/01/2026] - Melhoria: Adicionada geocodificação automática do endereço da loja no cálculo de frete do colaborador quando coordenadas estiverem ausentes.
-[17/01/2026] - Limpeza: Removidos logs de depuração do console em CollaboratorModule e StreetAutocomplete.
-[16/01/2026] - Melhoria: Validação de Perfil: Agora foca exclusivamente em dados da loja (store_address_*) e não mais em dados de usuário.
-[16/01/2026] - Novo: Adicionado campo "Tempo de Preparo" na configuração da loja e sincronizado com banco de dados.
-[16/01/2026] - Melhoria: Nova Entrega: Endereço de Coleta agora vem preenchido com dados da loja, oculto por padrão com opção de troca manual.
-[16/01/2026] - Correção: Validação de Perfil na página de Relatórios atualizada para usar campos store_address_* da loja.
+[17/01/2026] - CorreÃ§Ã£o: Corrigida cidade vazia no autocomplete do colaborador configurando storeCity via novo RPC.
+[17/01/2026] - Melhoria: Refatorado estado de endereÃ§o no colaborador para campos individuais (rua, nÃºmero, bairro) visando performance.
+[17/01/2026] - CorreÃ§Ã£o: Resolvido erro "v_profile has no field lat" no RPC atravÃ©s da seleÃ§Ã£o explÃ­cita de colunas.
+[17/01/2026] - Melhoria: Adicionada geocodificaÃ§Ã£o automÃ¡tica do endereÃ§o da loja no cÃ¡lculo de frete do colaborador quando coordenadas estiverem ausentes.
+[17/01/2026] - Limpeza: Removidos logs de depuraÃ§Ã£o do console em CollaboratorModule e StreetAutocomplete.
+[16/01/2026] - Melhoria: ValidaÃ§Ã£o de Perfil: Agora foca exclusivamente em dados da loja (store_address_*) e nÃ£o mais em dados de usuÃ¡rio.
+[16/01/2026] - Novo: Adicionado campo "Tempo de Preparo" na configuraÃ§Ã£o da loja e sincronizado com banco de dados.
+[16/01/2026] - Melhoria: Nova Entrega: EndereÃ§o de Coleta agora vem preenchido com dados da loja, oculto por padrÃ£o com opÃ§Ã£o de troca manual.
+[16/01/2026] - CorreÃ§Ã£o: ValidaÃ§Ã£o de Perfil na pÃ¡gina de RelatÃ³rios atualizada para usar campos store_address_* da loja.
 [/] Banco de Dados: Adicionadas colunas 'preparation_time_min' e 'preparation_time_max' na tabela user_profiles.
 [/] Tipos: Atualizada interface PartnerProfile com novos campos de tempo de preparo.
-[/] UI: Implementada faixa de tempo de preparo (Mín/Máx) nas configurações da loja.
-[/] Melhoria: Validação de perfil agora foca exclusivamente em dados da loja em todos os módulos.
-[/] Melhoria: Bloco de endereço de coleta otimizado para preenchimento automático.
-[16/01/2026] - An�lise: Executada revis�o completa de performance. Plano de otimiza��o (�ndices DB + Cache Paralelo) criado e documentado.
-[16/01/2026] - Performance: Implementado carregamento paralelo (Promise.all) em StoreWallet.tsx e criados �ndices DB para partner_requests.
-[16/01/2026] - Corre��o: Corrigido erro de refer�ncia 'fetchWallet' em StoreWallet.tsx e removidos console logs residuais.
-[16/01/2026] - Corre��o: Ajustado erro de sintaxe (chaves duplicadas) causado por edi��o anterior em StoreWallet.tsx.
+[/] UI: Implementada faixa de tempo de preparo (MÃ­n/MÃ¡x) nas configuraÃ§Ãµes da loja.
+[/] Melhoria: ValidaÃ§Ã£o de perfil agora foca exclusivamente em dados da loja em todos os mÃ³dulos.
+[/] Melhoria: Bloco de endereÃ§o de coleta otimizado para preenchimento automÃ¡tico.
+[16/01/2026] - Análise: Executada revisão completa de performance. Plano de otimização (Índices DB + Cache Paralelo) criado e documentado.
+[16/01/2026] - Performance: Implementado carregamento paralelo (Promise.all) em StoreWallet.tsx e criados índices DB para partner_requests.
+[16/01/2026] - Correção: Corrigido erro de referência 'fetchWallet' em StoreWallet.tsx e removidos console logs residuais.
+[16/01/2026] - Correção: Ajustado erro de sintaxe (chaves duplicadas) causado por edição anterior em StoreWallet.tsx.
 
-- Unificação de scripts de correção (updated_at) diretamente no arquivo supabase_global.sql para facilitar a migração manual.
-[17/01/2026] - Iniciando configura��o de rotas amig�veis de autentica��o (login, cadastro, recuperar-senha).
-[17/01/2026] - Finalizada configura��o de rotas amig�veis (/login, /cadastro, /recuperar-senha).
-[17/01/2026] - Corre��o: Adicionado tipo 'forgot_password' ao ActiveTab em App.tsx.
-[17/01/2026] - UI/UX: Padroniza��o de �cones internos nos inputs (Login, Cadastro). CPF agora � obrigat�rio.
+- UnificaÃ§Ã£o de scripts de correÃ§Ã£o (updated_at) diretamente no arquivo supabase_global.sql para facilitar a migraÃ§Ã£o manual.
+[17/01/2026] - Iniciando configuração de rotas amigáveis de autenticação (login, cadastro, recuperar-senha).
+[17/01/2026] - Finalizada configuração de rotas amigáveis (/login, /cadastro, /recuperar-senha).
+[17/01/2026] - Correção: Adicionado tipo 'forgot_password' ao ActiveTab em App.tsx.
+[17/01/2026] - UI/UX: Padronização de ícones internos nos inputs (Login, Cadastro). CPF agora é obrigatório.
 [17/01/2026] - Ajuste Layout: Removida classe 'pb-24' do main em WhatsappContainer.
-[17/01/2026] - UI/UX: Padding pb-24 removido condicionalmente da aba de WhatsApp para otimizar espa�o em tela.
-[17/01/2026] - Fix: Adicionado GRANT de permissões na tabela categories em supabase_global.sql
-[17/01/2026] - UI: Aumento da largura dos modais de produto/adicional, ocultação de scrollbar e máscara de moeda (R$)
-[17/01/2026] - Feature: Adicionada funcionalidade de editar opções de adicionais diretamente no modal
-[17/01/2026] - Fix: Correção do cálculo de preço ao editar opção de adicional sem alterar valor
-[17/01/2026] - UI: Melhoria na listagem de grupos de adicionais (exibição de opções nos cards)
-[17/01/2026] - Melhoria: Adicionada exibição da data de vencimento do plano Super Lojista em Configurações > Dados da Loja
-[17/01/2026] - Correção: Implementada definição automatica e manual de data de vencimento ao ativar Super Lojista no Admin
-- [x] Integra��o Brasil Aberto: Tabela city_districts, servi�o e UI admin implementados.
-[17/01/2026] - Melhoria: Adicionado campo 'ibge_code' na tabela 'available_cities', na UI de Admin e na l�gica de integra��o para maior precis�o.
+[17/01/2026] - UI/UX: Padding pb-24 removido condicionalmente da aba de WhatsApp para otimizar espaço em tela.
+[17/01/2026] - Fix: Adicionado GRANT de permissÃµes na tabela categories em supabase_global.sql
+[17/01/2026] - UI: Aumento da largura dos modais de produto/adicional, ocultaÃ§Ã£o de scrollbar e mÃ¡scara de moeda (R$)
+[17/01/2026] - Feature: Adicionada funcionalidade de editar opÃ§Ãµes de adicionais diretamente no modal
+[17/01/2026] - Fix: CorreÃ§Ã£o do cÃ¡lculo de preÃ§o ao editar opÃ§Ã£o de adicional sem alterar valor
+[17/01/2026] - UI: Melhoria na listagem de grupos de adicionais (exibiÃ§Ã£o de opÃ§Ãµes nos cards)
+[17/01/2026] - Melhoria: Adicionada exibiÃ§Ã£o da data de vencimento do plano Super Lojista em ConfiguraÃ§Ãµes > Dados da Loja
+[17/01/2026] - CorreÃ§Ã£o: Implementada definiÃ§Ã£o automatica e manual de data de vencimento ao ativar Super Lojista no Admin
+- [x] Integração Brasil Aberto: Tabela city_districts, serviço e UI admin implementados.
+[17/01/2026] - Melhoria: Adicionado campo 'ibge_code' na tabela 'available_cities', na UI de Admin e na lógica de integração para maior precisão.
 [17/01/2026] - Melhoria: Adicionada funcionalidade de excluir cidades no painel administrativo.
+[17/01/2026] - Correção: Estrutura da tabela available_cities consolidada (updated_at, UNIQUE constraint e RLS) no supabase_global.sql para resolver erro ao salvar cidades.

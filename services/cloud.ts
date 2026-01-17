@@ -1101,6 +1101,7 @@ export const adminAddCity = async (name: string, state: string, ibge_code?: stri
     console.log(`[adminAddCity] Tentando adicionar: ${name}, ${state}, IBGE: ${ibge_code}`);
 
     // Check if exists
+    console.log('[adminAddCity] Verificando duplicidade...');
     const { data: existing, error: queryError } = await sb.from('available_cities')
         .select('id')
         .ilike('name', name)
@@ -1112,7 +1113,12 @@ export const adminAddCity = async (name: string, state: string, ibge_code?: stri
         throw new Error('Erro ao verificar cidade: ' + queryError.message);
     }
 
-    if (existing) throw new Error('Cidade já cadastrada.');
+    if (existing) {
+        console.warn('[adminAddCity] Cidade já existe:', existing);
+        throw new Error('Cidade já cadastrada.');
+    }
+
+    console.log('[adminAddCity] Duplicidade OK. Preparando insert...');
 
     // Preparar objeto de inserção
     const payload: any = {
@@ -1122,12 +1128,19 @@ export const adminAddCity = async (name: string, state: string, ibge_code?: stri
     };
     if (ibge_code) payload.ibge_code = ibge_code;
 
-    const { error } = await sb.from('available_cities').insert(payload);
+    console.log('[adminAddCity] Payload:', payload);
+
+    const { data: insertedData, error } = await sb.from('available_cities')
+        .insert(payload)
+        .select()
+        .single();
 
     if (error) {
         console.error('[adminAddCity] Erro no insert:', error);
         throw new Error('Erro ao adicionar cidade: ' + error.message);
     }
+
+    console.log('[adminAddCity] Sucesso no insert:', insertedData);
 };
 
 export const adminEditCity = async (id: string, name: string, state: string, ibge_code?: string) => {

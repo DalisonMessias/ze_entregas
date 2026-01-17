@@ -6096,3 +6096,38 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_column THEN NULL;
 END $$;
+
+-- Fix available_cities structure and policies (Added 17/01/2026)
+DO $$ 
+BEGIN
+    -- Garantir que updated_at existe
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'available_cities' AND column_name = 'updated_at') THEN
+        ALTER TABLE public.available_cities ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now();
+    END IF;
+
+    -- Garantir restrição de unicidade (necessário para ON CONFLICT e evitar duplicatas inconsistentes)
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_city_state') THEN
+        -- Nota: Se já houver duplicatas, isso pode falhar. Mas a regra proíbe deletar dados.
+        -- Em sistemas novos ou limpos, isso garante a integridade.
+        ALTER TABLE public.available_cities ADD CONSTRAINT unique_city_state UNIQUE (name, state);
+    END IF;
+END $$;
+
+-- Garantir trigger de updated_at
+DROP TRIGGER IF EXISTS handle_available_cities_updated_at ON public.available_cities;
+CREATE TRIGGER handle_available_cities_updated_at 
+    BEFORE UPDATE ON public.available_cities
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Sincronizar RLS para garantir permissões de Admin
+DROP POLICY IF EXISTS "Admins can manage available cities" ON public.available_cities;
+CREATE POLICY "Admins can manage available cities" ON public.available_cities FOR ALL USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can insert cities" ON public.available_cities;
+CREATE POLICY "Admins can insert cities" ON public.available_cities FOR INSERT WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can update cities" ON public.available_cities;
+CREATE POLICY "Admins can update cities" ON public.available_cities FOR UPDATE USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can delete cities" ON public.available_cities;
+CREATE POLICY "Admins can delete cities" ON public.available_cities FOR DELETE USING (public.is_admin());
