@@ -62,3 +62,4 @@
 [17/01/2026] - Melhoria: Adicionado campo 'ibge_code' na tabela 'available_cities', na UI de Admin e na lógica de integração para maior precisão.
 [17/01/2026] - Melhoria: Adicionada funcionalidade de excluir cidades no painel administrativo.
 [17/01/2026] - Correção: Estrutura da tabela available_cities consolidada (updated_at, UNIQUE constraint e RLS) no supabase_global.sql para resolver erro ao salvar cidades.
+[17/01/2026] - Correção: UI de adição de cidades desacoplada do loading global para evitar travamento após inserção (AdminPanel.tsx).
