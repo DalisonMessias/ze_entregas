@@ -182,15 +182,15 @@ const UserManagement: React.FC = () => {
 
     // Removed loadCities as CitySelector handles it internally
 
-    const loadUsers = async () => {
-        setLoading(true);
+    const loadUsers = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const data = await getAllUsers();
             setUsers(data);
         } catch (e) {
             console.error(e);
             setToast({ type: 'error', message: 'Erro ao carregar usuários.' });
-        } finally { setLoading(false); }
+        } finally { if (!silent) setLoading(false); }
     };
 
     const handleEditClick = (user: ManagedUser) => {
@@ -240,7 +240,7 @@ const UserManagement: React.FC = () => {
 
             setToast({ type: 'success', message: "Dados do usuário atualizados com sucesso!" });
             setSelectedUser(null);
-            loadUsers();
+            loadUsers(true); // Silent refresh
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao salvar: " + e.message });
         } finally {
@@ -271,7 +271,7 @@ const UserManagement: React.FC = () => {
             setIsAddingUser(false);
             setAddForm({ name: '', email: '', password: '', phone: '', cpf: '', city: '', role: 'store_partner', is_super_store: false });
             setIsEditingAddCity(true); // Reset for next add
-            loadUsers();
+            loadUsers(true); // Silent refresh
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao criar: " + e.message });
         } finally {
@@ -685,12 +685,12 @@ const PartnerVerification: React.FC = () => {
         loadPendingPartners();
     }, []);
 
-    const loadPendingPartners = async () => {
-        setLoading(true);
+    const loadPendingPartners = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const data = await adminGetPendingPartners();
             setPartners(data);
-        } catch (e) { console.error(e); } finally { setLoading(false); }
+        } catch (e) { console.error(e); } finally { if (!silent) setLoading(false); }
     };
 
     const openPartnerDetails = async (partner: ManagedUser) => {
@@ -725,7 +725,7 @@ const PartnerVerification: React.FC = () => {
             await adminUpdatePartnerStatus(userId, status);
             setToast({ type: 'success', message: "Status do parceiro atualizado!" });
             if (selectedPartner) openPartnerDetails(selectedPartner); // Refresh
-            loadPendingPartners(); // Refresh list in case status changes
+            loadPendingPartners(true); // Refresh list silently in case status changes
         } catch (e: any) { setToast({ type: 'error', message: "Erro: " + e.message }); }
     };
 

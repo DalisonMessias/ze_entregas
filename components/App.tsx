@@ -11,6 +11,7 @@ import { tourSteps } from '../components/Tour/tourSteps';
 
 // Components
 import { Logo } from './Logo';
+import { Skeleton } from './Skeleton';
 import { PwaManager } from './PwaManager';
 import { Button } from './Button';
 import { NotificationsPanel } from './NotificationsPanel';
@@ -244,7 +245,32 @@ const UpgradeToPartnerPage: React.FC = () => {
     };
 
     if (loading) {
-        return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
+        return (
+            <div className="space-y-6 animate-in fade-in max-w-3xl mx-auto p-4 w-full">
+                {/* Header */}
+                <Skeleton className="h-32 w-full rounded-3xl" />
+
+                {/* Section 1 */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <Skeleton className="h-6 w-32 mb-4" />
+                    <div className="grid grid-cols-3 gap-3">
+                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-full" />
+                    </div>
+                </div>
+
+                {/* Section 2 */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <Skeleton className="h-6 w-32 mb-4" />
+                    <div className="space-y-3">
+                        <Skeleton className="h-20 w-full" />
+                        <Skeleton className="h-20 w-full" />
+                        <Skeleton className="h-20 w-full" />
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (!profile) {

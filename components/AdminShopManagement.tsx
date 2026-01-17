@@ -39,7 +39,7 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
                 </h4>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
             </div>
-            <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4"/></button>
+            <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
         </div>
     );
 };
@@ -47,7 +47,9 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
 export const AdminShopManagement: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'settings' | 'coupons'>('products');
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [saving, setSaving] = useState(false);  // Mantendo saving para compatibilidade ou refatorar para usar submitting
+
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
     // Products State
@@ -70,8 +72,8 @@ export const AdminShopManagement: React.FC = () => {
 
     const { confirm } = useDialog();
 
-    const loadData = useCallback(async () => {
-        setLoading(true);
+    const loadData = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const [p, c, s] = await Promise.all([
                 cloud.adminGetProducts(),
@@ -80,11 +82,11 @@ export const AdminShopManagement: React.FC = () => {
             ]);
             setProducts(p);
             setCategories(c);
-            setShopSettings(s || { id: true }); // Ensure settings object is never null
+            setShopSettings(s || { is_shop_enabled: true } as any); // Type assertion fix
         } catch (e) {
             console.error("Error loading shop data:", e);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, []);
 
@@ -98,7 +100,10 @@ export const AdminShopManagement: React.FC = () => {
             setToast({ type: 'error', message: "Preencha todos os campos obrigatórios." });
             return;
         }
-        setSaving(true);
+        if (submitting) return;
+
+        setSubmitting(true);
+        setSaving(true); // UI feedback specific to button
         try {
             const productToSave = {
                 ...currentProduct,
@@ -112,58 +117,79 @@ export const AdminShopManagement: React.FC = () => {
             }
             setShowProductModal(false);
             setCurrentProduct(null);
-            loadData();
             setToast({ type: 'success', message: "Produto salvo com sucesso!" });
+
+            loadData(true); // Silent refresh
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao salvar: " + e.message });
         } finally {
             setSaving(false);
+            setSubmitting(false);
         }
     };
 
     const handleDeleteProduct = async (id: string) => {
         const ok = await confirm({ title: 'Excluir produto', message: 'Tem certeza que deseja excluir este produto?' });
         if (!ok) return;
+
+        if (submitting) return;
+        setSubmitting(true);
+
         try {
             await cloud.adminDeleteProduct(id);
-            loadData();
             setToast({ type: 'success', message: "Produto excluído!" });
+            loadData(true); // Silent refresh
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao excluir: " + e.message });
+        } finally {
+            setSubmitting(false);
         }
     };
 
     // --- Category Management ---
     const handleAddCategory = async () => {
         if (!newCategoryName.trim()) return;
+        if (submitting) return;
+
+        setSubmitting(true);
         setSaving(true);
         try {
             await cloud.adminAddCategory(newCategoryName);
             setNewCategoryName('');
-            loadData();
             setToast({ type: 'success', message: "Categoria adicionada!" });
+            loadData(true); // Silent refresh
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao adicionar categoria: " + e.message });
         } finally {
             setSaving(false);
+            setSubmitting(false);
         }
     };
 
     const handleDeleteCategory = async (id: string) => {
         const ok = await confirm({ title: 'Excluir categoria', message: 'Tem certeza que deseja excluir esta categoria? Produtos associados não serão removidos, apenas ficarão sem categoria.' });
         if (!ok) return;
+
+        if (submitting) return;
+        setSubmitting(true);
+
         try {
             await cloud.adminDeleteCategory(id);
-            loadData();
             setToast({ type: 'success', message: "Categoria excluída!" });
+            loadData(true); // Silent
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao excluir categoria: " + e.message });
+        } finally {
+            setSubmitting(false);
         }
     };
 
     // --- Shop Settings Management ---
     const handleSaveShopSettings = async () => {
         if (!shopSettings) return;
+        if (submitting) return;
+
+        setSubmitting(true);
         setSaving(true);
         try {
             // Only update general shop settings here. Institutional and Support are in their own modules.
@@ -180,10 +206,13 @@ export const AdminShopManagement: React.FC = () => {
                 coupons: shopSettings.coupons
             });
             setToast({ type: 'success', message: "Configurações da loja salvas!" });
+            // No need to reload data usually, but if we do, silent
+            loadData(true);
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao salvar configurações: " + e.message });
         } finally {
             setSaving(false);
+            setSubmitting(false);
         }
     };
 
@@ -303,7 +332,7 @@ export const AdminShopManagement: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-            
+
             <div role="tablist" className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full mx-auto mb-[15px]">
                 <button
                     id="tab-products"
@@ -406,43 +435,43 @@ export const AdminShopManagement: React.FC = () => {
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowProductModal(false)}>
                             <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
                                 <h3 className="font-bold text-lg dark:text-white">{currentProduct?.id ? 'Editar Produto' : 'Novo Produto'}</h3>
-                                <input 
-                                    type="text" placeholder="Nome do Produto" 
-                                    value={currentProduct?.name || ''} 
-                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, name: e.target.value } : null)} 
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600" 
+                                <input
+                                    type="text" placeholder="Nome do Produto"
+                                    value={currentProduct?.name || ''}
+                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, name: e.target.value } : null)}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                                 />
-                                <textarea 
-                                    placeholder="Descrição" 
-                                    value={currentProduct?.description || ''} 
-                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, description: e.target.value } : null)} 
-                                    rows={3} 
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 resize-none" 
+                                <textarea
+                                    placeholder="Descrição"
+                                    value={currentProduct?.description || ''}
+                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, description: e.target.value } : null)}
+                                    rows={3}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 resize-none"
                                 />
-                                <input 
-                                    type="tel" placeholder="Preço" 
-                                    value={currentProduct?.price ? (currentProduct.price as any).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : ''}
+                                <input
+                                    type="tel" placeholder="Preço"
+                                    value={currentProduct?.price ? (currentProduct.price as any).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}
                                     onChange={e => handleCurrencyMask(e, val => setCurrentProduct(prev => prev ? { ...prev, price: parseCurrency(val) } : null))}
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600" 
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                                 />
-                                <input 
-                                    type="number" placeholder="Estoque (deixe vazio para ilimitado)" 
-                                    value={currentProduct?.stock_quantity === null ? '' : currentProduct?.stock_quantity || ''} 
-                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, stock_quantity: e.target.value === '' ? null : Number(e.target.value) } : null)} 
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600" 
+                                <input
+                                    type="number" placeholder="Estoque (deixe vazio para ilimitado)"
+                                    value={currentProduct?.stock_quantity === null ? '' : currentProduct?.stock_quantity || ''}
+                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, stock_quantity: e.target.value === '' ? null : Number(e.target.value) } : null)}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                                 />
-                                <select 
-                                    value={currentProduct?.category_id || ''} 
-                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, category_id: e.target.value } : null)} 
+                                <select
+                                    value={currentProduct?.category_id || ''}
+                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, category_id: e.target.value } : null)}
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                                 >
                                     <option value="">Selecionar Categoria</option>
                                     {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                                 </select>
-                                <Switch 
-                                    checked={currentProduct?.is_active || false} 
-                                    onChange={c => setCurrentProduct(prev => prev ? { ...prev, is_active: c } : null)} 
-                                    label="Ativo" 
+                                <Switch
+                                    checked={currentProduct?.is_active || false}
+                                    onChange={c => setCurrentProduct(prev => prev ? { ...prev, is_active: c } : null)}
+                                    label="Ativo"
                                 />
                                 <Button fullWidth onClick={handleAddEditProduct} disabled={saving}>
                                     {saving ? <Loader2 className="animate-spin" /> : 'Salvar'}
@@ -458,10 +487,10 @@ export const AdminShopManagement: React.FC = () => {
                 <div role="tabpanel" id="panel-categories" aria-labelledby="tab-categories" className="space-y-6">
                     <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Grid className="w-5 h-5 text-gray-500" /> Gerenciamento de Categorias</h3>
                     <div className="flex gap-2">
-                        <input 
-                            type="text" placeholder="Nome da Nova Categoria" 
-                            value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} 
-                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600" 
+                        <input
+                            type="text" placeholder="Nome da Nova Categoria"
+                            value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)}
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                         />
                         <Button onClick={handleAddCategory} disabled={saving} className="px-4">
                             {saving ? <Loader2 className="animate-spin" /> : <Plus className="w-5 h-5" />}
@@ -550,21 +579,21 @@ export const AdminShopManagement: React.FC = () => {
                             <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
                                 <h3 className="font-bold text-lg dark:text-white">{currentCoupon?.code ? 'Editar Cupom' : 'Novo Cupom'}</h3>
                                 <input
-                                    type="text" placeholder="Código do Cupom" 
-                                    value={currentCoupon?.code || ''} 
-                                    onChange={e => setCurrentCoupon(prev => prev ? { ...prev, code: e.target.value } : null)} 
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600" 
+                                    type="text" placeholder="Código do Cupom"
+                                    value={currentCoupon?.code || ''}
+                                    onChange={e => setCurrentCoupon(prev => prev ? { ...prev, code: e.target.value } : null)}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                                 />
                                 <input
-                                    type="number" placeholder="Percentual de Desconto" 
-                                    value={currentCoupon?.discount_percent || ''} 
-                                    onChange={e => setCurrentCoupon(prev => prev ? { ...prev, discount_percent: Number(e.target.value) } : null)} 
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600" 
+                                    type="number" placeholder="Percentual de Desconto"
+                                    value={currentCoupon?.discount_percent || ''}
+                                    onChange={e => setCurrentCoupon(prev => prev ? { ...prev, discount_percent: Number(e.target.value) } : null)}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                                 />
-                                <Switch 
-                                    checked={currentCoupon?.active || false} 
-                                    onChange={c => setCurrentCoupon(prev => prev ? { ...prev, active: c } : null)} 
-                                    label="Ativo" 
+                                <Switch
+                                    checked={currentCoupon?.active || false}
+                                    onChange={c => setCurrentCoupon(prev => prev ? { ...prev, active: c } : null)}
+                                    label="Ativo"
                                 />
                                 <Button fullWidth onClick={handleSaveCoupon} disabled={saving}>
                                     <Save className="w-5 h-5 mr-2" /> Adicionar Cupom
@@ -579,11 +608,11 @@ export const AdminShopManagement: React.FC = () => {
             {activeTab === 'settings' && shopSettings && (
                 <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" className="space-y-6">
                     <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500" /> Configurações da Loja</h3>
-                    
+
                     {/* General Settings */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 space-y-4 shadow-sm">
                         <h4 className="font-semibold text-gray-900 dark:text-white">Geral</h4>
-                        <Switch 
+                        <Switch
                             checked={shopSettings.is_shop_enabled}
                             onChange={c => updateShopSetting('is_shop_enabled', c)}
                             label="Loja Ativa"
@@ -592,7 +621,7 @@ export const AdminShopManagement: React.FC = () => {
                         <div>
                             <label htmlFor="shop_name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome da Loja</label>
                             <input
-                                type="text" id="shop_name" 
+                                type="text" id="shop_name"
                                 value={shopSettings.shop_name || ''}
                                 onChange={e => updateShopSetting('shop_name', e.target.value)}
                                 className="mt-1 block w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
