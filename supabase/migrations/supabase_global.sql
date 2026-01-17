@@ -110,7 +110,7 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE public.order_status AS ENUM ('PENDING', 'NEW', 'ACCEPTED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED');
+    CREATE TYPE public.order_status AS ENUM ('PENDING', 'NEW', 'ACCEPTED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED', 'pending_payment');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -1034,6 +1034,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
     shipping_cost NUMERIC(10, 2),
     discount NUMERIC(10, 2) DEFAULT 0,
     coupon_code TEXT,
+    order_type TEXT, -- 'LOCAL' | 'PICKUP' | 'DELIVERY'
+    delivery_mode TEXT, -- 'OWN' | 'PLATFORM' | 'ASSOCIATE'
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -3564,6 +3566,12 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'custom_payment_label') THEN
         ALTER TABLE public.orders ADD COLUMN custom_payment_label TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'order_type') THEN
+        ALTER TABLE public.orders ADD COLUMN order_type TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'delivery_mode') THEN
+        ALTER TABLE public.orders ADD COLUMN delivery_mode TEXT;
     END IF;
 END $$;
 

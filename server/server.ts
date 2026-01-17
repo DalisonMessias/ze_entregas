@@ -7,7 +7,7 @@ import http from 'http';
 
 import streetsNeighborhoodsRoutes from './routes/streetsNeighborhoods.js';
 import integrationRoutes from './routes/integration.js';
-import whatsappRoutes from './routes/whatsapp.js'; // Importar rotas do WhatsApp
+import whatsappRoutes from './routes/whatsapp.js';
 import { initializeWebSocket } from './websocket.js';
 import './services/whatsappService.js'; // Importa para inicializar o serviço
 import { supabaseAdmin } from './services/supabaseClient.js';
