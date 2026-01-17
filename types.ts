@@ -382,6 +382,7 @@ export interface Order {
     custom_payment_label?: string;
     store_id?: string;
     delivery_mode?: 'OWN' | 'PLATFORM' | 'ASSOCIATE';
+    driver_id?: string;
 
     store?: any;
     partner?: any;

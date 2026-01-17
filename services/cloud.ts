@@ -960,26 +960,6 @@ export const deleteStoreProduct = async (id: string) => {
     if (error) throw error;
 };
 
-export const getInternalOrders = async (): Promise<Order[]> => {
-    const sb = getClient();
-    if (!sb) return [];
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return [];
-
-    const { data, error } = await sb
-        .from('orders')
-        .select('*')
-        .eq('store_id', user.id)
-        .eq('origin', 'INTERNAL')
-        .order('created_at', { ascending: false });
-
-    if (error) {
-        console.error('Error fetching internal orders:', error);
-        return [];
-    }
-    return data || [];
-};
-
 // --- SHOP & ORDERS ---
 
 export const adminUpdateShopSettings = async (settings: Partial<ShopSettings>) => {
@@ -2880,6 +2860,12 @@ export const getOrdersTickets = async (storeId: string) => {
             orders_collaborators (
                 table_identifier,
                 customer_name
+            ),
+            orders:general_order_id (
+                customer_name,
+                customer_phone,
+                order_type,
+                delivery_mode
             )
         `)
         .eq('store_id', storeId)
@@ -2895,10 +2881,39 @@ export const getOrdersTickets = async (storeId: string) => {
 export const updateTicketStatus = async (ticketId: string, status: string) => {
     const sb = getClient();
     if (!sb) return;
-    const { error } = await sb.from('orders_tickets').update({ status }).eq('id', ticketId);
+
+    // 1. Atualiza o ticket
+    const { data: ticket, error } = await sb.from('orders_tickets')
+        .update({ status })
+        .eq('id', ticketId)
+        .select('general_order_id, order_id')
+        .single();
+
     if (error) {
         console.error('updateTicketStatus error', error);
         throw error;
+    }
+
+    // 2. Se for finalizado (ready), tenta atualizar o status do pedido principal
+    if (status === 'ready' && ticket.general_order_id) {
+        // Busca o pedido para saber se é entrega
+        const { data: order } = await sb.from('orders')
+            .select('delivery_mode, order_type, driver_id')
+            .eq('id', ticket.general_order_id)
+            .single();
+
+        if (order) {
+            let nextStatus = 'ready'; // Finalizado / Pronto para retirar
+
+            // Se for entrega, decide se vai para trânsito ou aguardando entregador
+            if (order.order_type === 'DELIVERY') {
+                nextStatus = order.driver_id ? 'in_transit' : 'ready';
+            }
+
+            await sb.from('orders')
+                .update({ status: nextStatus })
+                .eq('id', ticket.general_order_id);
+        }
     }
 };
 
@@ -2917,28 +2932,45 @@ export const getStoreInternalOrders = async (storeId: string) => {
     const sb = getClient();
     if (!sb) return [];
 
-    // Busca via RPC para garantir acesso a colaboradores (Bypass RLS)
-    const { data, error } = await sb.rpc('get_store_internal_orders_rpc', { p_store_id: storeId });
+    // Busca pedidos com origem 'INTERNAL'
+    const { data, error } = await sb
+        .from('orders')
+        .select('*')
+        .eq('store_id', storeId)
+        .eq('origin', 'INTERNAL')
+        .order('created_at', { ascending: false })
+        .limit(50);
 
     if (error) {
-        console.error('getStoreInternalOrders RPC error', error);
-
-        // Fallback para query direta (para Lojistas autenticados funcionarem mesmo se RPC falhar)
-        const { data: directData, error: directError } = await sb
-            .from('orders')
-            .select('*')
-            .eq('store_id', storeId)
-            .eq('origin', 'INTERNAL')
-            .order('created_at', { ascending: false })
-            .limit(50);
-
-        if (directError) {
-            console.error('getStoreInternalOrders Direct error', directError);
-            return [];
-        }
-        return directData || [];
+        console.error('getStoreInternalOrders error', error);
+        return [];
     }
     return data || [];
+};
+
+export const getInternalOrders = getStoreInternalOrders;
+
+export const getStoreAssociates = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb.from('store_delivery_partners')
+        .select(`
+            partner:user_profiles!store_delivery_partners_partner_id_fkey (
+                id,
+                name,
+                phone_number,
+                avatar_url
+            )
+        `)
+        .eq('store_id', storeId);
+
+    if (error) {
+        console.error('getStoreAssociates error', error);
+        return [];
+    }
+
+    return data?.map(d => d.partner).filter(p => !!p) || [];
 };
 
 export const getCollaboratorSummary = async (storeId: string, collaboratorId: string) => {

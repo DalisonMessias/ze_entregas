@@ -12,6 +12,7 @@ import { estimateDeliveryCosts } from '../utils/estimateDeliveryCosts';
 import { DistrictSearchSelect } from './DistrictSearchSelect';
 import { LocationHelpModal } from './LocationHelpModal';
 import { StreetAutocomplete } from './StreetAutocomplete';
+import { Logo } from './Logo';
 
 // Interface para detalhamento da taxa do Parceiro Zé
 interface PlatformFeeDetails {
@@ -84,6 +85,7 @@ export const InternalOrders: React.FC = () => {
     // Print Preview State
     const [showPrintPreview, setShowPrintPreview] = useState(false);
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
+    const [profile, setProfile] = useState<any>(null);
 
     // Product Management State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -107,11 +109,54 @@ export const InternalOrders: React.FC = () => {
     // Auth State
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+    // Delivery Associates State
+    const [associates, setAssociates] = useState<any[]>([]);
+    const [selectedAssociateId, setSelectedAssociateId] = useState<string | null>(null);
+
+    // Printer Settings State
+    const [printerSettings, setPrinterSettings] = useState({
+        printer_width: 80,
+        paper_type: 'thermal',
+        margin_top: 0,
+        margin_bottom: 0,
+        margin_left: 2,
+        margin_right: 2,
+        font_size_base: 12
+    });
+
     useEffect(() => {
         cloud.getClient()?.auth.getUser().then(({ data }) => {
-            if (data.user) setCurrentUserId(data.user.id);
+            if (data.user) {
+                setCurrentUserId(data.user.id);
+                loadAssociates(data.user.id);
+                loadPrinterSettings(data.user.id);
+            }
         });
     }, []);
+
+    const loadAssociates = async (storeId: string) => {
+        const data = await cloud.getStoreAssociates(storeId);
+        setAssociates(data);
+    };
+
+    const loadPrinterSettings = async (storeId: string) => {
+        try {
+            const { data } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', storeId).single() || {};
+            if (data) {
+                setPrinterSettings({
+                    printer_width: data.printer_width || 80,
+                    paper_type: data.paper_type || 'thermal',
+                    margin_top: data.margin_top || 0,
+                    margin_bottom: data.margin_bottom || 0,
+                    margin_left: data.margin_left || 2,
+                    margin_right: data.margin_right || 2,
+                    font_size_base: data.font_size_base || 12
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao carregar configurações de impressora:', error);
+        }
+    };
 
     useEffect(() => {
         loadProducts();
@@ -121,10 +166,21 @@ export const InternalOrders: React.FC = () => {
 
 
     const loadTickets = async () => {
-        const storeId = products[0]?.store_id || localStorage.getItem('storeId');
-        if (storeId) {
-            const data = await cloud.getOrdersTickets(storeId);
+        if (currentUserId) {
+            const data = await cloud.getOrdersTickets(currentUserId);
             setTickets(data);
+        }
+    };
+
+    const handleUpdateTicketStatus = async (ticketId: string, status: string) => {
+        try {
+            await cloud.updateTicketStatus(ticketId, status);
+            await loadTickets();
+            if (status === 'ready') {
+                showAlert({ title: 'Sucesso', message: 'Pedido finalizado e pronto para entrega/retirada!' });
+            }
+        } catch (error) {
+            showAlert({ title: 'Erro', message: 'Falha ao atualizar status do pedido.' });
         }
     };
 
@@ -450,9 +506,10 @@ export const InternalOrders: React.FC = () => {
     };
 
     const loadHistory = async () => {
+        if (!currentUserId) return;
         setLoadingHistory(true);
         try {
-            const data = await cloud.getInternalOrders();
+            const data = await cloud.getInternalOrders(currentUserId);
             setHistoryOrders(data);
         } catch (error) {
             // console.error(error);
@@ -723,7 +780,8 @@ export const InternalOrders: React.FC = () => {
                 change_amount: changeAmount,
                 custom_payment_label: paymentMethod === 'OTHER' ? customPaymentLabel : undefined,
                 order_type: orderType,
-                delivery_mode: orderType === 'DELIVERY' ? (deliveryMode || undefined) : undefined
+                delivery_mode: orderType === 'DELIVERY' ? (deliveryMode || undefined) : undefined,
+                driver_id: deliveryMode === 'ASSOCIATE' ? selectedAssociateId : undefined
             });
 
             setLastOrder(order);
@@ -1119,6 +1177,48 @@ export const InternalOrders: React.FC = () => {
                                                     </p>
                                                 </button>
                                             </div>
+
+                                            {/* Seletor de Entregador Fixo */}
+                                            {deliveryMode === 'ASSOCIATE' && associates.length > 0 && (
+                                                <div className="mt-4 animate-in fade-in slide-in-from-top-2">
+                                                    <label className="text-[10px] uppercase font-bold text-gray-500 mb-2 block">Escolha o Entregador Fixo</label>
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {associates.map(associate => (
+                                                            <button
+                                                                key={associate.id}
+                                                                onClick={() => setSelectedAssociateId(associate.id)}
+                                                                className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${selectedAssociateId === associate.id
+                                                                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/10'
+                                                                    : 'border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800'
+                                                                    }`}
+                                                            >
+                                                                <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                                                    {associate.avatar_url ? (
+                                                                        <img src={associate.avatar_url} alt={associate.name} className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
+                                                                            {associate.name.charAt(0)}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-left">
+                                                                    <p className="text-sm font-bold dark:text-white">{associate.name}</p>
+                                                                    <p className="text-[10px] text-gray-500">{associate.phone}</p>
+                                                                </div>
+                                                                {selectedAssociateId === associate.id && (
+                                                                    <CheckCircle className="ml-auto w-5 h-5 text-purple-500" />
+                                                                )}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {deliveryMode === 'ASSOCIATE' && associates.length === 0 && (
+                                                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl">
+                                                    <p className="text-xs text-red-600 dark:text-red-400 font-medium">Nenhum entregador fixo associado a esta loja.</p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Detalhes do Endereço e Taxa - Só aparece se um modo for selecionado */}
@@ -1629,24 +1729,30 @@ export const InternalOrders: React.FC = () => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
                                         {tickets.map(ticket => (
-                                            <div key={ticket.id} className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[32px] border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all group">
+                                            <div key={ticket.id} className={`p-6 rounded-[32px] border transition-all group ${ticket.status === 'producing' ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-900/50 dark:border-gray-700'}`}>
                                                 <div className="flex justify-between items-start mb-4 pb-4 border-b border-gray-200/50 dark:border-gray-700/50">
                                                     <div>
                                                         <div className="flex items-center gap-2 mb-2">
-                                                            <span className="bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase">
-                                                                {ticket.orders_collaborators?.table_identifier || 'Balcão'}
+                                                            <span className={`${ticket.general_order_id ? 'bg-blue-600' : 'bg-orange-500'} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase`}>
+                                                                {ticket.orders_collaborators?.table_identifier || 'Balcão / Entrega'}
                                                             </span>
                                                             <span className="text-[10px] text-gray-400 font-bold">
                                                                 {new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             </span>
+                                                            {ticket.status === 'producing' && (
+                                                                <span className="flex items-center gap-1 text-[10px] text-orange-600 font-black uppercase animate-pulse">
+                                                                    <Loader2 className="w-3 h-3 animate-spin" /> Produzindo
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">
-                                                            {ticket.orders_collaborators?.customer_name || 'Pedido Cozinha'}
+                                                            {ticket.orders_collaborators?.customer_name || ticket.orders?.customer_name || 'Pedido Cozinha'}
                                                         </h3>
                                                     </div>
                                                     <Button size="sm" onClick={() => {
                                                         const order = {
                                                             ...ticket.orders_collaborators,
+                                                            ...ticket.orders,
                                                             items: ticket.items.map((i: any) => ({
                                                                 ...i,
                                                                 name: i.name || i.product?.name,
@@ -1662,7 +1768,7 @@ export const InternalOrders: React.FC = () => {
                                                     </Button>
                                                 </div>
 
-                                                <div className="space-y-3">
+                                                <div className="space-y-3 mb-6">
                                                     {ticket.items.map((item: any, idx: number) => (
                                                         <div key={idx}>
                                                             <div className="flex justify-between text-sm">
@@ -1671,11 +1777,24 @@ export const InternalOrders: React.FC = () => {
                                                             {item.observation && (
                                                                 <p className="text-[10px] text-orange-600 font-black italic ml-4 mt-1">↳ OBS: {item.observation}</p>
                                                             )}
-                                                            {item.additional?.map((a: any, ai: number) => (
-                                                                <p key={ai} className="text-[10px] text-gray-400 font-bold ml-4 mt-0.5">↳ {a.value || a.name}</p>
-                                                            ))}
                                                         </div>
                                                     ))}
+                                                </div>
+
+                                                <div className="flex gap-2 mt-auto">
+                                                    {ticket.status === 'pending' ? (
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                            Iniciar Preparo
+                                                        </Button>
+                                                    ) : ticket.status === 'producing' ? (
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
+                                                            Finalizar Pedido
+                                                        </Button>
+                                                    ) : (
+                                                        <div className="w-full text-center py-2 bg-green-50 dark:bg-green-900/20 text-green-600 font-black uppercase text-[10px] rounded-xl flex items-center justify-center gap-2">
+                                                            <CheckCircle className="w-4 h-4" /> Finalizado
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -1832,35 +1951,225 @@ export const InternalOrders: React.FC = () => {
             {/* Print Preview Modal */}
             {
                 showPrintPreview && lastOrder && (
-                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-                        {/* Simplified Content, usually PrintTicket component */}
-                        <div className="bg-white p-6 rounded-lg w-full max-w-sm max-h-[90vh] overflow-y-auto">
-                            <h3 className="font-bold text-center mb-4">Pedido #{lastOrder.id.slice(0, 4)}</h3>
-                            <div className="space-y-3 mb-4">
-                                {lastOrder.items.map((item, i) => (
-                                    <div key={i} className="border-b border-gray-50 pb-2">
-                                        <div className="flex justify-between text-sm font-bold">
-                                            <span>{item.quantity}x {item.name}</span>
-                                            <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.total_price || (item.price * item.quantity))}</span>
+                    <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-0 sm:p-4 overflow-y-auto no-print-bg">
+                        <div className="bg-white p-8 w-full max-w-[380px] shadow-2xl print:shadow-none print:p-0 print:m-0 print:w-full min-h-screen sm:min-h-0 sm:rounded-[40px] flex flex-col">
+
+                            {/* Ticket Content Area */}
+                            <div id="printable-ticket" className="flex-1">
+                                {/* Logo & Header */}
+                                <div className="text-center mb-6">
+                                    <Logo variant="black" className="h-10 mx-auto mb-2" />
+                                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Ticket de Pedido</h3>
+                                    <p className="text-[10px] font-bold text-gray-500">#{lastOrder.id.substring(0, 8).toUpperCase()}</p>
+
+                                    {/* Store Info */}
+                                    {profile && (
+                                        <div className="mt-3 pt-3 border-t border-gray-200">
+                                            <p className="text-sm font-black text-gray-900">{profile.store_name || profile.name}</p>
+                                            {profile.phone_number && (
+                                                <p className="text-[10px] text-gray-600">{profile.phone_number}</p>
+                                            )}
+                                            {profile.store_address_street && (
+                                                <p className="text-[10px] text-gray-600">
+                                                    {profile.store_address_street}, {profile.store_address_number} - {profile.store_address_district}
+                                                </p>
+                                            )}
+                                            {profile.store_address_city && (
+                                                <p className="text-[10px] text-gray-600">
+                                                    {profile.store_address_city} - {profile.store_address_state}
+                                                </p>
+                                            )}
                                         </div>
-                                        {item.observation && (
-                                            <p className="text-[10px] text-gray-500 italic ml-2">Obs: {item.observation}</p>
-                                        )}
-                                        {item.additional?.map((a: any, ai: number) => (
-                                            <p key={ai} className="text-[10px] text-gray-400 ml-2">↳ {a.value || a.name}</p>
+                                    )}
+                                </div>
+
+                                <div className="border-t border-b border-black border-dashed py-4 mb-6 space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-black uppercase text-gray-500">Data</span>
+                                        <span className="text-xs font-bold">{new Date(lastOrder.created_at).toLocaleDateString('pt-BR')} {new Date(lastOrder.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-black uppercase text-gray-500">Tipo de Pedido</span>
+                                        <span className="text-xs font-black uppercase">
+                                            {(lastOrder as any).order_type === 'LOCAL' && '🍽️ Consumo Local'}
+                                            {(lastOrder as any).order_type === 'PICKUP' && '🛍️ Retirada'}
+                                            {(lastOrder as any).order_type === 'DELIVERY' && '🚚 Entrega'}
+                                            {!(lastOrder as any).order_type && 'Consumo'}
+                                        </span>
+                                    </div>
+                                    {(lastOrder as any).table_identifier && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[10px] font-black uppercase text-gray-500">Mesa/Referência</span>
+                                            <span className="text-xs font-black uppercase">{(lastOrder as any).table_identifier}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Customer Info */}
+                                <div className="mb-6">
+                                    {(lastOrder as any).order_type === 'DELIVERY' ? (
+                                        <>
+                                            <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">📍 Endereço de Entrega</h4>
+                                            <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
+                                            {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
+                                            {(lastOrder as any).shipping_address?.street && (
+                                                <div className="mt-2 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                                                    <p className="text-xs font-bold text-gray-800">
+                                                        {(lastOrder as any).shipping_address.street}, {(lastOrder as any).shipping_address.number}
+                                                    </p>
+                                                    <p className="text-[10px] text-gray-500 font-medium">
+                                                        {(lastOrder as any).shipping_address.district} - {(lastOrder as any).shipping_address.city}
+                                                    </p>
+                                                    {(lastOrder as any).shipping_address.complement && (
+                                                        <p className="text-[10px] text-gray-500 font-medium mt-1">
+                                                            Complemento: {(lastOrder as any).shipping_address.complement}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (lastOrder as any).order_type === 'PICKUP' ? (
+                                        <>
+                                            <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🛍️ Cliente (Retirada)</h4>
+                                            <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
+                                            {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
+                                            <div className="mt-2 p-3 bg-blue-50 rounded-2xl border border-blue-100">
+                                                <p className="text-xs font-bold text-blue-800">⏰ Cliente irá retirar no balcão</p>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🍽️ Cliente / Mesa</h4>
+                                            <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
+                                            {(lastOrder as any).table_identifier && (
+                                                <div className="mt-2 p-3 bg-amber-50 rounded-2xl border border-amber-100">
+                                                    <p className="text-xs font-bold text-amber-800">Mesa: {(lastOrder as any).table_identifier}</p>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Items List */}
+                                <div className="mb-6">
+                                    <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">Itens do Pedido</h4>
+                                    <div className="space-y-4">
+                                        {lastOrder.items.map((item, i) => (
+                                            <div key={i} className="flex justify-between items-start">
+                                                <div className="flex-1 pr-4">
+                                                    <div className="flex gap-2">
+                                                        <span className="font-black text-sm text-gray-900">{item.quantity}x</span>
+                                                        <span className="font-bold text-sm text-gray-800">{item.name}</span>
+                                                    </div>
+                                                    {item.observation && (
+                                                        <p className="text-[10px] text-brand-600 font-black italic mt-1 ml-6">↳ {item.observation}</p>
+                                                    )}
+                                                </div>
+                                                <span className="text-sm font-black text-gray-900">
+                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((item.total_price || (item.price * item.quantity)))}
+                                                </span>
+                                            </div>
                                         ))}
                                     </div>
-                                ))}
+                                </div>
+
+                                {/* Totals */}
+                                <div className="border-t-2 border-black pt-4 mb-4 space-y-2">
+                                    {(lastOrder as any).shipping_cost > 0 && (
+                                        <div className="flex justify-between items-center text-xs font-bold text-gray-600">
+                                            <span>Taxa de Entrega</span>
+                                            <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((lastOrder as any).shipping_cost)}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center text-lg font-black text-gray-900 uppercase">
+                                        <span>Total Geral</span>
+                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lastOrder.total_price)}</span>
+                                    </div>
+                                </div>
+
+                                {/* Payment Info */}
+                                <div className="bg-gray-900 text-white p-4 rounded-3xl mb-8 print:bg-white print:text-black print:border print:border-black">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="text-[8px] font-black uppercase opacity-60">Forma de Pagamento</p>
+                                            <p className="text-xs font-black uppercase">{(() => {
+                                                const method = lastOrder.payment_method || 'A Combinar';
+                                                const translations: Record<string, string> = {
+                                                    'CASH': 'Dinheiro',
+                                                    'PIX': 'PIX',
+                                                    'CREDIT_CARD': 'Cartão de Crédito',
+                                                    'DEBIT_CARD': 'Cartão de Débito',
+                                                    'OTHER': 'Outro',
+                                                    'PENDING': 'Pendente'
+                                                };
+                                                return translations[method] || method;
+                                            })()}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[8px] font-black uppercase opacity-60">Status</p>
+                                            <p className="text-xs font-black uppercase">PAGO</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="text-center">
+                                    <p className="text-[10px] font-black text-gray-400">Obrigado pela preferência!</p>
+                                    <p className="text-[8px] font-bold text-gray-300 mt-1">zeentregas.com.br</p>
+                                </div>
                             </div>
-                            <div className="border-t pt-3 font-black flex justify-between text-lg">
-                                <span>Total</span>
-                                <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lastOrder.total_price)}</span>
-                            </div>
-                            <div className="flex gap-2 mt-6 no-print">
-                                <Button fullWidth variant="secondary" onClick={() => setShowPrintPreview(false)}>Fechar</Button>
-                                <Button fullWidth onClick={handleShare} className="bg-green-600 hover:bg-green-700">Compartilhar</Button>
+
+                            {/* Action Buttons - Hidden on Print */}
+                            <div className="flex gap-3 mt-8 no-print pt-6 border-t border-gray-100">
+                                <Button fullWidth variant="secondary" onClick={() => setShowPrintPreview(false)} className="rounded-2xl h-14 font-bold">Voltar</Button>
+                                <Button fullWidth onClick={() => window.print()} className="rounded-2xl h-14 font-black flex items-center justify-center gap-2">
+                                    <Printer className="w-5 h-5" /> Imprimir
+                                </Button>
+                                <Button fullWidth onClick={handleShare} variant="outline" className="rounded-2xl h-14 border-2 border-green-200 text-green-600 hover:bg-green-50 font-bold p-0 w-14 min-w-[56px]">
+                                    <Share2 className="w-5 h-5 mx-auto" />
+                                </Button>
                             </div>
                         </div>
+
+                        {/* Style for Print */}
+                        <style>{`
+                            @media print {
+                                * {
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact;
+                                }
+                                body {
+                                    margin: 0;
+                                    padding: 0;
+                                }
+                                body * {
+                                    visibility: hidden;
+                                }
+                                #printable-ticket, #printable-ticket * {
+                                    visibility: visible;
+                                }
+                                #printable-ticket {
+                                    position: absolute;
+                                    left: 0;
+                                    top: 0;
+                                    width: ${printerSettings.printer_width}mm;
+                                    max-width: ${printerSettings.printer_width}mm;
+                                    padding: ${printerSettings.margin_top}mm ${printerSettings.margin_right}mm ${printerSettings.margin_bottom}mm ${printerSettings.margin_left}mm;
+                                    margin: 0;
+                                    font-size: ${printerSettings.font_size_base}pt;
+                                    box-sizing: border-box;
+                                }
+                                .no-print {
+                                    display: none !important;
+                                }
+                                @page {
+                                    size: ${printerSettings.paper_type === 'a4' ? 'A4' : `${printerSettings.printer_width}mm auto`};
+                                    margin: 0;
+                                }
+                            }
+                            .no-print-bg {
+                                background-color: rgba(0, 0, 0, 0.8) !important;
+                            }
+                        `}</style>
                     </div>
                 )
             }

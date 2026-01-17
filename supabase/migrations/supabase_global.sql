@@ -1049,6 +1049,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
     coupon_code TEXT,
     order_type TEXT, -- 'LOCAL' | 'PICKUP' | 'DELIVERY'
     delivery_mode TEXT, -- 'OWN' | 'PLATFORM' | 'ASSOCIATE'
+    driver_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Entregador atribuído (fixo)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -3686,7 +3687,8 @@ BEGIN
         change_amount,
         custom_payment_label,
         order_type,
-        delivery_mode
+        delivery_mode,
+        driver_id
     )
     VALUES (
         (order_details->>'store_id')::UUID,
@@ -3711,8 +3713,13 @@ BEGIN
         (order_details->>'change_amount')::NUMERIC,
         order_details->>'custom_payment_label',
         order_details->>'order_type',
-        order_details->>'delivery_mode'
+        order_details->>'delivery_mode',
+        (order_details->>'driver_id')::UUID
     ) RETURNING * INTO new_order;
+
+    -- Gerar Ticket de Produﾃｧﾃ｣o Automaticamente para pedidos internos
+    INSERT INTO public.orders_tickets (store_id, general_order_id, items, status)
+    VALUES (new_order.store_id, new_order.id, new_order.items, 'pending');
 
     RETURN to_jsonb(new_order);
 END;
@@ -3887,10 +3894,11 @@ GRANT ALL ON public.orders_items TO service_role;
 CREATE TABLE IF NOT EXISTS public.orders_tickets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
-    order_id UUID NOT NULL REFERENCES public.orders_collaborators(id) ON DELETE CASCADE,
+    order_id UUID REFERENCES public.orders_collaborators(id) ON DELETE CASCADE, -- Referência para mesa (opcional se for pedido direto)
+    general_order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE, -- Referência para pedido geral
     collaborator_id UUID REFERENCES public.collaborators(id) ON DELETE SET NULL,
     items JSONB NOT NULL,
-    status TEXT DEFAULT 'pending', -- pending, printed, ready
+    status TEXT DEFAULT 'pending', -- pending, producing, ready
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE public.orders_tickets ENABLE ROW LEVEL SECURITY;
@@ -6180,3 +6188,43 @@ CREATE POLICY "Admins can update cities" ON public.available_cities FOR UPDATE U
 
 DROP POLICY IF EXISTS "Admins can delete cities" ON public.available_cities;
 CREATE POLICY "Admins can delete cities" ON public.available_cities FOR DELETE USING (public.is_admin());
+
+-- ==================================================================
+-- PRINTER SETTINGS (17/01/2026)
+-- ==================================================================
+
+-- Tabela de configurações de impressora por loja
+CREATE TABLE IF NOT EXISTS public.printer_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    printer_width INTEGER DEFAULT 80, -- Largura em mm (58, 80)
+    paper_type TEXT DEFAULT 'thermal', -- 'thermal' | 'a4'
+    margin_top INTEGER DEFAULT 0,
+    margin_bottom INTEGER DEFAULT 0,
+    margin_left INTEGER DEFAULT 2,
+    margin_right INTEGER DEFAULT 2,
+    font_size_base INTEGER DEFAULT 12,
+    auto_cut BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_store_printer UNIQUE (store_id)
+);
+
+CREATE INDEX IF NOT EXISTS printer_settings_store_id_idx ON public.printer_settings (store_id);
+
+DROP TRIGGER IF EXISTS handle_printer_settings_updated_at ON public.printer_settings;
+CREATE TRIGGER handle_printer_settings_updated_at BEFORE UPDATE ON public.printer_settings
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.printer_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Stores can manage their printer settings" ON public.printer_settings;
+CREATE POLICY "Stores can manage their printer settings" ON public.printer_settings
+    FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Admins can manage all printer settings" ON public.printer_settings;
+CREATE POLICY "Admins can manage all printer settings" ON public.printer_settings
+    FOR ALL USING (public.is_admin());
+
+GRANT ALL ON public.printer_settings TO authenticated;
+GRANT SELECT ON public.printer_settings TO anon;

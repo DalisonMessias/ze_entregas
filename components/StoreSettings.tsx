@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera } from 'lucide-react';
+import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { StoreShippingRules } from './StoreShippingRules';
@@ -36,7 +36,7 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
 };
 
 export const StoreSettings: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'general' | 'shipping'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'shipping' | 'printer'>('general');
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [availableCities, setAvailableCities] = useState<City[]>([]);
     const [loading, setLoading] = useState(true);
@@ -50,6 +50,21 @@ export const StoreSettings: React.FC = () => {
     const [coverUrl, setCoverUrl] = useState<string | null>(null);
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [uploadingAsset, setUploadingAsset] = useState<'cover' | 'logo' | null>(null);
+
+    // Printer Settings State
+    const [printerSettings, setPrinterSettings] = useState({
+        printer_width: '80',
+        paper_type: 'thermal',
+        margin_top: '0',
+        margin_bottom: '0',
+        margin_left: '2',
+        margin_right: '2',
+        font_size_base: '12',
+        auto_cut: true
+    });
+    const [savingPrinter, setSavingPrinter] = useState(false);
+    const [detectingPrinter, setDetectingPrinter] = useState(false);
+    const [detectedPrinters, setDetectedPrinters] = useState<string[]>([]);
 
     // Form State
 
@@ -116,6 +131,21 @@ export const StoreSettings: React.FC = () => {
                         address_state: useStoreAddr ? (p.store_address_state || '') : (p.address_state || p.city?.split(' - ')[1] || ''),
                         address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || '') // TODO: Add to generic too if needed
                     });
+
+                    // Load printer settings
+                    const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', p.id).single() || {};
+                    if (printerData) {
+                        setPrinterSettings({
+                            printer_width: String(printerData.printer_width || 80),
+                            paper_type: printerData.paper_type || 'thermal',
+                            margin_top: String(printerData.margin_top || 0),
+                            margin_bottom: String(printerData.margin_bottom || 0),
+                            margin_left: String(printerData.margin_left || 2),
+                            margin_right: String(printerData.margin_right || 2),
+                            font_size_base: String(printerData.font_size_base || 12),
+                            auto_cut: printerData.auto_cut !== false
+                        });
+                    }
                 }
 
                 // Check super store status
@@ -213,6 +243,79 @@ export const StoreSettings: React.FC = () => {
         }
     };
 
+    const handleDetectPrinter = async () => {
+        setDetectingPrinter(true);
+        try {
+            // Detecta características do dispositivo
+            const userAgent = navigator.userAgent.toLowerCase();
+            const isMobile = /mobile|android|ios|iphone|ipad/.test(userAgent);
+
+            let suggestedWidth = '80';
+            let suggestedType = 'thermal';
+
+            // Se for mobile, provavelmente usa impressora térmica Bluetooth
+            if (isMobile) {
+                suggestedWidth = '58';
+                suggestedType = 'thermal';
+                setToast({
+                    type: 'success',
+                    message: 'Dispositivo móvel detectado! Configurações ajustadas para impressora térmica 58mm.'
+                });
+            } else {
+                // Desktop: padrão 80mm
+                setToast({
+                    type: 'success',
+                    message: 'Configurações ajustadas para impressora térmica 80mm (padrão desktop).'
+                });
+            }
+
+            // Aplica as configurações sugeridas
+            setPrinterSettings(prev => ({
+                ...prev,
+                printer_width: suggestedWidth,
+                paper_type: suggestedType
+            }));
+
+        } catch (error: any) {
+            console.error('Erro ao detectar impressora:', error);
+            setToast({
+                type: 'error',
+                message: 'Não foi possível detectar impressoras. Configure manualmente.'
+            });
+        } finally {
+            setDetectingPrinter(false);
+        }
+    };
+
+    const handleSavePrinter = async () => {
+        setSavingPrinter(true);
+        try {
+            const user = await cloud.getClient()?.auth.getUser();
+            if (!user?.data.user) throw new Error('Usuário não autenticado');
+
+            const payload = {
+                store_id: user.data.user.id,
+                printer_width: parseInt(printerSettings.printer_width),
+                paper_type: printerSettings.paper_type,
+                margin_top: parseInt(printerSettings.margin_top),
+                margin_bottom: parseInt(printerSettings.margin_bottom),
+                margin_left: parseInt(printerSettings.margin_left),
+                margin_right: parseInt(printerSettings.margin_right),
+                font_size_base: parseInt(printerSettings.font_size_base),
+                auto_cut: printerSettings.auto_cut
+            };
+
+            const { error } = await cloud.getClient()?.from('printer_settings').upsert(payload, { onConflict: 'store_id' }) || {};
+            if (error) throw error;
+
+            setToast({ type: 'success', message: 'Configurações de impressora salvas!' });
+        } catch (e: any) {
+            setToast({ type: 'error', message: 'Erro ao salvar: ' + e.message });
+        } finally {
+            setSavingPrinter(false);
+        }
+    };
+
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
 
     return (
@@ -240,6 +343,12 @@ export const StoreSettings: React.FC = () => {
                         className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'shipping' ? 'bg-white dark:bg-gray-600 shadow text-brand-600 dark:text-white' : 'text-gray-500'}`}
                     >
                         {isSuperStore ? <Truck className="w-4 h-4" /> : <Lock className="w-4 h-4" />} Config. Frete
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('printer')}
+                        className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'printer' ? 'bg-white dark:bg-gray-600 shadow text-brand-600 dark:text-white' : 'text-gray-500'}`}
+                    >
+                        <Printer className="w-4 h-4" /> Impressora
                     </button>
                 </div>
             </div>
@@ -491,6 +600,152 @@ export const StoreSettings: React.FC = () => {
                             />
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Printer Settings */}
+            {activeTab === 'printer' && (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
+                    <div>
+                        <h3 className="font-bold text-lg dark:text-white mb-2 flex items-center gap-2">
+                            <Printer className="w-5 h-5 text-gray-500" /> Configurações de Impressora
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                            Configure como os tickets de pedidos serão impressos na sua impressora térmica.
+                        </p>
+
+                        {/* Detect Printer Button */}
+                        <div className="mb-6">
+                            <Button
+                                onClick={handleDetectPrinter}
+                                disabled={detectingPrinter}
+                                variant="outline"
+                                fullWidth
+                                className="border-2 border-brand-200 text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-400 dark:hover:bg-brand-900/20"
+                            >
+                                {detectingPrinter ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                        Detectando impressoras...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Zap className="w-5 h-5 mr-2" />
+                                        Detectar Impressora Automaticamente
+                                    </>
+                                )}
+                            </Button>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                                Clique para detectar sua impressora e ajustar as configurações automaticamente
+                            </p>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* Paper Settings */}
+                            <div>
+                                <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-4">Tipo de Papel</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Largura do Papel</label>
+                                        <select
+                                            value={printerSettings.printer_width}
+                                            onChange={(e) => setPrinterSettings(prev => ({ ...prev, printer_width: e.target.value }))}
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                                        >
+                                            <option value="58">58mm (Compacta)</option>
+                                            <option value="80">80mm (Padrão)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Tipo de Papel</label>
+                                        <select
+                                            value={printerSettings.paper_type}
+                                            onChange={(e) => setPrinterSettings(prev => ({ ...prev, paper_type: e.target.value }))}
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                                        >
+                                            <option value="thermal">Térmico</option>
+                                            <option value="a4">A4 (Comum)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Margins */}
+                            <div>
+                                <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-4">Margens (mm)</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <CustomInput
+                                        label="Superior"
+                                        type="number"
+                                        value={printerSettings.margin_top}
+                                        onChange={(e) => setPrinterSettings(prev => ({ ...prev, margin_top: e.target.value }))}
+                                        placeholder="0"
+                                    />
+                                    <CustomInput
+                                        label="Inferior"
+                                        type="number"
+                                        value={printerSettings.margin_bottom}
+                                        onChange={(e) => setPrinterSettings(prev => ({ ...prev, margin_bottom: e.target.value }))}
+                                        placeholder="0"
+                                    />
+                                    <CustomInput
+                                        label="Esquerda"
+                                        type="number"
+                                        value={printerSettings.margin_left}
+                                        onChange={(e) => setPrinterSettings(prev => ({ ...prev, margin_left: e.target.value }))}
+                                        placeholder="2"
+                                    />
+                                    <CustomInput
+                                        label="Direita"
+                                        type="number"
+                                        value={printerSettings.margin_right}
+                                        onChange={(e) => setPrinterSettings(prev => ({ ...prev, margin_right: e.target.value }))}
+                                        placeholder="2"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Font & Options */}
+                            <div>
+                                <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-4">Aparência</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <CustomInput
+                                        label="Tamanho da Fonte (pt)"
+                                        type="number"
+                                        value={printerSettings.font_size_base}
+                                        onChange={(e) => setPrinterSettings(prev => ({ ...prev, font_size_base: e.target.value }))}
+                                        placeholder="12"
+                                        helperText="Tamanho base do texto no ticket"
+                                    />
+                                    <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                        <input
+                                            type="checkbox"
+                                            id="auto_cut"
+                                            checked={printerSettings.auto_cut}
+                                            onChange={(e) => setPrinterSettings(prev => ({ ...prev, auto_cut: e.target.checked }))}
+                                            className="w-5 h-5 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                                        />
+                                        <label htmlFor="auto_cut" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                                            Corte automático do papel
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Info Box */}
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 flex items-start gap-3">
+                                <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                                <div className="text-xs text-blue-800 dark:text-blue-200">
+                                    <p className="font-bold mb-1">Dica de Configuração</p>
+                                    <p>Para impressoras térmicas de 80mm, use as configurações padrão. Se o ticket estiver cortado ou com margens erradas, ajuste os valores acima.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Button onClick={handleSavePrinter} disabled={savingPrinter} fullWidth className="mt-6 py-4">
+                            {savingPrinter ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Configurações de Impressora</>}
+                        </Button>
+                    </div>
                 </div>
             )}
         </div>

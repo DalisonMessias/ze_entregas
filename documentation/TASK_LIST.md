@@ -15,3 +15,10 @@
 - [x] Inclusão das colunas `order_type` e `delivery_mode` na tabela `orders`.
 - [x] Ajuste de imports e export default no servidor Express.
 - [x] Revisão do componente `InternalOrders.tsx`.
+- [x] Implementação de estágios de produção (Pendente, Produzindo, Finalizado).
+- [x] Automação de criação de tickets de produção para pedidos internos via RPC.
+- [x] Integração de seleção de Entregador Fixo no checkout da comanda.
+- [x] Lógica de despacho automático para entregadores ao finalizar preparo.
+- [x] Atualização da estrutura do banco de dados (tabelas `orders` e `orders_tickets`).
+- [x] Criação do Ticket de Impressão Premium com logo oficial P&B e suporte térmica.
+- [x] Adição da variante de logo preto e branco no componente `Logo.tsx`.
