@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ListPlus, MapPin, Search, Plus, Trash2, Navigation, Loader2, Edit2, Check, X, Lock, AlertTriangle, CheckCircle, Mic, Info } from 'lucide-react';
+import { ListPlus, MapPin, Search, Plus, Trash2, Navigation, Loader2, Edit2, Check, X, Lock, AlertTriangle, CheckCircle, Mic, Info, Circle, Undo2 } from 'lucide-react';
 import { RouteListItem, UserRole } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
@@ -8,6 +8,7 @@ import { ExclusiveLock } from './ExclusiveLock';
 import { BaseModal } from './BaseModal';
 import { openNavigation } from '../utils/mapHelpers';
 import { useDialog } from '../utils/dialogService';
+import { StreetAutocomplete } from './StreetAutocomplete';
 
 interface RouteListProps {
     userRole: UserRole;
@@ -250,6 +251,18 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
         setEditName('');
     };
 
+    const handleToggleStatus = (id: string) => {
+        const newItems = items.map(item => {
+            if (item.id === id) {
+                const newStatus = !item.completed;
+                // Feedback visual rápido antes da confirmação ou persistência
+                return { ...item, completed: newStatus };
+            }
+            return item;
+        });
+        saveAndSetItems(newItems);
+    };
+
     const { confirm } = useDialog();
     // Access Control for Non-Partners
     if (userRole !== 'delivery_partner' && userRole !== 'delivery_person') {
@@ -289,21 +302,14 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                         </button>
                     </div>
                     <div className="relative flex-grow min-w-[180px]">
-                        <input
-                            type="text"
+                        <StreetAutocomplete
+                            city={userCity}
                             value={search}
-                            onChange={e => setSearch(e.target.value)}
+                            onChange={(val) => setSearch(val)}
                             placeholder="Endereço (Rua)"
-                            className="w-full p-3 pr-8 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
                             disabled={isProfileLoading || isSearching}
+                            className="w-full p-3 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
                         />
-                        <button
-                            onClick={() => handleVoiceInput('search')}
-                            className={`absolute right-2 top-2.5 p-1 rounded-full ${listeningField === 'search' ? 'bg-red-100 text-red-500' : 'text-gray-400 hover:text-purple-500'}`}
-                            disabled={isProfileLoading || isSearching}
-                        >
-                            <Mic className="w-3 h-3" />
-                        </button>
                     </div>
                     <input
                         type="text"
@@ -331,13 +337,15 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     </Button>
                 </div>
 
-                {feedback && (
-                    <div className={`p-3 rounded-lg text-xs font-bold flex items-center gap-2 animate-in fade-in ${feedback.type === 'error' ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300' : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-300'}`}>
-                        {feedback.type === 'error' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
-                        {feedback.message}
-                    </div>
-                )}
-            </div>
+                {
+                    feedback && (
+                        <div className={`p-3 rounded-lg text-xs font-bold flex items-center gap-2 animate-in fade-in ${feedback.type === 'error' ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300' : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-300'}`}>
+                            {feedback.type === 'error' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                            {feedback.message}
+                        </div>
+                    )
+                }
+            </div >
 
             <div className="space-y-3">
                 {items.length === 0 ? (
@@ -348,12 +356,12 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     </div>
                 ) : (
                     items.map((item, index) => (
-                        <div key={item.id} className="flex flex-row items-center bg-white dark:bg-gray-800 p-4 rounded-xl border-b border-gray-100 dark:border-gray-700 gap-4">
+                        <div key={item.id} className={`flex flex-row items-center bg-white dark:bg-gray-800 p-4 rounded-xl border-b border-gray-100 dark:border-gray-700 gap-4 transition-all ${item.completed ? 'opacity-60 grayscale-[0.5]' : ''}`}>
 
                             {/* Content Section */}
                             <div className="flex-1 flex items-start gap-3 min-w-0">
-                                <div className="w-8 h-8 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center text-sm font-bold text-purple-600 dark:text-purple-400 flex-shrink-0 mt-1">
-                                    {index + 1}
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 mt-1 transition-colors ${item.completed ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400'}`}>
+                                    {item.completed ? <Check className="w-4 h-4" /> : index + 1}
                                 </div>
 
                                 <div className="flex-1 min-w-0">
@@ -371,18 +379,39 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-2">
-                                            <p className="font-bold text-gray-900 dark:text-white text-base truncate">{item.name}</p>
+                                            <p className={`font-bold text-gray-900 dark:text-white text-base truncate ${item.completed ? 'line-through decoration-green-500/50' : ''}`}>{item.name}</p>
                                             <button onClick={() => startEditing(item)} className="text-gray-300 hover:text-purple-500 transition-colors">
                                                 <Edit2 className="w-3 h-3" />
                                             </button>
                                         </div>
                                     )}
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed line-clamp-2">{item.address}</p>
+                                    <p className={`text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed line-clamp-2 ${item.completed ? 'line-through' : ''}`}>{item.address}</p>
                                 </div>
                             </div>
 
                             {/* Actions Section */}
                             <div className="flex items-center gap-2 flex-shrink-0">
+                                <button
+                                    onClick={() => handleToggleStatus(item.id)}
+                                    className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 font-bold text-xs ${item.completed
+                                        ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100'
+                                        : 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100'
+                                        }`}
+                                    title={item.completed ? "Marcar como pendente" : "Marcar como entregue"}
+                                >
+                                    {item.completed ? (
+                                        <>
+                                            <Undo2 className="w-3.5 h-3.5" />
+                                            Voltar
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle className="w-3.5 h-3.5" />
+                                            Entregue
+                                        </>
+                                    )}
+                                </button>
+
                                 <Button
                                     onClick={() => handleNavigate(item)}
                                     className="px-4 py-2 h-auto text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-sm whitespace-nowrap"
@@ -465,6 +494,6 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     </div>
                 )}
             </BaseModal>
-        </div>
+        </div >
     );
 };

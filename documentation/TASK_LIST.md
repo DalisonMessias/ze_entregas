@@ -23,3 +23,9 @@
 - [x] Criação do Ticket de Impressão Premium com logo oficial P&B e suporte térmica.
 - [x] Adição da variante de logo preto e branco no componente `Logo.tsx`.
 - [x] Correção de erros de sintaxe JSX no componente `InternalOrders.tsx` (tags desalinhadas e fechamento de elemento raiz).
+
+## Melhorias na Lista de Rotas para Entregadores
+- [x] Integração do componente `StreetAutocomplete` para busca inteligente de ruas baseada na cidade do entregador.
+- [x] Adição de botão de status "Entregue" para marcação visual e organização das entregas.
+- [x] Persistência do status de entrega no armazenamento local.
+- [x] Identificação visual dos itens concluídos (opacidade e riscado) para facilitar a leitura da rota.
