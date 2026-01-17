@@ -22,7 +22,12 @@ declare const QRious: any;
 declare const Html5QrcodeScanner: any;
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-const parseCurrency = (val: string) => parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
+const parseCurrency = (val: string) => {
+    if (!val) return 0;
+    const digits = val.replace(/\D/g, '');
+    return Number(digits) / 100;
+};
+
 
 // --- TOAST COMPONENT ---
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {

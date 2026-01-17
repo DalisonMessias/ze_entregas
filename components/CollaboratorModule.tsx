@@ -13,6 +13,12 @@ interface Props {
     onLogout: () => void;
 }
 
+const parseCurrency = (val: string): number => {
+    if (!val) return 0;
+    const digits = val.replace(/\D/g, '');
+    return Number(digits) / 100;
+};
+
 type View = 'dashboard' | 'menu' | 'tables' | 'history' | 'reports' | 'external_order' | 'orders';
 
 export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) => {
@@ -214,8 +220,8 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
             return;
         }
 
-        const price = parseFloat(customProduct.price.replace(',', '.'));
-        if (isNaN(price) || price <= 0) {
+        const price = parseCurrency(customProduct.price);
+        if (price <= 0) {
             alert({ title: 'Erro', message: 'Preço inválido.' });
             return;
         }

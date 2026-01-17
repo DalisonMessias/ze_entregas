@@ -24,7 +24,8 @@ const handlePercentMask = (e: React.ChangeEvent<HTMLInputElement>) => {
 
 const parseCurrency = (val: string): number => {
     if (!val) return 0;
-    return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+    const digits = val.replace(/\D/g, '');
+    return Number(digits) / 100;
 };
 
 const parsePercent = (val: string): number => {
@@ -89,7 +90,7 @@ export const AdminFees: React.FC = () => {
                 pos_min_value: parseCurrency(formValues.pos_min_value),
                 pos_max_value: parseCurrency(formValues.pos_max_value),
             };
-            
+
             // Mantém campos não editáveis do original para não serem sobrescritos
             const finalPayload = { ...originalFees, ...payload };
 
@@ -183,16 +184,16 @@ export const AdminFees: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                
+
                 {feedback && (
                     <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                        {feedback.type === 'success' ? <CheckCircle className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>}
+                        {feedback.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
                         <span className="font-bold text-sm">{feedback.text}</span>
                     </div>
                 )}
 
                 <Button fullWidth onClick={handleSaveFees} disabled={saving} className="mt-6 py-4 text-lg shadow-lg">
-                    {saving ? <Loader2 className="w-6 h-6 animate-spin"/> : <><Save className="w-5 h-5 mr-2"/> Salvar Taxas</>}
+                    {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Taxas</>}
                 </Button>
             </div>
         </div>

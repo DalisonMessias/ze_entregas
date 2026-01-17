@@ -24,6 +24,13 @@ interface PlatformFeeDetails {
 
 import { TablesManager } from './TablesManager';
 
+const parseCurrency = (val: string): number => {
+    if (!val) return 0;
+    const digits = val.replace(/\D/g, '');
+    return Number(digits) / 100;
+};
+
+
 export const InternalOrders: React.FC = () => {
     // View State
     const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'TABLES_MANAGE'>('NEW_ORDER');
@@ -559,8 +566,8 @@ export const InternalOrders: React.FC = () => {
             return;
         }
 
-        const price = parseFloat(customProduct.price.replace(',', '.'));
-        if (isNaN(price) || price <= 0) {
+        const price = parseCurrency(customProduct.price);
+        if (price <= 0) {
             showAlert({ title: 'Erro', message: 'Preço inválido.' });
             return;
         }

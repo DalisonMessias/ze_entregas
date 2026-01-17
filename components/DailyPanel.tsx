@@ -33,7 +33,8 @@ const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val
 
 const parseCurrency = (val: string) => {
     if (!val) return 0;
-    return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+    const digits = val.replace(/\D/g, '');
+    return Number(digits) / 100;
 };
 
 interface DailyPanelProps {
