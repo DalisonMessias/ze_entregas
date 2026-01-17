@@ -78,7 +78,7 @@ export class OverpassService {
       });
 
       const data = response.data as OverpassResponse;
-      
+
       if (!data.elements || !Array.isArray(data.elements)) {
         throw new Error('Resposta inválida da Overpass API');
       }
@@ -87,13 +87,14 @@ export class OverpassService {
       const neighborhoods: Set<string> = new Set();
 
       data.elements.forEach(element => {
-        if (element.tags && element.tags.name && this.isValidName(element.tags.name)) {
-          const normalizedName = this.normalizeName(element.tags.name);
-          
-          if (element.type === 'way' && element.tags.highway) {
+        const tags = element.tags as any;
+        if (tags && tags.name && this.isValidName(tags.name)) {
+          const normalizedName = this.normalizeName(tags.name);
+
+          if (element.type === 'way' && tags.highway) {
             // É uma rua
             streets.add(normalizedName);
-          } else if (element.tags.place || element.tags.admin_level) {
+          } else if (tags.place || tags.admin_level) {
             // É um bairro/região
             neighborhoods.add(normalizedName);
           }
