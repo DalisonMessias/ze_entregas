@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StoreProduct, Order, CartItem, Product, PaymentMethod, StoreDeliverySettings, StoreNeighborhoodFee } from '../types';
 import * as cloud from '../services/cloud';
-import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator } from 'lucide-react';
+import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator, Truck, ShoppingCart, Utensils, ClipboardList, Settings } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { useDialog } from '../utils/dialogService';
@@ -34,7 +34,13 @@ const parseCurrency = (val: string): number => {
 
 export const InternalOrders: React.FC = () => {
     // View State
-    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'TABLES_MANAGE'>('NEW_ORDER');
+    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'DELIVERY_READY' | 'PICKUP_READY' | 'LOCAL_READY' | 'COMPLETED' | 'TABLES_MANAGE'>('NEW_ORDER');
+    const [productionTab, setProductionTab] = useState<'QUEUE' | 'DELIVERY' | 'PICKUP' | 'LOCAL' | 'HISTORY'>('QUEUE');
+
+    // Filtros de data para aba HISTORY
+    const [historyDateFilter, setHistoryDateFilter] = useState<string>(new Date().toISOString().split('T')[0]); // Data atual por padrão
+    const [historyTimeStart, setHistoryTimeStart] = useState<string>('00:00');
+    const [historyTimeEnd, setHistoryTimeEnd] = useState<string>('23:59');
 
     const [products, setProducts] = useState<StoreProduct[]>([]);
     const [activeTables, setActiveTables] = useState<any[]>([]); // Nova: Mesas ativas
@@ -125,13 +131,26 @@ export const InternalOrders: React.FC = () => {
     });
 
     useEffect(() => {
-        cloud.getClient()?.auth.getUser().then(({ data }) => {
-            if (data.user) {
-                setCurrentUserId(data.user.id);
-                loadAssociates(data.user.id);
-                loadPrinterSettings(data.user.id);
+        const initializeData = async () => {
+            try {
+                const { data } = await cloud.getClient()?.auth.getUser() || {};
+                if (data?.user) {
+                    setCurrentUserId(data.user.id);
+
+                    // Carrega todos os dados em paralelo para melhor performance
+                    await Promise.all([
+                        loadProducts(),
+                        loadAssociates(data.user.id),
+                        loadPrinterSettings(data.user.id),
+                        loadProfile(data.user.id)
+                    ]);
+                }
+            } catch (error) {
+                console.error('Erro ao inicializar dados:', error);
             }
-        });
+        };
+
+        initializeData();
     }, []);
 
     const loadAssociates = async (storeId: string) => {
@@ -158,12 +177,14 @@ export const InternalOrders: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        loadProducts();
-    }, []);
-
-
-
+    const loadProfile = async (userId: string) => {
+        try {
+            const profileData = await cloud.getMyPartnerProfile();
+            setProfile(profileData);
+        } catch (error) {
+            console.error('Erro ao carregar profile:', error);
+        }
+    };
 
     const loadTickets = async () => {
         if (currentUserId) {
@@ -1710,16 +1731,131 @@ export const InternalOrders: React.FC = () => {
                         <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
                             <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <h2 className="text-2xl font-bold dark:text-white uppercase tracking-tight">Fila de Produção</h2>
-                                    <p className="text-gray-500 text-sm">Pedidos enviados pelos garçons para preparo</p>
+                                    <h2 className="text-2xl font-bold dark:text-white uppercase tracking-tight">Produção e Entrega</h2>
+                                    <p className="text-gray-500 text-sm">Gerencie pedidos por etapa do fluxo</p>
                                 </div>
                                 <Button size="sm" variant="secondary" onClick={loadTickets} className="rounded-xl h-10 px-4">
-                                    Atualizar Fila
+                                    Atualizar
                                 </Button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                {tickets.length === 0 ? (
+                            {/* Sub-abas de Produção */}
+                            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                                <button
+                                    onClick={() => setProductionTab('QUEUE')}
+                                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 ${productionTab === 'QUEUE' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
+                                >
+                                    <Settings className="w-4 h-4" /> Fila de Produção
+                                </button>
+                                <button
+                                    onClick={() => setProductionTab('DELIVERY')}
+                                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 ${productionTab === 'DELIVERY' ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
+                                >
+                                    <Truck className="w-4 h-4" /> Prontos p/ Entrega
+                                </button>
+                                <button
+                                    onClick={() => setProductionTab('PICKUP')}
+                                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 ${productionTab === 'PICKUP' ? 'bg-purple-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
+                                >
+                                    <ShoppingCart className="w-4 h-4" /> Prontos p/ Retirada
+                                </button>
+                                <button
+                                    onClick={() => setProductionTab('LOCAL')}
+                                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 ${productionTab === 'LOCAL' ? 'bg-amber-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
+                                >
+                                    <Utensils className="w-4 h-4" /> Consumo Local
+                                </button>
+                                <button
+                                    onClick={() => setProductionTab('HISTORY')}
+                                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 ${productionTab === 'HISTORY' ? 'bg-green-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
+                                >
+                                    <ClipboardList className="w-4 h-4" /> Finalizados
+                                </button>
+                            </div>
+
+                            {/* Filtros de Data/Hora para aba HISTORY */}
+                            {productionTab === 'HISTORY' && (
+                                <div className="flex gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data</label>
+                                        <input
+                                            type="date"
+                                            value={historyDateFilter}
+                                            onChange={(e) => setHistoryDateFilter(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Hora Início</label>
+                                        <input
+                                            type="time"
+                                            value={historyTimeStart}
+                                            onChange={(e) => setHistoryTimeStart(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Hora Fim</label>
+                                        <input
+                                            type="time"
+                                            value={historyTimeEnd}
+                                            onChange={(e) => setHistoryTimeEnd(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+                                        />
+                                    </div>
+                                    <div className="flex items-end">
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => {
+                                                setHistoryDateFilter(new Date().toISOString().split('T')[0]);
+                                                setHistoryTimeStart('00:00');
+                                                setHistoryTimeEnd('23:59');
+                                            }}
+                                            className="px-4 py-2 h-[38px]"
+                                        >
+                                            Hoje
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto custom-scrollbar">{(() => {
+                                // Filtrar tickets baseado na aba ativa
+                                let filteredTickets = tickets;
+
+                                if (productionTab === 'QUEUE') {
+                                    // Fila: pending ou producing
+                                    filteredTickets = tickets.filter(t => t.status === 'pending' || t.status === 'producing');
+                                } else if (productionTab === 'DELIVERY') {
+                                    // Entrega: ready + tipo DELIVERY
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type === 'DELIVERY');
+                                } else if (productionTab === 'PICKUP') {
+                                    // Retirada: ready + tipo PICKUP
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type === 'PICKUP');
+                                } else if (productionTab === 'LOCAL') {
+                                    // Local: ready + tipo LOCAL
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && (t.orders?.order_type === 'LOCAL' || !t.orders?.order_type));
+                                } else if (productionTab === 'HISTORY') {
+                                    // Histórico: completed ou delivered + filtro de data
+                                    filteredTickets = tickets.filter(t => {
+                                        if (t.status !== 'completed' && t.status !== 'delivered') return false;
+
+                                        // Filtro de data
+                                        const ticketDate = new Date(t.created_at);
+                                        const filterDate = new Date(historyDateFilter);
+
+                                        // Verifica se é do mesmo dia
+                                        const isSameDay = ticketDate.toDateString() === filterDate.toDateString();
+                                        if (!isSameDay) return false;
+
+                                        // Filtro de hora
+                                        const ticketTime = ticketDate.toTimeString().slice(0, 5); // HH:MM
+                                        return ticketTime >= historyTimeStart && ticketTime <= historyTimeEnd;
+                                    });
+                                }
+
+                                return filteredTickets.length === 0 ? (
                                     <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
                                         <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
                                             <Printer className="w-8 h-8 text-gray-300" />
@@ -1782,25 +1918,44 @@ export const InternalOrders: React.FC = () => {
                                                 </div>
 
                                                 <div className="flex gap-2 mt-auto">
-                                                    {ticket.status === 'pending' ? (
-                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
-                                                            Iniciar Preparo
+                                                    {productionTab === 'QUEUE' ? (
+                                                        // FILA DE PRODUÇÃO: Iniciar/Finalizar
+                                                        ticket.status === 'pending' ? (
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                Iniciar Preparo
+                                                            </Button>
+                                                        ) : ticket.status === 'producing' ? (
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                Finalizar Pedido
+                                                            </Button>
+                                                        ) : null
+                                                    ) : productionTab === 'DELIVERY' ? (
+                                                        // ENTREGA: Marcar em trânsito
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'in_transit')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                            <Truck className="w-4 h-4" /> Marcar Em Trânsito
                                                         </Button>
-                                                    ) : ticket.status === 'producing' ? (
-                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
-                                                            Finalizar Pedido
+                                                    ) : productionTab === 'PICKUP' ? (
+                                                        // RETIRADA: Cliente retirou
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'completed')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                            <ShoppingCart className="w-4 h-4" /> Cliente Retirou
                                                         </Button>
-                                                    ) : (
+                                                    ) : productionTab === 'LOCAL' ? (
+                                                        // LOCAL: Finalizar mesa
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'completed')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                            <Utensils className="w-4 h-4" /> Finalizar Mesa
+                                                        </Button>
+                                                    ) : productionTab === 'HISTORY' ? (
+                                                        // HISTÓRICO: Apenas visualização
                                                         <div className="w-full text-center py-2 bg-green-50 dark:bg-green-900/20 text-green-600 font-black uppercase text-[10px] rounded-xl flex items-center justify-center gap-2">
                                                             <CheckCircle className="w-4 h-4" /> Finalizado
                                                         </div>
-                                                    )}
+                                                    ) : null}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-                                )}
-                            </div>
+                                );
+                            })()}</div>
                         </div>
                     ) : view === 'HISTORY' ? (
                         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
@@ -1875,67 +2030,63 @@ export const InternalOrders: React.FC = () => {
                         <div className="flex-1 h-full overflow-y-auto custom-scrollbar p-1">
                             <TablesManager storeId={currentUserId} />
                         </div>
-                    ) : null
-                    }
+                    ) : null}
                 </div>
             )}
 
             {/* Custom Product Modal */}
-            {
-                isCustomProductModalOpen && (
-                    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-in fade-in">
-                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-8 shadow-2xl space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h3 className="font-black text-xl dark:text-white">Adicionar Avulso</h3>
-                                <button onClick={() => setIsCustomProductModalOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full"><X className="w-5 h-5" /></button>
-                            </div>
+            {isCustomProductModalOpen && (
+                <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-8 shadow-2xl space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-black text-xl dark:text-white">Adicionar Avulso</h3>
+                            <button onClick={() => setIsCustomProductModalOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full"><X className="w-5 h-5" /></button>
+                        </div>
 
-                            <div className="space-y-4">
-                                <CustomInput
-                                    label="Nome do Produto"
-                                    placeholder="Ex: Bebida Extra"
-                                    value={customProduct.name}
-                                    onChange={e => setCustomProduct({ ...customProduct, name: e.target.value })}
-                                />
-                                <div className="flex gap-4">
-                                    <div className="flex-1">
-                                        <CustomInput
-                                            label="Preço (R$)"
-                                            placeholder="0,00"
-                                            mask="currency"
-                                            value={customProduct.price}
-                                            onChange={e => setCustomProduct({ ...customProduct, price: e.target.value })}
+                        <div className="space-y-4">
+                            <CustomInput
+                                label="Nome do Produto"
+                                placeholder="Ex: Bebida Extra"
+                                value={customProduct.name}
+                                onChange={e => setCustomProduct({ ...customProduct, name: e.target.value })}
+                            />
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <CustomInput
+                                        label="Preço (R$)"
+                                        placeholder="0,00"
+                                        mask="currency"
+                                        value={customProduct.price}
+                                        onChange={e => setCustomProduct({ ...customProduct, price: e.target.value })}
+                                    />
+                                </div>
+                                <div className="w-24">
+                                    <label className="text-xs font-bold text-gray-500 mb-1 block">Qtd</label>
+                                    <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-xl px-2 h-[52px]">
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            className="w-full bg-transparent border-none text-center font-bold outline-none"
+                                            value={customProduct.quantity}
+                                            onChange={e => setCustomProduct({ ...customProduct, quantity: parseInt(e.target.value) || 1 })}
                                         />
-                                    </div>
-                                    <div className="w-24">
-                                        <label className="text-xs font-bold text-gray-500 mb-1 block">Qtd</label>
-                                        <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-xl px-2 h-[52px]">
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                className="w-full bg-transparent border-none text-center font-bold outline-none"
-                                                value={customProduct.quantity}
-                                                onChange={e => setCustomProduct({ ...customProduct, quantity: parseInt(e.target.value) || 1 })}
-                                            />
-                                        </div>
                                     </div>
                                 </div>
                             </div>
-
-                            <Button fullWidth onClick={handleAddCustomProduct} className="py-4 shadow-lg shadow-brand-500/20">
-                                Adicionar à Comanda
-                            </Button>
                         </div>
+
+                        <Button fullWidth onClick={handleAddCustomProduct} className="py-4 shadow-lg shadow-brand-500/20">
+                            Adicionar à Comanda
+                        </Button>
                     </div>
-                )
-            }
+                </div>
+            )}
 
             {/* Product Modal - Keep here for adding new products */}
             <ProductModal
                 isOpen={isProductModalOpen}
                 onClose={() => setIsProductModalOpen(false)}
                 product={editingProduct}
-
                 onSave={handleSaveProduct}
                 isSaving={isSavingProduct}
             />
@@ -1945,193 +2096,189 @@ export const InternalOrders: React.FC = () => {
                 onClose={() => setIsHelpModalOpen(false)}
             />
 
-            {/* Tables Management View */}
-
-
             {/* Print Preview Modal */}
-            {
-                showPrintPreview && lastOrder && (
-                    <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-0 sm:p-4 overflow-y-auto no-print-bg">
-                        <div className="bg-white p-8 w-full max-w-[380px] shadow-2xl print:shadow-none print:p-0 print:m-0 print:w-full min-h-screen sm:min-h-0 sm:rounded-[40px] flex flex-col">
+            {showPrintPreview && lastOrder && (
+                <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-0 sm:p-4 overflow-y-auto no-print-bg">
+                    <div className="bg-white p-8 w-full max-w-[380px] shadow-2xl print:shadow-none print:p-0 print:m-0 print:w-full min-h-screen sm:min-h-0 sm:rounded-[40px] flex flex-col">
 
-                            {/* Ticket Content Area */}
-                            <div id="printable-ticket" className="flex-1">
-                                {/* Logo & Header */}
-                                <div className="text-center mb-6">
-                                    <Logo variant="black" className="h-10 mx-auto mb-2" />
-                                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Ticket de Pedido</h3>
-                                    <p className="text-[10px] font-bold text-gray-500">#{lastOrder.id.substring(0, 8).toUpperCase()}</p>
+                        {/* Ticket Content Area */}
+                        <div id="printable-ticket" className="flex-1">
+                            {/* Logo & Header */}
+                            <div className="text-center mb-6">
+                                <Logo variant="black" className="h-10 mx-auto mb-2" />
+                                <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Ticket de Pedido</h3>
+                                <p className="text-[10px] font-bold text-gray-500">#{lastOrder?.id?.substring(0, 8).toUpperCase() || 'N/A'}</p>
 
-                                    {/* Store Info */}
-                                    {profile && (
-                                        <div className="mt-3 pt-3 border-t border-gray-200">
-                                            <p className="text-sm font-black text-gray-900">{profile.store_name || profile.name}</p>
-                                            {profile.phone_number && (
-                                                <p className="text-[10px] text-gray-600">{profile.phone_number}</p>
-                                            )}
-                                            {profile.store_address_street && (
-                                                <p className="text-[10px] text-gray-600">
-                                                    {profile.store_address_street}, {profile.store_address_number} - {profile.store_address_district}
+                                {/* Store Info */}
+                                {profile && (
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                        <p className="text-sm font-black text-gray-900">{profile.store_name || profile.name}</p>
+                                        {profile.phone_number && (
+                                            <p className="text-[10px] text-gray-600">{profile.phone_number}</p>
+                                        )}
+                                        {profile.store_address_street && (
+                                            <p className="text-[10px] text-gray-600">
+                                                {profile.store_address_street}, {profile.store_address_number} - {profile.store_address_district}
+                                            </p>
+                                        )}
+                                        {profile.store_address_city && (
+                                            <p className="text-[10px] text-gray-600">
+                                                {profile.store_address_city} - {profile.store_address_state}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="border-t border-b border-black border-dashed py-4 mb-6 space-y-1">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-black uppercase text-gray-500">Data</span>
+                                    <span className="text-xs font-bold">{new Date(lastOrder.created_at).toLocaleDateString('pt-BR')} {new Date(lastOrder.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-black uppercase text-gray-500">Tipo de Pedido</span>
+                                    <span className="text-xs font-black uppercase">
+                                        {(lastOrder as any).order_type === 'LOCAL' && '🍽️ Consumo Local'}
+                                        {(lastOrder as any).order_type === 'PICKUP' && '🛍️ Retirada'}
+                                        {(lastOrder as any).order_type === 'DELIVERY' && '🚚 Entrega'}
+                                        {!(lastOrder as any).order_type && 'Consumo'}
+                                    </span>
+                                </div>
+                                {(lastOrder as any).table_identifier && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-black uppercase text-gray-500">Mesa/Referência</span>
+                                        <span className="text-xs font-black uppercase">{(lastOrder as any).table_identifier}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Customer Info */}
+                            <div className="mb-6">
+                                {(lastOrder as any).order_type === 'DELIVERY' ? (
+                                    <>
+                                        <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">📍 Endereço de Entrega</h4>
+                                        <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
+                                        {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
+                                        {(lastOrder as any).shipping_address?.street && (
+                                            <div className="mt-2 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                                                <p className="text-xs font-bold text-gray-800">
+                                                    {(lastOrder as any).shipping_address.street}, {(lastOrder as any).shipping_address.number}
                                                 </p>
-                                            )}
-                                            {profile.store_address_city && (
-                                                <p className="text-[10px] text-gray-600">
-                                                    {profile.store_address_city} - {profile.store_address_state}
+                                                <p className="text-[10px] text-gray-500 font-medium">
+                                                    {(lastOrder as any).shipping_address.district} - {(lastOrder as any).shipping_address.city}
                                                 </p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="border-t border-b border-black border-dashed py-4 mb-6 space-y-1">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[10px] font-black uppercase text-gray-500">Data</span>
-                                        <span className="text-xs font-bold">{new Date(lastOrder.created_at).toLocaleDateString('pt-BR')} {new Date(lastOrder.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[10px] font-black uppercase text-gray-500">Tipo de Pedido</span>
-                                        <span className="text-xs font-black uppercase">
-                                            {(lastOrder as any).order_type === 'LOCAL' && '🍽️ Consumo Local'}
-                                            {(lastOrder as any).order_type === 'PICKUP' && '🛍️ Retirada'}
-                                            {(lastOrder as any).order_type === 'DELIVERY' && '🚚 Entrega'}
-                                            {!(lastOrder as any).order_type && 'Consumo'}
-                                        </span>
-                                    </div>
-                                    {(lastOrder as any).table_identifier && (
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-[10px] font-black uppercase text-gray-500">Mesa/Referência</span>
-                                            <span className="text-xs font-black uppercase">{(lastOrder as any).table_identifier}</span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Customer Info */}
-                                <div className="mb-6">
-                                    {(lastOrder as any).order_type === 'DELIVERY' ? (
-                                        <>
-                                            <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">📍 Endereço de Entrega</h4>
-                                            <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
-                                            {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
-                                            {(lastOrder as any).shipping_address?.street && (
-                                                <div className="mt-2 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                                                    <p className="text-xs font-bold text-gray-800">
-                                                        {(lastOrder as any).shipping_address.street}, {(lastOrder as any).shipping_address.number}
+                                                {(lastOrder as any).shipping_address.complement && (
+                                                    <p className="text-[10px] text-gray-500 font-medium mt-1">
+                                                        Complemento: {(lastOrder as any).shipping_address.complement}
                                                     </p>
-                                                    <p className="text-[10px] text-gray-500 font-medium">
-                                                        {(lastOrder as any).shipping_address.district} - {(lastOrder as any).shipping_address.city}
-                                                    </p>
-                                                    {(lastOrder as any).shipping_address.complement && (
-                                                        <p className="text-[10px] text-gray-500 font-medium mt-1">
-                                                            Complemento: {(lastOrder as any).shipping_address.complement}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </>
-                                    ) : (lastOrder as any).order_type === 'PICKUP' ? (
-                                        <>
-                                            <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🛍️ Cliente (Retirada)</h4>
-                                            <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
-                                            {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
-                                            <div className="mt-2 p-3 bg-blue-50 rounded-2xl border border-blue-100">
-                                                <p className="text-xs font-bold text-blue-800">⏰ Cliente irá retirar no balcão</p>
+                                                )}
                                             </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🍽️ Cliente / Mesa</h4>
-                                            <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
-                                            {(lastOrder as any).table_identifier && (
-                                                <div className="mt-2 p-3 bg-amber-50 rounded-2xl border border-amber-100">
-                                                    <p className="text-xs font-bold text-amber-800">Mesa: {(lastOrder as any).table_identifier}</p>
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-
-                                {/* Items List */}
-                                <div className="mb-6">
-                                    <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">Itens do Pedido</h4>
-                                    <div className="space-y-4">
-                                        {lastOrder.items.map((item, i) => (
-                                            <div key={i} className="flex justify-between items-start">
-                                                <div className="flex-1 pr-4">
-                                                    <div className="flex gap-2">
-                                                        <span className="font-black text-sm text-gray-900">{item.quantity}x</span>
-                                                        <span className="font-bold text-sm text-gray-800">{item.name}</span>
-                                                    </div>
-                                                    {item.observation && (
-                                                        <p className="text-[10px] text-brand-600 font-black italic mt-1 ml-6">↳ {item.observation}</p>
-                                                    )}
-                                                </div>
-                                                <span className="text-sm font-black text-gray-900">
-                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((item.total_price || (item.price * item.quantity)))}
-                                                </span>
+                                        )}
+                                    </>
+                                ) : (lastOrder as any).order_type === 'PICKUP' ? (
+                                    <>
+                                        <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🛍️ Cliente (Retirada)</h4>
+                                        <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
+                                        {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
+                                        <div className="mt-2 p-3 bg-blue-50 rounded-2xl border border-blue-100">
+                                            <p className="text-xs font-bold text-blue-800">⏰ Cliente irá retirar no balcão</p>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🍽️ Cliente / Mesa</h4>
+                                        <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
+                                        {(lastOrder as any).table_identifier && (
+                                            <div className="mt-2 p-3 bg-amber-50 rounded-2xl border border-amber-100">
+                                                <p className="text-xs font-bold text-amber-800">Mesa: {(lastOrder as any).table_identifier}</p>
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
 
-                                {/* Totals */}
-                                <div className="border-t-2 border-black pt-4 mb-4 space-y-2">
-                                    {(lastOrder as any).shipping_cost > 0 && (
-                                        <div className="flex justify-between items-center text-xs font-bold text-gray-600">
-                                            <span>Taxa de Entrega</span>
-                                            <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((lastOrder as any).shipping_cost)}</span>
+                            {/* Items List */}
+                            <div className="mb-6">
+                                <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">Itens do Pedido</h4>
+                                <div className="space-y-4">
+                                    {lastOrder.items.map((item, i) => (
+                                        <div key={i} className="flex justify-between items-start">
+                                            <div className="flex-1 pr-4">
+                                                <div className="flex gap-2">
+                                                    <span className="font-black text-sm text-gray-900">{item.quantity}x</span>
+                                                    <span className="font-bold text-sm text-gray-800">{item.name}</span>
+                                                </div>
+                                                {item.observation && (
+                                                    <p className="text-[10px] text-brand-600 font-black italic mt-1 ml-6">↳ {item.observation}</p>
+                                                )}
+                                            </div>
+                                            <span className="text-sm font-black text-gray-900">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((item.total_price || (item.price * item.quantity)))}
+                                            </span>
                                         </div>
-                                    )}
-                                    <div className="flex justify-between items-center text-lg font-black text-gray-900 uppercase">
-                                        <span>Total Geral</span>
-                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lastOrder.total_price)}</span>
-                                    </div>
-                                </div>
-
-                                {/* Payment Info */}
-                                <div className="bg-gray-900 text-white p-4 rounded-3xl mb-8 print:bg-white print:text-black print:border print:border-black">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="text-[8px] font-black uppercase opacity-60">Forma de Pagamento</p>
-                                            <p className="text-xs font-black uppercase">{(() => {
-                                                const method = lastOrder.payment_method || 'A Combinar';
-                                                const translations: Record<string, string> = {
-                                                    'CASH': 'Dinheiro',
-                                                    'PIX': 'PIX',
-                                                    'CREDIT_CARD': 'Cartão de Crédito',
-                                                    'DEBIT_CARD': 'Cartão de Débito',
-                                                    'OTHER': 'Outro',
-                                                    'PENDING': 'Pendente'
-                                                };
-                                                return translations[method] || method;
-                                            })()}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-[8px] font-black uppercase opacity-60">Status</p>
-                                            <p className="text-xs font-black uppercase">PAGO</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="text-center">
-                                    <p className="text-[10px] font-black text-gray-400">Obrigado pela preferência!</p>
-                                    <p className="text-[8px] font-bold text-gray-300 mt-1">zeentregas.com.br</p>
+                                    ))}
                                 </div>
                             </div>
 
-                            {/* Action Buttons - Hidden on Print */}
-                            <div className="flex gap-3 mt-8 no-print pt-6 border-t border-gray-100">
-                                <Button fullWidth variant="secondary" onClick={() => setShowPrintPreview(false)} className="rounded-2xl h-14 font-bold">Voltar</Button>
-                                <Button fullWidth onClick={() => window.print()} className="rounded-2xl h-14 font-black flex items-center justify-center gap-2">
-                                    <Printer className="w-5 h-5" /> Imprimir
-                                </Button>
-                                <Button fullWidth onClick={handleShare} variant="outline" className="rounded-2xl h-14 border-2 border-green-200 text-green-600 hover:bg-green-50 font-bold p-0 w-14 min-w-[56px]">
-                                    <Share2 className="w-5 h-5 mx-auto" />
-                                </Button>
+                            {/* Totals */}
+                            <div className="border-t-2 border-black pt-4 mb-4 space-y-2">
+                                {(lastOrder as any).shipping_cost > 0 && (
+                                    <div className="flex justify-between items-center text-xs font-bold text-gray-600">
+                                        <span>Taxa de Entrega</span>
+                                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((lastOrder as any).shipping_cost)}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center text-lg font-black text-gray-900 uppercase">
+                                    <span>Total Geral</span>
+                                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lastOrder.total_price)}</span>
+                                </div>
+                            </div>
+
+                            {/* Payment Info */}
+                            <div className="bg-gray-900 text-white p-4 rounded-3xl mb-8 print:bg-white print:text-black print:border print:border-black">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className="text-[8px] font-black uppercase opacity-60">Forma de Pagamento</p>
+                                        <p className="text-xs font-black uppercase">{(() => {
+                                            const method = lastOrder.payment_method || 'A Combinar';
+                                            const translations: Record<string, string> = {
+                                                'CASH': 'Dinheiro',
+                                                'PIX': 'PIX',
+                                                'CREDIT_CARD': 'Cartão de Crédito',
+                                                'DEBIT_CARD': 'Cartão de Débito',
+                                                'OTHER': 'Outro',
+                                                'PENDING': 'Pendente'
+                                            };
+                                            return translations[method] || method;
+                                        })()}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[8px] font-black uppercase opacity-60">Status</p>
+                                        <p className="text-xs font-black uppercase">PAGO</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-gray-400">Obrigado pela preferência!</p>
+                                <p className="text-[8px] font-bold text-gray-300 mt-1">zeentregas.com.br</p>
                             </div>
                         </div>
 
-                        {/* Style for Print */}
-                        <style>{`
+                        {/* Action Buttons - Hidden on Print */}
+                        <div className="flex gap-3 mt-8 no-print pt-6 border-t border-gray-100">
+                            <Button fullWidth variant="secondary" onClick={() => setShowPrintPreview(false)} className="rounded-2xl h-14 font-bold">Voltar</Button>
+                            <Button fullWidth onClick={() => window.print()} className="rounded-2xl h-14 font-black flex items-center justify-center gap-2">
+                                <Printer className="w-5 h-5" /> Imprimir
+                            </Button>
+                            <Button fullWidth onClick={handleShare} variant="outline" className="rounded-2xl h-14 border-2 border-green-200 text-green-600 hover:bg-green-50 font-bold p-0 w-14 min-w-[56px]">
+                                <Share2 className="w-5 h-5 mx-auto" />
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Style for Print */}
+                    <style>{`
                             @media print {
                                 * {
                                     -webkit-print-color-adjust: exact;
@@ -2170,9 +2317,8 @@ export const InternalOrders: React.FC = () => {
                                 background-color: rgba(0, 0, 0, 0.8) !important;
                             }
                         `}</style>
-                    </div>
-                )
-            }
+                </div>
+            )}
         </div>
     );
 };

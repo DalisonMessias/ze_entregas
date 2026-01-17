@@ -69,3 +69,15 @@
 [17/01/2026] Correção crítica: Erro ao finalizar pedido na comanda. Atualizado enums e tipo da coluna items na tabela orders. Resolvido erro de permissão (GRANT) em orders e store_products.
 ry point único para respeitar limite de 12 funções (Hobby).
 [17/01/2026] - Correção: Adicionado status 'pending_payment' e colunas 'order_type', 'delivery_mode' em public.orders para correção do erro ao finalizar pedidos na comanda.
+[ 1 7 / 0 1 / 2 0 2 6 ]  
+ -  
+ C o r r e � � o :  
+ R e s o l v i d o s  
+ e r r o s  
+ d e  
+ s i n t a x e  
+ J S X  
+ n o  
+ c o m p o n e n t e  
+ I n t e r n a l O r d e r s . t s x .  
+ 

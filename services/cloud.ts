@@ -2860,12 +2860,6 @@ export const getOrdersTickets = async (storeId: string) => {
             orders_collaborators (
                 table_identifier,
                 customer_name
-            ),
-            orders:general_order_id (
-                customer_name,
-                customer_phone,
-                order_type,
-                delivery_mode
             )
         `)
         .eq('store_id', storeId)
@@ -2882,7 +2876,7 @@ export const updateTicketStatus = async (ticketId: string, status: string) => {
     const sb = getClient();
     if (!sb) return;
 
-    // 1. Atualiza o ticket
+    // 1. Atualiza o ticket e busca informações
     const { data: ticket, error } = await sb.from('orders_tickets')
         .update({ status })
         .eq('id', ticketId)
@@ -2894,20 +2888,20 @@ export const updateTicketStatus = async (ticketId: string, status: string) => {
         throw error;
     }
 
-    // 2. Se for finalizado (ready), tenta atualizar o status do pedido principal
-    if (status === 'ready' && ticket.general_order_id) {
-        // Busca o pedido para saber se é entrega
+    // 2. Se for finalizado (ready), atualiza o status do pedido principal
+    if (status === 'ready' && ticket?.general_order_id) {
+        // Busca o pedido para saber o tipo
         const { data: order } = await sb.from('orders')
             .select('delivery_mode, order_type, driver_id')
             .eq('id', ticket.general_order_id)
             .single();
 
         if (order) {
-            let nextStatus = 'ready'; // Finalizado / Pronto para retirar
+            let nextStatus = 'ready'; // Padrão: pronto
 
-            // Se for entrega, decide se vai para trânsito ou aguardando entregador
-            if (order.order_type === 'DELIVERY') {
-                nextStatus = order.driver_id ? 'in_transit' : 'ready';
+            // Se for entrega com entregador fixo, vai direto para trânsito
+            if (order.order_type === 'DELIVERY' && order.driver_id) {
+                nextStatus = 'in_transit';
             }
 
             await sb.from('orders')

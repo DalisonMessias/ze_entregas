@@ -6228,3 +6228,26 @@ CREATE POLICY "Admins can manage all printer settings" ON public.printer_setting
 
 GRANT ALL ON public.printer_settings TO authenticated;
 GRANT SELECT ON public.printer_settings TO anon;
+
+-- ==================================================================
+-- MIGRAÇÃO: Adicionar general_order_id à orders_tickets (17/01/2026)
+-- ==================================================================
+
+-- Adicionar coluna general_order_id se não existir
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'orders_tickets' 
+        AND column_name = 'general_order_id'
+    ) THEN
+        ALTER TABLE public.orders_tickets 
+        ADD COLUMN general_order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+-- Criar índice para melhor performance
+CREATE INDEX IF NOT EXISTS orders_tickets_general_order_id_idx 
+ON public.orders_tickets (general_order_id);
+
+

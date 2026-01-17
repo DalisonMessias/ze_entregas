@@ -22,3 +22,4 @@
 - [x] Atualização da estrutura do banco de dados (tabelas `orders` e `orders_tickets`).
 - [x] Criação do Ticket de Impressão Premium com logo oficial P&B e suporte térmica.
 - [x] Adição da variante de logo preto e branco no componente `Logo.tsx`.
+- [x] Correção de erros de sintaxe JSX no componente `InternalOrders.tsx` (tags desalinhadas e fechamento de elemento raiz).
