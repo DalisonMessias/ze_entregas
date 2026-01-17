@@ -1388,6 +1388,8 @@ export interface StoreDeliverySettings {
     delivery_mode: 'FIXED' | 'NEIGHBORHOOD';
     fixed_fee: number;
     allow_outside_city: boolean;
+    support_hours_start?: string;
+    support_hours_end?: string;
     created_at: string;
     updated_at: string;
 }

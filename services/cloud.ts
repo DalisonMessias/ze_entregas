@@ -4070,3 +4070,25 @@ export const uploadGenericImage = async (file: File, bucketName: string = 'publi
 
 
 
+
+export const getUnifiedActiveOrders = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.rpc('get_unified_active_orders', { p_store_id: storeId });
+    if (error) {
+        console.error('getUnifiedActiveOrders error', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getUnifiedOrderHistory = async (storeId: string, limit: number = 50) => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.rpc('get_unified_order_history', { p_store_id: storeId, p_limit: limit });
+    if (error) {
+        console.error('getUnifiedOrderHistory error', error);
+        return [];
+    }
+    return data || [];
+};

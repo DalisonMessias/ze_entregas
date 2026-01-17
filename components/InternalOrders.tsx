@@ -43,7 +43,7 @@ export const InternalOrders: React.FC = () => {
     const [historyTimeEnd, setHistoryTimeEnd] = useState<string>('23:59');
 
     const [products, setProducts] = useState<StoreProduct[]>([]);
-    const [activeTables, setActiveTables] = useState<any[]>([]); // Nova: Mesas ativas
+    const [activeOrders, setActiveOrders] = useState<any[]>([]); // Antiga activeTables, agora unificada
     const [tickets, setTickets] = useState<any[]>([]); // Tickets de produção
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -490,6 +490,9 @@ export const InternalOrders: React.FC = () => {
             setNeighborhoodFees(fees);
             if (settings) {
                 setCalculationMode(settings.delivery_mode);
+                // Inicializar horários do filtro com base nas configurações da loja se disponíveis
+                if (settings.support_hours_start) setHistoryTimeStart(settings.support_hours_start.slice(0, 5));
+                if (settings.support_hours_end) setHistoryTimeEnd(settings.support_hours_end.slice(0, 5));
             }
 
             setHasOnlineCouriers(onlineDrivers && onlineDrivers.length > 0);
@@ -530,10 +533,10 @@ export const InternalOrders: React.FC = () => {
         if (!currentUserId) return;
         setLoadingHistory(true);
         try {
-            const data = await cloud.getInternalOrders(currentUserId);
+            const data = await cloud.getUnifiedOrderHistory(currentUserId);
             setHistoryOrders(data);
         } catch (error) {
-            // console.error(error);
+            console.error('Error loading unified history:', error);
         } finally {
             setLoadingHistory(false);
         }
@@ -547,10 +550,10 @@ export const InternalOrders: React.FC = () => {
             const { data: { user } } = await mbClient.auth.getUser();
             if (!user) return;
 
-            const data = await cloud.getOpenOrders(user.id);
-            setActiveTables(data || []);
+            const data = await cloud.getUnifiedActiveOrders(user.id);
+            setActiveOrders(data || []);
         } catch (error) {
-            // console.error(error);
+            console.error('Error loading unified active orders:', error);
         } finally {
             setLoading(false);
         }
@@ -1666,40 +1669,42 @@ export const InternalOrders: React.FC = () => {
                                     <p className="text-gray-500 text-sm">Controle de comandas abertas pelos garçons</p>
                                 </div>
                                 <div className="bg-brand-50 dark:bg-brand-900/20 px-4 py-2 rounded-xl border border-brand-100">
-                                    <p className="text-[10px] font-black text-brand-600 uppercase">Mesas Ativas</p>
-                                    <p className="text-xl font-black text-brand-600">{activeTables.length}</p>
+                                    <p className="text-[10px] font-black text-brand-600 uppercase">Pedidos Ativos</p>
+                                    <p className="text-xl font-black text-brand-600">{activeOrders.length}</p>
                                 </div>
                             </div>
 
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
                                 {loading ? (
                                     <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
-                                ) : activeTables.length === 0 ? (
+                                ) : activeOrders.length === 0 ? (
                                     <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
                                         <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
                                             <Coffee className="w-8 h-8 text-gray-300" />
                                         </div>
-                                        <p className="text-gray-400 font-bold italic">Nenhuma mesa aberta no salão no momento.</p>
+                                        <p className="text-gray-400 font-bold italic">Nenhuma mesa ou pedido ativo no momento.</p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
-                                        {activeTables.map(table => (
+                                        {activeOrders.map(table => (
                                             <div key={table.id} className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[32px] border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all group">
                                                 <div className="flex justify-between items-start mb-4">
                                                     <div>
                                                         <div className="flex items-center gap-2 mb-2">
-                                                            <span className="bg-brand-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase">{table.table_identifier}</span>
+                                                            <span className={`text-white text-[10px] font-black px-3 py-1 rounded-full uppercase ${table.origin === 'COLLABORATOR' ? 'bg-brand-600' : 'bg-blue-600'}`}>
+                                                                {table.origin === 'COLLABORATOR' ? table.table_identifier : 'BALCÃO'}
+                                                            </span>
                                                             <span className="text-[10px] text-gray-400 font-bold">
                                                                 <Clock className="w-3 h-3 inline mr-1" />
                                                                 {new Date(table.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             </span>
                                                         </div>
-                                                        <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">{table.customer_name || 'Mesa Sem Nome'}</h3>
+                                                        <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">{table.customer_name || 'Pedido Sem Nome'}</h3>
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-[9px] text-gray-400 font-black uppercase mb-1">Total Acumulado</p>
+                                                        <p className="text-[9px] text-gray-400 font-black uppercase mb-1">Total</p>
                                                         <p className="text-xl font-black text-brand-600 italic">
-                                                            R$ {(table.total_amount || table.items?.reduce((acc: number, i: any) => acc + (i.total_price || (i.price * i.quantity) || 0), 0) || 0).toFixed(2)}
+                                                            R$ {Number(table.total_amount || 0).toFixed(2)}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1842,14 +1847,13 @@ export const InternalOrders: React.FC = () => {
                                         if (t.status !== 'completed' && t.status !== 'delivered') return false;
 
                                         // Filtro de data
-                                        const ticketDate = new Date(t.created_at);
-                                        const filterDate = new Date(historyDateFilter);
-
-                                        // Verifica se é do mesmo dia
-                                        const isSameDay = ticketDate.toDateString() === filterDate.toDateString();
+                                        // Filtro de data: Normalizar para YYYY-MM-DD para evitar problemas de fuso horário
+                                        const ticketDateStr = new Date(t.created_at).toISOString().split('T')[0];
+                                        const isSameDay = ticketDateStr === historyDateFilter;
                                         if (!isSameDay) return false;
 
                                         // Filtro de hora
+                                        const ticketDate = new Date(t.created_at); // Define ticketDate as a Date object
                                         const ticketTime = ticketDate.toTimeString().slice(0, 5); // HH:MM
                                         return ticketTime >= historyTimeStart && ticketTime <= historyTimeEnd;
                                     });

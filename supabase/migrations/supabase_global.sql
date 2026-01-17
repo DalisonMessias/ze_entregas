@@ -6251,3 +6251,322 @@ CREATE INDEX IF NOT EXISTS orders_tickets_general_order_id_idx
 ON public.orders_tickets (general_order_id);
 
 
+
+-- ==================================================================
+-- UNIFICAÇÃO DE PEDIDOS: RPCs para Visualização Integrada (17/01/2026)
+-- ==================================================================
+
+-- Função para buscar pedidos ativos unificados (Mesas e Internos)
+CREATE OR REPLACE FUNCTION public.get_unified_active_orders(p_store_id UUID)
+RETURNS TABLE (
+    id UUID,
+    store_id UUID,
+    customer_name VARCHAR(255),
+    table_identifier VARCHAR(50),
+    status VARCHAR(50),
+    total_amount NUMERIC(10, 2),
+    items JSONB[],
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    origin TEXT -- 'COLLABORATOR' ou 'INTERNAL'
+) AS $$
+BEGIN
+    RETURN QUERY
+    -- Pedidos de Colaboradores (Mesas)
+    SELECT 
+        oc.id, 
+        oc.store_id, 
+        oc.customer_name, 
+        oc.table_identifier, 
+        oc.status::VARCHAR(50), 
+        oc.total_amount, 
+        oc.items, 
+        oc.created_at, 
+        oc.updated_at,
+        'COLLABORATOR'::TEXT as origin
+    FROM public.orders_collaborators oc
+    WHERE oc.store_id = p_store_id AND oc.status IN ('opened', 'sent')
+
+    UNION ALL
+
+    -- Pedidos Internos (Balcão/Entrega)
+    SELECT 
+        o.id, 
+        o.store_id, 
+        o.customer_name, 
+        (CASE WHEN o.order_type = 'LOCAL' THEN 'Balcão' ELSE o.order_type END)::VARCHAR(50) as table_identifier, 
+        o.status::TEXT::VARCHAR(50), 
+        o.total_price as total_amount, 
+        o.items, 
+        o.created_at, 
+        o.updated_at,
+        'INTERNAL'::TEXT as origin
+    FROM public.orders o
+    WHERE o.store_id = p_store_id 
+      AND o.origin = 'INTERNAL' 
+      AND o.status IN ('PENDING', 'CONFIRMED', 'PROCESSING', 'READY');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Função para buscar histórico de pedidos unificado
+CREATE OR REPLACE FUNCTION public.get_unified_order_history(p_store_id UUID, p_limit INT DEFAULT 50)
+RETURNS TABLE (
+    id UUID,
+    store_id UUID,
+    customer_name VARCHAR(255),
+    table_identifier VARCHAR(50),
+    status VARCHAR(50),
+    total_amount NUMERIC(10, 2),
+    items JSONB[],
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    origin TEXT,
+    payment_method TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    -- Histórico de Colaboradores
+    SELECT 
+        oc.id, 
+        oc.store_id, 
+        oc.customer_name, 
+        oc.table_identifier, 
+        oc.status::VARCHAR(50), 
+        oc.total_amount, 
+        oc.items, 
+        oc.created_at, 
+        oc.updated_at,
+        'COLLABORATOR'::TEXT as origin,
+        'N/A'::TEXT as payment_method
+    FROM public.orders_collaborators oc
+    WHERE oc.store_id = p_store_id AND oc.status = 'completed'
+
+    UNION ALL
+
+    -- Histórico de Pedidos Internos
+    SELECT 
+        o.id, 
+        o.store_id, 
+        o.customer_name, 
+        (CASE WHEN o.order_type = 'LOCAL' THEN 'Balcão' ELSE o.order_type END)::VARCHAR(50) as table_identifier, 
+        o.status::TEXT::VARCHAR(50), 
+        o.total_price as total_amount, 
+        o.items, 
+        o.created_at, 
+        o.updated_at,
+        'INTERNAL'::TEXT as origin,
+        o.payment_method::TEXT as payment_method
+    FROM public.orders o
+    WHERE o.store_id = p_store_id 
+      AND o.origin = 'INTERNAL' 
+      AND o.status IN ('DELIVERED', 'COMPLETED', 'CANCELLED')
+    
+    ORDER BY created_at DESC
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.get_unified_active_orders(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_unified_order_history(UUID, INT) TO authenticated;
+
+-- ==================================================================
+-- AUTOMAÇÃO DE TICKETS DE PRODUÇÃO (FILA DE COZINHA)
+-- ==================================================================
+
+-- Garantir que a tabela orders_tickets existe
+CREATE TABLE IF NOT EXISTS public.orders_tickets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
+    collaborator_order_id UUID REFERENCES public.orders_collaborators(id) ON DELETE CASCADE,
+    display_id SERIAL,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, producing, ready, delivered, completed
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Índices para orders_tickets
+CREATE INDEX IF NOT EXISTS orders_tickets_store_id_idx ON public.orders_tickets(store_id);
+CREATE INDEX IF NOT EXISTS orders_tickets_status_idx ON public.orders_tickets(status);
+CREATE INDEX IF NOT EXISTS orders_tickets_created_at_idx ON public.orders_tickets(created_at);
+
+-- RLS para orders_tickets
+ALTER TABLE public.orders_tickets ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can view tickets' AND tablename = 'orders_tickets') THEN
+        CREATE POLICY "Authenticated users can view tickets" ON public.orders_tickets FOR SELECT TO authenticated USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can manage tickets' AND tablename = 'orders_tickets') THEN
+        CREATE POLICY "Authenticated users can manage tickets" ON public.orders_tickets FOR ALL TO authenticated USING (true);
+    END IF;
+END $$;
+
+-- Trigger para atualizar updated_at
+DROP TRIGGER IF EXISTS handle_orders_tickets_updated_at ON public.orders_tickets;
+CREATE TRIGGER handle_orders_tickets_updated_at BEFORE UPDATE ON public.orders_tickets
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Função: handle_new_order_ticket (Para Pedidos Internos/Delivery)
+CREATE OR REPLACE FUNCTION public.handle_new_order_ticket()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Se o pedido for criado com status PENDING ou CONFIRMED ou PROCESSING, criar ou atualizar ticket
+    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.status IN ('PENDING', 'CONFIRMED', 'PROCESSING') AND OLD.status != NEW.status) THEN
+        
+        -- Verificar se já existe ticket para este pedido
+        IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE order_id = NEW.id) THEN
+            INSERT INTO public.orders_tickets (store_id, order_id, status, created_at)
+            VALUES (NEW.store_id, NEW.id, 'pending', NEW.created_at);
+        END IF;
+    END IF;
+
+    -- Se o pedido for cancelado, remover ticket ou marcar como cancelado? Vamos marcar como completed para sair da fila visível ou deletar?
+    -- Melhor manter histórico como completed/cancelled se existir status. Por enquanto, se cancelado, removemos da fila ativa via filtro, ou mudamos status do ticket.
+    IF (TG_OP = 'UPDATE' AND NEW.status = 'CANCELLED') THEN
+         UPDATE public.orders_tickets SET status = 'completed' WHERE order_id = NEW.id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger: create_ticket_on_order
+DROP TRIGGER IF EXISTS trigger_create_ticket_on_order ON public.orders;
+CREATE TRIGGER trigger_create_ticket_on_order
+AFTER INSERT OR UPDATE ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_order_ticket();
+
+
+-- Função: handle_new_collaborator_order_ticket (Para Pedidos de Mesa/Colaborador)
+CREATE OR REPLACE FUNCTION public.handle_new_collaborator_order_ticket()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Se o pedido da mesa for 'sent' (enviado para cozinha) ou 'opened' (aberto, dependendo do fluxo)
+    -- Geralmente 'sent' é quando vai para cozinha.
+    IF (TG_OP = 'INSERT' AND NEW.status IN ('opened', 'sent')) OR 
+       (TG_OP = 'UPDATE' AND NEW.status IN ('opened', 'sent') AND OLD.status != NEW.status) THEN
+        
+        -- Verificar se já existe ticket
+        IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE collaborator_order_id = NEW.id) THEN
+            INSERT INTO public.orders_tickets (store_id, collaborator_order_id, status, created_at)
+            VALUES (NEW.store_id, NEW.id, 'pending', NEW.created_at);
+        END IF;
+    END IF;
+    
+    -- Se completado, finalizar ticket também
+    IF (TG_OP = 'UPDATE' AND NEW.status = 'completed') THEN
+        UPDATE public.orders_tickets SET status = 'completed' WHERE collaborator_order_id = NEW.id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger: create_ticket_on_collaborator_order
+DROP TRIGGER IF EXISTS trigger_create_ticket_on_collaborator_order ON public.orders_collaborators;
+CREATE TRIGGER trigger_create_ticket_on_collaborator_order
+AFTER INSERT OR UPDATE ON public.orders_collaborators
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_collaborator_order_ticket();
+
+-- ==================================================================
+-- AUTOMAÇÃO DE TICKETS DE PRODUÇÃO (FILA DE COZINHA)
+-- ==================================================================
+
+-- Garantir que a tabela orders_tickets existe
+CREATE TABLE IF NOT EXISTS public.orders_tickets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
+    collaborator_order_id UUID REFERENCES public.orders_collaborators(id) ON DELETE CASCADE,
+    display_id SERIAL,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, producing, ready, delivered, completed
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Índices para orders_tickets
+CREATE INDEX IF NOT EXISTS orders_tickets_store_id_idx ON public.orders_tickets(store_id);
+CREATE INDEX IF NOT EXISTS orders_tickets_status_idx ON public.orders_tickets(status);
+CREATE INDEX IF NOT EXISTS orders_tickets_created_at_idx ON public.orders_tickets(created_at);
+
+-- RLS para orders_tickets
+ALTER TABLE public.orders_tickets ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can view tickets' AND tablename = 'orders_tickets') THEN
+        CREATE POLICY "Authenticated users can view tickets" ON public.orders_tickets FOR SELECT TO authenticated USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can manage tickets' AND tablename = 'orders_tickets') THEN
+        CREATE POLICY "Authenticated users can manage tickets" ON public.orders_tickets FOR ALL TO authenticated USING (true);
+    END IF;
+END $$;
+
+-- Trigger para atualizar updated_at
+DROP TRIGGER IF EXISTS handle_orders_tickets_updated_at ON public.orders_tickets;
+CREATE TRIGGER handle_orders_tickets_updated_at BEFORE UPDATE ON public.orders_tickets
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Função: handle_new_order_ticket (Para Pedidos Internos/Delivery)
+CREATE OR REPLACE FUNCTION public.handle_new_order_ticket()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Se o pedido for criado com status PENDING ou CONFIRMED ou PROCESSING, criar ou atualizar ticket
+    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.status IN ('PENDING', 'CONFIRMED', 'PROCESSING') AND OLD.status != NEW.status) THEN
+        
+        -- Verificar se já existe ticket para este pedido
+        IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE order_id = NEW.id) THEN
+            INSERT INTO public.orders_tickets (store_id, order_id, status, created_at)
+            VALUES (NEW.store_id, NEW.id, 'pending', NEW.created_at);
+        END IF;
+    END IF;
+
+    -- Se o pedido for cancelado, remover ticket ou marcar como cancelado? Vamos marcar como completed para sair da fila visível ou deletar?
+    -- Melhor manter histórico como completed/cancelled se existir status. Por enquanto, se cancelado, removemos da fila ativa via filtro, ou mudamos status do ticket.
+    IF (TG_OP = 'UPDATE' AND NEW.status = 'CANCELLED') THEN
+         UPDATE public.orders_tickets SET status = 'completed' WHERE order_id = NEW.id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger: create_ticket_on_order
+DROP TRIGGER IF EXISTS trigger_create_ticket_on_order ON public.orders;
+CREATE TRIGGER trigger_create_ticket_on_order
+AFTER INSERT OR UPDATE ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_order_ticket();
+
+
+-- Função: handle_new_collaborator_order_ticket (Para Pedidos de Mesa/Colaborador)
+CREATE OR REPLACE FUNCTION public.handle_new_collaborator_order_ticket()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Se o pedido da mesa for 'sent' (enviado para cozinha) ou 'opened' (aberto, dependendo do fluxo)
+    -- Geralmente 'sent' é quando vai para cozinha.
+    IF (TG_OP = 'INSERT' AND NEW.status IN ('opened', 'sent')) OR 
+       (TG_OP = 'UPDATE' AND NEW.status IN ('opened', 'sent') AND OLD.status != NEW.status) THEN
+        
+        -- Verificar se já existe ticket
+        IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE collaborator_order_id = NEW.id) THEN
+            INSERT INTO public.orders_tickets (store_id, collaborator_order_id, status, created_at)
+            VALUES (NEW.store_id, NEW.id, 'pending', NEW.created_at);
+        END IF;
+    END IF;
+    
+    -- Se completado, finalizar ticket também
+    IF (TG_OP = 'UPDATE' AND NEW.status = 'completed') THEN
+        UPDATE public.orders_tickets SET status = 'completed' WHERE collaborator_order_id = NEW.id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger: create_ticket_on_collaborator_order
+DROP TRIGGER IF EXISTS trigger_create_ticket_on_collaborator_order ON public.orders_collaborators;
+CREATE TRIGGER trigger_create_ticket_on_collaborator_order
+AFTER INSERT OR UPDATE ON public.orders_collaborators
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_collaborator_order_ticket();
