@@ -824,8 +824,8 @@ const CityManagement: React.FC = () => {
         loadData();
     }, [activeTab]);
 
-    const loadData = async () => {
-        setLoading(true);
+    const loadData = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             if (activeTab === 'active' || activeTab === 'inactive') {
                 const data = await adminGetCities();
@@ -838,7 +838,7 @@ const CityManagement: React.FC = () => {
             console.error(e);
             setToast({ type: 'error', message: "Erro ao carregar dados: " + (e.message || 'Erro desconhecido') });
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -864,7 +864,7 @@ const CityManagement: React.FC = () => {
 
             // Refresh list separately without blocking UI
             if (activeTab === 'active' || activeTab === 'inactive') {
-                loadData();
+                loadData(true);
             }
         } catch (e: any) {
             console.error('[handleAddCity] Erro capturado:', e);
@@ -878,16 +878,19 @@ const CityManagement: React.FC = () => {
         const action = city.is_active ? "desativar" : "ativar";
         const ok = await dialogConfirm({ title: 'Confirmar ação', message: `Tem certeza que deseja ${action} a cidade ${city.name}?` });
         if (!ok) return;
+
+        // Optimistic update immediately
+        setCities(prev => prev.map(c => c.id === city.id ? { ...c, is_active: !city.is_active } : c));
+
         try {
             await adminUpdateCityStatus(city.id, !city.is_active);
-            // Optimistic update
-            setCities(prev => prev.map(c => c.id === city.id ? { ...c, is_active: !city.is_active } : c));
             setToast({ type: 'success', message: `Cidade ${action === 'ativar' ? 'ativada' : 'desativada'}!` });
 
-            // If we are in specific tab, the city might "disappear" from view, which is expected behavior
-            // But we keep the optimized update to ensure smooth transition
-            loadData();
+            // Background refresh (silent)
+            loadData(true);
         } catch (e: any) {
+            // Revert optimistic update
+            setCities(prev => prev.map(c => c.id === city.id ? { ...c, is_active: city.is_active } : c));
             setToast({ type: 'error', message: "Erro: " + e.message });
         }
     };
@@ -895,13 +898,21 @@ const CityManagement: React.FC = () => {
     const handleDeleteCity = async (city: City) => {
         const ok = await dialogConfirm({ title: 'Excluir Cidade', message: `Tem certeza que deseja EXCLUIR DEFINITIVAMENTE a cidade ${city.name}? Essa ação não pode ser desfeita e pode afetar bairros vinculados.` });
         if (!ok) return;
+
+        if (submitting) return;
+        setSubmitting(true);
+
         try {
             await adminDeleteCity(city.id);
             setCities(prev => prev.filter(c => c.id !== city.id));
             setToast({ type: 'success', message: "Cidade excluída com sucesso!" });
-            loadData();
+
+            // Background refresh (silent)
+            loadData(true);
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao excluir: " + e.message });
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -914,13 +925,21 @@ const CityManagement: React.FC = () => {
 
     const handleSaveChanges = async () => {
         if (!editingCity || !editName || !editState) return;
+        if (submitting) return;
+
+        setSubmitting(true);
         try {
             await adminEditCity(editingCity.id, editName, editState, editIbgeCode);
             setEditingCity(null);
-            loadData();
+
             setToast({ type: 'success', message: "Cidade editada com sucesso!" });
+
+            // Background refresh (silent)
+            loadData(true);
         } catch (e: any) {
             setToast({ type: 'error', message: "Erro ao editar: " + e.message });
+        } finally {
+            setSubmitting(false);
         }
     };
 
