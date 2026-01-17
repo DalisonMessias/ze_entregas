@@ -65,5 +65,7 @@
 [17/01/2026] - Correção: UI de cidades otimizada com 'silent refresh' para evitar travamentos e 'flickers' durante a atualização de listas.
 [17/01/2026] - Melhoria: Implementado 'Silent Refresh' Global no Admin (Lojas, Usuários, Parceiros) e Skeletons no App principal para eliminar todos os loadings bloqueantes.
 [17/01/2026] - Correção: Resolvidos erros de compilação em AdminShopManagement.tsx (nomes de funções, tipos e props).
-[17/01/2026] - Melhoria: Otimização de Backend para Vercel: Migrada lógica para /server e consolidada API em entry point único para respeitar limite de 12 funções (Hobby).
+[17/01/2026] Otimização das Serverless Functions para o limite da Vercel (Hobby): movendo lógica para /server e centralizando em /api/index.ts.
+[17/01/2026] Correção crítica: Erro ao finalizar pedido na comanda. Atualizado enums e tipo da coluna items na tabela orders. Resolvido erro de permissão (GRANT) em orders e store_products.
+ry point único para respeitar limite de 12 funções (Hobby).
 [17/01/2026] - Correção: Adicionado status 'pending_payment' e colunas 'order_type', 'delivery_mode' em public.orders para correção do erro ao finalizar pedidos na comanda.

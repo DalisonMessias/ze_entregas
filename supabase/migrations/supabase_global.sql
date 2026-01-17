@@ -49,7 +49,18 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE public.payment_method AS ENUM ('PIX', 'CREDIT_CARD', 'BOLETO', 'CASH');
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_method') THEN
+        CREATE TYPE public.payment_method AS ENUM ('PIX', 'CREDIT_CARD', 'BOLETO', 'CASH');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.payment_method'::regtype AND enumlabel = 'DEBIT_CARD') THEN
+        ALTER TYPE public.payment_method ADD VALUE 'DEBIT_CARD';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.payment_method'::regtype AND enumlabel = 'OTHER') THEN
+        ALTER TYPE public.payment_method ADD VALUE 'OTHER';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.payment_method'::regtype AND enumlabel = 'PENDING') THEN
+        ALTER TYPE public.payment_method ADD VALUE 'PENDING';
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -110,7 +121,9 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE public.order_status AS ENUM ('PENDING', 'NEW', 'ACCEPTED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED', 'pending_payment');
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'pending_payment') THEN
+        ALTER TYPE public.order_status ADD VALUE 'pending_payment';
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -1053,6 +1066,11 @@ BEGIN
         CREATE POLICY "Store owners can manage their own orders" ON public.orders FOR ALL USING (auth.uid() = store_id);
     END IF;
 END $$;
+
+-- Permissões para a tabela de pedidos
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.orders TO authenticated;
+GRANT SELECT ON public.orders TO anon;
+
 DROP POLICY IF EXISTS "Users can view their own orders" ON public.orders;
 DO $$
 BEGIN
@@ -3573,6 +3591,13 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'delivery_mode') THEN
         ALTER TABLE public.orders ADD COLUMN delivery_mode TEXT;
     END IF;
+    
+    -- Correção de compatibilidade: converter items de JSONB[] para JSONB
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'items' AND data_type = 'ARRAY') THEN
+        ALTER TABLE public.orders ALTER COLUMN items DROP DEFAULT;
+        ALTER TABLE public.orders ALTER COLUMN items TYPE JSONB USING to_jsonb(items);
+        ALTER TABLE public.orders ALTER COLUMN items SET DEFAULT '[]'::JSONB;
+    END IF;
 END $$;
 
 -- ==================================================================
@@ -3594,6 +3619,18 @@ CREATE TABLE IF NOT EXISTS public.store_products (
 
 -- Index para performance
 CREATE INDEX IF NOT EXISTS store_products_store_id_idx ON public.store_products (store_id);
+
+-- Permissões
+ALTER TABLE public.store_products ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.store_products TO anon, authenticated;
+GRANT ALL ON public.store_products TO authenticated;
+
+-- Políticas
+DROP POLICY IF EXISTS "Public can view active products" ON public.store_products;
+CREATE POLICY "Public can view active products" ON public.store_products FOR SELECT USING (is_active = TRUE);
+
+DROP POLICY IF EXISTS "Store owners can manage their products" ON public.store_products;
+CREATE POLICY "Store owners can manage their products" ON public.store_products FOR ALL USING (auth.uid() = store_id);
 
 -- Trigger para updated_at
 DROP TRIGGER IF EXISTS handle_store_products_updated_at ON public.store_products;
@@ -3647,7 +3684,9 @@ BEGIN
         origin,
         amount_paid,
         change_amount,
-        custom_payment_label
+        custom_payment_label,
+        order_type,
+        delivery_mode
     )
     VALUES (
         (order_details->>'store_id')::UUID,
@@ -3655,8 +3694,8 @@ BEGIN
             WHEN (order_details->>'origin') = 'INTERNAL' THEN NULL 
             ELSE auth.uid() 
         END,
-        'PENDING',
-        (order_details->'items')::JSONB[],
+        COALESCE(order_details->>'status', 'PENDING')::public.order_status,
+        COALESCE((order_details->'items'), '[]'::JSONB),
         (order_details->>'total_price')::NUMERIC,
         (order_details->>'payment_method')::public.payment_method,
         (order_details->'shipping_address')::JSONB,
@@ -3670,7 +3709,9 @@ BEGIN
         COALESCE(order_details->>'origin', 'APP'),
         (order_details->>'amount_paid')::NUMERIC,
         (order_details->>'change_amount')::NUMERIC,
-        order_details->>'custom_payment_label'
+        order_details->>'custom_payment_label',
+        order_details->>'order_type',
+        order_details->>'delivery_mode'
     ) RETURNING * INTO new_order;
 
     RETURN to_jsonb(new_order);

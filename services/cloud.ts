@@ -1530,15 +1530,21 @@ export const createOrder = async (order: Partial<Order>) => {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) throw new Error("Login required");
 
+    // Garantir que o pedido tenha os campos básicos necessários e estrutura limpa
     const newOrder = {
         ...order,
-        user_id: user.id,
-        status: 'pending_payment',
+        store_id: order.store_id || user.id, // Se for pedido interno, store_id é o próprio usuário logado
+        user_id: order.origin === 'INTERNAL' ? null : user.id,
+        status: order.status || 'pending_payment',
+        origin: order.origin || 'INTERNAL',
         created_at: new Date().toISOString()
     };
 
     const { data, error } = await sb.from('orders').insert(newOrder).select().single();
-    if (error) throw error;
+    if (error) {
+        console.error("Erro ao inserir pedido:", error);
+        throw error;
+    }
     return data;
 };
 
