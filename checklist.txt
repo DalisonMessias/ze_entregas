@@ -64,3 +64,4 @@
 [17/01/2026] - Correção: Estrutura da tabela available_cities consolidada (updated_at, UNIQUE constraint e RLS) no supabase_global.sql para resolver erro ao salvar cidades.
 [17/01/2026] - Correção: UI de cidades otimizada com 'silent refresh' para evitar travamentos e 'flickers' durante a atualização de listas.
 [17/01/2026] - Melhoria: Implementado 'Silent Refresh' Global no Admin (Lojas, Usuários, Parceiros) e Skeletons no App principal para eliminar todos os loadings bloqueantes.
+[17/01/2026] - Correção: Resolvidos erros de compilação em AdminShopManagement.tsx (nomes de funções, tipos e props).

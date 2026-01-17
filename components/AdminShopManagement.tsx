@@ -48,7 +48,7 @@ export const AdminShopManagement: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'settings' | 'coupons'>('products');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [saving, setSaving] = useState(false);  // Mantendo saving para compatibilidade ou refatorar para usar submitting
+    const [saving, setSaving] = useState(false);
 
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
@@ -76,13 +76,13 @@ export const AdminShopManagement: React.FC = () => {
         if (!silent) setLoading(true);
         try {
             const [p, c, s] = await Promise.all([
-                cloud.adminGetProducts(),
-                cloud.adminGetCategories(),
+                cloud.getStoreProducts(),
+                cloud.getStoreCategories(),
                 cloud.getShopSettings()
             ]);
-            setProducts(p);
+            setProducts(p as any);
             setCategories(c);
-            setShopSettings(s || { is_shop_enabled: true } as any); // Type assertion fix
+            setShopSettings(s || { is_shop_enabled: true } as any);
         } catch (e) {
             console.error("Error loading shop data:", e);
         } finally {
@@ -111,9 +111,9 @@ export const AdminShopManagement: React.FC = () => {
             };
 
             if (currentProduct.id) {
-                await cloud.adminUpdateProduct(currentProduct.id, productToSave);
+                await cloud.updateStoreProduct(productToSave);
             } else {
-                await cloud.adminAddProduct(productToSave);
+                await cloud.createStoreProduct(productToSave);
             }
             setShowProductModal(false);
             setCurrentProduct(null);
@@ -136,7 +136,7 @@ export const AdminShopManagement: React.FC = () => {
         setSubmitting(true);
 
         try {
-            await cloud.adminDeleteProduct(id);
+            await cloud.deleteStoreProduct(id);
             setToast({ type: 'success', message: "Produto excluído!" });
             loadData(true); // Silent refresh
         } catch (e: any) {
@@ -154,7 +154,7 @@ export const AdminShopManagement: React.FC = () => {
         setSubmitting(true);
         setSaving(true);
         try {
-            await cloud.adminAddCategory(newCategoryName);
+            await cloud.createStoreCategory(newCategoryName);
             setNewCategoryName('');
             setToast({ type: 'success', message: "Categoria adicionada!" });
             loadData(true); // Silent refresh
@@ -174,7 +174,7 @@ export const AdminShopManagement: React.FC = () => {
         setSubmitting(true);
 
         try {
-            await cloud.adminDeleteCategory(id);
+            await cloud.deleteStoreCategory(id);
             setToast({ type: 'success', message: "Categoria excluída!" });
             loadData(true); // Silent
         } catch (e: any) {
@@ -616,7 +616,6 @@ export const AdminShopManagement: React.FC = () => {
                             checked={shopSettings.is_shop_enabled}
                             onChange={c => updateShopSetting('is_shop_enabled', c)}
                             label="Loja Ativa"
-                            description="Ativar ou desativar a loja para clientes."
                         />
                         <div>
                             <label htmlFor="shop_name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome da Loja</label>
