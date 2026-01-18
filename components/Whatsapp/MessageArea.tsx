@@ -38,13 +38,30 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
   }, [onLoadMore, hasMore, isLoadingMore]);
 
   const getStatusIcon = (status: string) => {
+    const iconSize = "16";
     switch (status) {
       case 'sent':
-        return <Check size={16} className="inline" />;
+        return (
+          <svg viewBox="0 0 16 11" width={iconSize} height="11" fill="none" className="text-[#667781]">
+            <path d="M1 5L5 9L15 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        );
       case 'delivered':
-        return <CheckCheck size={16} className="inline" />;
+        return (
+          <svg viewBox="0 0 16 11" width={iconSize} height="11" fill="none" className="text-[#667781]">
+            <path d="M1 5L5 9L15 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5 5L9 9L19 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(-4, 0)" />
+          </svg>
+        );
       case 'read':
-        return <CheckCheck size={16} className="inline" />;
+        return (
+          <svg viewBox="0 0 16 11" width={iconSize} height="11" fill="none" className="text-[#53bdeb]">
+            <path d="M1 5L5 9L15 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5 5L9 9L19 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(-4, 0)" />
+          </svg>
+        );
+      case 'pending':
+        return <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />;
       default:
         return null;
     }
@@ -160,11 +177,16 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
           )}
 
           <div
-            className={`max-w-[85%] sm:max-w-md shadow-sm flex flex-col ${message.is_from_me
+            className={`max-w-[85%] sm:max-w-[70%] shadow-sm px-2 py-1.5 relative ${message.is_from_me
               ? 'bg-[#d9fdd3] text-[#111B21] rounded-lg rounded-tr-none'
               : 'bg-white text-[#111B21] border border-gray-100 rounded-lg rounded-tl-none'
               }`}
           >
+            {/* Seta do Balão */}
+            <div className={`absolute top-0 w-0 h-0 border-8 border-transparent ${message.is_from_me
+              ? 'right-[-7px] border-t-[#d9fdd3] border-r-0'
+              : 'left-[-7px] border-t-white border-l-0'
+              }`} />
             {/* Nome do remetente em mensagens de grupos que não são minhas */}
             {!message.is_from_me && message.conversation_id.includes('@g.us') && (
               <p className="text-[10px] font-bold text-blue-600 mb-1 opacity-90">
@@ -174,16 +196,16 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
 
             {renderMediaContent(message)}
 
-            <div className={`flex items-center gap-1 mt-1 ${message.is_from_me ? 'justify-end' : 'justify-start'}`}>
-              <p className="text-[11px] text-[#667781]">
+            <div className={`flex items-center gap-1 mt-0.5 justify-end`}>
+              <p className="text-[10px] text-[#667781] tabular-nums">
                 {new Date(message.message_timestamp).toLocaleTimeString('pt-BR', {
                   hour: '2-digit',
                   minute: '2-digit',
                 })}
               </p>
               {message.is_from_me && (
-                <span className={message.status === 'read' ? 'text-[#53bdeb]' : 'text-[#667781]'}>
-                  {getStatusIcon(message.status)}
+                <span className="flex items-center">
+                  {getStatusIcon(message.status || 'sent')}
                 </span>
               )}
             </div>

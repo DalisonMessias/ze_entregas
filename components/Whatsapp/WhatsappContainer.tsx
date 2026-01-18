@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { WhatsappConversation, WhatsappMessage } from './types';
+import { WhatsappConversation, WhatsappMessage, SortCriteria, ManualOrder, PriorityLevel } from './types';
 import { useWhatsappWebSocket } from './useWhatsappWebSocket';
 import ConversationList from './ConversationList';
 import MessageArea from './MessageArea';
@@ -8,65 +8,241 @@ import MessageInput from './MessageInput';
 import QrCodeModal from './QrCodeModal';
 import SearchBar from './SearchBar';
 import ContactsManager from './ContactsManager';
-import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut } from 'lucide-react';
+import { ZeAssistantConfig, ZeAssistantRulesManager, ZeAssistantDashboard } from './ZeAssistant/index';
+import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot } from 'lucide-react';
 
 import { getApiBaseUrl } from '../../utils/apiConfig';
 
 const API_BASE_URL = getApiBaseUrl();
 
-type TabType = 'conversations' | 'contacts';
+type TabType = 'conversations' | 'contacts' | 'assistant';
 
-const WhatsappContainer: React.FC = () => {
-  const { status, lastMessage } = useWhatsappWebSocket();
+import { whatsappOfflineService } from '../../services/whatsappOfflineService';
+
+interface WhatsappContainerProps {
+  storeId?: string;
+  attendantId?: string; // ID do atendente logado
+}
+
+const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
+  storeId = 'default-store-id',
+  attendantId
+}) => {
+  const { status, setStatus, lastMessage, lastStatusUpdate } = useWhatsappWebSocket(storeId);
+  const [hasSession, setHasSession] = useState(false);
   const [conversations, setConversations] = useState<WhatsappConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<WhatsappConversation | null>(null);
   const [messages, setMessages] = useState<WhatsappMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [profilePictures, setProfilePictures] = useState<Record<string, string>>({});
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // TODO: Obter storeId do contexto de autenticação
-  const storeId = 'default-store-id';
+  // Estados para Exclusão
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Filtrar mensagens com base na busca
-  const filteredMessages = React.useMemo(() => {
-    if (!searchQuery.trim()) return messages;
-    return messages.filter(msg =>
-      msg.content.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [messages, searchQuery]);
+  // Estados para Organização
+  const [sortCriteria, setSortCriteria] = useState<SortCriteria>('recent');
+  const [manualOrder, setManualOrder] = useState<Record<string, number>>({});
+  const filterContainerRef = useRef<HTMLDivElement>(null);
+
+  // Estados para Modais de Funcionalidade
+  const [showContactDetails, setShowContactDetails] = useState(false);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [newChatNumber, setNewChatNumber] = useState('');
+  const [showBlockConfirm, setShowBlockConfirm] = useState<'block' | 'report' | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const scrollFilters = (direction: 'left' | 'right') => {
+    if (filterContainerRef.current) {
+      const scrollAmount = 150;
+      filterContainerRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  // Monitorar status online
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const fetchConversations = useCallback(async () => {
-    // Permitir buscar conversas mesmo sem conexão ativa (para ver histórico)
-    // if (status.status !== 'CONNECTED') return;
     try {
-      const response = await axios.get<WhatsappConversation[]>(`${API_BASE_URL}/conversations`);
-      setConversations(response.data);
+      const response = await axios.get<WhatsappConversation[]>(`${API_BASE_URL}/conversations?storeId=${storeId}`);
+
+      // Normalizar e Remover Duplicatas Rigorosamente
+      const seen = new Map<string, WhatsappConversation>();
+      response.data.forEach(conv => {
+        // Normaliza o ID para apenas dígitos (ex: 5511999999999:1@s.whatsapp.net -> 5511999999999)
+        // Se for grupo (@g.us), mantemos o ID original
+        const isGroup = conv.conversation_id.includes('@g.us');
+
+        // Prioridade de chave: 1. phone_number do banco, 2. sufixo removido, 3. ID original
+        const phoneDigits = conv.conversation_id.split('@')[0].split(':')[0].replace(/\D/g, '');
+        const dedupeKey = isGroup ? conv.conversation_id : (conv.phone_number || phoneDigits || conv.conversation_id);
+
+        if (!dedupeKey) return;
+
+        const existing = seen.get(dedupeKey);
+        // Prioridade: conversa com mensagem mais recente ou a que já tem prioridade 'high'
+        const isNewer = !existing || new Date(conv.last_message_timestamp || 0) > new Date(existing.last_message_timestamp || 0);
+
+        if (isNewer) {
+          seen.set(dedupeKey, conv);
+        }
+      });
+      const uniqueConversations = Array.from(seen.values());
+
+      setConversations(uniqueConversations);
+      await whatsappOfflineService.saveConversations(storeId, uniqueConversations);
       setApiError(null);
+
+      uniqueConversations.forEach(async (conv) => {
+        if (!profilePictures[conv.conversation_id]) {
+          try {
+            const picRes = await axios.get(`${API_BASE_URL}/profile-picture/${conv.conversation_id}?storeId=${storeId}`);
+            if (picRes.data?.profilePicUrl) {
+              setProfilePictures(prev => ({ ...prev, [conv.conversation_id]: picRes.data.profilePicUrl }));
+            }
+          } catch (e) {
+            // Ignora erro de foto
+          }
+        }
+      });
     } catch (error: any) {
       console.error('Erro ao buscar conversas:', error);
-      const msg = error.response?.data?.details || error.response?.data?.message || error.message;
-      setApiError(msg);
+      // Fallback offline
+      const offlineData = await whatsappOfflineService.getConversations(storeId);
+      if (offlineData.length > 0) setConversations(offlineData);
+
+      const data = error.response?.data;
+      const msg = data?.message || error.message;
+      const details = data?.details ? ` (${data.details})` : '';
+      const hint = data?.hint ? ` - Dica: ${data.hint}` : '';
+
+      setApiError(`${msg}${details}${hint}`);
     }
-  }, []);
+  }, [storeId]);
 
   const fetchMessages = useCallback(async (conversationId: string) => {
     setIsLoadingMessages(true);
     try {
-      const response = await axios.get<WhatsappMessage[]>(`${API_BASE_URL}/messages/${conversationId}`);
+      const response = await axios.get<WhatsappMessage[]>(`${API_BASE_URL}/messages/${conversationId}?storeId=${storeId}`);
       setMessages(response.data);
+      await whatsappOfflineService.saveMessages(storeId, conversationId, response.data);
     } catch (error) {
       console.error('Erro ao buscar mensagens:', error);
+      // Fallback offline
+      const offlineMsgs = await whatsappOfflineService.getMessages(storeId, conversationId);
+      if (offlineMsgs.length > 0) setMessages(offlineMsgs);
     } finally {
       setIsLoadingMessages(false);
     }
-  }, []);
+  }, [storeId]);
+
+  const fetchManualOrder = useCallback(async () => {
+    if (!attendantId) return;
+    try {
+      const response = await axios.get<ManualOrder[]>(`${API_BASE_URL}/conversations/order?storeId=${storeId}&attendantId=${attendantId}`);
+      const orderMap: Record<string, number> = {};
+      response.data.forEach(o => {
+        orderMap[o.conversation_id] = o.position;
+      });
+      setManualOrder(orderMap);
+      if (typeof whatsappOfflineService.saveConversationOrders === 'function') {
+        await whatsappOfflineService.saveConversationOrders(response.data.map(o => ({ ...o, attendant_id: attendantId, store_id: storeId })));
+      }
+    } catch (error) {
+      console.error('Erro ao buscar ordem manual:', error);
+      if (typeof whatsappOfflineService.getConversationOrders === 'function') {
+        const offlineOrder = await whatsappOfflineService.getConversationOrders(attendantId, storeId);
+        const orderMap: Record<string, number> = {};
+        offlineOrder.forEach(o => {
+          orderMap[o.conversation_id] = o.position;
+        });
+        if (Object.keys(orderMap).length > 0) setManualOrder(orderMap);
+      }
+    }
+  }, [storeId, attendantId]);
+
+  const saveManualOrder = async (newOrder: Record<string, number>) => {
+    if (!attendantId) return;
+    const orderList = Object.entries(newOrder).map(([id, pos]) => ({
+      conversation_id: id,
+      position: pos
+    }));
+
+    // Otimista
+    setManualOrder(newOrder);
+    await whatsappOfflineService.saveConversationOrders(orderList.map(o => ({ ...o, attendant_id: attendantId, store_id: storeId })));
+
+    if (isOnline) {
+      try {
+        await axios.post(`${API_BASE_URL}/conversations/order`, {
+          storeId,
+          attendantId,
+          orders: orderList
+        });
+      } catch (error) {
+        console.error('Erro ao salvar ordem manual:', error);
+      }
+    }
+  };
+
+  // Sincronização offline
+  useEffect(() => {
+    const syncOfflineMessages = async () => {
+      if (status.status !== 'CONNECTED' || !isOnline) return;
+
+      const pending = await whatsappOfflineService.getPendingSync();
+      const myPending = pending.filter(p => p.store_id === storeId);
+
+      if (myPending.length === 0) return;
+
+      console.log(`[Loja ${storeId}] Sincronizando ${myPending.length} mensagens offline...`);
+
+      for (const item of myPending) {
+        try {
+          await axios.post(`${API_BASE_URL}/send/text`, {
+            to: item.to,
+            text: item.text,
+            storeId: item.store_id,
+            attendantId: item.attendantId
+          });
+          await whatsappOfflineService.clearPendingItem(item.temp_id);
+        } catch (error) {
+          console.error('Erro ao sincronizar mensagem offline:', error);
+          break; // Tenta novamente depois
+        }
+      }
+
+      if (selectedConversation) {
+        fetchMessages(selectedConversation.conversation_id);
+      }
+      fetchConversations();
+    };
+
+    const syncTimer = setTimeout(syncOfflineMessages, 2000);
+    return () => clearTimeout(syncTimer);
+  }, [status.status, isOnline, storeId, selectedConversation, fetchConversations, fetchMessages]);
 
   const handleSelectConversation = (conversation: WhatsappConversation) => {
     setSelectedConversation(conversation);
-    setActiveTab('conversations'); // Voltar para aba de conversas ao selecionar
+    setActiveTab('conversations');
     fetchMessages(conversation.conversation_id);
   };
 
@@ -85,12 +261,121 @@ const WhatsappContainer: React.FC = () => {
         last_message_content: '',
         last_message_timestamp: new Date().toISOString(),
         profile_pic_url: null,
+        status: 'pending'
       };
       setSelectedConversation(newConv);
       setMessages([]);
       setActiveTab('conversations');
     }
   };
+
+  // Lógica de Ordenação
+  const sortedConversations = React.useMemo(() => {
+    let sorted = [...conversations];
+
+    // Aplicar Filtro de Busca primeiro
+    if (searchQuery.trim()) {
+      sorted = sorted.filter(c =>
+        (c.contact_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.conversation_id.includes(searchQuery)
+      );
+    }
+
+    if (sortCriteria === 'manual') {
+      sorted.sort((a, b) => {
+        const posA = manualOrder[a.conversation_id] ?? 999999;
+        const posB = manualOrder[b.conversation_id] ?? 999999;
+        return posA - posB;
+      });
+    } else if (sortCriteria === 'recent') {
+      sorted.sort((a, b) => {
+        const timeA = new Date(a.last_message_timestamp || 0).getTime();
+        const timeB = new Date(b.last_message_timestamp || 0).getTime();
+        return timeB - timeA;
+      });
+    } else if (sortCriteria === 'unread') {
+      sorted = sorted.filter(c => (c.unread_count || 0) > 0);
+      sorted.sort((a, b) => (b.unread_count || 0) - (a.unread_count || 0));
+    } else if (sortCriteria === 'inprogress') {
+      sorted = sorted.filter(c => c.status === 'open');
+    } else if (sortCriteria === 'closed') {
+      sorted = sorted.filter(c => c.status === 'closed');
+    } else if (sortCriteria === 'priority') {
+      const priorityScore = { critical: 4, high: 3, normal: 2, low: 1, undefined: 0 };
+      sorted.sort((a, b) => {
+        const scoreA = priorityScore[a.priority || 'undefined'] || 0;
+        const scoreB = priorityScore[b.priority || 'undefined'] || 0;
+        return scoreB - scoreA;
+      });
+    }
+
+    return sorted;
+  }, [conversations, searchQuery, sortCriteria, manualOrder]);
+
+  const handleReorder = (draggedId: string, targetId: string) => {
+    const newSorted = [...sortedConversations];
+    const draggedIdx = newSorted.findIndex(c => c.conversation_id === draggedId);
+    const targetIdx = newSorted.findIndex(c => c.conversation_id === targetId);
+
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    const [draggedItem] = newSorted.splice(draggedIdx, 1);
+    newSorted.splice(targetIdx, 0, draggedItem);
+
+    // Atualizar mapa de ordens baseado na nova lista (apenas para modo manual)
+    const newOrderMap: Record<string, number> = { ...manualOrder };
+    newSorted.forEach((conv, index) => {
+      newOrderMap[conv.conversation_id] = index;
+    });
+
+    saveManualOrder(newOrderMap);
+  };
+
+  const handleUpdatePriority = async (conversationId: string, priority: PriorityLevel) => {
+    // 1. Otimista
+    setConversations(prev => prev.map(c =>
+      c.conversation_id === conversationId ? { ...c, priority } : c
+    ));
+
+    // 2. Persistir no backend
+    try {
+      await axios.patch(`${API_BASE_URL}/conversations/${encodeURIComponent(conversationId)}/priority`, { priority, storeId });
+    } catch (error) {
+      console.error('Erro ao atualizar prioridade:', error);
+      alert('Erro ao salvar prioridade.');
+    }
+  };
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    setShowDeleteConfirm(conversationId);
+  };
+
+  const confirmDelete = async () => {
+    if (!showDeleteConfirm) return;
+    setIsDeleting(true);
+    try {
+      await axios.delete(`${API_BASE_URL}/conversations/${encodeURIComponent(showDeleteConfirm)}?storeId=${storeId}`);
+      setConversations(prev => prev.filter(c => c.conversation_id !== showDeleteConfirm));
+      if (selectedConversation?.conversation_id === showDeleteConfirm) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
+      setShowDeleteConfirm(null);
+    } catch (error: any) {
+      console.error('Erro detalhado ao deletar conversa:', error.response?.data || error.message);
+      alert(`Erro ao deletar conversa: ${error.response?.data?.error || error.message}. Verifique sua conexão.`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Filtrar mensagens com base na busca (dentro do chat selecionado)
+  const filteredMessages = React.useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    return messages.filter(msg =>
+      msg.content?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [messages, searchQuery]);
 
   const handleSendMessage = async (text: string) => {
     if (!selectedConversation) return;
@@ -99,9 +384,11 @@ const WhatsappContainer: React.FC = () => {
     const newMessage: WhatsappMessage = {
       message_id: tempId,
       conversation_id: selectedConversation.conversation_id,
+      store_id: storeId,
+      attendant_id: attendantId,
       sender_id: 'me',
       content: text,
-      status: 'sent',
+      status: (status.status === 'CONNECTED' && isOnline) ? 'sent' : 'pending',
       message_timestamp: new Date().toISOString(),
       is_from_me: true,
       media_url: null,
@@ -109,37 +396,133 @@ const WhatsappContainer: React.FC = () => {
     };
     setMessages(prevMessages => [...prevMessages, newMessage]);
 
+    if (status.status === 'CONNECTED' && isOnline) {
+      try {
+        await axios.post(`${API_BASE_URL}/send/text`, {
+          to: selectedConversation.conversation_id,
+          text,
+          storeId,
+          attendantId
+        });
+      } catch (error) {
+        console.error('Erro ao enviar mensagem:', error);
+        setMessages(prev => prev.map(m => m.message_id === tempId ? { ...m, status: 'error' } : m));
+      }
+    } else {
+      // Modo Offline: Fila de sincronização
+      console.log('Mensagem enfileirada para envio posterior (offline)');
+      await whatsappOfflineService.queueMessage(storeId, selectedConversation.conversation_id, text, attendantId);
+    }
+  };
+
+  const handleSendAudio = async (blob: Blob) => {
+    if (!selectedConversation) return;
+
+    const tempId = 'audio-' + Date.now();
+    const newMessage: WhatsappMessage = {
+      message_id: tempId,
+      conversation_id: selectedConversation.conversation_id,
+      store_id: storeId,
+      attendant_id: attendantId,
+      sender_id: 'me',
+      content: '[Áudio]',
+      status: (status.status === 'CONNECTED' && isOnline) ? 'sent' : 'pending',
+      message_timestamp: new Date().toISOString(),
+      is_from_me: true,
+      media_url: URL.createObjectURL(blob),
+      media_type: 'audio',
+    };
+    setMessages(prev => [...prev, newMessage]);
+
+    if (status.status === 'CONNECTED' && isOnline) {
+      try {
+        const formData = new FormData();
+        formData.append('audio', blob, 'recording.webm');
+        formData.append('to', selectedConversation.conversation_id);
+        formData.append('storeId', storeId);
+        if (attendantId) formData.append('attendantId', attendantId);
+
+        await axios.post(`${API_BASE_URL}/send/audio`, formData);
+      } catch (error) {
+        console.error('Erro ao enviar áudio:', error);
+        setMessages(prev => prev.map(m => m.message_id === tempId ? { ...m, status: 'error' } : m));
+      }
+    }
+  };
+
+  const handleStartNewChat = async () => {
+    if (!newChatNumber.trim()) return;
+
+    const pureNumber = newChatNumber.replace(/\D/g, '');
+    const jid = `${pureNumber}@s.whatsapp.net`;
+
+    const newConv: WhatsappConversation = {
+      conversation_id: jid,
+      phone_number: pureNumber,
+      store_id: storeId,
+      contact_name: pureNumber,
+      unread_count: 0,
+      last_message_content: 'Nova conversa iniciada',
+      last_message_timestamp: new Date().toISOString(),
+      status: 'open',
+      profile_pic_url: null
+    };
+
+    setConversations(prev => [newConv, ...prev.filter(c => c.phone_number !== pureNumber)]);
+    setSelectedConversation(newConv);
+    setShowNewChatModal(false);
+    setNewChatNumber('');
+  };
+
+  const handleContactAction = async (action: 'block' | 'report') => {
+    if (!selectedConversation) return;
+    alert(`Ação "${action === 'block' ? 'Bloquear' : 'Denunciar'}" realizada para: ${selectedConversation.conversation_id} (Simulado)`);
+    setShowBlockConfirm(null);
+  };
+
+  const handleSaveContactName = async (conversationId: string, name: string) => {
     try {
-      await axios.post(`${API_BASE_URL}/send/text`, {
-        to: selectedConversation.conversation_id,
-        text,
+      const phoneNumber = conversationId.split('@')[0];
+      await axios.post(`${API_BASE_URL}/contacts`, {
+        storeId,
+        phoneNumber,
+        name
       });
+      // Atualizar localmente
+      setConversations(prev => prev.map(c =>
+        c.conversation_id === conversationId ? { ...c, contact_name: name } : c
+      ));
+      if (selectedConversation?.conversation_id === conversationId) {
+        setSelectedConversation(prev => prev ? { ...prev, contact_name: name } : null);
+      }
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
-      setMessages(prev => prev.map(m => m.message_id === tempId ? { ...m, status: 'error' } : m));
+      console.error('Erro ao salvar nome do contato:', error);
+      alert('Erro ao salvar nome do contato.');
     }
   };
 
   const handleSendMedia = async (file: File) => {
     if (!selectedConversation) return;
 
+    if (!isOnline || status.status !== 'CONNECTED') {
+      alert('O envio de arquivos não é suportado no modo offline.');
+      return;
+    }
+
     try {
       const formData = new FormData();
       formData.append('media', file);
       formData.append('to', selectedConversation.conversation_id);
+      formData.append('storeId', storeId);
+      if (attendantId) formData.append('attendantId', attendantId);
 
       const fileType = file.type.split('/')[0];
       let endpoint = '';
 
-      if (fileType === 'image') {
-        endpoint = `${API_BASE_URL}/send/image`;
-      } else if (fileType === 'audio') {
-        endpoint = `${API_BASE_URL}/send/audio`;
-      } else if (fileType === 'video') {
-        endpoint = `${API_BASE_URL}/send/video`;
-      } else {
-        endpoint = `${API_BASE_URL}/send/document`;
-      }
+      if (fileType === 'image') endpoint = `${API_BASE_URL}/send/image`;
+      else if (fileType === 'audio') endpoint = `${API_BASE_URL}/send/audio`;
+      else if (fileType === 'video') endpoint = `${API_BASE_URL}/send/video`;
+      else endpoint = `${API_BASE_URL}/send/document`;
 
       await axios.post(endpoint, formData, {
         headers: {
@@ -157,32 +540,88 @@ const WhatsappContainer: React.FC = () => {
 
   const handleRestart = async () => {
     try {
-      // Tenta rota de restart se existir, ou apenas logout
-      try {
-        await axios.post(`${API_BASE_URL}/logout`);
-      } catch (e) {
-        // Ignora erro de logout se já estiver desconectado
-      }
-      window.location.reload();
+      setStatus({ status: 'CONNECTING' }); // Optimistic update
+
+      // Se tem sessão, tenta reconectar (forceLogout: false). Se não, reinicia tudo (true).
+      // Mas se o botão clicado foi "NOVA CONEXÃO", deveria ser forceLogout: true
+      const shouldForce = status.status === 'DISCONNECTED' && !hasSession;
+      // Na verdade, a lógica visual no botão decide o texto, aqui decidimos a ação.
+      // Vamos simplificar: Se o usuário clicou explicito para RECONECTAR SESSÃO, passamos false.
+      // Se clicou NOVA CONEXÃO, passamos true.
+      // Como não temos esse state no clique, vamos inferir:
+      const forceLogout = !hasSession;
+
+      await axios.post(`${API_BASE_URL}/restart`, { storeId, forceLogout });
+
     } catch (error) {
-      console.error('Erro ao reiniciar:', error);
+      console.error('Erro ao reiniciar serviço:', error);
+      setStatus({ status: 'DISCONNECTED' });
+      alert('Não foi possível iniciar a conexão. Verifique se o servidor está rodando.');
     }
   };
 
-  const handleLogout = async () => {
+  const handleWhatsappDisconnect = async () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
     try {
-      await axios.post(`${API_BASE_URL}/logout`);
+      await axios.post(`${API_BASE_URL}/logout`, { storeId });
     } catch (error) {
-      console.error('Erro ao fazer logout:', error);
+      console.error('Erro ao desconectar WhatsApp (prosseguindo com limpeza local):', error);
+    } finally {
+      // Force cleanup regardless of backend success/failure
+      setStatus({ status: 'DISCONNECTED' });
+      setSelectedConversation(null);
+      setMessages([]);
+      setConversations([]);
     }
   };
 
-  // Buscar conversas inicialmente e periodicamente
+  // Buscar conversas e STATUS periodicamente (Fallback do WebSocket)
   useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/status`, { params: { storeId } });
+        if (res.data) {
+          setStatus(prev => {
+            // Evita sobrescrever se o status for igual, mas atualiza se tiver QR novo ou mudou status
+            if (prev.status !== res.data.status || prev.qrCode !== res.data.qrCode) {
+              return res.data;
+            }
+            return prev;
+          });
+          // Atualiza se tem sessão
+          if (res.data.hasSession !== undefined) {
+            setHasSession(res.data.hasSession);
+          }
+        }
+      } catch (e) {
+        // Silently fail on status poll
+      }
+    };
+
     fetchConversations();
-    const interval = setInterval(fetchConversations, 10000);
-    return () => clearInterval(interval);
-  }, []); // Removido fetchConversations das deps para evitar loop, embora useCallback previna isso
+    fetchManualOrder();
+    fetchStatus();
+
+    // Polling de 8s para status (garante QR code estável)
+    const statusInterval = setInterval(fetchStatus, 8000);
+
+    // Polling de 10s para conversas APENAS se estiver conectado
+    // Se estiver desconectado, não faz sentido ficar batendo no banco/backend
+    const chatsInterval = setInterval(() => {
+      if (status.status === 'CONNECTED') {
+        fetchConversations();
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(chatsInterval);
+    };
+  }, [fetchManualOrder, storeId, status.status]); // Adicionado status.status na dependência
 
   // Atualizar mensagens quando chegar uma nova via WebSocket
   useEffect(() => {
@@ -203,6 +642,17 @@ const WhatsappContainer: React.FC = () => {
     }
   }, [lastMessage, selectedConversation, messages]);
 
+  // Atualizar status da mensagem (ticks) quando chegar via WebSocket
+  useEffect(() => {
+    if (lastStatusUpdate) {
+      setMessages(prev => prev.map(msg =>
+        msg.message_id === lastStatusUpdate.messageId
+          ? { ...msg, status: lastStatusUpdate.status as any }
+          : msg
+      ));
+    }
+  }, [lastStatusUpdate]);
+
   // Carregar fotos de perfil
   useEffect(() => {
     const loadProfilePics = async () => {
@@ -211,7 +661,7 @@ const WhatsappContainer: React.FC = () => {
 
       for (const conv of pending) {
         try {
-          const res = await axios.get(`${API_BASE_URL}/profile-picture/${conv.conversation_id}`);
+          const res = await axios.get(`${API_BASE_URL}/profile-picture/${conv.conversation_id}?storeId=${storeId}`);
           if (res.data.profilePicUrl) {
             newPics[conv.conversation_id] = res.data.profilePicUrl;
           }
@@ -240,7 +690,7 @@ const WhatsappContainer: React.FC = () => {
           {/* Sidebar Header */}
           <div className="h-16 bg-[#F0F2F5] flex items-center justify-between px-4 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center cursor-pointer">
+              <div className="w-10 h-10 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center cursor-pointer" onClick={() => setActiveTab('contacts')}>
                 <Users className="text-gray-600" size={24} />
               </div>
               {/* Status Indicator (Compact) */}
@@ -253,65 +703,179 @@ const WhatsappContainer: React.FC = () => {
               )}
             </div>
 
-            <div className="flex gap-4 text-[#54656F]">
+
+            <div className="flex gap-4 text-[#54656F] items-center">
               <button
                 onClick={() => setActiveTab('conversations')}
                 title="Conversas"
-                className={`p-2 rounded-full transition-colors ${activeTab === 'conversations' ? 'bg-[#dcf8c6]' : 'hover:bg-gray-200'}`}
+                className={`p-2 rounded-full transition-colors relative ${activeTab === 'conversations' ? 'bg-[#dcf8c6]' : 'hover:bg-gray-200'}`}
               >
-                <MessageCircle size={20} />
+                <div className="relative">
+                  <MessageCircle size={20} />
+                  {/* Badge de mensagens não lidas */}
+                  {conversations.reduce((acc, curr) => acc + (curr.unread_count || 0), 0) > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] flex items-center justify-center">
+                      {conversations.reduce((acc, curr) => acc + (curr.unread_count || 0), 0)}
+                    </span>
+                  )}
+                </div>
               </button>
-              <button
-                onClick={() => setActiveTab('contacts')}
-                title="Contatos"
-                className={`p-2 rounded-full transition-colors ${activeTab === 'contacts' ? 'bg-[#dcf8c6]' : 'hover:bg-gray-200'}`}
-              >
-                <Users size={20} />
-              </button>
+            </div>
+
+            <button
+              onClick={() => setActiveTab('assistant')}
+              title="Zé Assistente"
+              className={`p-2 rounded-full transition-colors relative ${activeTab === 'assistant' ? 'bg-[#dcf8c6]' : 'hover:bg-gray-200'}`}
+            >
+              <Bot size={20} className={activeTab === 'assistant' ? 'text-green-700' : 'text-[#54656F]'} />
+            </button>
+
+            <button
+              onClick={() => setShowNewChatModal(true)}
+              title="Novo Chat"
+              className="p-2 hover:bg-gray-200 rounded-full transition-colors text-[#54656F]"
+            >
+              <UserPlus size={20} />
+            </button>
+
+            <div className="relative group/more">
               <button
                 title="Mais opções"
-                className="p-2 hover:bg-gray-200 rounded-full transition-colors relative group"
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors relative"
               >
                 <MoreVertical size={20} />
               </button>
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white shadow-lg rounded-md border border-gray-100 py-1 z-50 opacity-0 invisible group-hover/more:opacity-100 group-hover/more:visible transition-all">
+                <button onClick={fetchConversations} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                  <RefreshCw size={14} /> Atualizar lista
+                </button>
+                <button onClick={() => setActiveTab(activeTab === 'conversations' ? 'contacts' : 'conversations')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                  <Users size={14} /> {activeTab === 'conversations' ? 'Ver Contatos' : 'Ver Conversas'}
+                </button>
+                <div className="h-px bg-gray-100 my-1"></div>
+                <button onClick={handleWhatsappDisconnect} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                  <LogOut size={14} /> Desconectar tudo
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Connection Alert Bar */}
-          {status.status === 'CONNECTED' && (
-            <div className="bg-green-100 px-4 py-1 flex justify-between items-center">
+          {status.status === 'CONNECTED' ? (
+            <div className="bg-green-100 px-4 py-1 flex justify-between items-center animate-in slide-in-from-top duration-300">
               <span className="text-xs text-green-800">Conectado ao WhatsApp</span>
-              <button onClick={handleLogout} className="text-xs text-red-600 hover:underline flex items-center gap-1">
-                <LogOut size={10} /> Sair
+              <button onClick={handleWhatsappDisconnect} className="text-xs text-red-600 hover:underline flex items-center gap-1 font-medium">
+                <LogOut size={10} /> Desconectar
               </button>
+            </div>
+          ) : (
+            <div className="bg-orange-50 px-4 py-1 flex flex-col items-center border-b border-orange-100">
+              <div className="w-full flex justify-between items-center mb-0.5">
+                <span className="text-[10px] text-orange-700 font-medium">
+                  {status.status === 'WAITING_QR' ? '⚠️ Escaneie o código para conectar' :
+                    status.status === 'DISCONNECTED' ? '🔴 Desconectado' : '🔌 Tentando conectar...'}
+                </span>
+                <button
+                  onClick={status.status === 'DISCONNECTED' ? handleRestart : handleWhatsappDisconnect}
+                  className="text-[10px] text-red-500 hover:underline font-bold"
+                >
+                  {status.status === 'DISCONNECTED'
+                    ? (hasSession ? 'RECONECTAR SESSÃO' : 'NOVA CONEXÃO')
+                    : 'LIMPAR SESSÃO'}
+                </button>
+              </div>
+              {isSyncing && (
+                <div className="w-full flex items-center justify-center gap-2 py-0.5 bg-blue-50/50">
+                  <RefreshCw size={10} className="animate-spin text-blue-600" />
+                  <span className="text-[10px] text-blue-700 font-medium italic">Sincronizando histórico do aparelho...</span>
+                </div>
+              )}
             </div>
           )}
 
-          {[
-            activeTab === 'contacts' && (
-              <ContactsManager
-                storeId={storeId}
-                onStartChat={handleStartChatFromContact}
-                onClose={() => setActiveTab('conversations')}
-              />
-            )
-          ]}
+          {activeTab === 'contacts' && (
+            <ContactsManager
+              storeId={storeId}
+              onStartChat={handleStartChatFromContact}
+              onClose={() => setActiveTab('conversations')}
+            />
+          )}
+
+          {activeTab === 'assistant' && (
+            <div className="flex-1 overflow-y-auto bg-gray-50 h-[calc(100%-64px)] scrollbar-thin scrollbar-thumb-gray-200">
+              <div className="p-4 space-y-6 pb-20">
+                <button onClick={() => setActiveTab('conversations')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mb-2">
+                  <ArrowLeft size={16} /> Voltar para conversas
+                </button>
+                <ZeAssistantDashboard storeId={storeId} />
+                <ZeAssistantConfig storeId={storeId} />
+                <ZeAssistantRulesManager storeId={storeId} />
+              </div>
+            </div>
+          )}
 
           {/* Search Bar Container */}
           {activeTab === 'conversations' && (
-            <div className="p-2 bg-white border-b border-gray-100">
+            <div className="p-2 bg-white border-b border-gray-100 flex flex-col gap-2">
               <div className="bg-[#F0F2F5] rounded-lg px-4 py-1.5 flex items-center">
                 <SearchBar value={searchQuery} onChange={setSearchQuery} />
+              </div>
+
+              {/* Filtros de Ordenação */}
+              <div className="relative flex items-center group/filters">
+                <button
+                  onClick={() => scrollFilters('left')}
+                  className="absolute left-0 z-10 p-1 bg-white/80 backdrop-blur-sm shadow-sm rounded-full border border-gray-100 -ml-1 hover:bg-white transition-all opacity-0 group-hover/filters:opacity-100"
+                >
+                  <ChevronLeft size={14} className="text-gray-600" />
+                </button>
+
+                <div
+                  ref={filterContainerRef}
+                  className="flex gap-1 overflow-x-auto no-scrollbar py-1 scroll-smooth"
+                >
+                  {[
+                    { id: 'recent', label: 'Recentes' },
+                    { id: 'unread', label: 'Não lidas' },
+                    { id: 'manual', label: 'Manual' },
+                    { id: 'inprogress', label: 'Em aberto' },
+                    { id: 'priority', label: 'Prioridade' },
+                    { id: 'closed', label: 'Encerradas' }
+                  ].map((crit) => (
+                    <button
+                      key={crit.id}
+                      onClick={() => setSortCriteria(crit.id as SortCriteria)}
+                      className={`px-3 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap transition-all border ${sortCriteria === crit.id
+                        ? 'bg-[#00a884] text-white border-[#00a884] shadow-sm'
+                        : 'bg-[#F0F2F5] text-[#54656F] border-transparent hover:bg-[#E9EDEF]'
+                        }`}
+                    >
+                      {crit.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => scrollFilters('right')}
+                  className="absolute right-0 z-10 p-1 bg-white/80 backdrop-blur-sm shadow-sm rounded-full border border-gray-100 -mr-1 hover:bg-white transition-all opacity-0 group-hover/filters:opacity-100"
+                >
+                  <ChevronRight size={14} className="text-gray-600" />
+                </button>
               </div>
             </div>
           )}
 
           <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
             <ConversationList
-              conversations={conversations}
+              conversations={sortedConversations}
               selectedId={selectedConversation?.conversation_id}
               onSelectConversation={handleSelectConversation}
               profilePictures={profilePictures}
+              isManualOrder={sortCriteria === 'manual'}
+              onReorder={handleReorder}
+              onUpdatePriority={handleUpdatePriority}
+              onDeleteConversation={handleDeleteConversation}
+              onSaveContactName={handleSaveContactName}
             />
           </div>
         </div>
@@ -324,16 +888,28 @@ const WhatsappContainer: React.FC = () => {
               <div className="h-16 bg-[#F0F2F5] flex items-center px-4 border-b border-gray-200 flex-shrink-0 z-20 justify-between">
                 <div className="flex items-center gap-4 flex-1 cursor-pointer">
                   <div className="w-10 h-10 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center">
-                    {selectedConversation.profile_pic_url ? (
-                      <img src={selectedConversation.profile_pic_url} alt="" className="w-full h-full object-cover" />
+                    {profilePictures[selectedConversation.conversation_id] || selectedConversation.profile_pic_url ? (
+                      <img
+                        src={profilePictures[selectedConversation.conversation_id] || selectedConversation.profile_pic_url || ''}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
-                      <Users size={20} className="text-gray-500" />
+                      selectedConversation.conversation_id.includes('@g.us') ? (
+                        <div className="w-full h-full bg-green-100 flex items-center justify-center text-green-600">
+                          <Users size={20} />
+                        </div>
+                      ) : (
+                        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500">
+                          <Users size={20} />
+                        </div>
+                      )
                     )}
                   </div>
-                  <div className="flex flex-col justify-center">
-                    <h2 className="text-[#111B21] font-normal text-base leading-tight">
-                      {selectedConversation.contact_name || selectedConversation.conversation_id}
-                    </h2>
+                  <div className="flex flex-col justify-center cursor-pointer" onClick={() => setShowContactDetails(true)}>
+                    <h3 className="font-normal text-[#111B21] truncate text-[16px]">
+                      {selectedConversation.contact_name || selectedConversation.conversation_id.split('@')[0]}
+                    </h3>
                     <span className="text-xs text-gray-500 truncate">
                       clique para dados do contato
                     </span>
@@ -341,8 +917,8 @@ const WhatsappContainer: React.FC = () => {
                 </div>
                 <div className="flex gap-4 text-[#54656F]">
                   <button onClick={() => setSelectedConversation(null)} className="md:hidden p-2 hover:bg-gray-200 rounded-full"><ArrowLeft size={20} /></button>
-                  <button className="p-2 hover:bg-gray-200 rounded-full"><Users size={20} /></button>
-                  <button className="p-2 hover:bg-gray-200 rounded-full"><AlertTriangle size={20} /></button>
+                  <button onClick={() => setShowContactDetails(true)} className="p-2 hover:bg-gray-200 rounded-full" title="Ver Detalhes"><Users size={20} /></button>
+                  <button onClick={() => setShowBlockConfirm('block')} className="p-2 hover:bg-gray-200 rounded-full" title="Bloquear Contato"><AlertTriangle size={20} /></button>
                 </div>
               </div>
 
@@ -361,7 +937,11 @@ const WhatsappContainer: React.FC = () => {
 
               {/* Input Area */}
               <div className="bg-[#F0F2F5] p-0 z-20 min-h-[62px]">
-                <MessageInput onSend={handleSendMessage} onSendMedia={handleSendMedia} />
+                <MessageInput
+                  onSend={handleSendMessage}
+                  onSendMedia={handleSendMedia}
+                  onSendAudio={handleSendAudio}
+                />
               </div>
             </>
           ) : (
@@ -383,18 +963,194 @@ const WhatsappContainer: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Modal QR Code */}
-        {status.status === 'WAITING_QR' && status.qrCode && (
+      {/* Modal QR Code */}
+      {
+        status.status === 'WAITING_QR' && status.qrCode && (
           <QrCodeModal
             qrCode={status.qrCode}
             status={status.status}
-            onClose={handleLogout}
+            onClose={handleWhatsappDisconnect}
           />
-        )}
-      </div>
+        )
+      }
+      {/* Deletion Confirmation Modal */}
+      {
+        showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-in-center overflow-hidden relative">
+              <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Apagar conversa?</h3>
+              <p className="text-gray-500 text-sm mb-6 text-left">
+                Esta ação irá apagar permanentemente todas as mensagens desta conversa **tanto no sistema quanto no seu aparelho WhatsApp**. Esta ação não pode ser desfeita.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  disabled={isDeleting}
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={isDeleting}
+                  onClick={confirmDelete}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center gap-2 disabled:opacity-70"
+                >
+                  {isDeleting ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      Apagando...
+                    </>
+                  ) : 'Apagar para Todos'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal: Novo Chat */}
+      {showNewChatModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold mb-4">Novo Chat</h3>
+            <p className="text-sm text-gray-600 mb-4">Digite o número com DDD e DDI (ex: 5511999999999)</p>
+            <input
+              type="text"
+              placeholder="Número do telefone"
+              className="w-full border rounded p-2 mb-4 outline-none focus:border-green-500"
+              value={newChatNumber}
+              onChange={(e) => setNewChatNumber(e.target.value)}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowNewChatModal(false)}
+                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleStartNewChat}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 font-medium"
+              >
+                Iniciar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Detalhes do Contato */}
+      {showContactDetails && selectedConversation && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg w-[400px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+            <div className="h-48 bg-gradient-to-br from-[#128C7E] to-[#25D366] flex flex-col items-center justify-center relative">
+              <button
+                onClick={() => setShowContactDetails(false)}
+                className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"
+                title="Fechar"
+              >
+                <X size={20} />
+              </button>
+              <div className="w-24 h-24 rounded-full bg-white border-4 border-white shadow-lg overflow-hidden flex items-center justify-center mb-3">
+                {profilePictures[selectedConversation.conversation_id] ? (
+                  <img src={profilePictures[selectedConversation.conversation_id]} className="w-full h-full object-cover" alt="Perfil" />
+                ) : (
+                  <Users size={48} className="text-gray-300" />
+                )}
+              </div>
+              <h3 className="text-white text-xl font-bold">{selectedConversation.contact_name}</h3>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase font-bold tracking-wider">Número</label>
+                  <p className="text-[#111B21] text-lg">+{selectedConversation.phone_number || selectedConversation.conversation_id.split('@')[0]}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase font-bold tracking-wider">Status</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`w-2 h-2 rounded-full ${selectedConversation.status === 'open' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                    <p className="text-sm font-medium text-gray-700">{selectedConversation.status === 'open' ? 'Conversa Ativa' : 'Conversa Fechada'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => { setShowContactDetails(false); setShowBlockConfirm('block'); }}
+                  className="px-4 py-2 border border-red-200 text-red-600 rounded hover:bg-red-50 font-medium transition-colors"
+                >
+                  Bloquear
+                </button>
+                <button
+                  onClick={() => setShowContactDetails(false)}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 font-medium transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmação de Bloqueio/Denúncia */}
+      {showBlockConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
+            <h3 className="text-lg font-bold mb-2">Confirmar ação?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Você deseja realmente {showBlockConfirm === 'block' ? 'bloquear' : 'denunciar'} este contato? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowBlockConfirm(null)}
+                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleContactAction(showBlockConfirm)}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium shadow-sm"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmação de Logout */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
+            <h3 className="text-lg font-bold mb-2">Desconectar?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Você deseja realmente desconectar o WhatsApp desta loja? Todas as sessões serão encerradas.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium"
+              >
+                Desconectar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 export default WhatsappContainer;

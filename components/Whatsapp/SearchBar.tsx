@@ -9,7 +9,6 @@ interface SearchBarProps {
 
 const SearchBar: React.FC<SearchBarProps> = ({ onSearch, value, onChange }) => {
     const [internalQuery, setInternalQuery] = useState('');
-    const [isOpen, setIsOpen] = useState(false);
 
     const query = value !== undefined ? value : internalQuery;
 
@@ -26,36 +25,21 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, value, onChange }) => {
         handleSearch('');
     };
 
-    if (!isOpen) {
-        return (
-            <button
-                onClick={() => setIsOpen(true)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-            >
-                <Search size={20} className="text-gray-600 dark:text-gray-300" />
-            </button>
-        );
-    }
-
     return (
-        <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg flex-1 max-w-md">
-            <Search size={18} className="text-gray-500" />
+        <div className="flex items-center gap-2 bg-transparent flex-1">
+            <Search size={18} className="text-gray-400" />
             <input
                 type="text"
                 value={query}
                 onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Buscar mensagens..."
-                className="flex-1 bg-transparent border-none outline-none text-sm text-gray-800 dark:text-white"
-                autoFocus
+                placeholder="Pesquisar ou começar uma nova conversa"
+                className="flex-1 bg-transparent border-none outline-none text-[15px] text-[#111B21] placeholder:text-[#667781] placeholder:text-sm"
             />
             {query && (
-                <button onClick={handleClear} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full">
+                <button onClick={handleClear} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors">
                     <X size={16} className="text-gray-500" />
                 </button>
             )}
-            <button onClick={() => setIsOpen(false)} className="text-xs text-blue-500 hover:text-blue-600">
-                Fechar
-            </button>
         </div>
     );
 };

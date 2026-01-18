@@ -5,28 +5,97 @@ import AttachmentMenu from './AttachmentMenu';
 interface MessageInputProps {
   onSend: (text: string) => void;
   onSendMedia?: (file: File) => void;
+  onSendAudio?: (blob: Blob) => void;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia }) => {
+const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSendAudio }) => {
   const [text, setText] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = () => {
     if (text.trim()) {
       onSend(text);
       setText('');
+      setShowEmojiPicker(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Erro ao acessar microfone:', err);
+      alert('Não foi possível acessar o microfone.');
     }
   };
+
+  const stopRecording = (send: boolean) => {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = () => {
+        if (send && audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          if (onSendAudio) {
+            onSendAudio(audioBlob);
+          }
+        }
+        // Limpar tracks do stream
+        if (mediaRecorderRef.current?.stream) {
+          mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
+      };
+      mediaRecorderRef.current.stop();
+    }
+
+    setIsRecording(false);
+    setRecordingTime(0);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const addEmoji = (emoji: string) => {
+    setText(prev => prev + emoji);
+  };
+
+  const commonEmojis = ['😀', '😂', '😍', '👍', '🙏', '🙌', '🔥', '✨', '✅', '❌', '👀', '🚀', '⭐', '❤️', '🤔', '😊'];
+
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -128,10 +197,30 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia }) => {
           onChange={handleFileSelect}
         />
 
-        <div className="flex gap-2 text-[#54656F] mb-1">
-          <button className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-            <Smile size={24} />
-          </button>
+        <div className="flex gap-2 text-[#54656F] items-center">
+          <div className="relative">
+            <button
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className={`p-2 rounded-full transition-colors ${showEmojiPicker ? 'bg-gray-200 text-[#111B21]' : 'hover:bg-gray-200'}`}
+              title="Emojis"
+            >
+              <Smile size={24} />
+            </button>
+
+            {showEmojiPicker && (
+              <div className="absolute bottom-full left-0 mb-2 p-2 bg-white rounded-lg shadow-xl border border-gray-200 grid grid-cols-4 gap-2 z-50 w-[160px] animate-in fade-in slide-in-from-bottom-2">
+                {commonEmojis.map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => addEmoji(emoji)}
+                    className="text-2xl hover:bg-gray-100 p-1 rounded transition-colors"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => setShowMenu(!showMenu)}
             className={`p-2 rounded-full transition-colors ${showMenu ? 'bg-gray-200 text-[#111B21]' : 'hover:bg-gray-200'}`}
@@ -142,26 +231,66 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia }) => {
         </div>
 
         <div className="flex-1 bg-white rounded-lg flex items-center border border-white focus-within:border-white py-1">
-          <input
-            placeholder="Digite uma mensagem"
-            className="flex-1 px-4 py-1.5 bg-transparent focus:outline-none text-[#111B21] placeholder:text-gray-500 text-[15px] h-full"
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyPress}
-          />
+          {isRecording ? (
+            <div className="flex-1 px-4 py-2 flex items-center justify-between text-[#ef4444] animate-pulse">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                <span className="text-sm font-medium">Gravando {formatTime(recordingTime)}</span>
+              </div>
+              <button
+                onClick={() => stopRecording(false)}
+                className="text-gray-500 hover:text-red-500 text-xs font-bold"
+              >
+                CANCELAR
+              </button>
+            </div>
+          ) : (
+            <textarea
+              placeholder="Digite uma mensagem"
+              className="flex-1 px-4 py-1.5 bg-transparent outline-none text-[#111B21] placeholder:text-gray-500 text-[15px] resize-none max-h-32 custom-scrollbar"
+              rows={1}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  e.stopPropagation();
+
+                  const trimmedText = text.trim();
+                  if (trimmedText) {
+                    onSend(trimmedText);
+                    setText('');
+                    setShowEmojiPicker(false);
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = '36px';
+                  }
+                }
+              }}
+              style={{ minHeight: '36px' }}
+            />
+          )}
         </div>
 
-        <div className="mb-1">
-          {text.trim() ? (
+        <div className="flex items-center">
+          {text.trim() || isRecording ? (
             <button
-              onClick={handleSend}
-              className="p-2 text-[#54656F] hover:text-[#111B21] transition-colors"
+              onClick={isRecording ? () => stopRecording(true) : handleSend}
+              className={`p-2 transition-colors ${isRecording ? 'text-red-500 hover:text-red-600' : 'text-[#54656F] hover:text-[#111B21]'}`}
+              title={isRecording ? "Enviar Áudio" : "Enviar Mensagem"}
             >
               <Send size={24} />
             </button>
           ) : (
-            <button className="p-2 text-[#54656F] hover:text-[#111B21] transition-colors">
+            <button
+              onClick={startRecording}
+              className="p-2 text-[#54656F] hover:text-[#111B21] transition-colors"
+              title="Gravar Voz"
+            >
               <Mic size={24} />
             </button>
           )}

@@ -1,0 +1,7 @@
+# Lista de Tarefas - Otimização de Performance (/loja/comanda)
+
+- [ ] Adicionar índices SQL em `orders` e `orders_collaborators` no `supabase_global.sql`
+- [ ] Melhorar tratamento de erro em `loadHistory` no `InternalOrders.tsx`
+- [ ] Melhorar tratamento de erro em `loadActiveOrders` no `InternalOrders.tsx`
+- [ ] Atualizar `checklist.txt` com as alterações realizadas
+- [ ] Atualizar `TASK_LIST.md` na pasta documentation

@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Product, CartItem } from '../types';
 import * as cloud from '../services/cloud';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { Loader2, Search, Plus, Minus, ShoppingBag, Send, LogOut, Coffee, LayoutGrid, ClipboardList, CheckCircle, User, Clock, TrendingUp, History, Home, X, ArrowLeft, Printer, Truck, MapPin, RotateCcw, Check, Scan } from 'lucide-react';
+import { Loader2, Search, Plus, Minus, ShoppingBag, Send, LogOut, Coffee, LayoutGrid, ClipboardList, CheckCircle, User, Clock, TrendingUp, History, Home, X, ArrowLeft, Printer, Truck, MapPin, RotateCcw, Check, Scan, MessageCircle } from 'lucide-react';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 import { Logo } from './Logo';
+
+const WhatsappContainer = React.lazy(() => import('./Whatsapp/WhatsappContainer'));
 
 interface Props {
     collaborator: any;
@@ -19,7 +21,7 @@ const parseCurrency = (val: string): number => {
     return Number(digits) / 100;
 };
 
-type View = 'dashboard' | 'menu' | 'tables' | 'history' | 'reports' | 'external_order' | 'orders';
+type View = 'dashboard' | 'menu' | 'tables' | 'history' | 'reports' | 'external_order' | 'orders' | 'whatsapp_chat';
 
 export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) => {
     const [view, setView] = useState<View>('dashboard');
@@ -634,6 +636,17 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     <span className="text-[10px] text-gray-400 font-bold -mt-2">Delivery / Retirada</span>
                 </button>
 
+                <button
+                    onClick={() => setView('whatsapp_chat')}
+                    className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all flex flex-col items-center gap-3 group active:scale-95"
+                >
+                    <div className="w-14 h-14 bg-green-50 dark:bg-green-900/20 rounded-2xl flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors">
+                        <MessageCircle className="w-7 h-7" />
+                    </div>
+                    <span className="text-xs font-black dark:text-white uppercase tracking-tighter">WhatsApp</span>
+                    <span className="text-[10px] text-gray-400 font-bold -mt-2">Atendimento</span>
+                </button>
+
                 {/* Botão de Impressão removido para colaboradores */}
             </div>
         </div>
@@ -798,6 +811,13 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                 {view === 'history' && renderHistory()}
                 {view === 'reports' && renderReports()}
                 {view === 'orders' && renderOrders()}
+                {view === 'whatsapp_chat' && (
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                        <React.Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-brand-600" /></div>}>
+                            <WhatsappContainer storeId={collaborator.store_id} attendantId={collaborator.id} />
+                        </React.Suspense>
+                    </div>
+                )}
 
                 {view === 'tables' && (
                     <div className="flex-1 p-6 space-y-6 overflow-y-auto custom-scrollbar pb-24">

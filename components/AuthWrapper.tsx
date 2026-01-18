@@ -5,16 +5,18 @@ import * as logger from '../services/logger';
 import { useDialog } from '../utils/dialogService';
 import { App } from './App';
 import { UserRole } from '../types';
-import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin, Mail, Lock, User, Phone, FileText, Store as StoreIcon, Home } from 'lucide-react';
+import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin, Mail, Lock, User, Phone, FileText, Store as StoreIcon, Home, Truck, RefreshCw } from 'lucide-react';
 import { Button } from './Button';
 import { LandingPage } from './LandingPage';
-import { CitySelector } from './CitySelector';
-import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
+import { CitySearchSelect } from './CitySearchSelect';
+import { StreetSearchSelect } from './StreetSearchSelect';
+import { StreetAutocomplete } from './StreetAutocomplete';
 import { Logo } from './Logo';
 import { CustomInput } from './CustomInput';
 import { CollaboratorModule } from './CollaboratorModule';
+import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
 
-type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_password';
+type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_password' | 'signup_type_selection';
 
 // Helper simples para navegar e atualizar URL sem reload (apenas auth flows que não estão no App.tsx router principal)
 const updateAuthUrl = (view: AuthView) => {
@@ -146,16 +148,6 @@ export const AuthWrapper: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-
-    // Timeout de segurança global para parar loading infinito
-    const globalTimeoutId = setTimeout(() => {
-      if (mounted && isCheckingSession) {
-        logger.warn('SESSION_CHECK_TIMEOUT_GLOBAL', {});
-        setIsCheckingSession(false);
-        setAuthMessage({ type: 'error', text: 'Demorou muito para conectar. Verifique sua internet.' });
-      }
-    }, 15000);
-
     let authSubscriptionUnsubscribe: (() => void) | null = null;
 
     const initializeAuth = async () => {
@@ -167,7 +159,6 @@ export const AuthWrapper: React.FC = () => {
       }
 
       const supabase = cloud.initSupabase();
-
       if (!supabase) {
         if (mounted) setIsCheckingSession(false);
         return;
@@ -175,20 +166,18 @@ export const AuthWrapper: React.FC = () => {
 
       try {
         const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-
         if (error) throw error;
 
         if (initialSession) {
           try {
             const { status, role } = await cloud.getInitialUserData();
-            // console.log('[AUTH_INIT] getInitialUserData result', { userId: initialSession.user.id, status, role });
             if (!mounted) return;
 
             if (status === ('error' as any)) {
               setAuthMessage({ type: 'error', text: 'Não foi possível carregar seu perfil. O sistema continuará tentando.' });
               setSession(initialSession);
               setUserId(initialSession.user.id);
-              setUserRole('delivery_person' as any); // Fallback role
+              setUserRole('delivery_person' as any);
               setIsCheckingSession(false);
               return;
             }
@@ -199,25 +188,18 @@ export const AuthWrapper: React.FC = () => {
               setSession(null);
               setUserId(null);
               setUserRole('delivery_person');
-              logger.warn('LOGIN_BLOCKED_BANNED', { userId: initialSession.user.id });
             } else if (status === 'not_found') {
-              // Em vez de logout imediato, verificamos se é um erro temporário ou se realmente o perfil sumiu
-              // Se sumiu, talvez precise ser recriado ou redirecionado para onboarding.
-              // Por segurança e conforme pedido, vamos evitar expulsa-lo se puder ser erro de banco.
               setAuthMessage({ type: 'error', text: 'Perfil não encontrado. Tente novamente mais tarde.' });
               setSession(initialSession);
               setUserId(initialSession.user.id);
               setIsCheckingSession(false);
-              logger.warn('AUTH_INIT_USER_NOT_FOUND', { userId: initialSession.user.id });
             } else {
               setSession(initialSession);
               setUserId(initialSession.user.id);
               setUserRole((role || 'delivery_person'));
-              logger.info('AUTH_INIT_ROLE', { userId: initialSession.user.id, role: (role || 'delivery_person') });
               redirectToRoleHome(role || 'delivery_person');
             }
           } catch (profileError) {
-            console.error('[AUTH_INIT] profile fetch error', profileError);
             if (!mounted) return;
             setSession(initialSession);
             setUserId(initialSession.user.id);
@@ -225,33 +207,24 @@ export const AuthWrapper: React.FC = () => {
           }
         }
       } catch (err: any) {
-        logger.error('AUTH_INIT_ERROR', { message: err?.message || String(err) });
         const errorMessage = err?.message || JSON.stringify(err);
-
-        // Incrementa retry count
         setRetryCount(prev => prev + 1);
-
         if (errorMessage.includes("Refresh Token") || errorMessage.includes("Invalid Refresh Token")) {
           await cloud.signOut();
           if (mounted) {
             setSession(null);
             setUserId(null);
             setUserRole('delivery_person');
-            logger.warn('AUTH_REFRESH_INVALID', {});
           }
         }
       } finally {
         if (mounted) {
-          // Apenas para de carregar se tiver sucesso ou se atingir max retries (tratado no topo)
-          // Mas garantimos que o spinner saia eventualmente
           setTimeout(() => setIsCheckingSession(false), 500);
         }
       }
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: any, currentSession: any) => {
         if (!mounted) return;
-
-        // Se já atingiu limite de retries, ignora eventos automáticos para evitar loop
         if (retryCount >= MAX_RETRIES) return;
 
         if (event === 'SIGNED_OUT') {
@@ -259,39 +232,33 @@ export const AuthWrapper: React.FC = () => {
           setUserId(null);
           setUserRole('delivery_person');
           setView('login');
-          logger.info('AUTH_EVENT_SIGNED_OUT', {});
         } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           if (currentSession) {
             try {
               const { status, role } = await cloud.getInitialUserData();
-              console.log('[AUTH_EVENT] getInitialUserData result', { event, userId: currentSession.user.id, status, role });
               if (status === 'banned') {
                 await supabase.auth.signOut();
                 setAuthMessage({ type: 'error', text: 'Sua conta está suspensa.' });
-                logger.warn('AUTH_EVENT_BANNED', { userId: currentSession.user.id });
               } else if (status === 'not_found') {
                 handleLogoutAndRedirect("Usuário não encontrado no sistema.");
-                logger.warn('AUTH_EVENT_USER_NOT_FOUND', { userId: currentSession.user.id });
               } else {
                 setSession(currentSession);
                 setUserId(currentSession.user.id);
                 setUserRole((role || 'delivery_person'));
-                logger.info('AUTH_EVENT_SIGNED_IN', { userId: currentSession.user.id, role: (role || 'delivery_person') });
                 redirectToRoleHome(role || 'delivery_person');
               }
             } catch (e: any) {
               if (mounted) {
                 setRetryCount(prev => prev + 1);
-                console.log('[AUTH_EVENT] getInitialUserData threw', { event, userId: currentSession?.user?.id, error: e?.message || String(e) });
                 handleLogoutAndRedirect("Usuário não encontrado no sistema.");
-                logger.error('AUTH_EVENT_USER_DELETED', { userId: currentSession?.user?.id, error: e.message });
               }
             }
           }
         }
       });
+
       authSubscriptionUnsubscribe = () => {
-        try { subscription.unsubscribe(); } catch (e) { console.warn('Failed to unsubscribe auth listener', e); }
+        try { subscription.unsubscribe(); } catch (e) { console.warn('Unsubscribe error', e); }
       };
     };
 
@@ -299,8 +266,7 @@ export const AuthWrapper: React.FC = () => {
 
     return () => {
       mounted = false;
-      try { authSubscriptionUnsubscribe?.(); } catch { }
-      clearTimeout(globalTimeoutId);
+      if (authSubscriptionUnsubscribe) authSubscriptionUnsubscribe();
     };
   }, [retryCount]);
 
@@ -597,202 +563,321 @@ export const AuthWrapper: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-gray-950 flex items-center justify-center p-4 md:p-6 relative overflow-x-hidden overflow-y-auto py-12 md:py-0">
+      {/* Background Decorative Elements */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-500/10 dark:bg-brand-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-600/10 dark:bg-brand-600/5 rounded-full blur-[120px] pointer-events-none" />
+
       {renderBack()}
 
-      <div className="bg-white dark:bg-gray-800 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-in slide-in-from-bottom-5">
-        <div className="text-center mb-8">
-          <Logo className="h-10 w-auto mx-auto mb-4 text-brand-600" mode="icon" />
-          <h2 className="text-2xl font-black text-gray-900 dark:text-white">
-            {view === 'login' && 'Bem-vindo de volta!'}
-            {view === 'forgot_password' && 'Recuperar Senha'}
-            {(view === 'signup_form' || view === 'signup_city') && 'Criar Conta'}
-          </h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-            {view === 'login' && 'Acesse sua conta para continuar.'}
-            {view === 'forgot_password' && 'Enviaremos um link para seu e-mail.'}
-            {view === 'signup_city' && 'Onde você vai atuar?'}
-            {view === 'signup_form' && (
-              signupType === 'STORE_PARTNER'
-                ? 'Cadastre sua loja e impulsione suas vendas.'
-                : signupType === 'DELIVERY_PARTNER'
-                  ? 'Faça seu cadastro e comece a faturar.'
-                  : 'Preencha seus dados para continuar.'
-            )}
-          </p>
+      <div className="w-full max-w-md sm:max-w-xl md:max-w-md relative z-10 transition-all duration-500 animate-in fade-in zoom-in-95">
+        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl p-6 md:p-10 rounded-[40px] md:rounded-[48px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-white/20 dark:border-gray-800/50">
+
+          <div className="text-center mb-10">
+            <div className="inline-flex p-4 bg-brand-50 dark:bg-brand-900/30 rounded-3xl mb-6 shadow-sm">
+              <Logo className="h-10 w-auto text-brand-600" mode="icon" />
+            </div>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
+              {view === 'login' && 'Olá novamente! 👋'}
+              {view === 'forgot_password' && 'Recuperar Senha'}
+              {view === 'signup_type_selection' && 'Escolha seu perfil'}
+              {(view === 'signup_form' || view === 'signup_city') && 'Criar sua conta'}
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 text-base font-medium">
+              {view === 'login' && 'Acesse sua conta para continuar.'}
+              {view === 'forgot_password' && 'Enviaremos um link para seu e-mail.'}
+              {view === 'signup_type_selection' && 'Como você deseja utilizar o Zé Entregas?'}
+              {view === 'signup_city' && 'Selecione sua cidade de atuação.'}
+              {view === 'signup_form' && (
+                signupType === 'STORE_PARTNER'
+                  ? 'Preencha os dados da sua loja.'
+                  : 'Preencha seus dados pessoais.'
+              )}
+            </p>
+          </div>
+
+          {authMessage && (
+            <div className={`p-4 rounded-2xl mb-8 flex items-center gap-3 animate-in slide-in-from-top-4 duration-300 ${authMessage.type === 'error'
+              ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30'
+              : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30'
+              }`}>
+              <div className={`p-2 rounded-xl ${authMessage.type === 'error' ? 'bg-red-100 dark:bg-red-900/40 text-red-600' : 'bg-green-100 dark:bg-green-900/40 text-green-600'}`}>
+                {authMessage.type === 'error' ? <Ban className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+              </div>
+              <span className="text-sm font-bold">{authMessage.text}</span>
+            </div>
+          )}
+
+          {view === 'login' && (
+            <div className="space-y-5">
+              <CustomInput
+                label="Email"
+                type="email"
+                icon={Mail}
+                value={emailOrPhone}
+                onChange={e => setEmailOrPhone(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                placeholder="seu@email.com"
+                autoComplete="email"
+                autoFocus
+                error={authMessage?.type === 'error' && authMessage.text.includes('Credenciais') ? true : undefined}
+              />
+              <div className="relative">
+                <CustomInput
+                  label="Senha"
+                  type={showPassword ? 'text' : 'password'}
+                  icon={Lock}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                  placeholder="Sua senha secreta"
+                  autoComplete="current-password"
+                  error={authMessage?.type === 'error' && authMessage.text.includes('Credenciais') ? true : undefined}
+                />
+                <button
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-[38px] p-2 text-gray-400 hover:text-brand-500 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setView('forgot_password')}
+                  className="text-sm font-bold text-gray-500 hover:text-brand-600 transition-colors"
+                >
+                  Esqueceu a senha?
+                </button>
+              </div>
+
+              <Button
+                fullWidth
+                onClick={handleLogin}
+                disabled={authLoading}
+                className="py-5 text-lg font-black bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-600 shadow-[0_12px_24px_-8px_rgba(var(--brand-600-rgb),0.4)] transition-all active:scale-[0.98]"
+              >
+                {authLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Entrar no Sistema'}
+              </Button>
+
+              <div className="pt-6 text-center">
+                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">
+                  Não tem uma conta? {' '}
+                  <button
+                    onClick={() => setView('signup_type_selection')}
+                    className="text-brand-600 font-bold hover:underline"
+                  >
+                    Cadastre-se aqui
+                  </button>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {view === 'signup_type_selection' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4">
+                <button
+                  onClick={() => {
+                    setSignupType('STORE_PARTNER');
+                    setView('signup_city');
+                  }}
+                  className="group flex items-center gap-4 p-5 bg-blue-50/50 dark:bg-blue-900/10 border-2 border-blue-100 dark:border-blue-900/30 rounded-[32px] hover:border-blue-500 dark:hover:border-blue-500 transition-all text-left"
+                >
+                  <div className="p-3 bg-blue-100 dark:bg-blue-900/40 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
+                    <StoreIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-blue-900 dark:text-blue-100">Sou Lojista</h4>
+                    <p className="text-xs text-blue-600/70 font-bold">Quero vender meus produtos</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSignupType('DELIVERY_PARTNER');
+                    setView('signup_city');
+                  }}
+                  className="group flex items-center gap-4 p-5 bg-brand-50/50 dark:bg-brand-900/10 border-2 border-brand-100 dark:border-brand-900/30 rounded-[32px] hover:border-brand-500 dark:hover:border-brand-500 transition-all text-left"
+                >
+                  <div className="p-3 bg-brand-100 dark:bg-brand-900/40 text-brand-600 rounded-2xl group-hover:scale-110 transition-transform">
+                    <Truck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-brand-900 dark:text-brand-100">Sou Entregador</h4>
+                    <p className="text-xs text-brand-600/70 font-bold">Quero realizar entregas</p>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setView('login')}
+                className="w-full text-center text-sm font-bold text-gray-400 hover:text-brand-600 transition-colors pt-2"
+              >
+                Voltar para o login
+              </button>
+            </div>
+          )}
+
+          {view === 'forgot_password' && (
+            <div className="space-y-6">
+              <CustomInput
+                label="Email"
+                type="email"
+                icon={Mail}
+                value={emailOrPhone}
+                onChange={e => setEmailOrPhone(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleForgotPassword()}
+                placeholder="seu@email.com"
+                autoComplete="email"
+                autoFocus
+              />
+              <Button fullWidth onClick={handleForgotPassword} disabled={authLoading} className="py-5 text-lg font-black shadow-lg">
+                {authLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Resetar Senha'}
+              </Button>
+              <button
+                onClick={() => setView('login')}
+                className="w-full text-center text-sm font-bold text-gray-500 hover:text-brand-600 transition-colors"
+              >
+                Voltar para o login
+              </button>
+            </div>
+          )}
+
+          {view === 'signup_city' && (
+            <div className="space-y-6">
+              <div className={`p-4 rounded-2xl border-2 flex items-center gap-3 ${signupType === 'STORE_PARTNER'
+                ? 'bg-blue-50/50 border-blue-100 text-blue-700 dark:bg-blue-900/10 dark:border-blue-900/30'
+                : 'bg-brand-50/50 border-brand-100 text-brand-700 dark:bg-brand-900/10 dark:border-brand-900/30'
+                }`}>
+                <div className={`p-2 rounded-xl ${signupType === 'STORE_PARTNER' ? 'bg-blue-100 text-blue-600' : 'bg-brand-100 text-brand-600'}`}>
+                  {signupType === 'STORE_PARTNER' ? <StoreIcon className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
+                </div>
+                <span className="font-bold text-sm">
+                  {signupType === 'STORE_PARTNER' ? 'Cadastro Lojista' : 'Cadastro Entregador'}
+                </span>
+              </div>
+
+              <div className="pt-2">
+                <CitySearchSelect
+                  value={selectedCity}
+                  onSelect={(city) => {
+                    setSelectedCity(`${city.name} - ${city.state}`);
+                    setView('signup_form');
+                  }}
+                  placeholder="Selecione sua cidade..."
+                />
+              </div>
+            </div>
+          )}
+
+          {view === 'signup_form' && (
+            <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700 mb-2">
+                <MapPin className="w-5 h-5 text-brand-600" />
+                <div className="flex-1">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Cidade de atuação</p>
+                  <p className="font-bold text-gray-700 dark:text-gray-200">{selectedCity}</p>
+                </div>
+                <button onClick={() => setView('signup_city')} className="p-2 text-brand-600 hover:bg-brand-50 rounded-xl transition-colors">
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+
+              <CustomInput
+                type="text"
+                placeholder="Nome Completo"
+                icon={User}
+                value={name}
+                onChange={e => setName(e.target.value)}
+                autoComplete="name"
+                autoFocus
+              />
+              <CustomInput
+                type="email"
+                placeholder="Email principal"
+                icon={Mail}
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <CustomInput
+                  type="tel"
+                  placeholder="WhatsApp"
+                  icon={Phone}
+                  value={phone}
+                  onChange={e => setPhone(formatPhoneNumber(e.target.value))}
+                  maxLength={15}
+                  inputMode="tel"
+                />
+                <CustomInput
+                  type="text"
+                  placeholder="CPF"
+                  icon={FileText}
+                  value={cpf}
+                  onChange={e => setCpf(formatCpf(e.target.value))}
+                  inputMode="numeric"
+                  maxLength={14}
+                />
+              </div>
+
+              {signupType === 'STORE_PARTNER' && (
+                <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest pl-1">Informações da Loja</h3>
+                  <CustomInput type="text" placeholder="Nome Comercial da Loja" icon={StoreIcon} value={storeName} onChange={e => setStoreName(e.target.value)} />
+                  <CustomInput type="text" placeholder="CPF/CNPJ do Negócio" icon={FileText} value={storeDocument} onChange={e => setStoreDocument(formatCnpjCpf(e.target.value))} maxLength={18} />
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <CustomInput type="text" placeholder="CEP" icon={MapPin} value={addressZip} onChange={e => setAddressZip(e.target.value)} className="col-span-1" />
+                    <div className="col-span-2">
+                      <StreetSearchSelect
+                        city={selectedCity.split(' - ')[0]}
+                        value={addressStreet}
+                        onSelect={setAddressStreet}
+                        placeholder="Nome da Rua"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <CustomInput type="text" placeholder="Número" value={addressNumber} onChange={e => setAddressNumber(e.target.value)} className="col-span-1" />
+                    <CustomInput type="text" placeholder="Bairro" value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} className="col-span-2" />
+                  </div>
+                </div>
+              )}
+
+              <div className="relative pt-2">
+                <CustomInput
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Senha forte (6+ caracteres)"
+                  icon={Lock}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
+                  autoComplete="new-password"
+                />
+                <button
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-[14px] p-2 text-gray-400"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+
+              <div className="pt-4">
+                <Button fullWidth onClick={handleSignup} disabled={authLoading} className="py-5 text-lg font-black bg-brand-600 shadow-xl">
+                  {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Finalizar e Começar'}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {authMessage && (
-          <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-center gap-2 ${authMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-            {authMessage.type === 'error' ? <Ban className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
-            {authMessage.text}
-          </div>
-        )}
-
-        {view === 'login' && (
-          <div className="space-y-4">
-            <CustomInput
-              label="Email"
-              type="email"
-              value={emailOrPhone}
-              onChange={e => setEmailOrPhone(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-              placeholder="seu@email.com"
-              autoComplete="email"
-              autoFocus
-            />
-            <div className="relative">
-              <CustomInput
-                label="Senha"
-                type={showPassword ? 'text' : 'password'}
-                icon={Lock}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="pr-10" // Keep padding right for the eye icon
-                placeholder="******"
-                autoComplete="current-password"
-              />
-              <button
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-            <div className="text-right mt-2">
-              <button onClick={() => setView('forgot_password')} className="text-xs font-bold text-brand-600 hover:underline">Esqueci minha senha</button>
-            </div>
-            <Button fullWidth onClick={handleLogin} disabled={authLoading} className="py-4 text-lg shadow-xl shadow-brand-500/20">
-              {authLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Entrar'}
-            </Button>
-          </div>
-        )}
-
-        {view === 'forgot_password' && (
-          <div className="space-y-4">
-            <CustomInput
-              label="Email"
-              type="email"
-              value={emailOrPhone}
-              onChange={e => setEmailOrPhone(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleForgotPassword()}
-              placeholder="seu@email.com"
-              autoComplete="email"
-              autoFocus
-            />
-            <Button fullWidth onClick={handleForgotPassword} disabled={authLoading} className="py-4">
-              {authLoading ? <Loader2 className="animate-spin" /> : 'Enviar Link'}
-            </Button>
-            <button onClick={() => setView('login')} className="w-full text-center text-sm font-bold text-gray-500 hover:text-brand-600 mt-4">
-              Voltar para Login
-            </button>
-          </div>
-        )}
-
-        {view === 'signup_city' && (
-          <div className="space-y-4">
-            <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${signupType === 'STORE_PARTNER' ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300' : 'bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-300'}`}>
-              {signupType === 'STORE_PARTNER' ? 'Cadastro Lojista' : 'Cadastro Entregador'}
-            </div>
-            <CitySelector
-              onSelect={(cityName: string, state: string) => {
-                setSelectedCity(`${cityName} - ${state}`);
-                setView('signup_form');
-              }}
-              selectedCity={selectedCity}
-            />
-            <div className="mt-4 text-center">
-              <button onClick={() => setView('landing')} className="text-sm text-gray-500">Cancelar</button>
-            </div>
-          </div>
-        )}
-
-        {view === 'signup_form' && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-xs text-blue-700 dark:text-blue-300">
-              <MapPin className="w-4 h-4" /> Cidade: <strong>{selectedCity}</strong>
-              <button onClick={() => setView('signup_city')} className="ml-auto text-xs font-bold text-blue-800 dark:text-blue-200 hover:underline">
-                (Mudar)
-              </button>
-            </div>
-
-            <CustomInput
-              type="text"
-              placeholder="Nome Completo"
-              icon={User}
-              value={name}
-              onChange={e => setName(e.target.value)}
-              autoComplete="name"
-              autoFocus
-            />
-            <CustomInput
-              type="email"
-              placeholder="Email"
-              icon={Mail}
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              autoComplete="email"
-            />
-            <CustomInput
-              type="tel"
-              placeholder="Telefone (WhatsApp)"
-              icon={Phone}
-              value={phone}
-              onChange={e => setPhone(formatPhoneNumber(e.target.value))}
-              maxLength={15}
-              autoComplete="tel"
-              inputMode="tel"
-            />
-            <CustomInput
-              type="text"
-              placeholder="CPF"
-              icon={FileText}
-              value={cpf}
-              onChange={e => setCpf(formatCpf(e.target.value))}
-              autoComplete="off"
-              inputMode="numeric"
-              maxLength={14}
-            />
-
-            {signupType === 'STORE_PARTNER' && (
-              <>
-                <p className="text-sm font-bold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">Dados da Loja</p>
-                <CustomInput type="text" placeholder="Nome da Loja" icon={StoreIcon} value={storeName} onChange={e => setStoreName(e.target.value)} />
-                <CustomInput type="text" placeholder="CPF/CNPJ da Loja" icon={FileText} value={storeDocument} onChange={e => setStoreDocument(formatCnpjCpf(e.target.value))} maxLength={18} />
-                <CustomInput type="text" placeholder="CEP (Opcional)" icon={MapPin} value={addressZip} onChange={e => setAddressZip(e.target.value)} />
-                <div className="grid grid-cols-3 gap-4">
-                  <CustomInput type="text" placeholder="Rua" icon={Home} value={addressStreet} onChange={e => setAddressStreet(e.target.value)} className="col-span-2" />
-                  <CustomInput type="text" placeholder="Nº" value={addressNumber} onChange={e => setAddressNumber(e.target.value)} className="col-span-1" />
-                </div>
-                <CustomInput type="text" placeholder="Bairro" icon={MapPin} value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} />
-              </>
-            )}
-
-            <div className="relative">
-              <CustomInput
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Senha (mín. 6 caracteres)"
-                icon={Lock}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
-                className="pr-10"
-                autoComplete="new-password"
-              />
-              <button
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-
-            <Button fullWidth onClick={handleSignup} disabled={authLoading} className="py-4 text-lg">
-              {authLoading ? <Loader2 className="animate-spin" /> : 'Finalizar Cadastro'}
-            </Button>
-          </div>
-        )}
+        {/* Footer Info */}
+        <div className="mt-8 text-center text-gray-400 dark:text-gray-600 text-[10px] font-bold uppercase tracking-[2px]">
+          &copy; {new Date().getFullYear()} Zé Entregas &bull; Versão 2.0 Premium
+        </div>
       </div>
     </div>
   );

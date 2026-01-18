@@ -33,6 +33,31 @@ export const getClient = () => {
     return supabase;
 };
 
+// --- AUTH CACHE LOGIC ---
+let cachedUser: any = null;
+let lastUserFetch = 0;
+const AUTH_CACHE_MS = 5000; // 5 segundos de cache para o usuário autenticado
+
+/**
+ * Retorna o usuário autenticado com um sistema de cache curto para evitar requisições redundantes.
+ */
+export const getUserWithCache = async () => {
+    const sb = getClient();
+    if (!sb) return { user: null, error: new Error("No client") };
+
+    const now = Date.now();
+    if (cachedUser && (now - lastUserFetch < AUTH_CACHE_MS)) {
+        return { user: cachedUser, error: null };
+    }
+
+    const { data: { user }, error } = await sb.auth.getUser();
+    if (!error && user) {
+        cachedUser = user;
+        lastUserFetch = now;
+    }
+    return { user, error };
+};
+
 // --- OFFLINE SYNC LOGIC ---
 
 interface OfflineQueueItem {
@@ -127,19 +152,36 @@ export const getUserStatus = async (): Promise<string> => {
     const sb = getClient();
     if (!sb) return 'active';
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const { user } = await getUserWithCache();
         if (!user) return 'active';
+        // Otimização: Se tivermos getSystemPulse, podemos usar o cache dele se necessário, 
+        // mas aqui vamos manter a chamada direta mas garantindo que o RPC exista.
         const { data, error } = await sb.rpc('get_my_role_and_status');
         if (error) return 'active';
         const validData = Array.isArray(data) ? data[0] : data;
         return (validData?.status as UserStatus) || 'active';
     } catch (err: any) {
-        const msg = err?.message || '';
-        if (msg.includes('Refresh Token')) {
-            try { await sb.auth.signOut(); } catch { }
-        }
         return 'active';
     }
+};
+
+/**
+ * Consolida Notificações, Status de Manutenção e Role do Usuário em uma ÚNICA chamada.
+ * Reduz o polling triplo do App.tsx para apenas uma requisição.
+ */
+export const getSystemPulse = async (): Promise<{
+    notifications: AppNotification[],
+    maintenance: MaintenanceData | null,
+    role: UserRole
+}> => {
+    // Carregamos em paralelo no Cloud.ts para aproveitar a latência mínima entre os serviços do Supabase
+    const [notifications, maintenance, { role }] = await Promise.all([
+        getNotifications(),
+        getMaintenanceSettings(),
+        getInitialUserData()
+    ]);
+
+    return { notifications, maintenance, role };
 };
 
 export const getInitialUserData = async (): Promise<{ role: UserRole, status: UserStatus | 'not_found' | 'error' }> => {
@@ -147,8 +189,8 @@ export const getInitialUserData = async (): Promise<{ role: UserRole, status: Us
     if (!sb) return { role: 'delivery_person' as UserRole, status: 'error' as UserStatus };
 
     try {
-        const { data: { user }, error: authError } = await sb.auth.getUser();
-        if (authError || !user) return { role: 'delivery_person' as UserRole, status: 'not_found' as any };
+        const { user } = await getUserWithCache();
+        if (!user) return { role: 'delivery_person' as UserRole, status: 'not_found' as any };
 
         const { data, error } = await sb.from('user_profiles').select('role, status').eq('id', user.id).single();
 
@@ -185,7 +227,8 @@ export const getAllUsers = async (): Promise<any[]> => {
 
     const { data, error } = await sb.from('user_profiles')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100); // Segurança: Evitar carregar milhares de usuários sem necessidade
 
     if (error) {
         console.error('Error fetching all users:', error);
@@ -695,6 +738,8 @@ export const adminGetSystemTips = async (): Promise<any[]> => {
     return data || [];
 };
 
+// function duplicate removed (getOrdersTickets)
+
 // --- STORE ADDON GROUPS (GLOBAL) ---
 
 export const getStoreAddonGroups = async (): Promise<StoreAddonGroup[]> => {
@@ -845,20 +890,26 @@ export const getShopSettings = async (): Promise<ShopSettings | null> => {
 export const getStoreProducts = async (): Promise<StoreProduct[]> => {
     const sb = getClient();
     if (!sb) return [];
-    const { data: { user } } = await sb.auth.getUser();
+    const { user } = await getUserWithCache();
     if (!user) return [];
 
     const { data, error } = await sb
         .from('products')
         .select('*')
         .eq('store_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
     if (error) {
         console.error("Error fetching products:", error);
         return [];
     }
-    return data || [];
+
+    // Mapear campos do banco para o frontend (ex: images -> image_url)
+    return (data || []).map((p: any) => ({
+        ...p,
+        image_url: p.images && p.images.length > 0 ? p.images[0] : null
+    }));
 };
 
 
@@ -916,8 +967,21 @@ export const createStoreProduct = async (product: Partial<StoreProduct>) => {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
 
+    // Sanitizar objeto para o formato do banco (tabela products)
+    const dbPayload: any = { ...product };
+
+    // 1. Converter image_url (frontend) para images (array no banco)
+    if (product.image_url) {
+        dbPayload.images = [product.image_url];
+    }
+
+    // 2. Remover campos que não existem na tabela products
+    delete dbPayload.image_url;
+    delete dbPayload.category; // O banco usa apenas category_id
+    delete dbPayload.id; // Deixar o banco gerar o ID
+
     const { error } = await sb.from('products').insert({
-        ...product,
+        ...dbPayload,
         store_id: user.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -932,14 +996,29 @@ export const updateStoreProduct = async (product: Partial<StoreProduct>) => {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
 
-    const { id, ...updates } = product;
+    // Sanitizar objeto
+    const dbPayload: any = { ...product };
+    const productId = dbPayload.id;
+
+    // 1. Map fields
+    if (product.image_url) {
+        dbPayload.images = [product.image_url];
+    }
+
+    // 2. Remove non-db fields and immutable fields
+    delete dbPayload.image_url;
+    delete dbPayload.category;
+    delete dbPayload.id; // ID vai no WHERE
+    delete dbPayload.store_id; // Não alterar dono
+    delete dbPayload.created_at; // Não alterar data de criação
+
     const { error } = await sb
         .from('products')
         .update({
-            ...updates,
+            ...dbPayload,
             updated_at: new Date().toISOString()
         })
-        .eq('id', id)
+        .eq('id', productId)
         .eq('store_id', user.id);
 
     if (error) throw error;
@@ -1027,11 +1106,22 @@ export const getApiKey = async (serviceName: string): Promise<string | null> => 
 export const adminGetPendingPartners = async (): Promise<ManagedUser[]> => {
     const sb = getClient();
     if (!sb) return [];
-    const { data } = await sb.from('user_profiles').select('*').eq('role', 'DELIVERY_PARTNER'); // Filter by pending status in real app via join
-    // Mock filter based on partner_profiles
-    const profiles = await sb.from('partner_profiles').select('user_id').eq('verification_status', 'PENDING_REVIEW');
-    const ids = profiles.data?.map(p => p.user_id) || [];
-    return data?.filter(u => ids.includes(u.id)) || [];
+
+    // Otimização: Consulta única trazendo perfis de usuário que possuem perfil de parceiro pendente
+    const { data, error } = await sb
+        .from('user_profiles')
+        .select(`
+            *,
+            partner_profile:partner_profiles!inner(verification_status)
+        `)
+        .eq('partner_profiles.verification_status', 'PENDING_REVIEW')
+        .limit(100);
+
+    if (error) {
+        console.error('Error fetching pending partners:', error);
+        return [];
+    }
+    return data || [];
 };
 
 export const adminGetPartnerDetails = async (userId: string): Promise<{ profile: PartnerProfile, documents: PartnerDocument[] }> => {
@@ -1171,8 +1261,6 @@ export const adminUpdateCityStatus = async (id: string, isActive: boolean) => {
 
 // function removed (duplicate/corrupted)
 
-// function removed (duplicate/corrupted)
-
 export const getAvailableCities = async (term?: string): Promise<City[]> => {
     const sb = getClient();
     if (!sb) return [];
@@ -1202,6 +1290,8 @@ export const adminUpdatePayoutSettings = async (settings: Partial<PayoutSettings
     if (!sb) return;
     await sb.from('payout_settings').update(settings).eq('id', true); // Assuming singleton
 };
+
+// function duplicate removed (getStoreCollaborators)
 
 export const adminGetPayoutHistory = async (): Promise<any[]> => {
     const sb = getClient();
@@ -1497,8 +1587,8 @@ export const getShopData = async () => {
     const sb = getClient();
     if (!sb) return { products: [], categories: [], settings: null };
     const [p, c, s] = await Promise.all([
-        sb.from('products').select('*').eq('is_active', true),
-        sb.from('categories').select('*'),
+        sb.from('products').select('*').eq('is_active', true).limit(100), // Otimização: Limitar carregamento inicial da loja
+        sb.from('categories').select('*').limit(50),
         sb.from('shop_settings').select('*').single()
     ]);
     return { products: p.data || [], categories: c.data || [], settings: s.data };
@@ -1507,15 +1597,15 @@ export const getShopData = async () => {
 export const createOrder = async (order: Partial<Order>) => {
     const sb = getClient();
     if (!sb) throw new Error("No client");
-    const { data: { user } } = await sb.auth.getUser();
+    const { user } = await getUserWithCache();
     if (!user) throw new Error("Login required");
 
     // Garantir que o pedido tenha os campos básicos necessários e estrutura limpa
     const newOrder = {
         ...order,
         store_id: order.store_id || user.id, // Se for pedido interno, store_id é o próprio usuário logado
-        user_id: order.origin === 'INTERNAL' ? null : user.id,
-        status: order.status || 'pending_payment',
+        user_id: (order.origin === 'INTERNAL' || !order.user_id) ? null : order.user_id,
+        status: order.status || 'PENDING', // Default to UPPERCASE 'PENDING' matching DB Enum
         origin: order.origin || 'INTERNAL',
         created_at: new Date().toISOString()
     };
@@ -1562,7 +1652,7 @@ export const getMyOrders = async (): Promise<Order[]> => {
 export const getMyWallet = async (): Promise<StoreWallet | null> => {
     const sb = getClient();
     if (!sb) throw new Error("Client not ready");
-    const { data: { user } } = await sb.auth.getUser();
+    const { user } = await getUserWithCache();
     if (!user) return null;
     const { data } = await sb.from('store_wallets').select('*').eq('store_id', user.id).single();
     return data;
@@ -1592,31 +1682,25 @@ export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
     if (!sb) return [];
 
     try {
-        // 1. Buscar TODOS os Usuários do sistema
-        const { data: users, error: usersError } = await sb
-            .from('user_profiles')
-            .select('id, name, email, role, is_super_store')
-            .order('name');
+        // Otimização: Usar RPC ou JOIN se possível. 
+        // Como o esquema atual separa perfis de carteiras em tabelas diferentes,
+        // vamos fazer o fetch de forma um pouco mais eficiente ou usar um RPC se existisse.
+        // Por enquanto, vamos manter o fetch mas garantir que seja rápido.
 
-        if (usersError) throw usersError;
-        if (!users) return [];
+        const [usersRes, walletsRes] = await Promise.all([
+            sb.from('user_profiles').select('id, name, email, role, is_super_store').order('name'),
+            sb.from('store_wallets').select('store_id, balance_decimal')
+        ]);
 
-        // 2. Buscar Carteiras Unificadas (store_wallets usada para todos)
-        const { data: wallets, error: wError } = await sb
-            .from('store_wallets')
-            .select('store_id, balance_decimal');
+        if (usersRes.error) throw usersRes.error;
+        if (!usersRes.data) return [];
 
-        if (wError) console.error("Erro ao buscar store_wallets", wError);
-        // 3. Mapear Dados
         const walletMap = new Map<string, number>();
-
-        // Preencher mapa com carteiras
-        wallets?.forEach((w: any) => {
+        walletsRes.data?.forEach((w: any) => {
             walletMap.set(w.store_id, Number(w.balance_decimal || 0));
         });
 
-        // Montar resultado final
-        const result: AdminWalletUser[] = users.map(u => ({
+        return usersRes.data.map(u => ({
             user_id: u.id,
             name: u.name || u.email || 'Sem Nome',
             email: u.email || '',
@@ -1624,8 +1708,6 @@ export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
             balance: walletMap.get(u.id) || 0,
             is_super_store: u.is_super_store
         }));
-
-        return result;
 
     } catch (error) {
         console.error("adminGetAllWallets error:", error);
@@ -1657,28 +1739,32 @@ export const adminAdjustBalance = async (userId: string, amount: number, reason:
 
 // --- PARTNER REQUESTS ---
 
-export const getStoreRequests = async (limit: number = 50): Promise<PartnerRequest[]> => {
+export const getStoreRequests = async (limitNum: number = 20): Promise<PartnerRequest[]> => {
     const sb = getClient();
     if (!sb) return [];
     try {
-        const { data: { user } } = await sb.auth.getUser();
+        const { user } = await getUserWithCache();
         if (!user) return [];
         // Otimização: buscar apenas os mais recentes e limitar quantidade
         const { data, error } = await sb
             .from('partner_requests')
-            .select('*')
+            .select(`
+                *,
+                partner:partner_id (
+                    id,
+                    name,
+                    vehicle_type
+                )
+            `)
             .eq('store_id', user.id)
-            .neq('status', 'COMPLETED') // Mantém filtro de ativos
             .order('created_at', { ascending: false })
-            .limit(limit); // Limite hardcoded para evitar sobrecarga
+            .limit(Math.min(limitNum, 100)); // Segurança: Limite máximo de 100
 
         if (error) {
-            // console.error('[getStoreRequests] error:', error);
             return [];
         }
         return data || [];
     } catch (err) {
-        // console.error('[getStoreRequests] exception:', err);
         return [];
     }
 };
@@ -2243,103 +2329,20 @@ export const getAdminDashboardStats = async (): Promise<AdminDashboardStats | nu
     if (!sb) return null;
 
     try {
-        const now = new Date();
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayIso = today.toISOString();
+        // Otimização Crítica: Usar o novo RPC v2 para consolidar ~15 chamadas em 1 única
+        const { data, error } = await sb.rpc('get_admin_dashboard_stats_v2');
 
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayIso = yesterday.toISOString();
-
-        const monthAgo = new Date();
-        monthAgo.setDate(monthAgo.getDate() - 30);
-        const monthIso = monthAgo.toISOString();
-
-        const twoMonthsAgo = new Date();
-        twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
-        const twoMonthsIso = twoMonthsAgo.toISOString();
-
-        // 1. Pedidos (Partner Requests)
-        const { count: reqsToday } = await sb.from('partner_requests').select('id', { count: 'exact', head: true }).gte('created_at', todayIso);
-        const { count: reqsYesterday } = await sb.from('partner_requests').select('id', { count: 'exact', head: true }).gte('created_at', yesterdayIso).lt('created_at', todayIso);
-        const { count: reqsWeek } = await sb.from('partner_requests').select('id', { count: 'exact', head: true }).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString());
-        const { count: reqsMonth } = await sb.from('partner_requests').select('id', { count: 'exact', head: true }).gte('created_at', monthIso);
-        const { count: reqsTotal } = await sb.from('partner_requests').select('id', { count: 'exact', head: true });
-
-        // Order Trend (%)
-        let orderTrend = 0;
-        const tCount = reqsToday || 0;
-        const yCount = reqsYesterday || 0;
-        if (yCount > 0) orderTrend = ((tCount - yCount) / yCount) * 100;
-        else if (tCount > 0) orderTrend = 100;
-
-        // Graph Data: Últimos 7 dias
-        const graphData: { date: string, count: number }[] = [];
-        for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            d.setHours(0, 0, 0, 0);
-            const start = d.toISOString();
-            const next = new Date(d);
-            next.setDate(d.getDate() + 1);
-            const end = next.toISOString();
-
-            const { count } = await sb.from('partner_requests')
-                .select('id', { count: 'exact', head: true })
-                .gte('created_at', start)
-                .lt('created_at', end);
-
-            graphData.push({ date: start.split('T')[0], count: count || 0 });
+        if (error) {
+            console.error("Error fetching admin stats via RPC v2:", error);
+            // Fallback para lógica antiga ou erro controlado?
+            // Como estamos em produção e queremos performance, vamos logar e retornar null para o admin ver o erro.
+            throw error;
         }
 
-        // 2. Financeiro (Mensal vs Anterior)
-        const { data: currentMonthData } = await sb.from('partner_requests')
-            .select('total_charged_store, net_value_partner')
-            .eq('status', 'COMPLETED')
-            .gte('created_at', monthIso);
-
-        const { data: prevMonthData } = await sb.from('partner_requests')
-            .select('total_charged_store, net_value_partner')
-            .eq('status', 'COMPLETED')
-            .gte('created_at', twoMonthsIso)
-            .lt('created_at', monthIso);
-
-        const calcFinance = (data: any[] | null) => {
-            let gmv = 0;
-            let rev = 0;
-            data?.forEach(r => {
-                const total = Number(r.total_charged_store) || 0;
-                const net = Number(r.net_value_partner) || 0;
-                gmv += total;
-                rev += (total - net);
-            });
-            return { gmv, rev };
-        };
-
-        const currentFinance = calcFinance(currentMonthData);
-        const prevFinance = calcFinance(prevMonthData);
-
-        const gmvTrend = prevFinance.gmv > 0 ? ((currentFinance.gmv - prevFinance.gmv) / prevFinance.gmv) * 100 : (currentFinance.gmv > 0 ? 100 : 0);
-        const revenueTrend = prevFinance.rev > 0 ? ((currentFinance.rev - prevFinance.rev) / prevFinance.rev) * 100 : (currentFinance.rev > 0 ? 100 : 0);
-        const averageTicket = (currentMonthData?.length || 0) > 0 ? currentFinance.gmv / currentMonthData!.length : 0;
-
-        // 3. Usuários
-        const { count: storesActive } = await sb.from('user_profiles').select('id', { count: 'exact', head: true }).eq('role', 'store_partner').eq('is_active', true);
-        const { count: storesTotal } = await sb.from('user_profiles').select('id', { count: 'exact', head: true }).eq('role', 'store_partner');
-        const { count: driversOnline } = await sb.from('user_profiles').select('id', { count: 'exact', head: true }).in('role', ['delivery_partner', 'delivery_person']).eq('is_available', true);
-        const { count: driversTotal } = await sb.from('user_profiles').select('id', { count: 'exact', head: true }).in('role', ['delivery_partner', 'delivery_person']);
-
-        return {
-            orders: { today: reqsToday || 0, week: reqsWeek || 0, month: reqsMonth || 0, total: reqsTotal || 0, graphData, trend: orderTrend },
-            finance: { gmv: currentFinance.gmv, platformRevenue: currentFinance.rev, averageTicket, gmvTrend, revenueTrend },
-            users: {
-                stores: { active: storesActive || 0, total: storesTotal || 0 },
-                drivers: { online: driversOnline || 0, total: driversTotal || 0 }
-            }
-        };
+        // A estrutura retornada pelo JSONB no SQL mapeia com o objeto AdminDashboardStats
+        return data as AdminDashboardStats;
     } catch (error) {
-        // console.error("Error fetching admin stats:", error);
+        console.error("Error in getAdminDashboardStats:", error);
         return null;
     }
 };
@@ -2857,6 +2860,14 @@ export const getOrdersTickets = async (storeId: string) => {
     const { data, error } = await sb.from('orders_tickets')
         .select(`
             *,
+            orders (
+                id,
+                customer_name,
+                order_type,
+                status,
+                total_price,
+                created_at
+            ),
             orders_collaborators (
                 table_identifier,
                 customer_name
@@ -2876,38 +2887,15 @@ export const updateTicketStatus = async (ticketId: string, status: string) => {
     const sb = getClient();
     if (!sb) return;
 
-    // 1. Atualiza o ticket e busca informações
-    const { data: ticket, error } = await sb.from('orders_tickets')
-        .update({ status })
-        .eq('id', ticketId)
-        .select('general_order_id, order_id')
-        .single();
+    // Usar RPC para garantir permissões (especialmente para colaboradores)
+    const { error } = await sb.rpc('update_ticket_status', {
+        p_ticket_id: ticketId,
+        p_status: status
+    });
 
     if (error) {
         console.error('updateTicketStatus error', error);
         throw error;
-    }
-
-    // 2. Se for finalizado (ready), atualiza o status do pedido principal
-    if (status === 'ready' && ticket?.general_order_id) {
-        // Busca o pedido para saber o tipo
-        const { data: order } = await sb.from('orders')
-            .select('delivery_mode, order_type, driver_id')
-            .eq('id', ticket.general_order_id)
-            .single();
-
-        if (order) {
-            let nextStatus = 'ready'; // Padrão: pronto
-
-            // Se for entrega com entregador fixo, vai direto para trânsito
-            if (order.order_type === 'DELIVERY' && order.driver_id) {
-                nextStatus = 'in_transit';
-            }
-
-            await sb.from('orders')
-                .update({ status: nextStatus })
-                .eq('id', ticket.general_order_id);
-        }
     }
 };
 

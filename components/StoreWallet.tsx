@@ -191,19 +191,18 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
         // Carregamento inicial paralelo
         loadAllData(false);
 
-        // Setup polling otimizado
-        const interval = setInterval(() => {
-            // Polling silencioso apenas de dados voláteis (Carteira e Pedidos)
-            Promise.all([
-                cloud.getStoreRequests(50).catch(() => []),
-                cloud.getMyWallet().catch(() => null)
-            ]).then(([reqs, wal]) => {
-                if (reqs) setRequests(reqs as any);
-                if (wal) setWallet(wal as any);
-            });
-        }, 15000);
+        // Otimização: Em vez de polling fixo, reagimos aos eventos de atualização do sistema (Pulse)
+        const handleRefresh = () => {
+            loadAllData(true);
+        };
 
-        return () => clearInterval(interval);
+        window.addEventListener('refreshNotifications', handleRefresh);
+        window.addEventListener('refreshUserRole', handleRefresh);
+
+        return () => {
+            window.removeEventListener('refreshNotifications', handleRefresh);
+            window.removeEventListener('refreshUserRole', handleRefresh);
+        };
     }, []);
 
     // const handleRecharge = (amount: number, method: 'PIX') => cloud.createRechargeCharge(amount, method);

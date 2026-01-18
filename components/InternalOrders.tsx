@@ -186,10 +186,17 @@ export const InternalOrders: React.FC = () => {
         }
     };
 
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
     const loadTickets = async () => {
         if (currentUserId) {
-            const data = await cloud.getOrdersTickets(currentUserId);
-            setTickets(data);
+            setIsRefreshing(true);
+            try {
+                const data = await cloud.getOrdersTickets(currentUserId);
+                setTickets(data);
+            } finally {
+                setIsRefreshing(false);
+            }
         }
     };
 
@@ -535,8 +542,12 @@ export const InternalOrders: React.FC = () => {
         try {
             const data = await cloud.getUnifiedOrderHistory(currentUserId);
             setHistoryOrders(data);
-        } catch (error) {
-            console.error('Error loading unified history:', error);
+        } catch (error: any) {
+            console.error('Error loading unified history:', error?.message || error);
+            // Tenta logar detalhes se for objeto
+            if (typeof error === 'object') {
+                try { console.error('History Error Details:', JSON.stringify(error)); } catch (e) { }
+            }
         } finally {
             setLoadingHistory(false);
         }
@@ -552,8 +563,11 @@ export const InternalOrders: React.FC = () => {
 
             const data = await cloud.getUnifiedActiveOrders(user.id);
             setActiveOrders(data || []);
-        } catch (error) {
-            console.error('Error loading unified active orders:', error);
+        } catch (error: any) {
+            console.error('Error loading unified active orders:', error?.message || error);
+            if (typeof error === 'object') {
+                try { console.error('Active Orders Error Details:', JSON.stringify(error)); } catch (e) { }
+            }
         } finally {
             setLoading(false);
         }
@@ -805,7 +819,8 @@ export const InternalOrders: React.FC = () => {
                 custom_payment_label: paymentMethod === 'OTHER' ? customPaymentLabel : undefined,
                 order_type: orderType,
                 delivery_mode: orderType === 'DELIVERY' ? (deliveryMode || undefined) : undefined,
-                driver_id: deliveryMode === 'ASSOCIATE' ? selectedAssociateId : undefined
+                driver_id: deliveryMode === 'ASSOCIATE' ? selectedAssociateId : undefined,
+                status: paymentTiming === 'ONLINE' ? 'CONFIRMED' : 'PENDING'
             });
 
             setLastOrder(order);
@@ -1675,61 +1690,66 @@ export const InternalOrders: React.FC = () => {
                             </div>
 
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                {loading ? (
-                                    <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
-                                ) : activeOrders.length === 0 ? (
-                                    <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
-                                        <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-                                            <Coffee className="w-8 h-8 text-gray-300" />
-                                        </div>
-                                        <p className="text-gray-400 font-bold italic">Nenhuma mesa ou pedido ativo no momento.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
-                                        {activeOrders.map(table => (
-                                            <div key={table.id} className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[32px] border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all group">
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div>
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <span className={`text-white text-[10px] font-black px-3 py-1 rounded-full uppercase ${table.origin === 'COLLABORATOR' ? 'bg-brand-600' : 'bg-blue-600'}`}>
-                                                                {table.origin === 'COLLABORATOR' ? table.table_identifier : 'BALCÃO'}
-                                                            </span>
-                                                            <span className="text-[10px] text-gray-400 font-bold">
-                                                                <Clock className="w-3 h-3 inline mr-1" />
-                                                                {new Date(table.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                            </span>
-                                                        </div>
-                                                        <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">{table.customer_name || 'Pedido Sem Nome'}</h3>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[9px] text-gray-400 font-black uppercase mb-1">Total</p>
-                                                        <p className="text-xl font-black text-brand-600 italic">
-                                                            R$ {Number(table.total_amount || 0).toFixed(2)}
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                {(() => {
+                                    // Filtra para mostrar apenas mesas na aba Mesas
+                                    const mesaOrders = activeOrders.filter(o => o.origin === 'COLLABORATOR');
 
-                                                <div className="bg-white/50 dark:bg-gray-800/50 rounded-2xl p-3 mb-4 max-h-32 overflow-y-auto text-xs space-y-2 border border-black/5">
-                                                    {table.items?.map((item: any, idx: number) => (
-                                                        <div key={idx} className="flex justify-between">
-                                                            <span className="text-gray-500 font-bold">{item.quantity}x <span className="text-gray-800 dark:text-gray-200">{item.name}</span></span>
-                                                            <span className="font-bold">R$ {item.total_price.toFixed(2)}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <div className="flex gap-2">
-                                                    <Button fullWidth variant="secondary" onClick={() => {
-                                                        const order = { ...table, created_at: table.created_at || new Date().toISOString() };
-                                                        setLastOrder(order);
-                                                        setShowPrintPreview(true);
-                                                    }} className="rounded-2xl text-xs py-3">Conferir</Button>
-                                                    <Button fullWidth onClick={() => handleCloseTable(table)} className="rounded-2xl text-xs py-3 bg-green-600 hover:bg-green-700">Finalizar</Button>
-                                                </div>
+                                    return loading ? (
+                                        <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
+                                    ) : mesaOrders.length === 0 ? (
+                                        <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                            <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                                                <Coffee className="w-8 h-8 text-gray-300" />
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
+                                            <p className="text-gray-400 font-bold italic">Nenhuma mesa ativa no momento.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
+                                            {mesaOrders.map(table => (
+                                                <div key={table.id} className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[32px] border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all group">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className={`text-white text-[10px] font-black px-3 py-1 rounded-full uppercase ${table.origin === 'COLLABORATOR' ? 'bg-brand-600' : 'bg-blue-600'}`}>
+                                                                    {table.origin === 'COLLABORATOR' ? table.table_identifier : 'BALCÃO'}
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-400 font-bold">
+                                                                    <Clock className="w-3 h-3 inline mr-1" />
+                                                                    {new Date(table.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                </span>
+                                                            </div>
+                                                            <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">{table.customer_name || 'Pedido Sem Nome'}</h3>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-[9px] text-gray-400 font-black uppercase mb-1">Total</p>
+                                                            <p className="text-xl font-black text-brand-600 italic">
+                                                                R$ {Number(table.total_amount || 0).toFixed(2)}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-white/50 dark:bg-gray-800/50 rounded-2xl p-3 mb-4 max-h-32 overflow-y-auto text-xs space-y-2 border border-black/5">
+                                                        {table.items?.map((item: any, idx: number) => (
+                                                            <div key={idx} className="flex justify-between">
+                                                                <span className="text-gray-500 font-bold">{item.quantity}x <span className="text-gray-800 dark:text-gray-200">{item.name}</span></span>
+                                                                <span className="font-bold">R$ {(item.total_price || (item.quantity * item.price) || 0).toFixed(2)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    <div className="flex gap-2">
+                                                        <Button fullWidth variant="secondary" onClick={() => {
+                                                            const order = { ...table, created_at: table.created_at || new Date().toISOString() };
+                                                            setLastOrder(order);
+                                                            setShowPrintPreview(true);
+                                                        }} className="rounded-2xl text-xs py-3">Conferir</Button>
+                                                        <Button fullWidth onClick={() => handleCloseTable(table)} className="rounded-2xl text-xs py-3 bg-green-600 hover:bg-green-700">Finalizar</Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                })()}
                             </div>
                         </div>
                     ) : view === 'PRODUCTION' ? (
@@ -1739,8 +1759,9 @@ export const InternalOrders: React.FC = () => {
                                     <h2 className="text-2xl font-bold dark:text-white uppercase tracking-tight">Produção e Entrega</h2>
                                     <p className="text-gray-500 text-sm">Gerencie pedidos por etapa do fluxo</p>
                                 </div>
-                                <Button size="sm" variant="secondary" onClick={loadTickets} className="rounded-xl h-10 px-4">
-                                    Atualizar
+                                <Button size="sm" variant="secondary" onClick={loadTickets} className="rounded-xl h-10 px-4 flex items-center gap-2" disabled={isRefreshing}>
+                                    {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <HistoryIcon className="w-4 h-4" />}
+                                    {isRefreshing ? 'Atualizando...' : 'Atualizar'}
                                 </Button>
                             </div>
 
@@ -1830,30 +1851,29 @@ export const InternalOrders: React.FC = () => {
                                 let filteredTickets = tickets;
 
                                 if (productionTab === 'QUEUE') {
-                                    // Fila: pending ou producing
-                                    filteredTickets = tickets.filter(t => t.status === 'pending' || t.status === 'producing');
+                                    // Fila: Apenas pendentes (aguardando início)
+                                    filteredTickets = tickets.filter(t => t.status === 'pending');
                                 } else if (productionTab === 'DELIVERY') {
-                                    // Entrega: ready + tipo DELIVERY
-                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type === 'DELIVERY');
+                                    // Entrega: producing, ready ou in_transit + tipo DELIVERY
+                                    filteredTickets = tickets.filter(t => (t.status === 'producing' || t.status === 'ready' || t.status === 'in_transit') && t.orders?.order_type === 'DELIVERY');
                                 } else if (productionTab === 'PICKUP') {
-                                    // Retirada: ready + tipo PICKUP
-                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type === 'PICKUP');
+                                    // Retirada: producing ou ready + tipo PICKUP
+                                    filteredTickets = tickets.filter(t => (t.status === 'producing' || t.status === 'ready') && t.orders?.order_type === 'PICKUP');
                                 } else if (productionTab === 'LOCAL') {
-                                    // Local: ready + tipo LOCAL
-                                    filteredTickets = tickets.filter(t => t.status === 'ready' && (t.orders?.order_type === 'LOCAL' || !t.orders?.order_type));
+                                    // Local: producing ou ready + tipo LOCAL
+                                    filteredTickets = tickets.filter(t => (t.status === 'producing' || t.status === 'ready') && (t.orders?.order_type === 'LOCAL' || !t.orders?.order_type));
                                 } else if (productionTab === 'HISTORY') {
                                     // Histórico: completed ou delivered + filtro de data
                                     filteredTickets = tickets.filter(t => {
                                         if (t.status !== 'completed' && t.status !== 'delivered') return false;
 
                                         // Filtro de data
-                                        // Filtro de data: Normalizar para YYYY-MM-DD para evitar problemas de fuso horário
                                         const ticketDateStr = new Date(t.created_at).toISOString().split('T')[0];
                                         const isSameDay = ticketDateStr === historyDateFilter;
                                         if (!isSameDay) return false;
 
                                         // Filtro de hora
-                                        const ticketDate = new Date(t.created_at); // Define ticketDate as a Date object
+                                        const ticketDate = new Date(t.created_at);
                                         const ticketTime = ticketDate.toTimeString().slice(0, 5); // HH:MM
                                         return ticketTime >= historyTimeStart && ticketTime <= historyTimeEnd;
                                     });
@@ -1864,12 +1884,12 @@ export const InternalOrders: React.FC = () => {
                                         <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
                                             <Printer className="w-8 h-8 text-gray-300" />
                                         </div>
-                                        <p className="text-gray-400 font-bold italic">Nenhum pedido na fila no momento.</p>
+                                        <p className="text-gray-400 font-bold italic">Nenhum pedido nesta etapa.</p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
-                                        {tickets.map(ticket => (
-                                            <div key={ticket.id} className={`p-6 rounded-[32px] border transition-all group ${ticket.status === 'producing' ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-900/50 dark:border-gray-700'}`}>
+                                        {filteredTickets.map(ticket => (
+                                            <div key={ticket.id} className={`p-6 rounded-[32px] border transition-all group ${ticket.status === 'producing' ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800' : ticket.status === 'in_transit' ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-900/50 dark:border-gray-700'}`}>
                                                 <div className="flex justify-between items-start mb-4 pb-4 border-b border-gray-200/50 dark:border-gray-700/50">
                                                     <div>
                                                         <div className="flex items-center gap-2 mb-2">
@@ -1882,6 +1902,11 @@ export const InternalOrders: React.FC = () => {
                                                             {ticket.status === 'producing' && (
                                                                 <span className="flex items-center gap-1 text-[10px] text-orange-600 font-black uppercase animate-pulse">
                                                                     <Loader2 className="w-3 h-3 animate-spin" /> Produzindo
+                                                                </span>
+                                                            )}
+                                                            {ticket.status === 'in_transit' && (
+                                                                <span className="flex items-center gap-1 text-[10px] text-blue-600 font-black uppercase">
+                                                                    <Truck className="w-3 h-3" /> Em Rota
                                                                 </span>
                                                             )}
                                                         </div>
@@ -1923,33 +1948,49 @@ export const InternalOrders: React.FC = () => {
 
                                                 <div className="flex gap-2 mt-auto">
                                                     {productionTab === 'QUEUE' ? (
-                                                        // FILA DE PRODUÇÃO: Iniciar/Finalizar
-                                                        ticket.status === 'pending' ? (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                Iniciar Preparo
-                                                            </Button>
-                                                        ) : ticket.status === 'producing' ? (
+                                                        // FILA DE PRODUÇÃO: Apenas Iniciar
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                            Iniciar Preparo
+                                                        </Button>
+                                                    ) : productionTab === 'DELIVERY' ? (
+                                                        // ENTREGA
+                                                        ticket.status === 'producing' ? (
                                                             <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                Finalizar Pedido
+                                                                Finalizar Produção
+                                                            </Button>
+                                                        ) : ticket.status === 'ready' ? (
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'in_transit')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                <Truck className="w-4 h-4" /> Marcar Em Trânsito
+                                                            </Button>
+                                                        ) : ticket.status === 'in_transit' ? (
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                <CheckCircle className="w-4 h-4" /> Confirmar Entrega
                                                             </Button>
                                                         ) : null
-                                                    ) : productionTab === 'DELIVERY' ? (
-                                                        // ENTREGA: Marcar em trânsito
-                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'in_transit')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                            <Truck className="w-4 h-4" /> Marcar Em Trânsito
-                                                        </Button>
                                                     ) : productionTab === 'PICKUP' ? (
-                                                        // RETIRADA: Cliente retirou
-                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'completed')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                            <ShoppingCart className="w-4 h-4" /> Cliente Retirou
-                                                        </Button>
+                                                        // RETIRADA
+                                                        ticket.status === 'producing' ? (
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                Finalizar Produção
+                                                            </Button>
+                                                        ) : (
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'completed')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                <ShoppingCart className="w-4 h-4" /> Cliente Retirou
+                                                            </Button>
+                                                        )
                                                     ) : productionTab === 'LOCAL' ? (
-                                                        // LOCAL: Finalizar mesa
-                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'completed')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                            <Utensils className="w-4 h-4" /> Finalizar Mesa
-                                                        </Button>
+                                                        // LOCAL
+                                                        ticket.status === 'producing' ? (
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                Finalizar Produção
+                                                            </Button>
+                                                        ) : (
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'completed')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                <Utensils className="w-4 h-4" /> Encerrar Pedido
+                                                            </Button>
+                                                        )
                                                     ) : productionTab === 'HISTORY' ? (
-                                                        // HISTÓRICO: Apenas visualização
+                                                        // HISTÓRICO
                                                         <div className="w-full text-center py-2 bg-green-50 dark:bg-green-900/20 text-green-600 font-black uppercase text-[10px] rounded-xl flex items-center justify-center gap-2">
                                                             <CheckCircle className="w-4 h-4" /> Finalizado
                                                         </div>

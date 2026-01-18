@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import * as whatsappController from '../controllers/whatsappController.js';
+import multer from 'multer';
+
+const upload = multer();
 
 const router = Router();
 
@@ -53,15 +56,32 @@ router.post('/send/text', whatsappController.sendTextMessage);
 
 /**
  * @swagger
- * /api/whatsapp/conversations:
- *   get:
- *     summary: Lista todas as conversas
+ * /api/whatsapp/send/audio:
+ *   post:
+ *     summary: Envia uma mensagem de áudio (PTT)
  *     tags: [WhatsApp]
- *     responses:
- *       200:
- *         description: Uma lista de conversas
  */
+router.post('/send/audio', upload.single('audio'), whatsappController.sendAudioMessage);
+
 router.get('/conversations', whatsappController.getConversations);
+
+/**
+ * @swagger
+ * /api/whatsapp/conversations/order:
+ *   get:
+ *     summary: Obtém a ordem manual das conversas
+ *     tags: [WhatsApp]
+ */
+router.get('/conversations/order', whatsappController.getConversationOrder);
+
+/**
+ * @swagger
+ * /api/whatsapp/conversations/order:
+ *   post:
+ *     summary: Salva a ordem manual das conversas
+ *     tags: [WhatsApp]
+ */
+router.post('/conversations/order', whatsappController.saveConversationOrder);
 
 /**
  * @swagger
@@ -199,5 +219,25 @@ router.post('/send/document', whatsappMediaController.uploadMiddleware, whatsapp
  *     tags: [WhatsApp]
  */
 router.post('/restart', whatsappController.restartService);
+
+router.post('/restart', whatsappController.restartService);
+
+/**
+ * @swagger
+ * /api/whatsapp/conversations/{conversationId}/priority:
+ *   patch:
+ *     summary: Atualiza a prioridade de uma conversa
+ *     tags: [WhatsApp]
+ */
+router.patch('/conversations/:conversationId/priority', whatsappController.updatePriority);
+
+/**
+ * @swagger
+ * /api/whatsapp/conversations/{conversationId}:
+ *   delete:
+ *     summary: Deleta uma conversa sincronizado com o aparelho
+ *     tags: [WhatsApp]
+ */
+router.delete('/conversations/:conversationId', whatsappController.deleteConversation);
 
 export default router;

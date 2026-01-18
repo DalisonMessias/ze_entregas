@@ -8,6 +8,7 @@ import http from 'http';
 import streetsNeighborhoodsRoutes from './routes/streetsNeighborhoods.js';
 import integrationRoutes from './routes/integration.js';
 import whatsappRoutes from './routes/whatsapp.js';
+import zeAssistantRoutes from './routes/zeAssistant.js';
 import { initializeWebSocket } from './websocket.js';
 import './services/whatsappService.js'; // Importa para inicializar o serviço
 import { supabaseAdmin } from './services/supabaseClient.js';
@@ -37,6 +38,8 @@ app.use((req, res, next) => {
 app.use('/api/streets-neighborhoods', streetsNeighborhoodsRoutes);
 app.use('/api/v1', integrationRoutes);
 app.use('/api/whatsapp', whatsappRoutes); // Usar rotas do WhatsApp
+app.use('/api/ze-assistant', zeAssistantRoutes); // Usar rotas do Zé Assistente
+
 
 // Rota de health check
 app.get('/health', (req, res) => {
@@ -74,18 +77,22 @@ server.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n🚀 SERVIDOR WHATSAPP LIGADO`);
   console.log(`🔌 Porta: ${PORT}`);
 
-  // Teste básico de Supabase no boot
+  // Teste de integridade multi-loja no boot
   try {
-    const { error, data } = await supabaseAdmin.from('whatsapp_sessions').select('count', { count: 'exact', head: true });
+    const { error } = await supabaseAdmin.from('whatsapp_sessions').select('store_id').limit(1);
     if (error) {
-      console.error('❌ ERRO DE CONEXÃO COM SUPABASE:', error);
-      console.error('👉 Código do erro:', error.code);
-      console.error('👉 Detalhes:', error.details || error.message);
+      console.error('\n❌ ERRO DE CONFIGURAÇÃO DO BANCO DE DADOS:');
+      if (error.message.includes('column "store_id" does not exist')) {
+        console.error('👉 A coluna "store_id" está faltando nas tabelas do WhatsApp.');
+        console.error('👉 AÇÃO REQUERIDA: Abra o arquivo "supabase/migrations/supabase_global.sql" e execute o conteúdo das Linhas 7100 até o final no SQL Editor do seu Supabase.');
+      } else {
+        console.error(`👉 Erro: ${error.message}`);
+      }
     } else {
-      console.log('✅ Conexão com Supabase: OK');
+      console.log('✅ Conexão com Supabase e colunas Multi-Loja: OK');
     }
   } catch (e: any) {
-    console.error('🔥 FALHA CATASTRÓFICA AO ACESSAR SUPABASE:', e);
+    console.error('🔥 FALHA AO VALIDAR ESTRUTURA DO BANCO:', e.message);
   }
 
   const base = `http://localhost:${PORT}`;

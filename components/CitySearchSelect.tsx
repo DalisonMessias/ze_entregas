@@ -104,7 +104,7 @@ export const CitySearchSelect: React.FC<CitySearchSelectProps> = ({
                     </div>
 
                     {/* Results List */}
-                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                    <div className="max-h-[50vh] min-h-[200px] md:max-h-60 overflow-y-auto custom-scrollbar overscroll-contain">
                         {loading && (
                             <div className="p-8 text-center">
                                 <Loader2 className="w-6 h-6 animate-spin text-brand-500 mx-auto" />

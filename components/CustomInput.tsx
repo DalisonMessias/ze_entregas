@@ -5,6 +5,8 @@ interface CustomInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     mask?: 'currency' | 'phone' | 'cpf' | 'cnpj' | 'cep';
     icon?: React.ElementType;
     helperText?: string;
+    error?: string | boolean;
+    success?: boolean;
 }
 
 export const CustomInput: React.FC<CustomInputProps> = ({
@@ -15,12 +17,11 @@ export const CustomInput: React.FC<CustomInputProps> = ({
     onChange,
     className = '',
     helperText,
+    error,
+    success,
     ...props
 }) => {
     const [displayValue, setDisplayValue] = useState('');
-
-    // ... (logic remains same)
-    // Currency Formatter logic...
 
     useEffect(() => {
         if (mask === 'currency' && (value !== undefined && value !== null && value !== '')) {
@@ -36,9 +37,6 @@ export const CustomInput: React.FC<CustomInputProps> = ({
                 setDisplayValue(valStr);
             }
         } else {
-            // Se value for 0 (número), String(0) é "0". Se for 0, queremos mostrar "0,00" se for currency?
-            // Na verdade, se value for 0 e for currency, o if acima já pegaria se não fosse falsy.
-            // Ajustando a lógica do if acima para pegar o 0.
             setDisplayValue(String(value ?? ''));
         }
     }, [value, mask]);
@@ -60,8 +58,6 @@ export const CustomInput: React.FC<CustomInputProps> = ({
             const formatted = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             setDisplayValue(formatted);
             if (onChange) {
-                // Passa o valor formatado para o onChange. O pai deve saber lidar ou limpar se quiser o raw.
-                // Idealmente, componentes controlados deveriam receber o valor raw, mas aqui estamos emulando máscara.
                 const syntheticEvent = { ...e, target: { ...e.target, value: formatted } } as any;
                 onChange(syntheticEvent);
             }
@@ -119,21 +115,42 @@ export const CustomInput: React.FC<CustomInputProps> = ({
 
     return (
         <div className={`w-full ${className}`}>
-            {label && <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">{label}</label>}
-            <div className="relative">
+            {label && (
+                <label className={`block text-xs font-bold mb-1 transition-colors ${error ? 'text-red-500' : success ? 'text-green-500' : 'text-gray-500 dark:text-gray-400'
+                    }`}>
+                    {label}
+                </label>
+            )}
+            <div className="relative group">
                 {Icon && (
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 z-10">
-                        <Icon className="w-4 h-4" />
+                    <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors z-10 ${error ? 'text-red-400' : success ? 'text-green-400' : 'text-gray-400 dark:text-gray-500 group-focus-within:text-brand-500'
+                        }`}>
+                        <Icon className="w-5 h-5" />
                     </div>
                 )}
                 <input
                     {...props}
                     value={displayValue}
                     onChange={handleChange}
-                    className={`w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-gray-700 dark:text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed ${Icon ? 'pl-10' : ''}`}
+                    className={`w-full p-4 bg-gray-50 dark:bg-gray-800/50 border-2 rounded-2xl outline-none transition-all text-gray-700 dark:text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-base
+                        ${Icon ? 'pl-12' : 'pl-4'}
+                        ${error
+                            ? 'border-red-200 dark:border-red-900/50 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
+                            : success
+                                ? 'border-green-200 dark:border-green-900/50 focus:border-green-500 focus:ring-4 focus:ring-green-500/10'
+                                : 'border-gray-100 dark:border-gray-700 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 group-hover:border-gray-200 dark:group-hover:border-gray-600'
+                        }
+                    `}
                 />
             </div>
-            {helperText && <p className="text-[10px] text-gray-400 mt-1 ml-1">{helperText}</p>}
+            {(error && typeof error === 'string') && (
+                <p className="text-xs text-red-500 mt-1.5 ml-1 font-medium animate-in fade-in slide-in-from-top-1">
+                    {error}
+                </p>
+            )}
+            {helperText && !error && (
+                <p className="text-[10px] text-gray-400 mt-1 ml-1">{helperText}</p>
+            )}
         </div>
     );
 };

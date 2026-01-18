@@ -16,33 +16,33 @@ export const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props
 }) => {
-  // iFood Style: Rounded Full, Flat colors, No harsh borders
-  const baseStyles = "inline-flex items-center justify-center font-semibold transition-transform duration-100 active:scale-[0.98] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed gap-2";
+  // Premium Style: Rounded 2xl, Soft shadows, Modern gradients/flats
+  const baseStyles = "inline-flex items-center justify-center font-bold transition-all duration-200 active:scale-[0.98] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed gap-2 ring-offset-2 focus:ring-2 select-none";
 
   const variants = {
-    // Primary Orange (like iFood Red but Orange)
-    primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm border-none",
+    // Primary Brand
+    primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-md shadow-brand-500/20 border-none ring-brand-500",
 
     // Secondary Blue
-    secondary: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm border-none",
+    secondary: "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-500/20 border-none ring-blue-500",
 
     // Danger Red
-    danger: "bg-red-500 text-white hover:bg-red-600 shadow-sm border-none",
+    danger: "bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-500/20 border-none ring-red-500",
 
     // Success Green
-    success: "bg-green-600 text-white hover:bg-green-700 shadow-sm border-none",
+    success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-md shadow-emerald-500/20 border-none ring-emerald-500",
 
-    // Outline (Gray border)
-    outline: "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700",
+    // Outline
+    outline: "bg-transparent border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 ring-gray-400",
 
-    // Ghost (Text only)
+    // Ghost
     ghost: "bg-transparent text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
   };
 
   const sizes = {
-    sm: "py-2 px-4 text-sm rounded-full",
-    md: "py-3.5 px-6 text-base rounded-full",
-    lg: "py-4 px-8 text-lg rounded-full"
+    sm: "py-2 px-4 text-sm rounded-xl",
+    md: "py-3 px-6 text-base rounded-2xl",
+    lg: "py-4.5 px-8 text-lg rounded-3xl"
   };
 
   const widthClass = fullWidth ? "w-full" : "";

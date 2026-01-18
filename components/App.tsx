@@ -339,9 +339,34 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     // Shop Cart State
     const [cart, setCart] = useState<any[]>([]);
 
+    // WhatsApp Unread Count State
+    const [whatsappUnreadCount, setWhatsappUnreadCount] = useState(0);
+
     const { alert } = useDialog();
 
     const mounted = useRef(true);
+
+    // Poll for WhatsApp Unread Count (from IndexedDB or Cache if available)
+    // Using a custom event listener that WhatsappContainer or Service can emit
+    useEffect(() => {
+        const handleUnreadUpdate = (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.count === 'number') {
+                setWhatsappUnreadCount(event.detail.count);
+            }
+        };
+
+        window.addEventListener('whatsapp_unread_update', handleUnreadUpdate as EventListener);
+
+        // Initial check via service if possible, or just wait for event
+        // Importing service dynamically to avoid circular dependencies if any
+        import('../services/whatsappOfflineService').then(({ whatsappOfflineService }) => {
+            whatsappOfflineService.getUnreadCount().then(count => setWhatsappUnreadCount(count));
+        }).catch(() => { });
+
+        return () => {
+            window.removeEventListener('whatsapp_unread_update', handleUnreadUpdate as EventListener);
+        };
+    }, []);
 
 
     // --- TOUR LOGIC ---
@@ -395,41 +420,37 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     useEffect(() => {
         initNotificationService(userId, effectiveRole);
 
-        const fetchNotifs = async () => {
+        const fetchPulse = async () => {
             try {
-                const notifs = await cloud.getNotifications();
+                // OTIMIZAÇÃO: Um único chamado unificado (Pulse) para todas as verificações periódicas
+                const { notifications: notifs, maintenance: maintSettings, role: currentRole } = await cloud.getSystemPulse();
+
                 if (mounted.current) {
                     setNotifications(notifs);
+                    setMaintenance(maintSettings as unknown as MaintenanceSettings);
+
+                    // Verificação proativa de role (unifica o que estava no outro useEffect)
+                    if (currentRole && currentRole !== effectiveRole) {
+                        logger.warn('ROLE_MISMATCH_PULSE', { dbRole: currentRole, currentEffective: effectiveRole });
+                        setEffectiveRole(currentRole);
+                    }
                 }
             } catch (error) {
-                console.error("Erro ao buscar notificações:", error);
+                console.error("Erro no System Pulse:", error);
             }
         };
 
-        fetchNotifs();
+        fetchPulse();
 
-        const interval = setInterval(fetchNotifs, 30000);
+        // Polling unificado a cada 30 segundos
+        const pulseInterval = setInterval(fetchPulse, 30000);
 
-        // Listener para recarregamento imediato de notificações (ex: após envio admin ou realtime)
-        const handleRefreshNotifs = () => {
-            void fetchNotifs();
+        // Listeners para recarregamento sob demanda
+        const handleRefreshPulse = () => {
+            void fetchPulse();
         };
-        window.addEventListener('refreshNotifications', handleRefreshNotifs);
-
-        // Check Maintenance Status
-        const checkMaintenance = async () => {
-            try {
-                const settings = await cloud.getMaintenanceSettings();
-                if (mounted.current) {
-                    setMaintenance(settings as unknown as MaintenanceSettings);
-                }
-            } catch (error) {
-                console.error("Erro ao verificar status de manutenção:", error);
-            }
-        };
-        checkMaintenance();
-        // Check maintenance every 30 seconds to lock/unlock users in real-time
-        const maintInterval = setInterval(checkMaintenance, 30000);
+        window.addEventListener('refreshNotifications', handleRefreshPulse);
+        window.addEventListener('refreshUserRole', handleRefreshPulse);
 
         // Load Theme
         const storedTheme = storage.getTheme();
@@ -439,50 +460,18 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
         return () => {
             stopNotificationService();
-            clearInterval(interval);
-            clearInterval(maintInterval);
-            window.removeEventListener('refreshNotifications', handleRefreshNotifs);
+            clearInterval(pulseInterval);
+            window.removeEventListener('refreshNotifications', handleRefreshPulse);
+            window.removeEventListener('refreshUserRole', handleRefreshPulse);
         };
     }, [userId, effectiveRole]);
 
+    // O polling de Role foi integrado ao Pulse acima para maior eficiência.
+    // Este efeito agora cuida apenas da sincronização de prop vinda do AuthWrapper.
     useEffect(() => {
         if (!userId) return;
-
-        let cancelled = false;
-
-        const refreshRole = async (reason: string) => {
-            try {
-                const r = await cloud.getUserRole();
-                if (!mounted.current || cancelled) return;
-                const propRole = userRole;
-                if (r !== propRole) {
-                    logger.warn('ROLE_MISMATCH_DB_VS_PROP', { dbRole: r, propRole, reason });
-                }
-                setEffectiveRole(r);
-            } catch {
-                if (!mounted.current || cancelled) return;
-                logger.warn('ROLE_FETCH_FAILED_FALLBACK_PROP', { fallbackRole: userRole, reason });
-                setEffectiveRole(userRole);
-            }
-        };
-
-        refreshRole('initial');
-
-        const intervalId = window.setInterval(() => {
-            void refreshRole('interval');
-        }, 60000);
-
-        const handleManualRefresh = () => {
-            void refreshRole('manual_event');
-        };
-
-        window.addEventListener('refreshUserRole', handleManualRefresh);
-
-        return () => {
-            cancelled = true;
-            window.clearInterval(intervalId);
-            window.removeEventListener('refreshUserRole', handleManualRefresh);
-        };
+        setEffectiveRole(userRole);
+        logger.info('ROLE_PROP_SYNC', { userRole });
     }, [userId, userRole]);
 
     useEffect(() => {
@@ -737,8 +726,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                         userRole={effectiveRole}
                         onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')}
                     />;
-                case 'admin_whatsapp': return <WhatsappContainer />;
-                case 'whatsapp_chat': return <WhatsappContainer />;
+                case 'admin_whatsapp': return <WhatsappContainer storeId={userId} attendantId={userId} />;
+                case 'whatsapp_chat': return <WhatsappContainer storeId={userId} attendantId={userId} />;
 
                 // Store Specific
                 case 'store_status': return <div className="max-w-4xl mx-auto"><h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">Gerenciar Loja</h1><StoreStatus /></div>;
@@ -1021,7 +1010,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     <MenuButton icon={User} label="Meu Perfil" tab="profile" />
                     <MenuButton icon={Headphones} label="Suporte" tab="support" />
                     <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
-                    <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" badge={3} />
+                    <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" badge={whatsappUnreadCount} />
                     <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
                     <MenuButton icon={Info} label="Sobre o App" tab="about" />
 

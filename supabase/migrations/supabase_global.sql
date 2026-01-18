@@ -348,6 +348,39 @@ CREATE POLICY "Authenticated users can view delivery partners" ON public.user_pr
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_profiles TO authenticated;
 
+-- ==================================================================
+-- 2.1 CARTEIRAS E TRANSAÇÕES
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.store_wallets (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    store_id UUID REFERENCES public.user_profiles(id) NOT NULL UNIQUE,
+    balance_decimal NUMERIC(15, 2) DEFAULT 0.00,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.store_wallets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own wallet" ON public.store_wallets;
+CREATE POLICY "Users can view own wallet" ON public.store_wallets FOR SELECT USING (auth.uid() = store_id);
+DROP POLICY IF EXISTS "Admins can view all wallets" ON public.store_wallets;
+CREATE POLICY "Admins can view all wallets" ON public.store_wallets FOR SELECT USING (public.is_admin());
+
+CREATE TABLE IF NOT EXISTS public.wallet_transactions (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    store_id UUID REFERENCES public.user_profiles(id) NOT NULL,
+    amount NUMERIC(15, 2) NOT NULL,
+    type TEXT NOT NULL, -- 'CREDIT', 'DEBIT', 'RECHARGE', 'PAYOUT', 'ADJUSTMENT'
+    status TEXT DEFAULT 'COMPLETED',
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}'::jsonb
+);
+ALTER TABLE public.wallet_transactions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own transactions" ON public.wallet_transactions;
+CREATE POLICY "Users can view own transactions" ON public.wallet_transactions FOR SELECT USING (auth.uid() = store_id);
+DROP POLICY IF EXISTS "Admins can view all transactions" ON public.wallet_transactions;
+CREATE POLICY "Admins can view all transactions" ON public.wallet_transactions FOR SELECT USING (public.is_admin());
+
 -- Garantir que a coluna address exista (Fix: erro rota /perfil)
 DO $$
 BEGIN
@@ -636,12 +669,48 @@ BEGIN
         CREATE POLICY "Public can read active products" ON public.products FOR SELECT USING (is_active = TRUE OR public.is_admin());
     END IF;
 END $$;
-DROP POLICY IF EXISTS "Admins can manage products" ON public.products;
-CREATE POLICY "Admins can manage products" ON public.products FOR ALL USING (
-    public.is_admin() OR 
-    (store_id = auth.uid()) OR
-    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
-);
+-- Políticas Granulares para Produtos (Refatoradas em 18/01/2026 - Idempotentes)
+DO $$
+BEGIN
+    -- 1. DROP da política antiga genérica (se existir)
+    DROP POLICY IF EXISTS "Admins can manage products" ON public.products;
+
+    -- 2. SELECT Policy
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins and Owners can view all own products' AND tablename = 'products') THEN
+        CREATE POLICY "Admins and Owners can view all own products" ON public.products
+            FOR SELECT USING (
+                public.is_admin() OR
+                store_id = auth.uid()
+            );
+    END IF;
+
+    -- 3. INSERT Policy
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins and Owners can insert products' AND tablename = 'products') THEN
+        CREATE POLICY "Admins and Owners can insert products" ON public.products
+            FOR INSERT WITH CHECK (
+                public.is_admin() OR
+                store_id = auth.uid()
+            );
+    END IF;
+
+    -- 4. UPDATE Policy
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins and Owners can update products' AND tablename = 'products') THEN
+        CREATE POLICY "Admins and Owners can update products" ON public.products
+            FOR UPDATE USING (
+                public.is_admin() OR
+                store_id = auth.uid()
+            );
+    END IF;
+
+    -- 5. DELETE Policy
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins and Owners can delete products' AND tablename = 'products') THEN
+        CREATE POLICY "Admins and Owners can delete products" ON public.products
+            FOR DELETE USING (
+                public.is_admin() OR
+                store_id = auth.uid()
+            );
+    END IF;
+END $$;
 
 
 -- Tabela para logs de erro do cliente;
@@ -3592,6 +3661,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'delivery_mode') THEN
         ALTER TABLE public.orders ADD COLUMN delivery_mode TEXT;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'driver_id') THEN
+        ALTER TABLE public.orders ADD COLUMN driver_id UUID REFERENCES public.user_profiles(id);
+    END IF;
     
     -- Correção de compatibilidade: converter items de JSONB[] para JSONB
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'items' AND data_type = 'ARRAY') THEN
@@ -4936,7 +5008,7 @@ ALTER TABLE public.app_notifications ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own notifications" ON public.app_notifications;
 CREATE POLICY "Users can view their own notifications" ON public.app_notifications
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT USING (auth.uid()::text = user_id::text);
 
 DROP POLICY IF EXISTS "Admins can manage all notifications" ON public.app_notifications;
 CREATE POLICY "Admins can manage all notifications" ON public.app_notifications
@@ -5078,15 +5150,15 @@ ALTER TABLE public.partner_loans ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own loans" ON public.partner_loans;
 CREATE POLICY "Users can view their own loans" ON public.partner_loans
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT USING (auth.uid()::text = user_id::text);
 
 DROP POLICY IF EXISTS "Users can create loan requests" ON public.partner_loans;
 CREATE POLICY "Users can create loan requests" ON public.partner_loans
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
+    FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
 
 DROP POLICY IF EXISTS "Users can update their own loans" ON public.partner_loans;
 CREATE POLICY "Users can update their own loans" ON public.partner_loans
-    FOR UPDATE USING (auth.uid() = user_id);
+    FOR UPDATE USING (auth.uid()::text = user_id::text);
 
 DROP POLICY IF EXISTS "Admins can manage partner_loans" ON public.partner_loans;
 CREATE POLICY "Admins can manage partner_loans" ON public.partner_loans
@@ -5121,7 +5193,7 @@ ALTER TABLE public.loan_installments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own loan installments" ON public.loan_installments;
 CREATE POLICY "Users can view their own loan installments" ON public.loan_installments
-    FOR SELECT USING (EXISTS (SELECT 1 FROM public.partner_loans WHERE id = loan_installments.loan_id AND user_id = auth.uid()));
+    FOR SELECT USING (EXISTS (SELECT 1 FROM public.partner_loans WHERE id = loan_installments.loan_id AND user_id::text = auth.uid()::text));
 
 DROP POLICY IF EXISTS "Admins can manage loan_installments" ON public.loan_installments;
 CREATE POLICY "Admins can manage loan_installments" ON public.loan_installments
@@ -5347,14 +5419,14 @@ INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_ins
 SELECT 'Crﾃｩdito Pessoal', 'Dinheiro rﾃ｡pido para emergﾃｪncias.', 4.50, 6, 2000.00, 'COURIER', true
 WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Crﾃｩdito Pessoal');
 
--- 4. Correﾃｧﾃ｣o RLS: Permitir INSERT em loan_installments pelo usuﾃ｡rio dono do emprﾃｩstimo
+-- 4. Correção RLS: Permitir INSERT em loan_installments pelo usuário dono do empréstimo
 DROP POLICY IF EXISTS "Users can create loan installments" ON public.loan_installments;
 CREATE POLICY "Users can create loan installments" ON public.loan_installments
     FOR INSERT WITH CHECK (
         EXISTS (
             SELECT 1 FROM public.partner_loans 
             WHERE id = loan_installments.loan_id 
-            AND user_id = auth.uid()
+            AND user_id::text = auth.uid()::text
         )
     );
 -- Adicionando coluna order_type para controle de pedidos (Local, Retirada, Entrega)
@@ -5370,21 +5442,21 @@ DROP POLICY IF EXISTS "Enable read for store owners" ON public.orders;
 DROP POLICY IF EXISTS "Enable insert for store owners" ON public.orders;
 DROP POLICY IF EXISTS "Enable update for store owners" ON public.orders;
 
--- Criar policies com tipagem correta (UUID = UUID)
+-- Criar policies com cast para texto para evitar erro uuid=text
 CREATE POLICY "Enable read for store owners" ON public.orders
 FOR SELECT
-USING (auth.uid() = store_id);
+USING (auth.uid()::text = store_id::text);
 
 CREATE POLICY "Enable insert for store owners" ON public.orders
 FOR INSERT
-WITH CHECK (auth.uid() = store_id);
+WITH CHECK (auth.uid()::text = store_id::text);
 
 CREATE POLICY "Enable update for store owners" ON public.orders
 FOR UPDATE
-USING (auth.uid() = store_id);
+USING (auth.uid()::text = store_id::text);
 
 -- ==================================================================
--- CONFIGURAﾃ�髭S DE ENTREGA DA LOJA (Adicionado em 2026-01-14)
+-- CONFIGURAÇÕES DE ENTREGA DA LOJA (Adicionado em 2026-01-14)
 -- ==================================================================
 
 -- Tabela para configurar modo de entrega e taxas
@@ -5407,14 +5479,14 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 -- RLS para store_delivery_settings
 ALTER TABLE public.store_delivery_settings ENABLE ROW LEVEL SECURITY;
 
--- Garantir permissﾃｵes de leitura para authenticated
+-- Garantir permissões de leitura para authenticated
 GRANT SELECT ON public.store_delivery_settings TO authenticated;
 GRANT SELECT ON public.store_delivery_settings TO anon;
 GRANT ALL ON public.store_delivery_settings TO service_role;
 
 DROP POLICY IF EXISTS "Store owners manage their delivery settings" ON public.store_delivery_settings;
 CREATE POLICY "Store owners manage their delivery settings" ON public.store_delivery_settings
-    FOR ALL USING (auth.uid() = store_id);
+    FOR ALL USING (auth.uid()::text = store_id::text);
 
 DROP POLICY IF EXISTS "Anyone can view delivery settings" ON public.store_delivery_settings;
 CREATE POLICY "Anyone can view delivery settings" ON public.store_delivery_settings
@@ -5445,14 +5517,14 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 -- RLS para store_neighborhood_fees
 ALTER TABLE public.store_neighborhood_fees ENABLE ROW LEVEL SECURITY;
 
--- Garantir permissﾃｵes de leitura para authenticated
+-- Garantir permissões de leitura para authenticated
 GRANT SELECT ON public.store_neighborhood_fees TO authenticated;
 GRANT SELECT ON public.store_neighborhood_fees TO anon;
 GRANT ALL ON public.store_neighborhood_fees TO service_role;
 
 DROP POLICY IF EXISTS "Store owners manage their neighborhood fees" ON public.store_neighborhood_fees;
 CREATE POLICY "Store owners manage their neighborhood fees" ON public.store_neighborhood_fees
-    FOR ALL USING (auth.uid() = store_id);
+    FOR ALL USING (auth.uid()::text = store_id::text);
 
 DROP POLICY IF EXISTS "Anyone can view neighborhood fees" ON public.store_neighborhood_fees;
 CREATE POLICY "Anyone can view neighborhood fees" ON public.store_neighborhood_fees
@@ -5462,26 +5534,26 @@ DROP POLICY IF EXISTS "Authenticated users can view neighborhood fees" ON public
 CREATE POLICY "Authenticated users can view neighborhood fees" ON public.store_neighborhood_fees
     FOR SELECT TO authenticated USING (true);
 
--- Permissﾃｵes adicionais para permitir salvamento pelos lojistas
+-- Permissões adicionais para permitir salvamento pelos lojistas
 GRANT ALL ON public.store_delivery_settings TO authenticated;
 GRANT ALL ON public.store_neighborhood_fees TO authenticated;
 
 
 
 -- ==================================================================
--- RPCs para Gestﾃ｣o de Usuﾃ｡rios (Admin) - Adicionado em 14/01/2026
+-- RPCs para Gestão de Usuários (Admin) - Adicionado em 14/01/2026
 -- ==================================================================
 
--- RPC: Atualizar senha de usuﾃ｡rio (Admin Only)
+-- RPC: Atualizar senha de usuário (Admin Only)
 CREATE OR REPLACE FUNCTION public.admin_update_user_password(
     p_user_id UUID,
     p_new_password TEXT
 )
 RETURNS BOOLEAN AS $$
 BEGIN
-    -- Verifica se quem chama ﾃｩ admin
+    -- Verifica se quem chama é admin
     IF NOT public.is_admin() THEN
-        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem alterar senhas de outros usuﾃ｡rios.';
+        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem alterar senhas de outros usuários.';
     END IF;
 
     -- Atualiza a senha na tabela auth.users
@@ -5493,13 +5565,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Garantir permissﾃｵes
+-- Garantir permissões
 GRANT EXECUTE ON FUNCTION public.admin_update_user_password(UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_update_user_password(UUID, TEXT) TO service_role;
 
 
--- RPC: Criar usuﾃ｡rio manualmente (Admin Only)
--- Permite criar usuﾃ｡rio passando metadados completos sem logar automaticamente
+-- RPC: Criar usuário manualmente (Admin Only)
+-- Permite criar usuário passando metadados completos sem logar automaticamente
 CREATE OR REPLACE FUNCTION public.admin_create_user_manual(
     p_email TEXT,
     p_password TEXT,
@@ -5509,14 +5581,14 @@ RETURNS UUID AS $$
 DECLARE
     v_user_id UUID;
 BEGIN
-    -- Verifica se quem chama ﾃｩ admin
+    -- Verifica se quem chama é admin
     IF NOT public.is_admin() THEN
-        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem criar usuﾃ｡rios manualmente.';
+        RAISE EXCEPTION 'Acesso negado: Apenas administradores podem criar usuários manualmente.';
     END IF;
 
-    -- Verifica se usuﾃ｡rio jﾃ｡ existe
+    -- Verifica se usuário já existe
     IF EXISTS (SELECT 1 FROM auth.users WHERE email = p_email) THEN
-        RAISE EXCEPTION 'Email jﾃ｡ cadastrado.';
+        RAISE EXCEPTION 'Email já cadastrado.';
     END IF;
 
     -- Gera novo UUID
@@ -5553,7 +5625,7 @@ BEGIN
         ''
     );
 
-    -- Insere na tabela identity (necessﾃ｡rio para login funcionar corretamente em alguns casos do Supabase)
+    -- Insere na tabela identity (necessário para login funcionar corretamente em alguns casos do Supabase)
     INSERT INTO auth.identities (
         id,
         user_id,
@@ -5574,19 +5646,19 @@ BEGIN
         now()
     );
 
-    -- O trigger handle_new_user serﾃ｡ disparado automaticamente apﾃｳs insert em auth.users
+    -- O trigger handle_new_user será disparado automaticamente após insert em auth.users
     -- preenchendo user_profiles e outras tabelas
 
     RETURN v_user_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Garantir permissﾃｵes
+-- Garantir permissões
 GRANT EXECUTE ON FUNCTION public.admin_create_user_manual(TEXT, TEXT, JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_create_user_manual(TEXT, TEXT, JSONB) TO service_role;
 
 -- ==================================================================
--- ASSOCIAﾃ�グ DE LOJISTAS E PARCEIROS (Adicionado em 14/01/2026)
+-- ASSOCIAÇÃO DE LOJISTAS E PARCEIROS (Adicionado em 14/01/2026)
 -- ==================================================================
 
 CREATE TABLE IF NOT EXISTS public.store_partners (
@@ -5601,18 +5673,18 @@ ALTER TABLE public.store_partners ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Store owners manage their partners" ON public.store_partners;
 CREATE POLICY "Store owners manage their partners" ON public.store_partners
-    FOR ALL USING (auth.uid() = store_id);
+    FOR ALL USING (auth.uid()::text = store_id::text);
 
 GRANT ALL ON public.store_partners TO authenticated;
 GRANT ALL ON public.store_partners TO service_role;
 
--- Nova polﾃｭtica para permitir que lojistas gerenciem emprﾃｩstimos de seus parceiros associados
+-- Nova política para permitir que lojistas gerenciem empréstimos de seus parceiros associados
 DROP POLICY IF EXISTS "Store partners can manage their drivers loans" ON public.partner_loans;
 CREATE POLICY "Store partners can manage their drivers loans" ON public.partner_loans
     FOR ALL USING (
         EXISTS (
             SELECT 1 FROM public.store_partners 
-            WHERE store_id = auth.uid() 
+            WHERE store_id::text = auth.uid()::text 
             AND partner_id = partner_loans.user_id
         )
     );
@@ -5632,7 +5704,7 @@ END $$;
 -- Garantir que usuﾃ｡rios possam atualizar seu prﾃｳprio status is_open
 DROP POLICY IF EXISTS "Users can update own is_open" ON public.user_profiles;
 CREATE POLICY "Users can update own is_open" ON public.user_profiles
-    FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+    FOR UPDATE USING (auth.uid()::text = id::text) WITH CHECK (auth.uid()::text = id::text);
 
 -- 2. Tabela de Relatﾃｳrios Diﾃ｡rios da Loja
 CREATE TABLE IF NOT EXISTS public.store_daily_reports (
@@ -5658,7 +5730,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas veem seus proprios relatorios diarios' AND tablename = 'store_daily_reports') THEN
         CREATE POLICY "Lojistas veem seus proprios relatorios diarios" ON public.store_daily_reports
-            FOR SELECT USING (auth.uid() = store_id);
+            FOR SELECT USING (auth.uid()::text = store_id::text);
     END IF;
 END $$;
 
@@ -5667,7 +5739,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas criam seus proprios relatorios diarios' AND tablename = 'store_daily_reports') THEN
         CREATE POLICY "Lojistas criam seus proprios relatorios diarios" ON public.store_daily_reports
-            FOR INSERT WITH CHECK (auth.uid() = store_id);
+            FOR INSERT WITH CHECK (auth.uid()::text = store_id::text);
     END IF;
 END $$;
 
@@ -5681,7 +5753,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas leem seus proprios pedidos' AND tablename = 'orders') THEN
         CREATE POLICY "Lojistas leem seus proprios pedidos" ON public.orders
-            FOR SELECT USING (auth.uid() = store_id OR public.is_admin());
+            FOR SELECT USING (auth.uid()::text = store_id::text OR public.is_admin());
     END IF;
 END $$;
 
@@ -5693,7 +5765,7 @@ BEGIN
             FOR SELECT USING (
                 EXISTS (
                     SELECT 1 FROM public.collaborators
-                    WHERE id = auth.uid()
+                    WHERE id::text = auth.uid()::text
                     AND store_id = public.orders.store_id
                 )
             );
@@ -6092,6 +6164,33 @@ ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 -- ==================================================================
 -- INTEGRAÇÃO BRASIL ABERTO (Adicionado em 2026-01-17)
 -- ==================================================================
+-- ORGANIZAÇÃO MANUAL DE CONVERSAS (Adicionado em 2026-01-18)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.whatsapp_conversation_orders (
+    attendant_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    conversation_id TEXT,
+    position INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (attendant_id, store_id, conversation_id)
+);
+
+-- Índices para performance
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conv_orders_attendant ON public.whatsapp_conversation_orders(attendant_id, store_id);
+
+-- RLS
+ALTER TABLE public.whatsapp_conversation_orders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Atendentes gerenciam sua própria ordem" ON public.whatsapp_conversation_orders;
+CREATE POLICY "Atendentes gerenciam sua própria ordem" ON public.whatsapp_conversation_orders
+    FOR ALL USING (auth.uid() = attendant_id);
+
+GRANT ALL ON public.whatsapp_conversation_orders TO authenticated, service_role;
+
+COMMENT ON TABLE public.whatsapp_conversation_orders IS 'Armazena a ordem manual das conversas de WhatsApp por atendente';
+-- ==================================================================
 
 -- Tabela de Bairros (Distritos) importados da API
 CREATE TABLE IF NOT EXISTS public.city_districts (
@@ -6254,9 +6353,13 @@ ON public.orders_tickets (general_order_id);
 
 -- ==================================================================
 -- UNIFICAÇÃO DE PEDIDOS: RPCs para Visualização Integrada (17/01/2026)
+-- CORREÇÃO 18/01/2026: Correção de erro de coluna oc.items e ajuste de tipo JSONB
+-- CORREÇÃO 18/01/2026 (v2): Cast explícito de status para TEXT para evitar erro 22P02
+-- CORREÇÃO 18/01/2026 (v3): Inclusão de status lowercase e remoção de filtro restritivo de origem (APP+INTERNAL)
 -- ==================================================================
 
--- Função para buscar pedidos ativos unificados (Mesas e Internos)
+-- Função para buscar pedidos ativos unificados (Mesas e Internos/App)
+DROP FUNCTION IF EXISTS public.get_unified_active_orders(UUID);
 CREATE OR REPLACE FUNCTION public.get_unified_active_orders(p_store_id UUID)
 RETURNS TABLE (
     id UUID,
@@ -6265,10 +6368,10 @@ RETURNS TABLE (
     table_identifier VARCHAR(50),
     status VARCHAR(50),
     total_amount NUMERIC(10, 2),
-    items JSONB[],
+    items JSONB,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
-    origin TEXT -- 'COLLABORATOR' ou 'INTERNAL'
+    origin TEXT -- 'COLLABORATOR', 'INTERNAL' ou 'APP'
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -6280,16 +6383,30 @@ BEGIN
         oc.table_identifier, 
         oc.status::VARCHAR(50), 
         oc.total_amount, 
-        oc.items, 
+        (
+            SELECT jsonb_agg(
+                jsonb_build_object(
+                    'id', oi.id,
+                    'name', COALESCE(oi.name, p.name, 'Produto'),
+                    'observation', oi.observation,
+                    'quantity', oi.quantity,
+                    'unit_price', oi.unit_price,
+                    'total_price', oi.total_price,
+                    'additional', oi.additional
+                )
+            ) FROM public.orders_items oi 
+            LEFT JOIN public.products p ON p.id = oi.product_id
+            WHERE oi.order_id = oc.id
+        ) as items,
         oc.created_at, 
         oc.updated_at,
         'COLLABORATOR'::TEXT as origin
     FROM public.orders_collaborators oc
-    WHERE oc.store_id = p_store_id AND oc.status IN ('opened', 'sent')
+    WHERE oc.store_id = p_store_id AND oc.status::TEXT IN ('opened', 'sent', 'OPENED', 'SENT')
 
     UNION ALL
 
-    -- Pedidos Internos (Balcão/Entrega)
+    -- Pedidos Gerais (Balcão, App, Entrega)
     SELECT 
         o.id, 
         o.store_id, 
@@ -6297,18 +6414,19 @@ BEGIN
         (CASE WHEN o.order_type = 'LOCAL' THEN 'Balcão' ELSE o.order_type END)::VARCHAR(50) as table_identifier, 
         o.status::TEXT::VARCHAR(50), 
         o.total_price as total_amount, 
-        o.items, 
+        o.items::JSONB, 
         o.created_at, 
         o.updated_at,
-        'INTERNAL'::TEXT as origin
+        COALESCE(o.origin, 'INTERNAL')::TEXT as origin
     FROM public.orders o
     WHERE o.store_id = p_store_id 
-      AND o.origin = 'INTERNAL' 
-      AND o.status IN ('PENDING', 'CONFIRMED', 'PROCESSING', 'READY');
+      -- Removemos filtro de origin para incluir APP e INTERNAL
+      AND o.status::TEXT IN ('PENDING', 'CONFIRMED', 'PROCESSING', 'READY', 'pending', 'confirmed', 'processing', 'ready');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Função para buscar histórico de pedidos unificado
+DROP FUNCTION IF EXISTS public.get_unified_order_history(UUID, INT);
 CREATE OR REPLACE FUNCTION public.get_unified_order_history(p_store_id UUID, p_limit INT DEFAULT 50)
 RETURNS TABLE (
     id UUID,
@@ -6317,7 +6435,7 @@ RETURNS TABLE (
     table_identifier VARCHAR(50),
     status VARCHAR(50),
     total_amount NUMERIC(10, 2),
-    items JSONB[],
+    items JSONB,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
     origin TEXT,
@@ -6333,17 +6451,29 @@ BEGIN
         oc.table_identifier, 
         oc.status::VARCHAR(50), 
         oc.total_amount, 
-        oc.items, 
+        (
+            SELECT jsonb_agg(
+                jsonb_build_object(
+                    'id', oi.id,
+                    'name', COALESCE(oi.name, p.name, 'Produto'),
+                    'quantity', oi.quantity,
+                    'unit_price', oi.unit_price,
+                    'total_price', oi.total_price
+                )
+            ) FROM public.orders_items oi 
+            LEFT JOIN public.products p ON p.id = oi.product_id
+            WHERE oi.order_id = oc.id
+        ) as items,
         oc.created_at, 
         oc.updated_at,
         'COLLABORATOR'::TEXT as origin,
         'N/A'::TEXT as payment_method
     FROM public.orders_collaborators oc
-    WHERE oc.store_id = p_store_id AND oc.status = 'completed'
+    WHERE oc.store_id = p_store_id AND oc.status::TEXT IN ('completed', 'COMPLETED')
 
     UNION ALL
 
-    -- Histórico de Pedidos Internos
+    -- Histórico de Pedidos Gerais
     SELECT 
         o.id, 
         o.store_id, 
@@ -6351,15 +6481,15 @@ BEGIN
         (CASE WHEN o.order_type = 'LOCAL' THEN 'Balcão' ELSE o.order_type END)::VARCHAR(50) as table_identifier, 
         o.status::TEXT::VARCHAR(50), 
         o.total_price as total_amount, 
-        o.items, 
+        o.items::JSONB, 
         o.created_at, 
         o.updated_at,
-        'INTERNAL'::TEXT as origin,
+        COALESCE(o.origin, 'INTERNAL')::TEXT as origin,
         o.payment_method::TEXT as payment_method
     FROM public.orders o
     WHERE o.store_id = p_store_id 
-      AND o.origin = 'INTERNAL' 
-      AND o.status IN ('DELIVERED', 'COMPLETED', 'CANCELLED')
+      -- Removemos filtro de origin para incluir APP e INTERNAL
+      AND o.status::TEXT IN ('DELIVERED', 'COMPLETED', 'CANCELLED', 'delivered', 'completed', 'cancelled')
     
     ORDER BY created_at DESC
     LIMIT p_limit;
@@ -6380,13 +6510,14 @@ CREATE TABLE IF NOT EXISTS public.orders_tickets (
     order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
     collaborator_order_id UUID REFERENCES public.orders_collaborators(id) ON DELETE CASCADE,
     display_id SERIAL,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
     status TEXT NOT NULL DEFAULT 'pending', -- pending, producing, ready, delivered, completed
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Índices para orders_tickets
-CREATE INDEX IF NOT EXISTS orders_tickets_store_id_idx ON public.orders_tickets(store_id);
+CREATE INDEX IF NOT EXISTS orders_tickets_store_id_idx ON public.orders_tickets(store_id); 
 CREATE INDEX IF NOT EXISTS orders_tickets_status_idx ON public.orders_tickets(status);
 CREATE INDEX IF NOT EXISTS orders_tickets_created_at_idx ON public.orders_tickets(created_at);
 
@@ -6417,8 +6548,8 @@ BEGIN
         
         -- Verificar se já existe ticket para este pedido
         IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE order_id = NEW.id) THEN
-            INSERT INTO public.orders_tickets (store_id, order_id, status, created_at)
-            VALUES (NEW.store_id, NEW.id, 'pending', NEW.created_at);
+            INSERT INTO public.orders_tickets (store_id, order_id, items, status, created_at)
+            VALUES (NEW.store_id, NEW.id, COALESCE(NEW.items, '[]'::jsonb), 'pending', NEW.created_at);
         END IF;
     END IF;
 
@@ -6450,8 +6581,27 @@ BEGIN
         
         -- Verificar se já existe ticket
         IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE collaborator_order_id = NEW.id) THEN
-            INSERT INTO public.orders_tickets (store_id, collaborator_order_id, status, created_at)
-            VALUES (NEW.store_id, NEW.id, 'pending', NEW.created_at);
+            -- Para pedidos de colaborador, buscar items da tabela orders_items
+            INSERT INTO public.orders_tickets (store_id, collaborator_order_id, items, status, created_at)
+            VALUES (
+                NEW.store_id, 
+                NEW.id, 
+                COALESCE(
+                    (SELECT jsonb_agg(
+                        jsonb_build_object(
+                            'product_id', oi.product_id,
+                            'name', COALESCE(oi.name, p.name, 'Produto'),
+                            'quantity', oi.quantity,
+                            'price', oi.unit_price
+                        )
+                    ) FROM public.orders_items oi 
+                    LEFT JOIN public.products p ON p.id = oi.product_id
+                    WHERE oi.order_id = NEW.id),
+                    '[]'::jsonb
+                ),
+                'pending', 
+                NEW.created_at
+            );
         END IF;
     END IF;
     
@@ -6481,6 +6631,7 @@ CREATE TABLE IF NOT EXISTS public.orders_tickets (
     order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
     collaborator_order_id UUID REFERENCES public.orders_collaborators(id) ON DELETE CASCADE,
     display_id SERIAL,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
     status TEXT NOT NULL DEFAULT 'pending', -- pending, producing, ready, delivered, completed
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -6518,8 +6669,8 @@ BEGIN
         
         -- Verificar se já existe ticket para este pedido
         IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE order_id = NEW.id) THEN
-            INSERT INTO public.orders_tickets (store_id, order_id, status, created_at)
-            VALUES (NEW.store_id, NEW.id, 'pending', NEW.created_at);
+            INSERT INTO public.orders_tickets (store_id, order_id, items, status, created_at)
+            VALUES (NEW.store_id, NEW.id, COALESCE(NEW.items, '[]'::jsonb), 'pending', NEW.created_at);
         END IF;
     END IF;
 
@@ -6551,8 +6702,27 @@ BEGIN
         
         -- Verificar se já existe ticket
         IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE collaborator_order_id = NEW.id) THEN
-            INSERT INTO public.orders_tickets (store_id, collaborator_order_id, status, created_at)
-            VALUES (NEW.store_id, NEW.id, 'pending', NEW.created_at);
+            -- Para pedidos de colaborador, buscar items da tabela orders_items
+            INSERT INTO public.orders_tickets (store_id, collaborator_order_id, items, status, created_at)
+            VALUES (
+                NEW.store_id, 
+                NEW.id, 
+                COALESCE(
+                    (SELECT jsonb_agg(
+                        jsonb_build_object(
+                            'product_id', oi.product_id,
+                            'name', COALESCE(oi.name, p.name, 'Produto'),
+                            'quantity', oi.quantity,
+                            'price', oi.unit_price
+                        )
+                    ) FROM public.orders_items oi 
+                    LEFT JOIN public.products p ON p.id = oi.product_id
+                    WHERE oi.order_id = NEW.id),
+                    '[]'::jsonb
+                ),
+                'pending', 
+                NEW.created_at
+            );
         END IF;
     END IF;
     
@@ -6570,3 +6740,1057 @@ DROP TRIGGER IF EXISTS trigger_create_ticket_on_collaborator_order ON public.ord
 CREATE TRIGGER trigger_create_ticket_on_collaborator_order
 AFTER INSERT OR UPDATE ON public.orders_collaborators
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_collaborator_order_ticket();
+
+-- ==================================================================
+-- 15.x OTIMIZAÇÕES DE PERFORMANCE (18/01/2026)
+-- ==================================================================
+
+-- RPC: Estatísticas Consolidadas do Dashboard Admin (v2 - Otimizado)
+-- Reduz ~15 requisições sequenciais para 1 única chamada atômica
+CREATE OR REPLACE FUNCTION public.get_admin_dashboard_stats_v2()
+RETURNS JSONB AS $$
+DECLARE
+    v_now TIMESTAMPTZ := now();
+    v_today TIMESTAMPTZ := date_trunc('day', v_now);
+    v_yesterday TIMESTAMPTZ := v_today - interval '1 day';
+    v_month_ago TIMESTAMPTZ := v_now - interval '30 days';
+    v_two_months_ago TIMESTAMPTZ := v_now - interval '60 days';
+    v_result JSONB;
+BEGIN
+    SELECT jsonb_build_object(
+        'orders', jsonb_build_object(
+            'today', (SELECT count(*) FROM public.partner_requests WHERE created_at >= v_today),
+            'yesterday', (SELECT count(*) FROM public.partner_requests WHERE created_at >= v_yesterday AND created_at < v_today),
+            'total', (SELECT count(*) FROM public.partner_requests),
+            'week', (SELECT count(*) FROM public.partner_requests WHERE created_at >= v_now - interval '7 days'),
+            'month', (SELECT count(*) FROM public.partner_requests WHERE created_at >= v_month_ago)
+        ),
+        'finance', (
+            WITH current_month AS (
+                SELECT 
+                    SUM(total_charged_store) as gmv,
+                    SUM(total_charged_store - net_value_partner) as rev,
+                    COUNT(*) as count
+                FROM public.partner_requests 
+                WHERE status = 'COMPLETED' AND created_at >= v_month_ago
+            ),
+            prev_month AS (
+                SELECT 
+                    SUM(total_charged_store) as gmv,
+                    SUM(total_charged_store - net_value_partner) as rev
+                FROM public.partner_requests 
+                WHERE status = 'COMPLETED' AND created_at >= v_two_months_ago AND created_at < v_month_ago
+            )
+            SELECT jsonb_build_object(
+                'gmv', COALESCE(c.gmv, 0),
+                'platformRevenue', COALESCE(c.rev, 0),
+                'averageTicket', CASE WHEN COALESCE(c.count, 0) > 0 THEN COALESCE(c.gmv, 0) / c.count ELSE 0 END,
+                'gmvTrend', CASE WHEN COALESCE(p.gmv, 0) > 0 THEN ((COALESCE(c.gmv, 0) - p.gmv) / p.gmv) * 100 ELSE (CASE WHEN COALESCE(c.gmv, 0) > 0 THEN 100 ELSE 0 END) END,
+                'revenueTrend', CASE WHEN COALESCE(p.rev, 0) > 0 THEN ((COALESCE(c.rev, 0) - p.rev) / p.rev) * 100 ELSE (CASE WHEN COALESCE(c.rev, 0) > 0 THEN 100 ELSE 0 END) END
+            ) FROM current_month c, prev_month p
+        ),
+        'users', jsonb_build_object(
+            'stores', jsonb_build_object(
+                'active', (SELECT count(*) FROM public.user_profiles WHERE role = 'store_partner' AND is_active = true),
+                'total', (SELECT count(*) FROM public.user_profiles WHERE role = 'store_partner')
+            ),
+            'drivers', jsonb_build_object(
+                'online', (SELECT count(*) FROM public.user_profiles WHERE role IN ('delivery_partner', 'delivery_person') AND is_available = true),
+                'total', (SELECT count(*) FROM public.user_profiles WHERE role IN ('delivery_partner', 'delivery_person'))
+            )
+        ),
+        'graphData', (
+            SELECT jsonb_agg(d) FROM (
+                SELECT 
+                    t.day::date::text as date,
+                    count(pr.id) as count
+                FROM generate_series(v_today - interval '6 days', v_today, interval '1 day') AS t(day)
+                LEFT JOIN public.partner_requests pr ON date_trunc('day', pr.created_at) = t.day
+                GROUP BY t.day
+                ORDER BY t.day
+            ) d
+        )
+    ) INTO v_result;
+
+    RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Adição de Índices Estratégicos para Performance
+CREATE INDEX IF NOT EXISTS partner_requests_status_idx ON public.partner_requests (status);
+CREATE INDEX IF NOT EXISTS partner_requests_store_created_idx ON public.partner_requests (store_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS partner_requests_partner_created_idx ON public.partner_requests (partner_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS orders_created_at_idx ON public.orders (created_at DESC);
+CREATE INDEX IF NOT EXISTS store_wallets_store_id_idx ON public.store_wallets (store_id);
+CREATE INDEX IF NOT EXISTS wallet_transactions_store_created_idx ON public.wallet_transactions (store_id, created_at DESC);
+
+-- Índices Globais de Fase 2
+CREATE INDEX IF NOT EXISTS user_profiles_role_idx ON public.user_profiles (role);
+CREATE INDEX IF NOT EXISTS user_profiles_is_active_idx ON public.user_profiles (is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS products_is_active_idx ON public.products (is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS products_store_id_idx ON public.products (store_id);
+CREATE INDEX IF NOT EXISTS categories_store_id_idx ON public.categories (store_id);
+CREATE INDEX IF NOT EXISTS orders_store_id_created_idx ON public.orders (store_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS orders_customer_phone_idx ON public.orders (customer_phone);
+CREATE INDEX IF NOT EXISTS chat_messages_order_type_idx ON public.chat_messages (order_id, type);
+
+-- ==================================================================
+-- OTIMIZAÇÃO DE PERFORMANCE: ÍNDICES PARA COMANDA (18/01/2026)
+-- ==================================================================
+
+-- Índices para otimizar get_unified_active_orders e get_unified_order_history
+-- Permitem busca eficiente por loja + origem + status (usado nos WHERE das RPCs)
+CREATE INDEX IF NOT EXISTS orders_store_origin_status_idx ON public.orders (store_id, origin, status);
+
+-- Índice para orders_collaborators filtering by store and status
+CREATE INDEX IF NOT EXISTS orders_collaborators_store_status_idx ON public.orders_collaborators (store_id, status);
+
+-- Índices para ordenação eficiente (ORDER BY created_at DESC)
+-- Combinando com as colunas de filtro para Index Only Scan ou Index Scan eficiente
+CREATE INDEX IF NOT EXISTS orders_store_origin_created_at_idx ON public.orders (store_id, origin, created_at DESC);
+CREATE INDEX IF NOT EXISTS orders_collaborators_store_created_at_idx ON public.orders_collaborators (store_id, created_at DESC);
+
+-- ==================================================================
+-- ALINHAMENTO DE STATUS: Garantir que order_status suporte todos os rótulos usados (18/01/2026)
+-- Resolve Erro 22P02: invalid input value for enum order_status: "CONFIRMED"
+-- ==================================================================
+DO $$ 
+BEGIN
+    -- Lista de status para garantir no enum public.order_status
+    -- Maiúsculos (Padrão esperado pelo backend)
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'PENDING') THEN
+        ALTER TYPE public.order_status ADD VALUE 'PENDING';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'CONFIRMED') THEN
+        ALTER TYPE public.order_status ADD VALUE 'CONFIRMED';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'PROCESSING') THEN
+        ALTER TYPE public.order_status ADD VALUE 'PROCESSING';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'READY') THEN
+        ALTER TYPE public.order_status ADD VALUE 'READY';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'DELIVERED') THEN
+        ALTER TYPE public.order_status ADD VALUE 'DELIVERED';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'COMPLETED') THEN
+        ALTER TYPE public.order_status ADD VALUE 'COMPLETED';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'CANCELLED') THEN
+        ALTER TYPE public.order_status ADD VALUE 'CANCELLED';
+    END IF;
+
+    -- Minúsculos (Para compatibilidade com dados legados ou envios acidentais)
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'pending') THEN
+        ALTER TYPE public.order_status ADD VALUE 'pending';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'confirmed') THEN
+        ALTER TYPE public.order_status ADD VALUE 'confirmed';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'processing') THEN
+        ALTER TYPE public.order_status ADD VALUE 'processing';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'ready') THEN
+        ALTER TYPE public.order_status ADD VALUE 'ready';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'delivered') THEN
+        ALTER TYPE public.order_status ADD VALUE 'delivered';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'completed') THEN
+        ALTER TYPE public.order_status ADD VALUE 'completed';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'cancelled') THEN
+        ALTER TYPE public.order_status ADD VALUE 'cancelled';
+    END IF;
+END $$;
+
+-- ==================================================================
+-- CORREÇÃO DEFINITIVA: Recriar tabela orders_tickets corretamente (18/01/2026)
+-- ==================================================================
+
+-- Dropar triggers antigos
+DROP TRIGGER IF EXISTS trigger_create_ticket_on_order ON public.orders;
+DROP TRIGGER IF EXISTS trigger_create_ticket_on_collaborator_order ON public.orders_collaborators;
+DROP TRIGGER IF EXISTS handle_orders_tickets_updated_at ON public.orders_tickets;
+
+-- Dropar funções antigas
+DROP FUNCTION IF EXISTS public.handle_new_order_ticket() CASCADE;
+DROP FUNCTION IF EXISTS public.handle_new_collaborator_order_ticket() CASCADE;
+
+-- Dropar tabela antiga se existir
+DROP TABLE IF EXISTS public.orders_tickets CASCADE;
+
+-- Recriar tabela orders_tickets com estrutura correta
+CREATE TABLE public.orders_tickets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
+    collaborator_order_id UUID REFERENCES public.orders_collaborators(id) ON DELETE CASCADE,
+    display_id SERIAL,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT check_one_order_type CHECK (
+        (order_id IS NOT NULL AND collaborator_order_id IS NULL) OR
+        (order_id IS NULL AND collaborator_order_id IS NOT NULL)
+    )
+);
+
+-- Índices
+CREATE INDEX orders_tickets_store_id_idx ON public.orders_tickets(store_id);
+CREATE INDEX orders_tickets_status_idx ON public.orders_tickets(status);
+CREATE INDEX orders_tickets_created_at_idx ON public.orders_tickets(created_at);
+CREATE INDEX orders_tickets_order_id_idx ON public.orders_tickets(order_id) WHERE order_id IS NOT NULL;
+CREATE INDEX orders_tickets_collaborator_order_id_idx ON public.orders_tickets(collaborator_order_id) WHERE collaborator_order_id IS NOT NULL;
+
+-- RLS
+ALTER TABLE public.orders_tickets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can view tickets" ON public.orders_tickets;
+CREATE POLICY "Authenticated users can view tickets" ON public.orders_tickets FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Authenticated users can manage tickets" ON public.orders_tickets;
+CREATE POLICY "Authenticated users can manage tickets" ON public.orders_tickets FOR ALL TO authenticated USING (true);
+
+-- Trigger para updated_at
+CREATE TRIGGER handle_orders_tickets_updated_at 
+BEFORE UPDATE ON public.orders_tickets
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Função para pedidos internos/delivery
+CREATE OR REPLACE FUNCTION public.handle_new_order_ticket()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.status IN ('PENDING', 'CONFIRMED', 'PROCESSING') AND OLD.status != NEW.status) THEN
+        IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE order_id = NEW.id) THEN
+            INSERT INTO public.orders_tickets (store_id, order_id, items, status, created_at)
+            VALUES (NEW.store_id, NEW.id, COALESCE(NEW.items, '[]'::jsonb), 'pending', NEW.created_at);
+        END IF;
+    END IF;
+    
+    IF (TG_OP = 'UPDATE' AND NEW.status = 'CANCELLED') THEN
+        UPDATE public.orders_tickets SET status = 'completed' WHERE order_id = NEW.id;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Função para pedidos de colaborador
+CREATE OR REPLACE FUNCTION public.handle_new_collaborator_order_ticket()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT' AND NEW.status IN ('opened', 'sent')) OR 
+       (TG_OP = 'UPDATE' AND NEW.status IN ('opened', 'sent') AND OLD.status != NEW.status) THEN
+        
+        IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE collaborator_order_id = NEW.id) THEN
+            INSERT INTO public.orders_tickets (store_id, collaborator_order_id, items, status, created_at)
+            VALUES (
+                NEW.store_id, 
+                NEW.id, 
+                COALESCE(
+                    (SELECT jsonb_agg(
+                        jsonb_build_object(
+                            'product_id', oi.product_id,
+                            'name', COALESCE(oi.name, p.name, 'Produto'),
+                            'quantity', oi.quantity,
+                            'price', oi.unit_price
+                        )
+                    ) FROM public.orders_items oi 
+                    LEFT JOIN public.products p ON p.id = oi.product_id
+                    WHERE oi.order_id = NEW.id),
+                    '[]'::jsonb
+                ),
+                'pending', 
+                NEW.created_at
+            );
+        END IF;
+    END IF;
+    
+    IF (TG_OP = 'UPDATE' AND NEW.status = 'completed') THEN
+        UPDATE public.orders_tickets SET status = 'completed' WHERE collaborator_order_id = NEW.id;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Criar triggers
+CREATE TRIGGER trigger_create_ticket_on_order
+AFTER INSERT OR UPDATE ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_order_ticket();
+
+CREATE TRIGGER trigger_create_ticket_on_collaborator_order
+AFTER INSERT OR UPDATE ON public.orders_collaborators
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_collaborator_order_ticket();
+
+-- ==================================================================
+-- CORREÇÃO DE PERMISSÕES RLS - orders_tickets (18/01/2026)
+-- ==================================================================
+
+-- Remover policies antigas
+DROP POLICY IF EXISTS "Authenticated users can view tickets" ON public.orders_tickets;
+DROP POLICY IF EXISTS "Authenticated users can manage tickets" ON public.orders_tickets;
+DROP POLICY IF EXISTS "Users can view their store tickets" ON public.orders_tickets;
+DROP POLICY IF EXISTS "Users can create tickets for their store" ON public.orders_tickets;
+DROP POLICY IF EXISTS "Users can update their store tickets" ON public.orders_tickets;
+DROP POLICY IF EXISTS "Users can delete their store tickets" ON public.orders_tickets;
+
+-- Criar policies corretas
+CREATE POLICY "Users can view their store tickets" 
+ON public.orders_tickets 
+FOR SELECT 
+TO authenticated 
+USING (
+    store_id = auth.uid() 
+    OR 
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+CREATE POLICY "Users can create tickets for their store" 
+ON public.orders_tickets 
+FOR INSERT 
+TO authenticated 
+WITH CHECK (
+    store_id = auth.uid() 
+    OR 
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+CREATE POLICY "Users can update their store tickets" 
+ON public.orders_tickets 
+FOR UPDATE 
+TO authenticated 
+USING (
+    store_id = auth.uid() 
+    OR 
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+CREATE POLICY "Users can delete their store tickets" 
+ON public.orders_tickets 
+FOR DELETE 
+TO authenticated 
+USING (
+    store_id = auth.uid() 
+    OR 
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.orders_tickets TO authenticated;
+
+-- Função RPC para atualizar status do ticket (Acessível por Colaboradores/Lojistas)
+CREATE OR REPLACE FUNCTION public.update_ticket_status(p_ticket_id UUID, p_status TEXT)
+RETURNS VOID AS $$
+DECLARE
+    v_ticket RECORD;
+    v_order RECORD;
+    v_next_status TEXT := 'ready';
+BEGIN
+    -- 1. Atualizar o status do ticket
+    UPDATE public.orders_tickets
+    SET status = p_status, updated_at = now()
+    WHERE id = p_ticket_id
+    RETURNING * INTO v_ticket;
+
+    IF v_ticket.id IS NULL THEN
+        RAISE EXCEPTION 'Ticket not found';
+    END IF;
+
+    -- 2. Se for finalizado (ready) e tiver pedido principal associado (Delivery/Balcão)
+    IF p_status = 'ready' AND v_ticket.order_id IS NOT NULL THEN
+        -- Buscar pedido para ver tipo
+        SELECT * INTO v_order FROM public.orders WHERE id = v_ticket.order_id;
+        
+        IF v_order.id IS NOT NULL THEN
+            -- Se for delivery com entregador, vai para in_transit
+            IF v_order.order_type = 'DELIVERY' AND v_order.driver_id IS NOT NULL THEN
+                v_next_status := 'in_transit';
+            END IF;
+
+            -- Atualizar pedido principal
+            UPDATE public.orders 
+            SET status = v_next_status::public.order_status, updated_at = now()
+            WHERE id = v_order.id;
+        END IF;
+    END IF;
+
+    -- 3. Se for pedido de colaborador (Mesa)
+    IF v_ticket.collaborator_order_id IS NOT NULL THEN
+        -- Se o ticket for completado/ready, podemos atualizar a mesa também se necessário
+        -- Por enquanto, mantemos desconectado ou lógica específica se houver
+        NULL;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.update_ticket_status TO anon, authenticated, service_role;
+
+-- ==================================================================
+-- MULTI-LOJA E MULTI-ATENDENTE WHATSAPP (Adicionado em 2024-05-21)
+-- ==================================================================
+
+-- 1. Modificar whatsapp_sessions para suportar store_id
+ALTER TABLE public.whatsapp_sessions ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+ALTER TABLE public.whatsapp_sessions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'DISCONNECTED';
+
+-- 2. Modificar whatsapp_conversations para incluir store_id, assigned_to e status
+ALTER TABLE public.whatsapp_conversations ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+ALTER TABLE public.whatsapp_conversations ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL;
+ALTER TABLE public.whatsapp_conversations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
+
+-- 3. Modificar whatsapp_messages para incluir store_id e attendant_id
+ALTER TABLE public.whatsapp_messages ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+ALTER TABLE public.whatsapp_messages ADD COLUMN IF NOT EXISTS attendant_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL;
+
+-- 4. Criar restrições de unicidade compostas para evitar colisões entre lojas (Multi-loja)
+ALTER TABLE public.whatsapp_sessions DROP CONSTRAINT IF EXISTS whatsapp_sessions_store_id_key;
+ALTER TABLE public.whatsapp_sessions ADD CONSTRAINT whatsapp_sessions_store_id_key UNIQUE (store_id);
+
+ALTER TABLE public.whatsapp_conversations DROP CONSTRAINT IF EXISTS whatsapp_conversations_store_id_conv_id_key;
+ALTER TABLE public.whatsapp_conversations ADD CONSTRAINT whatsapp_conversations_store_id_conv_id_key UNIQUE (store_id, conversation_id);
+
+ALTER TABLE public.whatsapp_messages DROP CONSTRAINT IF EXISTS whatsapp_messages_store_id_msg_id_key;
+ALTER TABLE public.whatsapp_messages ADD CONSTRAINT whatsapp_messages_store_id_msg_id_key UNIQUE (store_id, message_id);
+
+-- 5. Criar ínidices para performance
+CREATE INDEX IF NOT EXISTS idx_whatsapp_sessions_store_id ON public.whatsapp_sessions(store_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conv_store_id ON public.whatsapp_conversations(store_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_msg_store_id ON public.whatsapp_messages(store_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conv_assigned_to ON public.whatsapp_conversations(assigned_to);
+
+-- 5. Atualizar RLS (As tabelas originais tinham RLS desabilitado, vamos habilitar e configurar)
+ALTER TABLE public.whatsapp_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_messages ENABLE ROW LEVEL SECURITY;
+
+-- Policies para whatsapp_sessions
+DROP POLICY IF EXISTS "Lojistas gerenciam suas proprias sessoes" ON public.whatsapp_sessions;
+CREATE POLICY "Lojistas gerenciam suas proprias sessoes" ON public.whatsapp_sessions
+    FOR ALL USING (auth.uid() = store_id);
+
+-- Policies para whatsapp_conversations
+DROP POLICY IF EXISTS "Lojistas veem suas proprias conversas" ON public.whatsapp_conversations;
+CREATE POLICY "Lojistas veem suas proprias conversas" ON public.whatsapp_conversations
+    FOR SELECT USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Atendentes veem conversas atribuidas" ON public.whatsapp_conversations;
+CREATE POLICY "Atendentes veem conversas atribuidas" ON public.whatsapp_conversations
+    FOR ALL USING (auth.uid() = assigned_to OR auth.uid() = store_id);
+
+-- Policies para whatsapp_messages
+DROP POLICY IF EXISTS "Lojistas e Atendentes veem mensagens da loja" ON public.whatsapp_messages;
+CREATE POLICY "Lojistas e Atendentes veem mensagens da loja" ON public.whatsapp_messages
+    FOR SELECT USING (auth.uid() = store_id OR EXISTS (
+        SELECT 1 FROM public.whatsapp_conversations 
+        WHERE conversation_id = whatsapp_messages.conversation_id 
+        AND (assigned_to = auth.uid() OR store_id = auth.uid())
+    ));
+
+GRANT ALL ON public.whatsapp_sessions TO authenticated, service_role;
+GRANT ALL ON public.whatsapp_conversations TO authenticated, service_role;
+GRANT ALL ON public.whatsapp_messages TO authenticated, service_role;
+
+-- 6. Adicionar campos para Concurrency Control e Deduplicação Offline
+ALTER TABLE public.whatsapp_conversations ADD COLUMN IF NOT EXISTS locked_by_agent_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL;
+ALTER TABLE public.whatsapp_conversations ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;
+ALTER TABLE public.whatsapp_messages ADD COLUMN IF NOT EXISTS client_message_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conv_locked_by ON public.whatsapp_conversations(locked_by_agent_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_msg_client_id ON public.whatsapp_messages(client_message_id);
+
+COMMENT ON COLUMN public.whatsapp_conversations.locked_by_agent_id IS 'ID do atendente que está respondendo no momento';
+COMMENT ON COLUMN public.whatsapp_messages.client_message_id IS 'ID gerado pelo cliente para deduplicação em sincronização offline';
+
+-- ==================================================================
+-- ORGANIZAÇÃO MANUAL DE CONVERSAS (Adicionado em 2026-01-18)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.whatsapp_conversation_orders (
+    attendant_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    conversation_id TEXT,
+    position INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (attendant_id, store_id, conversation_id)
+);
+
+-- Índices para performance
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conv_orders_attendant ON public.whatsapp_conversation_orders(attendant_id, store_id);
+
+-- RLS
+ALTER TABLE public.whatsapp_conversation_orders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Atendentes gerenciam sua própria ordem" ON public.whatsapp_conversation_orders;
+CREATE POLICY "Atendentes gerenciam sua própria ordem" ON public.whatsapp_conversation_orders
+    FOR ALL USING (auth.uid() = attendant_id);
+
+GRANT ALL ON public.whatsapp_conversation_orders TO authenticated, service_role;
+
+COMMENT ON TABLE public.whatsapp_conversation_orders IS 'Armazena a ordem manual das conversas de WhatsApp por atendente';
+
+-- Adiciona coluna de prioridade para conversas (Extensão de Prioridade)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsapp_conversations' AND column_name = 'priority') THEN
+        ALTER TABLE "whatsapp_conversations" ADD COLUMN "priority" text DEFAULT 'normal';
+        ALTER TABLE "whatsapp_conversations" ADD CONSTRAINT "check_priority" CHECK (priority IN ('critical', 'high', 'normal', 'low'));
+    END IF;
+END $$;
+-- Organização definitiva de conversas por Telefone (Precavendo duplicatas multi-aparelho)
+ALTER TABLE public.whatsapp_conversations ADD COLUMN IF NOT EXISTS phone_number TEXT;
+
+-- Migração: Extrair números de telefone dos JIDs existentes
+UPDATE public.whatsapp_conversations 
+SET phone_number = split_part(split_part(conversation_id, '@', 1), ':', 1)
+WHERE phone_number IS NULL AND conversation_id NOT LIKE '%@g.us';
+
+-- Criar índice único para evitar duplicatas por número na mesma loja
+-- Nota: Removemos duplicatas mantendo a mais recente por número/loja usando ctid.
+DELETE FROM public.whatsapp_conversations a
+USING public.whatsapp_conversations b
+WHERE a.ctid < b.ctid 
+  AND a.store_id = b.store_id 
+  AND a.phone_number = b.phone_number 
+  AND a.phone_number IS NOT NULL;
+
+ALTER TABLE public.whatsapp_conversations DROP CONSTRAINT IF EXISTS whatsapp_conversations_store_id_phone_number_key;
+ALTER TABLE public.whatsapp_conversations ADD CONSTRAINT whatsapp_conversations_store_id_phone_number_key UNIQUE (store_id, phone_number);
+
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conv_phone ON public.whatsapp_conversations(phone_number);
+
+-- ==================================================================
+-- ZÉ ASSISTENTE - ASSISTENTE VIRTUAL WHATSAPP (Adicionado em 2026-01-18)
+-- ==================================================================
+
+-- Enum para tipos de resposta do assistente
+DO $$ BEGIN
+    CREATE TYPE public.ze_assistant_response_type AS ENUM ('AI', 'RULE', 'HYBRID', 'HUMAN');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Enum para tipos de regra
+DO $$ BEGIN
+    CREATE TYPE public.ze_assistant_rule_type AS ENUM ('SYSTEM', 'CUSTOM');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Enum para tipos de pedido
+DO $$ BEGIN
+    CREATE TYPE public.ze_assistant_order_type AS ENUM ('DELIVERY', 'PICKUP');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Enum para tipos de conteúdo da base de conhecimento
+DO $$ BEGIN
+    CREATE TYPE public.ze_assistant_content_type AS ENUM ('PRODUCT', 'FAQ', 'POLICY', 'HOURS', 'PAYMENT', 'DELIVERY');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ==================================================================
+-- TABELA 1: Configurações do Zé Assistente por Loja
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.ze_assistant_config (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE UNIQUE NOT NULL,
+    is_enabled BOOLEAN DEFAULT FALSE,
+    ai_enabled BOOLEAN DEFAULT TRUE,
+    rules_enabled BOOLEAN DEFAULT TRUE,
+    can_create_orders BOOLEAN DEFAULT FALSE,
+    can_delivery BOOLEAN DEFAULT FALSE,
+    can_pickup BOOLEAN DEFAULT FALSE,
+    greeting_message TEXT DEFAULT 'Olá! Sou o Zé, assistente virtual desta loja. Como posso ajudar?',
+    fallback_message TEXT DEFAULT 'Desculpe, não entendi. Vou transferir você para um atendente humano.',
+    auto_handoff_on_confusion BOOLEAN DEFAULT TRUE,
+    max_confusion_attempts INTEGER DEFAULT 2,
+    response_delay_ms INTEGER DEFAULT 1000,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_config_store ON public.ze_assistant_config(store_id);
+
+DROP TRIGGER IF EXISTS handle_ze_assistant_config_updated_at ON public.ze_assistant_config;
+CREATE TRIGGER handle_ze_assistant_config_updated_at BEFORE UPDATE ON public.ze_assistant_config
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.ze_assistant_config ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas gerenciam sua configuração" ON public.ze_assistant_config;
+CREATE POLICY "Lojistas gerenciam sua configuração" ON public.ze_assistant_config
+    FOR ALL USING (auth.uid() = store_id OR public.is_admin());
+
+GRANT ALL ON public.ze_assistant_config TO authenticated, service_role;
+
+COMMENT ON TABLE public.ze_assistant_config IS 'Configurações do Zé Assistente por loja';
+
+-- ==================================================================
+-- TABELA 2: Regras Fixas do Assistente (Sistema + Personalizadas)
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.ze_assistant_rules (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    rule_type public.ze_assistant_rule_type NOT NULL DEFAULT 'CUSTOM',
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    trigger_keywords TEXT[] NOT NULL,
+    response_template TEXT NOT NULL,
+    priority INTEGER DEFAULT 100,
+    is_active BOOLEAN DEFAULT TRUE,
+    match_mode VARCHAR(20) DEFAULT 'contains', -- 'exact', 'contains', 'starts_with', 'regex'
+    variables JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT check_rule_type_store CHECK (
+        (rule_type = 'SYSTEM' AND store_id IS NULL) OR 
+        (rule_type = 'CUSTOM' AND store_id IS NOT NULL)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_rules_store ON public.ze_assistant_rules(store_id);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_rules_type ON public.ze_assistant_rules(rule_type);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_rules_active ON public.ze_assistant_rules(is_active);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_rules_priority ON public.ze_assistant_rules(priority DESC);
+
+DROP TRIGGER IF EXISTS handle_ze_assistant_rules_updated_at ON public.ze_assistant_rules;
+CREATE TRIGGER handle_ze_assistant_rules_updated_at BEFORE UPDATE ON public.ze_assistant_rules
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.ze_assistant_rules ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Todos visualizam regras do sistema" ON public.ze_assistant_rules;
+CREATE POLICY "Todos visualizam regras do sistema" ON public.ze_assistant_rules
+    FOR SELECT USING (rule_type = 'SYSTEM' OR auth.uid() = store_id OR public.is_admin());
+
+DROP POLICY IF EXISTS "Lojistas gerenciam suas regras" ON public.ze_assistant_rules;
+CREATE POLICY "Lojistas gerenciam suas regras" ON public.ze_assistant_rules
+    FOR ALL USING (
+        (rule_type = 'CUSTOM' AND auth.uid() = store_id) OR 
+        public.is_admin()
+    );
+
+GRANT SELECT ON public.ze_assistant_rules TO authenticated, service_role;
+GRANT INSERT, UPDATE, DELETE ON public.ze_assistant_rules TO authenticated, service_role;
+
+COMMENT ON TABLE public.ze_assistant_rules IS 'Regras fixas do Zé Assistente (sistema e personalizadas)';
+
+-- ==================================================================
+-- TABELA 3: Histórico de Conversas do Assistente
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.ze_assistant_conversations (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE NOT NULL,
+    customer_phone TEXT NOT NULL,
+    customer_name TEXT,
+    is_assistant_active BOOLEAN DEFAULT TRUE,
+    handoff_to_human BOOLEAN DEFAULT FALSE,
+    handoff_at TIMESTAMPTZ,
+    handoff_reason TEXT,
+    context_data JSONB DEFAULT '{}'::jsonb,
+    summary TEXT,
+    confusion_count INTEGER DEFAULT 0,
+    last_interaction_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(store_id, conversation_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_conv_store ON public.ze_assistant_conversations(store_id);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_conv_phone ON public.ze_assistant_conversations(customer_phone);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_conv_active ON public.ze_assistant_conversations(is_assistant_active);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_conv_last_interaction ON public.ze_assistant_conversations(last_interaction_at DESC);
+
+DROP TRIGGER IF EXISTS handle_ze_assistant_conversations_updated_at ON public.ze_assistant_conversations;
+CREATE TRIGGER handle_ze_assistant_conversations_updated_at BEFORE UPDATE ON public.ze_assistant_conversations
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.ze_assistant_conversations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas visualizam conversas da sua loja" ON public.ze_assistant_conversations;
+CREATE POLICY "Lojistas visualizam conversas da sua loja" ON public.ze_assistant_conversations
+    FOR ALL USING (auth.uid() = store_id OR public.is_admin());
+
+GRANT ALL ON public.ze_assistant_conversations TO authenticated, service_role;
+
+COMMENT ON TABLE public.ze_assistant_conversations IS 'Histórico de conversas do Zé Assistente';
+
+-- ==================================================================
+-- TABELA 4: Mensagens Processadas pelo Assistente
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.ze_assistant_messages (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    conversation_id UUID REFERENCES public.ze_assistant_conversations(id) ON DELETE CASCADE NOT NULL,
+    message_id TEXT,
+    message_text TEXT NOT NULL,
+    response_text TEXT,
+    response_type public.ze_assistant_response_type DEFAULT 'HYBRID',
+    confidence_score NUMERIC(3, 2),
+    rule_id UUID REFERENCES public.ze_assistant_rules(id) ON DELETE SET NULL,
+    processing_time_ms INTEGER,
+    was_successful BOOLEAN DEFAULT TRUE,
+    error_message TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_msg_conv ON public.ze_assistant_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_msg_type ON public.ze_assistant_messages(response_type);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_msg_created ON public.ze_assistant_messages(created_at DESC);
+
+ALTER TABLE public.ze_assistant_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas visualizam mensagens da sua loja" ON public.ze_assistant_messages;
+CREATE POLICY "Lojistas visualizam mensagens da sua loja" ON public.ze_assistant_messages
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.ze_assistant_conversations 
+            WHERE id = conversation_id AND 
+            (store_id = auth.uid() OR public.is_admin())
+        )
+    );
+
+GRANT SELECT, INSERT ON public.ze_assistant_messages TO authenticated, service_role;
+
+COMMENT ON TABLE public.ze_assistant_messages IS 'Registro de mensagens processadas pelo Zé Assistente';
+
+-- ==================================================================
+-- TABELA 5: Pedidos Criados pelo Assistente
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.ze_assistant_orders (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    conversation_id UUID REFERENCES public.ze_assistant_conversations(id) ON DELETE CASCADE NOT NULL,
+    order_id UUID,
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    customer_address JSONB,
+    items JSONB NOT NULL,
+    order_type public.ze_assistant_order_type NOT NULL,
+    total_amount NUMERIC(10, 2),
+    delivery_fee NUMERIC(10, 2),
+    payment_method TEXT,
+    confirmed_by_customer BOOLEAN DEFAULT FALSE,
+    confirmed_at TIMESTAMPTZ,
+    status TEXT DEFAULT 'PENDING',
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_orders_conv ON public.ze_assistant_orders(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_orders_status ON public.ze_assistant_orders(status);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_orders_created ON public.ze_assistant_orders(created_at DESC);
+
+DROP TRIGGER IF EXISTS handle_ze_assistant_orders_updated_at ON public.ze_assistant_orders;
+CREATE TRIGGER handle_ze_assistant_orders_updated_at BEFORE UPDATE ON public.ze_assistant_orders
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.ze_assistant_orders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas gerenciam pedidos da sua loja" ON public.ze_assistant_orders;
+CREATE POLICY "Lojistas gerenciam pedidos da sua loja" ON public.ze_assistant_orders
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.ze_assistant_conversations 
+            WHERE id = conversation_id AND 
+            (store_id = auth.uid() OR public.is_admin())
+        )
+    );
+
+GRANT ALL ON public.ze_assistant_orders TO authenticated, service_role;
+
+COMMENT ON TABLE public.ze_assistant_orders IS 'Pedidos criados pelo Zé Assistente';
+
+-- ==================================================================
+-- TABELA 6: Base de Conhecimento por Loja
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.ze_assistant_knowledge_base (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE NOT NULL,
+    content_type public.ze_assistant_content_type NOT NULL,
+    title VARCHAR(500),
+    content TEXT NOT NULL,
+    structured_data JSONB,
+    embeddings JSONB,
+    relevance_score NUMERIC(3, 2) DEFAULT 1.0,
+    is_active BOOLEAN DEFAULT TRUE,
+    last_synced_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_kb_store ON public.ze_assistant_knowledge_base(store_id);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_kb_type ON public.ze_assistant_knowledge_base(content_type);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_kb_active ON public.ze_assistant_knowledge_base(is_active);
+
+DROP TRIGGER IF EXISTS handle_ze_assistant_kb_updated_at ON public.ze_assistant_knowledge_base;
+CREATE TRIGGER handle_ze_assistant_kb_updated_at BEFORE UPDATE ON public.ze_assistant_knowledge_base
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.ze_assistant_knowledge_base ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas gerenciam sua base de conhecimento" ON public.ze_assistant_knowledge_base;
+CREATE POLICY "Lojistas gerenciam sua base de conhecimento" ON public.ze_assistant_knowledge_base
+    FOR ALL USING (auth.uid() = store_id OR public.is_admin());
+
+GRANT ALL ON public.ze_assistant_knowledge_base TO authenticated, service_role;
+
+COMMENT ON TABLE public.ze_assistant_knowledge_base IS 'Base de conhecimento do Zé Assistente por loja';
+
+-- ==================================================================
+-- DADOS INICIAIS: Regras Padrão do Sistema
+-- ==================================================================
+
+-- Inserir regras padrão do sistema (apenas se não existirem)
+INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+VALUES 
+    ('SYSTEM', 'Saudação', 'Resposta para saudações', ARRAY['oi', 'olá', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'ola'], 
+     'Olá! 👋 Sou o Zé, assistente virtual. Como posso ajudar você hoje?', 90, 'contains'),
+    
+    ('SYSTEM', 'Agradecimento', 'Resposta para agradecimentos', ARRAY['obrigado', 'obrigada', 'valeu', 'muito obrigado'],
+     'Por nada! 😊 Sempre à disposição. Precisa de mais alguma coisa?', 80, 'contains'),
+    
+    ('SYSTEM', 'Despedida', 'Resposta para despedidas', ARRAY['tchau', 'até logo', 'até mais', 'falou', 'bye'],
+     'Até logo! 👋 Volte sempre que precisar!', 85, 'contains'),
+    
+    ('SYSTEM', 'Cardápio/Produtos', 'Solicitar lista de produtos', ARRAY['cardápio', 'cardapio', 'menu', 'produtos', 'o que tem', 'o que vocês tem', 'que tem'],
+     'Claro! Vou buscar nosso cardápio completo para você. Um momento... 📋', 70, 'contains'),
+    
+    ('SYSTEM', 'Preço', 'Pergunta sobre preços', ARRAY['quanto custa', 'preço', 'preco', 'valor', 'quanto é', 'quanto fica'],
+     'Sobre qual produto você gostaria de saber o preço? 💰', 75, 'contains'),
+    
+    ('SYSTEM', 'Forma de Pagamento', 'Pergunta sobre pagamento', ARRAY['pagar', 'pagamento', 'aceita', 'forma de pagamento', 'cartão', 'cartao', 'pix', 'dinheiro'],
+     'Aceitamos diversas formas de pagamento. Deixe-me verificar as opções disponíveis para você! 💳', 70, 'contains'),
+    
+    ('SYSTEM', 'Entrega', 'Pergunta sobre entrega', ARRAY['entrega', 'entregar', 'delivery', 'frete', 'quanto tempo', 'demora'],
+     'Sobre entrega: deixe-me verificar as informações de prazo e taxa para sua região! 🚚', 75, 'contains'),
+    
+    ('SYSTEM', 'Horário', 'Pergunta sobre horário de funcionamento', ARRAY['horário', 'horario', 'abre', 'fecha', 'funciona', 'funcionamento', 'aberto'],
+     'Vou verificar nosso horário de funcionamento para você! ⏰', 80, 'contains'),
+    
+    ('SYSTEM', 'Endereço', 'Pergunta sobre localização', ARRAY['endereço', 'endereco', 'onde fica', 'localização', 'localizacao', 'onde é'],
+     'Vou te passar o endereço da loja! 📍', 75, 'contains'),
+    
+    ('SYSTEM', 'Fazer Pedido', 'Iniciar pedido', ARRAY['fazer pedido', 'quero pedir', 'gostaria de pedir', 'queria pedir', 'pedido'],
+     'Ótimo! Vou te ajudar a fazer seu pedido. 🛒 Me diga o que você gostaria!', 95, 'contains')
+ON CONFLICT DO NOTHING;
+
+
+-- ==================================================================
+-- ZÉ ASSISTENTE - SISTEMA DE ATENDIMENTO VIRTUAL
+-- ==================================================================
+
+-- Tabela de configuração do assistente por loja
+CREATE TABLE IF NOT EXISTS public.ze_assistant_config (
+    store_id UUID PRIMARY KEY REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT false,
+    ai_enabled BOOLEAN DEFAULT false,
+    rules_enabled BOOLEAN DEFAULT true,
+    order_creation_enabled BOOLEAN DEFAULT false,
+    welcome_message TEXT DEFAULT 'Olá! Sou o assistente virtual. Como posso ajudar?',
+    fallback_message TEXT DEFAULT 'Desculpe, não entendi. Pode reformular?',
+    handoff_message TEXT DEFAULT 'Vou transferir você para um atendente humano.',
+    max_confusion_count INTEGER DEFAULT 3,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Tabela de regras fixas de resposta
+CREATE TABLE IF NOT EXISTS public.ze_assistant_rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    rule_type TEXT DEFAULT 'CUSTOM' CHECK (rule_type IN ('SYSTEM', 'CUSTOM')),
+    name TEXT NOT NULL,
+    description TEXT,
+    trigger_keywords TEXT[] NOT NULL,
+    response_template TEXT NOT NULL,
+    priority INTEGER DEFAULT 50,
+    match_type TEXT DEFAULT 'contains' CHECK (match_type IN ('exact', 'contains', 'starts_with', 'regex')),
+    is_active BOOLEAN DEFAULT true,
+    variables JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Tabela de conversas do assistente
+CREATE TABLE IF NOT EXISTS public.ze_assistant_conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    customer_phone TEXT NOT NULL,
+    customer_name TEXT,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'closed', 'handoff')),
+    context JSONB DEFAULT '{}',
+    confusion_count INTEGER DEFAULT 0,
+    last_message_at TIMESTAMPTZ DEFAULT now(),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, customer_phone)
+);
+
+-- Tabela de mensagens do assistente
+CREATE TABLE IF NOT EXISTS public.ze_assistant_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES public.ze_assistant_conversations(id) ON DELETE CASCADE,
+    sender TEXT NOT NULL CHECK (sender IN ('customer', 'assistant', 'human')),
+    message_text TEXT NOT NULL,
+    response_type TEXT CHECK (response_type IN ('AI', 'RULE', 'HUMAN')),
+    rule_id UUID REFERENCES public.ze_assistant_rules(id) ON DELETE SET NULL,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Tabela de pedidos criados pelo assistente
+CREATE TABLE IF NOT EXISTS public.ze_assistant_orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES public.ze_assistant_conversations(id) ON DELETE CASCADE,
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    order_data JSONB NOT NULL,
+    status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'confirmed', 'cancelled', 'completed')),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Tabela de base de conhecimento do assistente
+CREATE TABLE IF NOT EXISTS public.ze_assistant_knowledge_base (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    knowledge_type TEXT NOT NULL CHECK (knowledge_type IN ('product', 'faq', 'store_info', 'policy')),
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    is_active BOOLEAN DEFAULT true,
+    last_synced_at TIMESTAMPTZ DEFAULT now(),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Índices para performance
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_rules_store ON public.ze_assistant_rules(store_id) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_rules_keywords ON public.ze_assistant_rules USING GIN(trigger_keywords);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_conversations_store ON public.ze_assistant_conversations(store_id);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_conversations_phone ON public.ze_assistant_conversations(customer_phone);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_conversations_status ON public.ze_assistant_conversations(status);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_messages_conversation ON public.ze_assistant_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_orders_store ON public.ze_assistant_orders(store_id);
+CREATE INDEX IF NOT EXISTS idx_ze_assistant_knowledge_store ON public.ze_assistant_knowledge_base(store_id) WHERE is_active = true;
+
+-- Triggers para updated_at
+CREATE TRIGGER update_ze_assistant_config_updated_at BEFORE UPDATE ON public.ze_assistant_config
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_ze_assistant_rules_updated_at BEFORE UPDATE ON public.ze_assistant_rules
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_ze_assistant_conversations_updated_at BEFORE UPDATE ON public.ze_assistant_conversations
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_ze_assistant_orders_updated_at BEFORE UPDATE ON public.ze_assistant_orders
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_ze_assistant_knowledge_updated_at BEFORE UPDATE ON public.ze_assistant_knowledge_base
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS (Row Level Security)
+ALTER TABLE public.ze_assistant_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_knowledge_base ENABLE ROW LEVEL SECURITY;
+
+-- Políticas RLS para ze_assistant_config
+DROP POLICY IF EXISTS "Usuários podem ver sua própria configuração" ON public.ze_assistant_config;
+CREATE POLICY "Usuários podem ver sua própria configuração" ON public.ze_assistant_config
+    FOR SELECT USING (auth.uid()::text = store_id::text);
+
+DROP POLICY IF EXISTS "Usuários podem atualizar sua própria configuração" ON public.ze_assistant_config;
+CREATE POLICY "Usuários podem atualizar sua própria configuração" ON public.ze_assistant_config
+    FOR UPDATE USING (auth.uid()::text = store_id::text);
+
+DROP POLICY IF EXISTS "Usuários podem inserir sua própria configuração" ON public.ze_assistant_config;
+CREATE POLICY "Usuários podem inserir sua própria configuração" ON public.ze_assistant_config
+    FOR INSERT WITH CHECK (auth.uid()::text = store_id::text);
+
+-- Políticas RLS para ze_assistant_rules
+DROP POLICY IF EXISTS "Usuários podem ver suas próprias regras" ON public.ze_assistant_rules;
+CREATE POLICY "Usuários podem ver suas próprias regras" ON public.ze_assistant_rules
+    FOR SELECT USING (auth.uid()::text = store_id::text OR store_id IS NULL);
+
+DROP POLICY IF EXISTS "Usuários podem gerenciar suas próprias regras" ON public.ze_assistant_rules;
+CREATE POLICY "Usuários podem gerenciar suas próprias regras" ON public.ze_assistant_rules
+    FOR ALL USING (auth.uid()::text = store_id::text);
+
+-- Políticas RLS para ze_assistant_conversations
+DROP POLICY IF EXISTS "Usuários podem ver suas próprias conversas" ON public.ze_assistant_conversations;
+CREATE POLICY "Usuários podem ver suas próprias conversas" ON public.ze_assistant_conversations
+    FOR SELECT USING (auth.uid()::text = store_id::text);
+
+DROP POLICY IF EXISTS "Usuários podem gerenciar suas próprias conversas" ON public.ze_assistant_conversations;
+CREATE POLICY "Usuários podem gerenciar suas próprias conversas" ON public.ze_assistant_conversations
+    FOR ALL USING (auth.uid()::text = store_id::text);
+
+-- Políticas RLS para ze_assistant_messages
+DROP POLICY IF EXISTS "Usuários podem ver mensagens de suas conversas" ON public.ze_assistant_messages;
+CREATE POLICY "Usuários podem ver mensagens de suas conversas" ON public.ze_assistant_messages
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.ze_assistant_conversations
+            WHERE id = conversation_id AND auth.uid()::text = store_id::text
+        )
+    );
+
+DROP POLICY IF EXISTS "Usuários podem gerenciar mensagens de suas conversas" ON public.ze_assistant_messages;
+CREATE POLICY "Usuários podem gerenciar mensagens de suas conversas" ON public.ze_assistant_messages
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.ze_assistant_conversations
+            WHERE id = conversation_id AND auth.uid()::text = store_id::text
+        )
+    );
+
+-- Políticas RLS para ze_assistant_orders
+DROP POLICY IF EXISTS "Usuários podem ver seus próprios pedidos" ON public.ze_assistant_orders;
+CREATE POLICY "Usuários podem ver seus próprios pedidos" ON public.ze_assistant_orders
+    FOR SELECT USING (auth.uid()::text = store_id::text);
+
+DROP POLICY IF EXISTS "Usuários podem gerenciar seus próprios pedidos" ON public.ze_assistant_orders;
+CREATE POLICY "Usuários podem gerenciar seus próprios pedidos" ON public.ze_assistant_orders
+    FOR ALL USING (auth.uid()::text = store_id::text);
+
+-- Políticas RLS para ze_assistant_knowledge_base
+DROP POLICY IF EXISTS "Usuários podem ver sua própria base de conhecimento" ON public.ze_assistant_knowledge_base;
+CREATE POLICY "Usuários podem ver sua própria base de conhecimento" ON public.ze_assistant_knowledge_base
+    FOR SELECT USING (auth.uid()::text = store_id::text);
+
+DROP POLICY IF EXISTS "Usuários podem gerenciar sua própria base de conhecimento" ON public.ze_assistant_knowledge_base;
+CREATE POLICY "Usuários podem gerenciar sua própria base de conhecimento" ON public.ze_assistant_knowledge_base
+    FOR ALL USING (auth.uid()::text = store_id::text);
+
+-- Inserir regras padrão do sistema
+INSERT INTO public.ze_assistant_rules (store_id, rule_type, name, description, trigger_keywords, response_template, priority, match_type)
+VALUES 
+    (NULL, 'SYSTEM', 'Saudação', 'Cumprimento inicial', ARRAY['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'ola'],
+     'Olá! Bem-vindo(a)! 👋 Como posso ajudar você hoje?', 100, 'contains'),
+    
+    (NULL, 'SYSTEM', 'Cardápio', 'Solicita ver produtos', ARRAY['cardápio', 'cardapio', 'menu', 'produtos', 'o que tem', 'tem o que'],
+     'Aqui está nosso cardápio! 📋 {{products_list}}', 90, 'contains'),
+    
+    (NULL, 'SYSTEM', 'Entrega', 'Pergunta sobre entrega', ARRAY['entrega', 'entregar', 'delivery', 'frete', 'quanto tempo', 'demora'],
+     'Sobre entrega: deixe-me verificar as informações de prazo e taxa para sua região! 🚚', 75, 'contains'),
+    
+    (NULL, 'SYSTEM', 'Horário', 'Pergunta sobre horário de funcionamento', ARRAY['horário', 'horario', 'abre', 'fecha', 'funciona', 'funcionamento', 'aberto'],
+     'Vou verificar nosso horário de funcionamento para você! ⏰', 80, 'contains'),
+    
+    (NULL, 'SYSTEM', 'Endereço', 'Pergunta sobre localização', ARRAY['endereço', 'endereco', 'onde fica', 'localização', 'localizacao', 'onde é'],
+     'Vou te passar o endereço da loja! 📍', 75, 'contains'),
+    
+    (NULL, 'SYSTEM', 'Fazer Pedido', 'Iniciar pedido', ARRAY['fazer pedido', 'quero pedir', 'gostaria de pedir', 'queria pedir', 'pedido'],
+     'Ótimo! Vou te ajudar a fazer seu pedido. 🛒 Me diga o que você gostaria!', 95, 'contains')
+ON CONFLICT DO NOTHING;
+
