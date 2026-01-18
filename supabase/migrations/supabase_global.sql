@@ -334,10 +334,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.user_profiles;
 CREATE POLICY "Users can view their own profile" ON public.user_profiles
-    FOR SELECT USING (auth.uid() = id);
+    FOR SELECT USING (auth.uid()::text = id::text);
 DROP POLICY IF EXISTS "Users can update their own profile" ON public.user_profiles;
 CREATE POLICY "Users can update their own profile" ON public.user_profiles
-    FOR UPDATE USING (auth.uid() = id);
+    FOR UPDATE USING (auth.uid()::text = id::text);
 DROP POLICY IF EXISTS "Admins can manage user profiles" ON public.user_profiles;
 CREATE POLICY "Admins can manage user profiles" ON public.user_profiles
     FOR ALL USING (public.is_admin());
@@ -361,7 +361,7 @@ CREATE TABLE IF NOT EXISTS public.store_wallets (
 );
 ALTER TABLE public.store_wallets ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view own wallet" ON public.store_wallets;
-CREATE POLICY "Users can view own wallet" ON public.store_wallets FOR SELECT USING (auth.uid() = store_id);
+CREATE POLICY "Users can view own wallet" ON public.store_wallets FOR SELECT USING (auth.uid()::text = store_id::text);
 DROP POLICY IF EXISTS "Admins can view all wallets" ON public.store_wallets;
 CREATE POLICY "Admins can view all wallets" ON public.store_wallets FOR SELECT USING (public.is_admin());
 
@@ -377,7 +377,7 @@ CREATE TABLE IF NOT EXISTS public.wallet_transactions (
 );
 ALTER TABLE public.wallet_transactions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view own transactions" ON public.wallet_transactions;
-CREATE POLICY "Users can view own transactions" ON public.wallet_transactions FOR SELECT USING (auth.uid() = store_id);
+CREATE POLICY "Users can view own transactions" ON public.wallet_transactions FOR SELECT USING (auth.uid()::text = store_id::text);
 DROP POLICY IF EXISTS "Admins can view all transactions" ON public.wallet_transactions;
 CREATE POLICY "Admins can view all transactions" ON public.wallet_transactions FOR SELECT USING (public.is_admin());
 
@@ -532,7 +532,7 @@ DROP POLICY IF EXISTS "Users can manage their own terminals" ON public.user_term
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage their own terminals' AND tablename = 'user_terminals') THEN
-        CREATE POLICY "Users can manage their own terminals" ON public.user_terminals FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users can manage their own terminals" ON public.user_terminals FOR ALL USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all user terminals" ON public.user_terminals;
@@ -640,7 +640,7 @@ CREATE POLICY "Admins can manage categories" ON public.categories FOR ALL USING 
 
 DROP POLICY IF EXISTS "Lojistas gerenciam categorias" ON public.categories;
 CREATE POLICY "Lojistas gerenciam categorias" ON public.categories 
-    FOR ALL USING (store_id = auth.uid() OR public.is_admin());
+    FOR ALL USING (store_id::text = auth.uid()::text OR public.is_admin());
 CREATE TABLE IF NOT EXISTS public.products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
@@ -680,7 +680,7 @@ BEGIN
         CREATE POLICY "Admins and Owners can view all own products" ON public.products
             FOR SELECT USING (
                 public.is_admin() OR
-                store_id = auth.uid()
+                store_id::text = auth.uid()::text
             );
     END IF;
 
@@ -689,7 +689,7 @@ BEGIN
         CREATE POLICY "Admins and Owners can insert products" ON public.products
             FOR INSERT WITH CHECK (
                 public.is_admin() OR
-                store_id = auth.uid()
+                store_id::text = auth.uid()::text
             );
     END IF;
 
@@ -698,7 +698,7 @@ BEGIN
         CREATE POLICY "Admins and Owners can update products" ON public.products
             FOR UPDATE USING (
                 public.is_admin() OR
-                store_id = auth.uid()
+                store_id::text = auth.uid()::text
             );
     END IF;
 
@@ -707,7 +707,7 @@ BEGIN
         CREATE POLICY "Admins and Owners can delete products" ON public.products
             FOR DELETE USING (
                 public.is_admin() OR
-                store_id = auth.uid()
+                store_id::text = auth.uid()::text
             );
     END IF;
 END $$;
@@ -728,7 +728,7 @@ DROP POLICY IF EXISTS "Allow authenticated access to client_error_logs" ON publi
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow authenticated access to client_error_logs' AND tablename = 'client_error_logs') THEN
-        CREATE POLICY "Allow authenticated access to client_error_logs" ON public.client_error_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.role() = 'authenticated');
+        CREATE POLICY "Allow authenticated access to client_error_logs" ON public.client_error_logs FOR ALL USING (auth.uid()::text = user_id::text) WITH CHECK (auth.role() = 'authenticated');
     END IF;
 END $$;
 GRANT SELECT, INSERT ON public.client_error_logs TO authenticated;
@@ -849,14 +849,14 @@ DROP POLICY IF EXISTS "Authenticated users can create transactions" ON public.us
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can create transactions' AND tablename = 'user_terminal_transactions') THEN
-        CREATE POLICY "Authenticated users can create transactions" ON public.user_terminal_transactions FOR INSERT WITH CHECK (auth.uid() = merchant_user_id OR auth.uid() = payer_id);
+        CREATE POLICY "Authenticated users can create transactions" ON public.user_terminal_transactions FOR INSERT WITH CHECK (auth.uid()::text = merchant_user_id::text OR auth.uid()::text = payer_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Users can view their own terminal transactions" ON public.user_terminal_transactions;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own terminal transactions' AND tablename = 'user_terminal_transactions') THEN
-        CREATE POLICY "Users can view their own terminal transactions" ON public.user_terminal_transactions FOR SELECT USING (auth.uid() = merchant_user_id OR auth.uid() = payer_id);
+        CREATE POLICY "Users can view their own terminal transactions" ON public.user_terminal_transactions FOR SELECT USING (auth.uid()::text = merchant_user_id::text OR auth.uid()::text = payer_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all terminal transactions" ON public.user_terminal_transactions;
@@ -884,7 +884,7 @@ DROP POLICY IF EXISTS "Users manage their own sales simulations" ON public.sales
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users manage their own sales simulations' AND tablename = 'sales_simulations') THEN
-        CREATE POLICY "Users manage their own sales simulations" ON public.sales_simulations FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users manage their own sales simulations" ON public.sales_simulations FOR ALL USING (auth.uid()::text = user_id::text);
 
 -- Tabela para rotas salvas (compatﾃｭvel com SavedRoute);
     END IF;
@@ -904,7 +904,7 @@ DROP POLICY IF EXISTS "Users manage their own saved routes" ON public.saved_rout
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users manage their own saved routes' AND tablename = 'saved_routes') THEN
-        CREATE POLICY "Users manage their own saved routes" ON public.saved_routes FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users manage their own saved routes" ON public.saved_routes FOR ALL USING (auth.uid()::text = user_id::text);
 
 
 -- Tabela de configuraﾃｧﾃｵes de manutenﾃｧﾃ｣o (EXISTENTE) - Renomeada para manter consistﾃｪncia;
@@ -1042,21 +1042,21 @@ DROP POLICY IF EXISTS "Users can upload their own avatar" ON public.avatars;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can upload their own avatar' AND tablename = 'avatars') THEN
-        CREATE POLICY "Users can upload their own avatar" ON public.avatars FOR INSERT WITH CHECK (auth.uid() = user_id);
+        CREATE POLICY "Users can upload their own avatar" ON public.avatars FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Users can update their own avatar" ON public.avatars;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update their own avatar' AND tablename = 'avatars') THEN
-        CREATE POLICY "Users can update their own avatar" ON public.avatars FOR UPDATE USING (auth.uid() = user_id);
+        CREATE POLICY "Users can update their own avatar" ON public.avatars FOR UPDATE USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Users can delete their own avatar" ON public.avatars;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can delete their own avatar' AND tablename = 'avatars') THEN
-        CREATE POLICY "Users can delete their own avatar" ON public.avatars FOR DELETE USING (auth.uid() = user_id);
+        CREATE POLICY "Users can delete their own avatar" ON public.avatars FOR DELETE USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Public can read avatars" ON public.avatars;
@@ -1090,7 +1090,7 @@ DROP POLICY IF EXISTS "Partners can manage their own work_shifts" ON public.work
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Partners can manage their own work_shifts' AND tablename = 'work_shifts') THEN
-        CREATE POLICY "Partners can manage their own work_shifts" ON public.work_shifts FOR ALL USING (auth.uid() = partner_id);
+        CREATE POLICY "Partners can manage their own work_shifts" ON public.work_shifts FOR ALL USING (auth.uid()::text = partner_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can view all work_shifts" ON public.work_shifts;
@@ -1133,7 +1133,7 @@ DROP POLICY IF EXISTS "Store owners can manage their own orders" ON public.order
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can manage their own orders' AND tablename = 'orders') THEN
-        CREATE POLICY "Store owners can manage their own orders" ON public.orders FOR ALL USING (auth.uid() = store_id);
+        CREATE POLICY "Store owners can manage their own orders" ON public.orders FOR ALL USING (auth.uid()::text = store_id::text);
     END IF;
 END $$;
 
@@ -1145,7 +1145,7 @@ DROP POLICY IF EXISTS "Users can view their own orders" ON public.orders;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own orders' AND tablename = 'orders') THEN
-        CREATE POLICY "Users can view their own orders" ON public.orders FOR SELECT USING (auth.uid() = user_id);
+        CREATE POLICY "Users can view their own orders" ON public.orders FOR SELECT USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all orders" ON public.orders;
@@ -1172,7 +1172,7 @@ DROP POLICY IF EXISTS "Users can manage their own backups" ON public.user_backup
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage their own backups' AND tablename = 'user_backups') THEN
-        CREATE POLICY "Users can manage their own backups" ON public.user_backups FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users can manage their own backups" ON public.user_backups FOR ALL USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can view all backups" ON public.user_backups;
@@ -1207,7 +1207,7 @@ DROP POLICY IF EXISTS "Users can manage their own notifications" ON public.user_
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage their own notifications' AND tablename = 'user_notifications') THEN
-        CREATE POLICY "Users can manage their own notifications" ON public.user_notifications FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users can manage their own notifications" ON public.user_notifications FOR ALL USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all notifications" ON public.user_notifications;
@@ -1234,7 +1234,7 @@ DROP POLICY IF EXISTS "Drivers can manage their own manual histories" ON public.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Drivers can manage their own manual histories' AND tablename = 'driver_manual_histories') THEN
-        CREATE POLICY "Drivers can manage their own manual histories" ON public.driver_manual_histories FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Drivers can manage their own manual histories" ON public.driver_manual_histories FOR ALL USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can view all driver manual histories" ON public.driver_manual_histories;
@@ -1264,7 +1264,7 @@ DROP POLICY IF EXISTS "Authenticated users can insert blitz alerts" ON public.bl
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can insert blitz alerts' AND tablename = 'blitz_alerts') THEN
-        CREATE POLICY "Authenticated users can insert blitz alerts" ON public.blitz_alerts FOR INSERT WITH CHECK (auth.uid() = user_id);
+        CREATE POLICY "Authenticated users can insert blitz alerts" ON public.blitz_alerts FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Public can read blitz alerts" ON public.blitz_alerts;
@@ -1313,7 +1313,7 @@ DROP POLICY IF EXISTS "Admins can manage products" ON public.products;
 DROP POLICY IF EXISTS "Admins can manage products" ON public.products;
 CREATE POLICY "Admins can manage products" ON public.products FOR ALL USING (
     public.is_admin() OR 
-    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id::text = auth.uid()::text AND role = 'admin')
 );
 
 -- Tabela de configuraﾃｧﾃｵes da loja (geral);
@@ -1358,7 +1358,7 @@ END $$;
 DROP POLICY IF EXISTS "Admins can manage shop_settings" ON public.shop_settings;
 CREATE POLICY "Admins can manage shop_settings" ON public.shop_settings FOR ALL USING (
     public.is_admin() OR 
-    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id::text = auth.uid()::text AND role = 'admin')
 );
 
 INSERT INTO public.shop_settings (id) VALUES ('1') ON CONFLICT (id) DO NOTHING;
@@ -1445,16 +1445,16 @@ DROP POLICY IF EXISTS "Store owners can manage their own requests" ON public.par
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can manage their own requests' AND tablename = 'partner_requests') THEN
-        CREATE POLICY "Store owners can manage their own requests" ON public.partner_requests FOR ALL USING (auth.uid() = store_id);
+        CREATE POLICY "Store owners can manage their own requests" ON public.partner_requests FOR ALL USING (auth.uid()::text = store_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Partners can view and accept available requests" ON public.partner_requests;
 CREATE POLICY "Partners can view and accept available requests" ON public.partner_requests FOR SELECT USING (
-    status = 'PENDING' OR auth.uid() = partner_id
+    status = 'PENDING' OR auth.uid()::text = partner_id::text
 );
 DROP POLICY IF EXISTS "Partners can update their accepted requests" ON public.partner_requests;
 CREATE POLICY "Partners can update their accepted requests" ON public.partner_requests FOR UPDATE USING (
-    auth.uid() = partner_id AND status IN ('ACCEPTED', 'IN_TRANSIT', 'RETURNING')
+    auth.uid()::text = partner_id::text AND status IN ('ACCEPTED', 'IN_TRANSIT', 'RETURNING')
 );
 DROP POLICY IF EXISTS "Admins can manage all partner requests" ON public.partner_requests;
 DO $$
@@ -1482,14 +1482,14 @@ DROP POLICY IF EXISTS "Store owners can manage their associated partners" ON pub
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can manage their associated partners' AND tablename = 'store_delivery_partners') THEN
-        CREATE POLICY "Store owners can manage their associated partners" ON public.store_delivery_partners FOR ALL USING (auth.uid() = store_id);
+        CREATE POLICY "Store owners can manage their associated partners" ON public.store_delivery_partners FOR ALL USING (auth.uid()::text = store_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Partners can view their associated stores" ON public.store_delivery_partners;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Partners can view their associated stores' AND tablename = 'store_delivery_partners') THEN
-        CREATE POLICY "Partners can view their associated stores" ON public.store_delivery_partners FOR SELECT USING (auth.uid() = partner_id);
+        CREATE POLICY "Partners can view their associated stores" ON public.store_delivery_partners FOR SELECT USING (auth.uid()::text = partner_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all store_delivery_partners" ON public.store_delivery_partners;
@@ -1514,12 +1514,12 @@ DROP POLICY IF EXISTS "Partners and stores can view associated profiles" ON publ
 CREATE POLICY "Partners and stores can view associated profiles" ON public.user_profiles
     FOR SELECT USING (
         -- Usuﾃ｡rios podem ver o prﾃｳprio perfil (Regra Absoluta)
-        auth.uid() = id
+        auth.uid()::text = id::text
         -- Lojistas podem ver perfis de entregadores associados
         OR (
              EXISTS (
                 SELECT 1 FROM public.store_delivery_partners sdp
-                WHERE sdp.store_id = auth.uid() AND sdp.partner_id = id
+                WHERE sdp.store_id::text = auth.uid()::text AND sdp.partner_id::text = id::text
             )
              AND (current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'role') = 'store_partner'
         )
@@ -1527,7 +1527,7 @@ CREATE POLICY "Partners and stores can view associated profiles" ON public.user_
         OR (
              EXISTS (
                 SELECT 1 FROM public.store_delivery_partners sdp
-                WHERE sdp.store_id = id AND sdp.partner_id = auth.uid()
+                WHERE sdp.store_id::text = id::text AND sdp.partner_id::text = auth.uid()::text
             )
              AND (current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'role') = 'delivery_partner'
         )
@@ -1551,11 +1551,11 @@ DROP POLICY IF EXISTS "Store owners can view and manage their own wallet" ON pub
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can view and manage their own wallet' AND tablename = 'store_wallets') THEN
-        CREATE POLICY "Store owners can view and manage their own wallet" ON public.store_wallets FOR ALL USING (auth.uid() = store_id);
+        CREATE POLICY "Store owners can view and manage their own wallet" ON public.store_wallets FOR ALL USING (auth.uid()::text = store_id::text);
     END IF;
     -- Polﾃｭtica de backup para garantir SELECT explﾃｭcito se o ALL falhar em alguns contextos
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can select their own wallet' AND tablename = 'store_wallets') THEN
-        CREATE POLICY "Store owners can select their own wallet" ON public.store_wallets FOR SELECT USING (auth.uid() = store_id);
+        CREATE POLICY "Store owners can select their own wallet" ON public.store_wallets FOR SELECT USING (auth.uid()::text = store_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all store wallets" ON public.store_wallets;
@@ -1685,7 +1685,7 @@ CREATE INDEX IF NOT EXISTS chat_messages_type_idx ON public.chat_messages (type)
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can manage their own chat messages" ON public.chat_messages;
 CREATE POLICY "Users can manage their own chat messages" ON public.chat_messages FOR ALL USING (
-    auth.uid() = sender_id OR auth.uid() = receiver_id
+    auth.uid()::text = sender_id::text OR auth.uid()::text = receiver_id::text
 );
 DROP POLICY IF EXISTS "Admins can manage all chat messages" ON public.chat_messages;
 DO $$
@@ -1718,7 +1718,7 @@ DROP POLICY IF EXISTS "Users can manage their own partner documents" ON public.p
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage their own partner documents' AND tablename = 'partner_documents') THEN
-        CREATE POLICY "Users can manage their own partner documents" ON public.partner_documents FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users can manage their own partner documents" ON public.partner_documents FOR ALL USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all partner documents" ON public.partner_documents;
@@ -1752,14 +1752,14 @@ DROP POLICY IF EXISTS "Users can view their own referrals" ON public.referrals;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own referrals' AND tablename = 'referrals') THEN
-        CREATE POLICY "Users can view their own referrals" ON public.referrals FOR SELECT USING (auth.uid() = referrer_id OR auth.uid() = referred_id);
+        CREATE POLICY "Users can view their own referrals" ON public.referrals FOR SELECT USING (auth.uid()::text = referrer_id::text OR auth.uid()::text = referred_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Authenticated users can insert referrals" ON public.referrals;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can insert referrals' AND tablename = 'referrals') THEN
-        CREATE POLICY "Authenticated users can insert referrals" ON public.referrals FOR INSERT WITH CHECK (auth.uid() = referred_id);
+        CREATE POLICY "Authenticated users can insert referrals" ON public.referrals FOR INSERT WITH CHECK (auth.uid()::text = referred_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all referrals" ON public.referrals;
@@ -1790,7 +1790,7 @@ DROP POLICY IF EXISTS "Store owners can manage their own shipping rules" ON publ
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can manage their own shipping rules' AND tablename = 'store_shipping_rules') THEN
-        CREATE POLICY "Store owners can manage their own shipping rules" ON public.store_shipping_rules FOR ALL USING (auth.uid() = store_id);
+        CREATE POLICY "Store owners can manage their own shipping rules" ON public.store_shipping_rules FOR ALL USING (auth.uid()::text = store_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Public can read shipping rules for stores" ON public.store_shipping_rules;
@@ -1871,7 +1871,7 @@ DROP POLICY IF EXISTS "Users can manage their own Zebank cards" ON public.zebank
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage their own Zebank cards' AND tablename = 'zebank_cards') THEN
-        CREATE POLICY "Users can manage their own Zebank cards" ON public.zebank_cards FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users can manage their own Zebank cards" ON public.zebank_cards FOR ALL USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all Zebank cards" ON public.zebank_cards;
@@ -1904,7 +1904,7 @@ DROP POLICY IF EXISTS "Users can manage their own identity verifications" ON pub
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage their own identity verifications' AND tablename = 'identity_verifications') THEN
-        CREATE POLICY "Users can manage their own identity verifications" ON public.identity_verifications FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users can manage their own identity verifications" ON public.identity_verifications FOR ALL USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all identity verifications" ON public.identity_verifications;
@@ -1964,7 +1964,7 @@ DROP POLICY IF EXISTS "Users can manage their own support claims" ON public.supp
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage their own support claims' AND tablename = 'support_claims') THEN
-        CREATE POLICY "Users can manage their own support claims" ON public.support_claims FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Users can manage their own support claims" ON public.support_claims FOR ALL USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all support claims" ON public.support_claims;
@@ -2038,14 +2038,14 @@ DROP POLICY IF EXISTS "Users can view their own ratings" ON public.partner_ratin
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own ratings' AND tablename = 'partner_ratings') THEN
-        CREATE POLICY "Users can view their own ratings" ON public.partner_ratings FOR SELECT USING (auth.uid() = evaluator_id OR auth.uid() = evaluated_id);
+        CREATE POLICY "Users can view their own ratings" ON public.partner_ratings FOR SELECT USING (auth.uid()::text = evaluator_id::text OR auth.uid()::text = evaluated_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Authenticated users can insert partner ratings" ON public.partner_ratings;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can insert partner ratings' AND tablename = 'partner_ratings') THEN
-        CREATE POLICY "Authenticated users can insert partner ratings" ON public.partner_ratings FOR INSERT WITH CHECK (auth.uid() = evaluator_id);
+        CREATE POLICY "Authenticated users can insert partner ratings" ON public.partner_ratings FOR INSERT WITH CHECK (auth.uid()::text = evaluator_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all partner ratings" ON public.partner_ratings;
@@ -2288,7 +2288,7 @@ DROP POLICY IF EXISTS "Partners can view their own payments" ON public.partner_p
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Partners can view their own payments' AND tablename = 'partner_payments') THEN
-        CREATE POLICY "Partners can view their own payments" ON public.partner_payments FOR SELECT USING (auth.uid() = partner_id);
+        CREATE POLICY "Partners can view their own payments" ON public.partner_payments FOR SELECT USING (auth.uid()::text = partner_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all partner payments" ON public.partner_payments;
@@ -2322,7 +2322,7 @@ DROP POLICY IF EXISTS "Store owners can view their own wallet transactions" ON p
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can view their own wallet transactions' AND tablename = 'store_wallet_transactions') THEN
-        CREATE POLICY "Store owners can view their own wallet transactions" ON public.store_wallet_transactions FOR ALL USING (auth.uid() = store_id);
+        CREATE POLICY "Store owners can view their own wallet transactions" ON public.store_wallet_transactions FOR ALL USING (auth.uid()::text = store_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all store wallet transactions" ON public.store_wallet_transactions;
@@ -2357,7 +2357,7 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.store_virtual_cards ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Store owners can manage their own virtual cards" ON public.store_virtual_cards;
 CREATE POLICY "Store owners can manage their own virtual cards" ON public.store_virtual_cards
-    FOR ALL USING (auth.uid() = store_id);
+    FOR ALL USING (auth.uid()::text = store_id::text);
 DROP POLICY IF EXISTS "Admins can manage all store virtual cards" ON public.store_virtual_cards;
 CREATE POLICY "Admins can manage all store virtual cards" ON public.store_virtual_cards
     FOR ALL USING (public.is_admin());
@@ -2379,7 +2379,7 @@ DROP POLICY IF EXISTS "Drivers can access their own wallet" ON public.driver_wal
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Drivers can access their own wallet' AND tablename = 'driver_wallets') THEN
-        CREATE POLICY "Drivers can access their own wallet" ON public.driver_wallets FOR ALL USING (auth.uid() = driver_id);
+        CREATE POLICY "Drivers can access their own wallet" ON public.driver_wallets FOR ALL USING (auth.uid()::text = driver_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all driver wallets" ON public.driver_wallets;
@@ -2412,7 +2412,7 @@ DROP POLICY IF EXISTS "Drivers can view their own wallet transactions" ON public
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Drivers can view their own wallet transactions' AND tablename = 'driver_wallet_transactions') THEN
-        CREATE POLICY "Drivers can view their own wallet transactions" ON public.driver_wallet_transactions FOR ALL USING (auth.uid() = driver_id);
+        CREATE POLICY "Drivers can view their own wallet transactions" ON public.driver_wallet_transactions FOR ALL USING (auth.uid()::text = driver_id::text);
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage all driver wallet transactions" ON public.driver_wallet_transactions;
@@ -3527,25 +3527,25 @@ CREATE POLICY "Anyone can upload an avatar."
 DROP POLICY IF EXISTS "Anyone can update their own avatar." ON storage.objects;
 CREATE POLICY "Anyone can update their own avatar."
     ON storage.objects FOR UPDATE
-    USING (auth.uid() = owner)
+    USING (auth.uid()::text = owner::text)
     WITH CHECK (bucket_id = 'avatars');
 
 DROP POLICY IF EXISTS "Anyone can delete their own avatar." ON storage.objects;
 CREATE POLICY "Anyone can delete their own avatar."
     ON storage.objects FOR DELETE
-    USING (auth.uid() = owner);
+    USING (auth.uid()::text = owner::text);
 
 
 -- Polﾃｭticas para o bucket 'documents' (documentos de parceiros)
 DROP POLICY IF EXISTS "Users can view their own documents." ON storage.objects;
 CREATE POLICY "Users can view their own documents."
     ON storage.objects FOR SELECT
-    USING (bucket_id = 'documents' AND auth.uid() = owner);
+    USING (bucket_id = 'documents' AND auth.uid()::text = owner::text);
 
 DROP POLICY IF EXISTS "Users can upload their own documents." ON storage.objects;
 CREATE POLICY "Users can upload their own documents."
     ON storage.objects FOR INSERT
-    WITH CHECK (bucket_id = 'documents' AND auth.uid() = owner);
+    WITH CHECK (bucket_id = 'documents' AND auth.uid()::text = owner::text);
 
 DROP POLICY IF EXISTS "Admins can view all documents." ON storage.objects;
 CREATE POLICY "Admins can view all documents."
@@ -3557,7 +3557,7 @@ CREATE POLICY "Admins can view all documents."
 DROP POLICY IF EXISTS "Users can upload their own identity verification." ON storage.objects;
 CREATE POLICY "Users can upload their own identity verification."
     ON storage.objects FOR INSERT
-    WITH CHECK (bucket_id = 'identity_verifications' AND auth.uid() = owner);
+    WITH CHECK (bucket_id = 'identity_verifications' AND auth.uid()::text = owner::text);
 
 DROP POLICY IF EXISTS "Admins can view all identity verifications." ON storage.objects;
 CREATE POLICY "Admins can view all identity verifications."
@@ -3598,7 +3598,7 @@ DROP POLICY IF EXISTS "Users can view their own qrcode logs" ON public.qrcode_lo
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own qrcode logs' AND tablename = 'qrcode_logs') THEN
-        CREATE POLICY "Users can view their own qrcode logs" ON public.qrcode_logs FOR SELECT USING (auth.uid() = user_id);
+        CREATE POLICY "Users can view their own qrcode logs" ON public.qrcode_logs FOR SELECT USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 
@@ -3606,7 +3606,7 @@ DROP POLICY IF EXISTS "Authenticated users can insert qrcode logs" ON public.qrc
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can insert qrcode logs' AND tablename = 'qrcode_logs') THEN
-        CREATE POLICY "Authenticated users can insert qrcode logs" ON public.qrcode_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
+        CREATE POLICY "Authenticated users can insert qrcode logs" ON public.qrcode_logs FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
     END IF;
 END $$;
 
@@ -3703,7 +3703,7 @@ DROP POLICY IF EXISTS "Public can view active products" ON public.store_products
 CREATE POLICY "Public can view active products" ON public.store_products FOR SELECT USING (is_active = TRUE);
 
 DROP POLICY IF EXISTS "Store owners can manage their products" ON public.store_products;
-CREATE POLICY "Store owners can manage their products" ON public.store_products FOR ALL USING (auth.uid() = store_id);
+CREATE POLICY "Store owners can manage their products" ON public.store_products FOR ALL USING (auth.uid()::text = store_id::text);
 
 -- Trigger para updated_at
 DROP TRIGGER IF EXISTS handle_store_products_updated_at ON public.store_products;
@@ -3719,8 +3719,8 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store partners can manage their own products' AND tablename = 'store_products') THEN
         CREATE POLICY "Store partners can manage their own products" ON public.store_products
         FOR ALL
-        USING (auth.uid() = store_id)
-        WITH CHECK (auth.uid() = store_id);
+        USING (auth.uid()::text = store_id::text)
+        WITH CHECK (auth.uid()::text = store_id::text);
     END IF;
 
     -- Permitir que admins gerenciem tudo
@@ -3881,7 +3881,7 @@ ALTER TABLE public.collaborators ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Stores can manage their own collaborators" ON public.collaborators;
 CREATE POLICY "Stores can manage their own collaborators" ON public.collaborators
-    FOR ALL USING (auth.uid() = store_id);
+    FOR ALL USING (auth.uid()::text = store_id::text);
 
 DROP POLICY IF EXISTS "Anon can check collaborator login" ON public.collaborators;
 CREATE POLICY "Anon can check collaborator login" ON public.collaborators
@@ -3923,7 +3923,7 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.orders_collaborators ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Stores can manage table orders" ON public.orders_collaborators;
 CREATE POLICY "Stores can manage table orders" ON public.orders_collaborators
-    FOR ALL USING (auth.uid() = store_id);
+    FOR ALL USING (auth.uid()::text = store_id::text);
 
 GRANT ALL ON public.orders_collaborators TO authenticated;
 GRANT ALL ON public.orders_collaborators TO service_role;
@@ -3976,7 +3976,7 @@ CREATE TABLE IF NOT EXISTS public.orders_tickets (
 ALTER TABLE public.orders_tickets ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Stores can manage their tickets" ON public.orders_tickets;
 CREATE POLICY "Stores can manage their tickets" ON public.orders_tickets
-    FOR ALL USING (auth.uid() = store_id);
+    FOR ALL USING (auth.uid()::text = store_id::text);
 
 GRANT ALL ON public.orders_tickets TO authenticated;
 GRANT ALL ON public.orders_tickets TO service_role;
