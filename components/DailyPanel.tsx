@@ -451,9 +451,9 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
 
             {/* Main Actions */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
+                <Button
                     onClick={handleAddStandard}
-                    className="sm:col-span-2 bg-brand-600 active:bg-brand-700 text-white p-5 rounded-2xl  flex items-center justify-between group transition-all"
+                    className="sm:col-span-2 bg-brand-600 active:bg-brand-700 text-white p-5 rounded-2xl flex items-center justify-between group transition-all border-none"
                 >
                     <div className="flex items-center gap-3">
                         <div className="bg-white/20 p-2 rounded-xl group-hover:scale-110 transition-transform">
@@ -467,11 +467,12 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                     <div className="bg-white text-brand-600 p-2 rounded-lg font-black text-sm">
                         +1
                     </div>
-                </button>
+                </Button>
 
-                <button
+                <Button
                     onClick={() => setShowExtraModal(true)}
-                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    variant="outline"
+                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors h-auto"
                 >
                     <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 p-2 rounded-xl">
                         <Calculator className="w-5 h-5" />
@@ -480,11 +481,12 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                         <p className="font-bold text-gray-900 dark:text-white text-sm">Entrega Extra</p>
                         <p className="text-[10px] text-gray-500">Valor variável</p>
                     </div>
-                </button>
+                </Button>
 
-                <button
+                <Button
                     onClick={() => setShowExpenseModal(true)}
-                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    variant="outline"
+                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors h-auto"
                 >
                     <div className="bg-red-100 dark:bg-red-900/30 text-red-600 p-2 rounded-xl">
                         <TrendingDown className="w-5 h-5" />
@@ -493,7 +495,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                         <p className="font-bold text-gray-900 dark:text-white text-sm">Registrar Gasto</p>
                         <p className="text-xs text-gray-500">Combustível/Outros</p>
                     </div>
-                </button>
+                </Button>
             </div>
 
             {/* Quick Access & Tools Sections */}

@@ -53,6 +53,7 @@ import { AdminInvestments } from './AdminInvestments';
 import { AdminSlides } from './AdminSlides';
 import { AdminPayouts } from './AdminPayouts';
 import { AdminTips } from './AdminTips';
+import { AdminScoreConfig } from './AdminScoreConfig';
 
 // --- HELPERS ---
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -1155,6 +1156,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'investments': return <AdminInvestments />;
             case 'slides': return <AdminSlides />;
             case 'tips': return <AdminTips />;
+            case 'score_config': return <AdminScoreConfig />;
 
             default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
         }

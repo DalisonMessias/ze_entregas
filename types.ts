@@ -1,7 +1,7 @@
 ﻿
 export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator';
-export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found';
+export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found' | 'blocked' | 'suspended' | 'error';
 export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION';
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER' | 'PENDING';
 export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
@@ -228,6 +228,9 @@ export interface ManagedUser {
     average_rating?: number;
     vehicle_plate?: string;
     completed_deliveries?: number;
+    score?: number;
+    cancellation_count_monthly?: number;
+    refusal_count_monthly?: number;
     association_code?: string;
     balance?: number;
     preparation_time?: number;
@@ -786,7 +789,7 @@ export interface CofrinhoAccount {
     lock_until?: string | null;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp';
+export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp' | 'score_config';
 
 export interface AppNotification {
     id: string;

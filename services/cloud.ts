@@ -184,7 +184,7 @@ export const getSystemPulse = async (): Promise<{
     return { notifications, maintenance, role };
 };
 
-export const getInitialUserData = async (): Promise<{ role: UserRole, status: UserStatus | 'not_found' | 'error' }> => {
+export const getInitialUserData = async (): Promise<{ role: UserRole, status: UserStatus }> => {
     const sb = getClient();
     if (!sb) return { role: 'delivery_person' as UserRole, status: 'error' as UserStatus };
 
@@ -4079,4 +4079,38 @@ export const getUnifiedOrderHistory = async (storeId: string, limit: number = 50
         return [];
     }
     return data || [];
+};
+// --- SCORE & BLOCKING ADMIN ---
+export const adminGetScoreConfig = async () => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.from('score_config').select('*').order('event_key');
+    if (error) throw error;
+    return data;
+};
+
+export const adminUpdateScoreConfig = async (eventKey: string, impactValue: number, isActive: boolean) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('score_config').update({ impact_value: impactValue, is_active: isActive }).eq('event_key', eventKey);
+    if (error) throw error;
+};
+
+export const adminGetBlockingConfig = async () => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data, error } = await sb.from('blocking_config').select('*').single();
+    if (error) throw error;
+    return data;
+};
+
+export const adminUpdateBlockingConfig = async (cancellationLimit: number, refusalLimit: number) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('blocking_config').update({
+        monthly_cancellation_limit: cancellationLimit,
+        monthly_refusal_limit: refusalLimit,
+        updated_at: new Date().toISOString()
+    }).eq('id', '1'); // Assumindo uma única linha com ID '1'
+    if (error) throw error;
 };

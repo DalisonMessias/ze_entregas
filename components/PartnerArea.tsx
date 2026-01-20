@@ -24,6 +24,7 @@ import { NotificationCenter } from './NotificationCenter';
 import { useNotification } from '../contexts/NotificationContext';
 import { PromoSlider } from './PromoSlider';
 import { TipOfTheDay } from './TipOfTheDay';
+import { ScorePanel } from './ScorePanel';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -96,7 +97,19 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
     // Rating State
     const [ratingRequest, setRatingRequest] = useState<PartnerRequest | null>(null);
 
-    // Shift Logic
+    // Scroll to Score effect
+    useEffect(() => {
+        const handleScroll = () => {
+            const el = document.getElementById('driver-score-panel');
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('ring-2', 'ring-brand-500', 'transition-all');
+                setTimeout(() => el.classList.remove('ring-2', 'ring-brand-500'), 2000);
+            }
+        };
+        window.addEventListener('scroll_to_score', handleScroll);
+        return () => window.removeEventListener('scroll_to_score', handleScroll);
+    }, []);
     const [currentShift, setCurrentShift] = useState<WorkShift | null>(null);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [shiftLoading, setShiftLoading] = useState(false); // No longer for initial load
@@ -433,7 +446,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                         <h2 className="text-2xl font-black">Você está Offline</h2>
                         <p className="text-gray-400 text-sm">Inicie seu turno para receber entregas.</p>
                     </div>
-                    <Button onClick={handleStartShiftClick} disabled={shiftLoading} className="w-full py-4 text-lg bg-green-600 hover:bg-green-500 ">
+                    <Button onClick={handleStartShiftClick} disabled={shiftLoading} className="w-full py-4 text-lg bg-green-600 hover:bg-green-500 border-none shadow-lg">
                         {shiftLoading ? <Loader2 className="animate-spin" /> : <><Play className="w-5 h-5 mr-2 fill-current" /> Iniciar Turno</>}
                     </Button>
                 </div>
@@ -515,17 +528,18 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             </div>
 
             <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar mb-2.5">
-                <button onClick={() => setActiveTab('requests')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500'}`}>
+                <Button onClick={() => setActiveTab('requests')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap border-none ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500 bg-transparent shadow-none hover:bg-white/10'}`}>
                     Entregas
-                </button>
-                <button onClick={() => setActiveTab('finance')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'finance' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500'}`}>Financeiro</button>
-                <button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'history' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500'}`}>Histórico</button>
-                <button onClick={() => setActiveTab('stores')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'stores' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500'}`}>Lojas</button>
+                </Button>
+                <Button onClick={() => setActiveTab('finance')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap border-none ${activeTab === 'finance' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500 bg-transparent shadow-none hover:bg-white/10'}`}>Financeiro</Button>
+                <Button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap border-none ${activeTab === 'history' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500 bg-transparent shadow-none hover:bg-white/10'}`}>Histórico</Button>
+                <Button onClick={() => setActiveTab('stores')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap border-none ${activeTab === 'stores' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500 bg-transparent shadow-none hover:bg-white/10'}`}>Lojas</Button>
             </div>
 
             {activeTab === 'requests' && (
                 <>
                     <PromoSlider audience={userRole === 'store_partner' ? 'merchants' : 'drivers'} />
+                    <ScorePanel />
                     <TipOfTheDay role={userRole} />
                     {renderShiftControl()}
 
@@ -533,76 +547,82 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     <div>
                         <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2 mt-6">Acessos Rápidos</h3>
                         <div className="grid grid-cols-4 gap-2 mb-4">
-                            <button onClick={() => setActiveTab('finance')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            <Button onClick={() => setActiveTab('finance')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
                                     <Wallet className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Ganhos</span>
-                            </button>
-                            <button onClick={() => setActiveTab('history')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => setActiveTab('history')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                                     <HistoryIcon className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Histórico</span>
-                            </button>
-                            <button onClick={() => setActiveTab('stores')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => setActiveTab('stores')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-full text-pink-600 dark:text-pink-400">
                                     <Store className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Minhas Lojas</span>
-                            </button>
-                            <button onClick={() => setShowNotifications(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => setShowNotifications(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-full text-yellow-600 dark:text-yellow-400">
                                     <Bell className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Avisos</span>
-                            </button>
-                            <button onClick={() => onNavigate('zebank')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => onNavigate('zebank')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
                                     <Landmark className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">ZéBank</span>
-                            </button>
-                            <button onClick={() => setShowReferral(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => setShowReferral(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600 dark:text-indigo-400">
                                     <Gift className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Indicações</span>
-                            </button>
+                            </Button>
+                            <Button onClick={() => onNavigate('score')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                                <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
+                                    <Star className="w-5 h-5" />
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Meu Score</span>
+                            </Button>
                         </div>
 
                         <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2">Ferramentas</h3>
                         <div className="grid grid-cols-4 gap-2">
-                            <button onClick={() => setShowFuelCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            <Button onClick={() => setShowFuelCalc(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
                                     <Fuel className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Combustível</span>
-                            </button>
-                            <button onClick={() => setShowRouteCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => setShowRouteCalc(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
                                     <Calculator className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Calc. Rota</span>
-                            </button>
-                            <button onClick={() => setShowMaintenance(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => setShowMaintenance(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
                                     <Wrench className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Manutenção</span>
-                            </button>
-                            <button onClick={() => setShowMerchantPOS(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => setShowMerchantPOS(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
                                     <Smartphone className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">ZéPoint</span>
-                            </button>
-                            <button onClick={() => onNavigate('profile')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                            </Button>
+                            <Button onClick={() => onNavigate('profile')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300">
                                     <User className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Perfil</span>
-                            </button>
+                            </Button>
                         </div>
                     </div>
                     {/* Active Delivery Card */}
@@ -701,9 +721,9 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     {/* Action Button for Emergency Withdraw (Only Partners) */}
                     {userRole === 'delivery_partner' && summary && summary.settings && (
                         <div className="mb-4">
-                            <button onClick={() => setShowWithdrawConfirm(true)} className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 ">
+                            <Button onClick={() => setShowWithdrawConfirm(true)} className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border-none">
                                 <Wallet className="w-4 h-4" /> Solicitar Saque Emergencial
-                            </button>
+                            </Button>
                         </div>
                     )}
 

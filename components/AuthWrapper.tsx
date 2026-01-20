@@ -182,12 +182,13 @@ export const AuthWrapper: React.FC = () => {
               return;
             }
 
-            if (status === 'banned') {
-              await supabase.auth.signOut();
-              setAuthMessage({ type: 'error', text: 'Sua conta foi suspensa.' });
-              setSession(null);
-              setUserId(null);
-              setUserRole('delivery_person');
+            if (status === 'banned' || status === 'blocked' || status === 'suspended') {
+              // Nova regra: Não faz signOut. Permite entrar para modo de visualização.
+              setSession(initialSession);
+              setUserId(initialSession.user.id);
+              setUserRole((role || 'delivery_person'));
+              setAuthMessage({ type: 'error', text: 'Conta com restrições de acesso (Modo Visualização).' });
+              redirectToRoleHome(role || 'delivery_person');
             } else if (status === 'not_found') {
               setAuthMessage({ type: 'error', text: 'Perfil não encontrado. Tente novamente mais tarde.' });
               setSession(initialSession);
@@ -236,9 +237,12 @@ export const AuthWrapper: React.FC = () => {
           if (currentSession) {
             try {
               const { status, role } = await cloud.getInitialUserData();
-              if (status === 'banned') {
-                await supabase.auth.signOut();
-                setAuthMessage({ type: 'error', text: 'Sua conta está suspensa.' });
+              if (status === 'banned' || status === 'blocked' || status === 'suspended') {
+                setSession(currentSession);
+                setUserId(currentSession.user.id);
+                setUserRole((role || 'delivery_person'));
+                setAuthMessage({ type: 'error', text: 'Conta com restrições de acesso.' });
+                redirectToRoleHome(role || 'delivery_person');
               } else if (status === 'not_found') {
                 handleLogoutAndRedirect("Usuário não encontrado no sistema.");
               } else {
@@ -287,10 +291,10 @@ export const AuthWrapper: React.FC = () => {
           filter: `id=eq.${userId}`,
         },
         (payload: any) => {
-          if (payload.new.status === 'banned') {
-            supabase.auth.signOut();
-            void alert({ title: 'Conta', message: 'Sua conta foi suspensa.' });
-            logger.warn('ROLE_DB_UPDATE_BANNED', { userId });
+          if (payload.new.status === 'banned' || payload.new.status === 'blocked' || payload.new.status === 'suspended') {
+            // Não desloga mais. Apenas notifica e deixa o App.tsx lidar com as restrições de UI.
+            void alert({ title: 'Atenção', message: 'Sua conta possui restrições de acesso no momento.' });
+            logger.warn('USER_STATUS_RESTRICTED', { userId, status: payload.new.status });
             return;
           }
           if (payload.new.status === 'deleted') {

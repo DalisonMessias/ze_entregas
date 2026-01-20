@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare } from 'lucide-react';
-import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile } from '../types';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark } from 'lucide-react';
+import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
 import * as logger from '../services/logger';
@@ -21,6 +21,7 @@ import { NotificationSettings } from './NotificationSettings';
 import { MaintenancePage } from './MaintenancePage';
 import { PartnerDocumentation } from './PartnerDocumentation';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
+import { ExclusiveLock } from './ExclusiveLock';
 
 // Lazy Loaded Components
 const AdminPanel = React.lazy(() => import('./AdminPanel').then(module => ({ default: module.AdminPanel })));
@@ -66,6 +67,7 @@ const PrivacyPolicy = React.lazy(() => import('./PrivacyPolicy').then(module => 
 const StreetsList = React.lazy(() => import('../src/pages/StreetsList'));
 const LoansModule = React.lazy(() => import('./LoansModule'));
 const CollaboratorWrapper = React.lazy(() => import('./CollaboratorWrapper').then(m => ({ default: m.CollaboratorWrapper })));
+const ScorePanel = React.lazy(() => import('./ScorePanel').then(m => ({ default: m.ScorePanel })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -128,6 +130,7 @@ export type ActiveTab =
     | 'store_api_docs'
 
     | 'streets_list'
+    | 'score'
     | 'store_loans'
     | 'loans'
     | 'collaborator_area'
@@ -323,6 +326,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
         return 'profile'; // Fallback padrão
     });
+    const [userStatus, setUserStatus] = useState<UserStatus>('active');
+    const [isRestrictedMode, setIsRestrictedMode] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Default collapsed on desktop per user request
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -428,6 +433,18 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 if (mounted.current) {
                     setNotifications(notifs);
                     setMaintenance(maintSettings as unknown as MaintenanceSettings);
+
+                    // Atualizar status do usuário
+                    const { status: freshStatus } = await cloud.getInitialUserData();
+                    if (freshStatus) {
+                        setUserStatus(freshStatus);
+                        setIsRestrictedMode(['blocked', 'suspended', 'banned'].includes(freshStatus));
+
+                        // Emitir evento global caso o status mude para restrito
+                        if (['blocked', 'suspended', 'banned'].includes(freshStatus)) {
+                            window.dispatchEvent(new CustomEvent('restricted_mode_active'));
+                        }
+                    }
 
                     // Verificação proativa de role (unifica o que estava no outro useEffect)
                     if (currentRole && currentRole !== effectiveRole) {
@@ -622,7 +639,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
     const isDriver = isNormalDriver || isPartner;
 
     const generalTabs = new Set<ActiveTab>([
-        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'whatsapp_chat'
+        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'whatsapp_chat', 'score'
     ]);
 
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
@@ -763,6 +780,16 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 case 'heatmap': return <Heatmap userRole={effectiveRole} />;
                 case 'local_history': return <LocalHistoryPage />;
                 case 'addresses': return <AddressBook onClose={() => { }} />;
+                case 'score':
+                    if (isPartner) return <div className="max-w-4xl mx-auto"><ScorePanel /></div>;
+                    return (
+                        <div className="max-w-4xl mx-auto">
+                            <ExclusiveLock
+                                title="Meu Score"
+                                description="O sistema de score é uma exclusividade para parceiros verificados. Acompanhe seu desempenho, receba mais pedidos e aumente seus ganhos."
+                            />
+                        </div>
+                    );
 
                 case 'about': return <AboutApp />;
                 case 'faq': return <FaqPage />;
@@ -984,8 +1011,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                             <MenuSection title="Plataforma Zé" />
                             <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
                             <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
-                            <MenuButton icon={Wallet} label="Zebank" tab="zebank" />
-                            <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" />
+                            <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
+                            <MenuButton icon={Star} label="Meu Score" tab="score" />
+                            <MenuButton icon={History} label="Histórico Local" tab="local_history" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
                             <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
 
@@ -1010,7 +1038,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     <MenuButton icon={User} label="Meu Perfil" tab="profile" />
                     <MenuButton icon={Headphones} label="Suporte" tab="support" />
                     <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
-                    <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" badge={whatsappUnreadCount} />
                     <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
                     <MenuButton icon={Info} label="Sobre o App" tab="about" />
 
@@ -1024,7 +1051,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 </div>
 
                 <div className={`
-                    border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 
+                    border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50
                     p-4
                     ${isSidebarExpanded ? 'md:space-y-3' : 'md:space-y-2 md:p-2'}
                 `}>

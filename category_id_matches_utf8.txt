@@ -1,0 +1,24 @@
+﻿
+supabase\migrations\supabase_global.sql:658:    
+category_id UUID REFERENCES public.categories(id) ON 
+DELETE SET NULL,
+supabase\migrations\supabase_global.sql:666:CREATE INDEX 
+IF NOT EXISTS products_category_id_idx ON public.products 
+(category_id);
+supabase\migrations\supabase_global.sql:1301:    
+category_id UUID REFERENCES public.categories(id) ON 
+DELETE SET NULL,
+supabase\migrations\supabase_global.sql:1308:CREATE INDEX 
+IF NOT EXISTS products_category_id_idx ON public.products 
+(category_id);
+supabase\migrations\supabase_global.sql:2106:    
+category_id UUID REFERENCES 
+public.institutional_categories(id) ON DELETE SET NULL,
+supabase\migrations\supabase_global.sql:2116:CREATE INDEX 
+IF NOT EXISTS institutional_contents_category_id_idx ON 
+public.institutional_contents (category_id);
+supabase\migrations\supabase_global.sql:3697:    
+category_id UUID REFERENCES public.categories(id) ON 
+DELETE SET NULL,
+
+

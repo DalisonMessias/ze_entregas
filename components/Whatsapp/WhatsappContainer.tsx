@@ -57,6 +57,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
   const [newChatNumber, setNewChatNumber] = useState('');
   const [showBlockConfirm, setShowBlockConfirm] = useState<'block' | 'report' | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   const scrollFilters = (direction: 'left' | 'right') => {
     if (filterContainerRef.current) {
@@ -772,15 +773,25 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
             <div className="bg-orange-50 px-4 py-1 flex flex-col items-center border-b border-orange-100">
               <div className="w-full flex justify-between items-center mb-0.5">
                 <span className="text-[10px] text-orange-700 font-medium">
-                  {status.status === 'WAITING_QR' ? '⚠️ Escaneie o código para conectar' :
-                    status.status === 'DISCONNECTED' ? '🔴 Desconectado' : '🔌 Tentando conectar...'}
+                  {status.status === 'WAITING_QR' ? '⚠️ Clique em Conectar para escanear o QR Code' :
+                    status.status === 'DISCONNECTED' ? '🔴 Desconectado - Clique para conectar' : '🔌 Tentando conectar...'}
                 </span>
                 <button
-                  onClick={status.status === 'DISCONNECTED' ? handleRestart : handleWhatsappDisconnect}
-                  className="text-[10px] text-red-500 hover:underline font-bold"
+                  onClick={() => {
+                    if (status.status === 'DISCONNECTED') {
+                      handleRestart();
+                    } else if (status.status === 'WAITING_QR') {
+                      setShowQrModal(true);
+                    } else {
+                      handleWhatsappDisconnect();
+                    }
+                  }}
+                  className="text-[10px] text-blue-600 hover:underline font-bold"
                 >
                   {status.status === 'DISCONNECTED'
-                    ? (hasSession ? 'RECONECTAR SESSÃO' : 'NOVA CONEXÃO')
+                    ? (hasSession ? 'RECONECTAR' : 'CONECTAR')
+                    : status.status === 'WAITING_QR'
+                    ? 'CONECTAR'
                     : 'LIMPAR SESSÃO'}
                 </button>
               </div>
@@ -967,11 +978,14 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
 
       {/* Modal QR Code */}
       {
-        status.status === 'WAITING_QR' && status.qrCode && (
+        showQrModal && status.status === 'WAITING_QR' && status.qrCode && (
           <QrCodeModal
             qrCode={status.qrCode}
             status={status.status}
-            onClose={handleWhatsappDisconnect}
+            onClose={() => {
+              setShowQrModal(false);
+              handleWhatsappDisconnect();
+            }}
           />
         )
       }
