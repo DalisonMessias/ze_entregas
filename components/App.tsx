@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download } from 'lucide-react';
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
@@ -314,7 +314,9 @@ const UpgradeToPartnerPage: React.FC = () => {
 export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 'active' }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const tabFromUrl = getTabFromUrl(window.location.pathname);
-        if (tabFromUrl) return tabFromUrl;
+        const authTabs = ['login', 'signup', 'forgot_password'];
+
+        if (tabFromUrl && !authTabs.includes(tabFromUrl)) return tabFromUrl;
 
         // Default tabs by role
 
@@ -508,11 +510,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     useEffect(() => {
         // 1. Tenta recuperar aba da URL
         const tabFromUrl = getTabFromUrl(window.location.pathname);
+        const authTabs = ['login', 'signup', 'forgot_password'];
 
-        if (tabFromUrl) {
-            // Se a URL tem uma aba válida, usamos ela e ignoramos o default do role
-            // Mas precisamos verificar se o usuário tem acesso (canAccessTab simplificado aqui)
-            // Por enquanto confiamos no mapping, se o usuário não puder ver, o render vai bloquear ou mostrar erro
+        if (tabFromUrl && !authTabs.includes(tabFromUrl)) {
+            // Se a URL tem uma aba válida e NÃO é aba de autenticação, usamos ela
             setActiveTab(tabFromUrl);
             logger.info('ACTIVE_TAB_FROM_URL', { tab: tabFromUrl });
         } else {
@@ -977,6 +978,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
                             <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
                             <MenuButton icon={CreditCard} label="Config. Empréstimos" tab="admin_loan_config" />
+                            <MenuButton icon={DollarSign} label="Financeiro das Lojas" tab="admin_store_finance" />
                             <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
 
                             <MenuSection title="Marketing & Conteúdo" />
@@ -1003,6 +1005,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={LayoutDashboard} label="Painel" tab="wallet" id="store-wallet-link" />
                             <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
                             <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
+                            <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
                             <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" />
                             <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
@@ -1012,6 +1015,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
                             <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
                             <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
+                            <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
                             <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
                             <MenuButton icon={FileText} label="Comanda" tab="internal_orders" />
                             <MenuButton icon={CreditCard} label="Financeiro ZéPay" tab="zepay_store" />
@@ -1055,6 +1059,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     <MenuButton icon={ShoppingBag} label="Loja de Peças" tab="shop" />
                     <MenuButton icon={User} label="Meu Perfil" tab="profile" />
                     <MenuButton icon={Headphones} label="Suporte" tab="support" />
+                    <MenuButton icon={HelpCircle} label="Perguntas Frequentes (FAQ)" tab="faq" />
+                    <MenuButton icon={Bell} label="Notificações" tab="notifications" />
                     <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
                     <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
                     <MenuButton icon={Info} label="Sobre o App" tab="about" />
