@@ -10,6 +10,7 @@ import integrationRoutes from './routes/integration.js';
 import whatsappRoutes from './routes/whatsapp.js';
 import zeAssistantRoutes from './routes/zeAssistant.js';
 import pwaRoutes from './routes/pwa.js';
+import paymentRoutes from './routes/payment.js';
 import { initializeWebSocket } from './websocket.js';
 import './services/whatsappService.js'; // Importa para inicializar o serviço
 import './services/zeAssistantService.js'; // Importa para inicializar o serviço de Assistente
@@ -44,6 +45,7 @@ app.use('/api/v1', integrationRoutes);
 app.use('/api/whatsapp', whatsappRoutes); // Usar rotas do WhatsApp
 app.use('/api/ze-assistant', zeAssistantRoutes); // Usar rotas do Zé Assistente
 app.use('/pwa', pwaRoutes); // Rotas para PWA dinâmico
+app.use('/api/payment', paymentRoutes); // Rota para pagamentos
 
 
 // Rota de health check
