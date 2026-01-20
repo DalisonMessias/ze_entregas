@@ -345,14 +345,14 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 </p>
 
                 <div className="w-full max-w-sm space-y-4">
-                    <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-2xl">
                         <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Início Rápido</span>
                         <Switch checked={isQuickStart} onChange={setIsQuickStart} />
                     </div>
 
                     {!isQuickStart ? (
                         <div className="space-y-4 animate-in slide-in-from-top-2">
-                            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-left">
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl text-left">
                                 <label className="text-xs font-bold text-gray-500 uppercase ml-1">Valor Entrega Padrão (R$)</label>
                                 <input
                                     type="tel"
@@ -362,7 +362,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 mt-1 rounded-xl text-xl font-bold outline-none dark:text-white"
                                 />
                             </div>
-                            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-left">
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl text-left">
                                 <label className="text-xs font-bold text-gray-500 uppercase ml-1">Meta do Dia (R$)</label>
                                 <input
                                     type="tel"
@@ -379,7 +379,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                         </p>
                     )}
 
-                    <Button fullWidth onClick={handleStartDay} className="py-4 text-lg shadow-xl shadow-brand-500/20">
+                    <Button fullWidth onClick={handleStartDay} className="py-4 text-lg">
                         Iniciar Jornada
                     </Button>
                 </div>
@@ -393,7 +393,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             <TipOfTheDay role="delivery_partner" />
 
             {/* Header Stats */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden mb-4">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-[32px] relative overflow-hidden mb-4">
                 <div className="absolute top-0 right-0 p-6 opacity-5">
                     <Target className="w-32 h-32" />
                 </div>
@@ -453,7 +453,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Button
                     onClick={handleAddStandard}
-                    className="sm:col-span-2 bg-brand-600 active:bg-brand-700 text-white p-5 rounded-2xl flex items-center justify-between group transition-all border-none"
+                    className="sm:col-span-2 bg-brand-600 active:bg-brand-700 text-white p-5 rounded-2xl flex items-center justify-between group transition-all"
                 >
                     <div className="flex items-center gap-3">
                         <div className="bg-white/20 p-2 rounded-xl group-hover:scale-110 transition-transform">
@@ -472,7 +472,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 <Button
                     onClick={() => setShowExtraModal(true)}
                     variant="outline"
-                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors h-auto"
+                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors h-auto"
                 >
                     <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 p-2 rounded-xl">
                         <Calculator className="w-5 h-5" />
@@ -486,7 +486,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 <Button
                     onClick={() => setShowExpenseModal(true)}
                     variant="outline"
-                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors h-auto"
+                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors h-auto"
                 >
                     <div className="bg-red-100 dark:bg-red-900/30 text-red-600 p-2 rounded-xl">
                         <TrendingDown className="w-5 h-5" />
@@ -502,37 +502,37 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             <div>
                 <h3 className="font-bold text-gray-800 dark:text-white mb-4 mt-4 text-sm px-2">Acessos Rápidos</h3>
                 <div className="grid grid-cols-4 gap-2 mb-4">
-                    <button onClick={() => onNavigate('local_history')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('local_history')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                             <History className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Histórico</span>
                     </button>
-                    <button onClick={() => onNavigate('route_tools')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('route_tools')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
                             <Route className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Minhas Rotas</span>
                     </button>
-                    <button onClick={() => onNavigate('tasks')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('tasks')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-full text-pink-600 dark:text-pink-400">
                             <ClipboardList className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Tarefas</span>
                     </button>
-                    <button onClick={() => onNavigate('zebank')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('zebank')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
                             <Landmark className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">ZéBank</span>
                     </button>
-                    <button onClick={() => onNavigate('addresses')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('addresses')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-full text-cyan-600 dark:text-cyan-400">
                             <MapPin className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Endereços</span>
                     </button>
-                    <button onClick={() => onNavigate('profile')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('profile')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
                             <User className="w-5 h-5" />
                         </div>
@@ -542,49 +542,49 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
 
                 <h3 className="font-bold text-gray-800 dark:text-white mb-4 text-sm px-2">Ferramentas</h3>
                 <div className="grid grid-cols-4 gap-2 mb-4">
-                    <button onClick={() => setShowFuelCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => setShowFuelCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
                             <Fuel className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Combustível</span>
                     </button>
-                    <button onClick={() => setShowRouteCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => setShowRouteCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
                             <Calculator className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Calc. Rota</span>
                     </button>
-                    <button onClick={() => setShowMaintenance(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => setShowMaintenance(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
                             <Wrench className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Manutenção</span>
                     </button>
-                    <button onClick={() => setShowBlitzModal(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => setShowBlitzModal(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
                             <Siren className="w-5 h-5 fill-current" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Alertas</span>
                     </button>
-                    <button onClick={() => onNavigate('driver_marketing')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('driver_marketing')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-full text-yellow-600 dark:text-yellow-400">
                             <Megaphone className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Divulgação</span>
                     </button>
-                    <button onClick={() => onNavigate('shop')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('shop')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
                             <ShoppingBag className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Loja</span>
                     </button>
-                    <button onClick={() => setShowMerchantPOS(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => setShowMerchantPOS(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600 dark:text-indigo-400">
                             <Smartphone className="w-5 h-5" />
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">ZéPoint</span>
                     </button>
-                    <button onClick={() => setShowEditConfig(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => setShowEditConfig(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300">
                             <Settings className="w-5 h-5" />
                         </div>
@@ -595,7 +595,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
 
 
             {/* Transactions List */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl  border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden">
                 <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
                     <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <DollarSign className="w-4 h-4 text-gray-400" /> Extrato do Dia
@@ -787,7 +787,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl">
                         <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2 text-center">Resumo do Dia</h3>
-                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl mb-6 space-y-2 border border-gray-100 dark:border-gray-600">
+                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl mb-6 space-y-2 border-gray-100 dark:border-gray-600">
                             <div className="flex justify-between">
                                 <span className="text-sm text-gray-500 dark:text-gray-400">Total Bruto</span>
                                 <span className="font-bold dark:text-white">{formatCurrency(summary.profit + summary.expenses)}</span>

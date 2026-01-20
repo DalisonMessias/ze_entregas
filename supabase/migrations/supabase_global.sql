@@ -344,6 +344,49 @@ DROP TRIGGER IF EXISTS handle_user_profiles_updated_at ON public.user_profiles;
 CREATE TRIGGER handle_user_profiles_updated_at BEFORE UPDATE ON public.user_profiles
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+-- Função para verificar se o usuário é administrador (Com SECURITY DEFINER para evitar recursão)
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $body$
+DECLARE
+  v_role public.user_role;
+  v_is_admin BOOLEAN;
+BEGIN
+  -- 1. Tentar via JWT (Meta-dados do usuário)
+  IF (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' THEN
+    RETURN TRUE;
+  END IF;
+
+  -- 2. Fallback via Banco de Dados (Bypassa RLS por ser SECURITY DEFINER)
+    SELECT (role = 'admin') INTO v_is_admin FROM public.user_profiles WHERE id = auth.uid();
+    RETURN COALESCE(v_is_admin, FALSE);
+END;
+$body$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Função para verificar se o usuário está restrito (blocked/suspended)
+CREATE OR REPLACE FUNCTION public.is_restricted()
+RETURNS BOOLEAN AS $body$
+DECLARE
+    v_status public.user_status;
+BEGIN
+    SELECT status INTO v_status FROM public.user_profiles WHERE id = auth.uid();
+    RETURN v_status::text IN ('blocked', 'suspended');
+END;
+$body$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Função gatilho para bloquear ações de escrita em usuários restritos
+CREATE OR REPLACE FUNCTION public.check_not_restricted_trigger()
+RETURNS TRIGGER AS $body$
+BEGIN
+    IF public.is_restricted() THEN
+        RAISE EXCEPTION 'Ação bloqueada: Sua conta está em modo restrito (apenas visualização).';
+    END IF;
+    IF (TG_OP = 'DELETE') THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$body$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Bloqueio para usuários restritos (Exceto o próprio campo de status que admin muda via SECURITY DEFINER em funções, 
 -- mas aqui como é trigger BEFORE, o admin pode ser afetado se não filtrarmos por is_admin(). 
 -- No entanto, admin não deve estar 'blocked'. 
@@ -358,47 +401,6 @@ EXECUTE FUNCTION public.check_not_restricted_trigger();
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, UPDATE ON public.user_profiles TO authenticated;
 
--- Funﾃｧﾃ｣o para verificar se o usuﾃ｡rio ﾃｩ administrador (Com SECURITY DEFINER para evitar recursﾃ｣o)
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $$
-DECLARE
-  v_role public.user_role;
-BEGIN
-  -- 1. Tentar via JWT (Meta-dados do usuﾃ｡rio)
-  IF (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' THEN
-    RETURN TRUE;
-  END IF;
-
-  -- 2. Fallback via Banco de Dados (Bypassa RLS por ser SECURITY DEFINER)
-    SELECT (role = 'admin') INTO v_is_admin FROM public.user_profiles WHERE id = auth.uid();
-    RETURN COALESCE(v_is_admin, FALSE);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Função para verificar se o usuário está restrito (blocked/suspended)
-CREATE OR REPLACE FUNCTION public.is_restricted()
-RETURNS BOOLEAN AS $$
-DECLARE
-    v_status public.user_status;
-BEGIN
-    SELECT status INTO v_status FROM public.user_profiles WHERE id = auth.uid();
-    RETURN v_status IN ('blocked', 'suspended');
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Função gatilho para bloquear ações de escrita em usuários restritos
-CREATE OR REPLACE FUNCTION public.check_not_restricted_trigger()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF public.is_restricted() THEN
-        RAISE EXCEPTION 'Ação bloqueada: Sua conta está em modo restrito (apenas visualização).';
-    END IF;
-    IF (TG_OP = 'DELETE') THEN
-        RETURN OLD;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.user_profiles;
 CREATE POLICY "Users can view their own profile" ON public.user_profiles
@@ -1709,10 +1711,7 @@ CREATE OR REPLACE FUNCTION public.update_driver_score(
     p_event_key TEXT,
     p_reason TEXT DEFAULT NULL,
     p_order_id UUID DEFAULT NULL
-) RETURNS VOID 
-LANGUAGE plpgsql 
-SECURITY DEFINER
-AS $$
+) RETURNS VOID AS $body$
 DECLARE
     v_impact INTEGER;
     v_old_score INTEGER;
@@ -1739,17 +1738,15 @@ BEGIN
     UPDATE public.user_profiles SET score = v_new_score, updated_at = NOW() WHERE id = p_user_id;
 
     -- Registrar no histórico
-    INSERT INTO public.score_history (user_id, event_key, impact, reason, order_id)
-    VALUES (p_user_id, p_event_key, v_impact, p_reason, p_order_id);
+    INSERT INTO public.score_history (user_id, event_key, impact, previous_score, new_score, reason, order_id)
+    SELECT p_user_id, p_event_key, v_impact, v_old_score, v_new_score, COALESCE(p_reason, label), p_order_id
+    FROM public.score_config WHERE event_key = p_event_key;
 END;
-$$;
+$body$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Função para verificar bloqueio automático
 CREATE OR REPLACE FUNCTION public.check_driver_blocking(p_user_id UUID)
-RETURNS VOID 
-LANGUAGE plpgsql 
-SECURITY DEFINER
-AS $$
+RETURNS VOID AS $body$
 DECLARE
     v_cancellations INTEGER;
     v_refusals INTEGER;
@@ -1789,16 +1786,13 @@ BEGIN
                 'AUTOMATIC');
     END IF;
 END;
-$$;
+$body$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Função para registrar recusa/cancelamento e disparar verificação
 CREATE OR REPLACE FUNCTION public.register_driver_event(
     p_user_id UUID,
     p_event_type TEXT -- 'REFUSAL', 'CANCELLATION'
-) RETURNS VOID 
-LANGUAGE plpgsql 
-SECURITY DEFINER
-AS $$
+) RETURNS VOID AS $body$
 BEGIN
     IF p_event_type = 'REFUSAL' THEN
         UPDATE public.user_profiles SET refusal_count_monthly = refusal_count_monthly + 1 WHERE id = p_user_id;
@@ -1811,14 +1805,11 @@ BEGIN
     -- Verificar bloqueio
     PERFORM public.check_driver_blocking(p_user_id);
 END;
-$$;
+$body$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Função para reset mensal (deve ser chamada via Cron ou gatilho de login)
 CREATE OR REPLACE FUNCTION public.reset_monthly_stats_if_needed(p_user_id UUID)
-RETURNS VOID 
-LANGUAGE plpgsql 
-SECURITY DEFINER
-AS $$
+RETURNS VOID AS $body$
 DECLARE
     v_reset_date TIMESTAMPTZ;
 BEGIN
@@ -1833,7 +1824,7 @@ BEGIN
         WHERE id = p_user_id;
     END IF;
 END;
-$$;
+$body$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TABLE IF NOT EXISTS public.store_delivery_partners (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -1868,7 +1859,6 @@ BEGIN
 
 -- Polﾃｭtica para permitir que parceiros leiam perfis com base em associaﾃｧﾃ｣o ou visibilidade pﾃｺblica;
     END IF;
-END $$;
 END $$;
 
 -- Polﾃｭtica para permitir leitura durante avaliaﾃｧﾃ｣o de polﾃｭticas de outras tabelas

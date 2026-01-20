@@ -473,7 +473,9 @@ const UserManagement: React.FC = () => {
                                             options={[
                                                 { label: 'Ativo', value: 'active' },
                                                 { label: 'Banido', value: 'banned' },
-                                                { label: 'Pendente', value: 'pending' }
+                                                { label: 'Pendente', value: 'pending' },
+                                                { label: 'Bloqueado', value: 'blocked' },
+                                                { label: 'Suspenso', value: 'suspended' }
                                             ]}
                                         />
                                     </div>

@@ -165,6 +165,28 @@ export const getUserStatus = async (): Promise<string> => {
     }
 };
 
+export const getBlockingDetails = async (): Promise<{ reason: string; created_at: string } | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    try {
+        const { user } = await getUserWithCache();
+        if (!user) return null;
+
+        const { data, error } = await sb
+            .from('blocking_history')
+            .select('reason, created_at')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (error || !data) return null;
+        return data;
+    } catch {
+        return null;
+    }
+};
+
 /**
  * Consolida Notificações, Status de Manutenção e Role do Usuário em uma ÚNICA chamada.
  * Reduz o polling triplo do App.tsx para apenas uma requisição.

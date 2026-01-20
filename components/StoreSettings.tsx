@@ -330,27 +330,25 @@ export const StoreSettings: React.FC = () => {
             />
 
             {/* Header / Tabs */}
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
-                <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
-                    <button
-                        onClick={() => setActiveTab('general')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'general' ? 'bg-white dark:bg-gray-600 shadow text-brand-600 dark:text-white' : 'text-gray-500'}`}
-                    >
-                        <Store className="w-4 h-4" /> Dados da Loja
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('shipping')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'shipping' ? 'bg-white dark:bg-gray-600 shadow text-brand-600 dark:text-white' : 'text-gray-500'}`}
-                    >
-                        {isSuperStore ? <Truck className="w-4 h-4" /> : <Lock className="w-4 h-4" />} Config. Frete
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('printer')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'printer' ? 'bg-white dark:bg-gray-600 shadow text-brand-600 dark:text-white' : 'text-gray-500'}`}
-                    >
-                        <Printer className="w-4 h-4" /> Impressora
-                    </button>
-                </div>
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl mb-6">
+                <button
+                    onClick={() => setActiveTab('general')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'general' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
+                >
+                    <Store className="w-4 h-4" /> Dados da Loja
+                </button>
+                <button
+                    onClick={() => setActiveTab('shipping')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'shipping' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
+                >
+                    {isSuperStore ? <Truck className="w-4 h-4" /> : <Lock className="w-4 h-4" />} Config. Frete
+                </button>
+                <button
+                    onClick={() => setActiveTab('printer')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'printer' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
+                >
+                    <Printer className="w-4 h-4" /> Impressora
+                </button>
             </div>
 
             {/* Super Store Expiration Banner */}
@@ -376,7 +374,7 @@ export const StoreSettings: React.FC = () => {
                 <div className="space-y-10">
 
                     {/* --- BRANDING SECTION (NEW) --- */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden relative group">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden relative group">
                         {/* Cover Image */}
                         <div className="h-40 md:h-52 w-full bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 relative">
                             {coverUrl && (
@@ -414,7 +412,7 @@ export const StoreSettings: React.FC = () => {
 
 
                     {/* Store Info */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-8">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl space-y-8">
                         <div>
                             <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
                                 <Store className="w-5 h-5 text-gray-500" /> Informações Básicas
@@ -605,7 +603,7 @@ export const StoreSettings: React.FC = () => {
 
             {/* Printer Settings */}
             {activeTab === 'printer' && (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-6">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl space-y-6">
                     <div>
                         <h3 className="font-bold text-lg dark:text-white mb-2 flex items-center gap-2">
                             <Printer className="w-5 h-5 text-gray-500" /> Configurações de Impressora

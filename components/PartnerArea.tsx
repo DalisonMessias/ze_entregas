@@ -81,7 +81,7 @@ interface PartnerAreaProps {
 }
 
 export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }) => {
-    const [activeTab, setActiveTab] = useState<'requests' | 'finance' | 'history' | 'stores'>('requests');
+    const [activeTab, setActiveTab] = useState<'deliveries' | 'financial' | 'history' | 'stores'>('deliveries');
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [requests, setRequests] = useState<PartnerRequest[]>([]);
     const [activeDelivery, setActiveDelivery] = useState<PartnerRequest | null>(null);
@@ -228,7 +228,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
     };
 
     useEffect(() => {
-        if (activeTab === 'finance') {
+        if (activeTab === 'financial') {
             (async () => {
                 try {
                     const s = await cloud.getPartnerFinancialSummary();
@@ -243,7 +243,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
     // Auto refresh requests ONLY if shift is ACTIVE
     useEffect(() => {
         let interval: any;
-        if (currentShift?.status === 'ACTIVE' && activeTab === 'requests' && profile?.verification_status === 'APPROVED') {
+        if (currentShift?.status === 'ACTIVE' && activeTab === 'deliveries' && profile?.verification_status === 'APPROVED') {
             loadRequests();
             interval = setInterval(loadRequests, 10000);
         } else {
@@ -446,7 +446,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                         <h2 className="text-2xl font-black">Você está Offline</h2>
                         <p className="text-gray-400 text-sm">Inicie seu turno para receber entregas.</p>
                     </div>
-                    <Button onClick={handleStartShiftClick} disabled={shiftLoading} className="w-full py-4 text-lg bg-green-600 hover:bg-green-500 border-none shadow-lg">
+                    <Button onClick={handleStartShiftClick} disabled={shiftLoading} className="w-full py-4 text-lg bg-green-600 hover:bg-green-500">
                         {shiftLoading ? <Loader2 className="animate-spin" /> : <><Play className="w-5 h-5 mr-2 fill-current" /> Iniciar Turno</>}
                     </Button>
                 </div>
@@ -476,7 +476,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                         <Button
                             onClick={handleResumeShift}
                             disabled={shiftLoading}
-                            className="!bg-white !text-yellow-600 !hover:bg-white border-none shadow-sm"
+                            className="!bg-white !text-yellow-600 !hover:bg-white"
                         >
                             {shiftLoading ? <Loader2 className="animate-spin" /> : <><Play className="w-4 h-4 mr-2 fill-current" /> Retomar</>}
                         </Button>
@@ -527,16 +527,42 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 </button>
             </div>
 
-            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar mb-2.5">
-                <Button onClick={() => setActiveTab('requests')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap border-none ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500 bg-transparent shadow-none hover:bg-white/10'}`}>
-                    Entregas
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar mb-2.5">
+                <Button
+                    variant="ghost"
+                    onClick={() => setActiveTab('deliveries')}
+                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'deliveries' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+                >
+                    <MapPin className="w-5 h-5" />
+                    <span className="text-[10px] uppercase font-bold">Entregas</span>
                 </Button>
-                <Button onClick={() => setActiveTab('finance')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap border-none ${activeTab === 'finance' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500 bg-transparent shadow-none hover:bg-white/10'}`}>Financeiro</Button>
-                <Button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap border-none ${activeTab === 'history' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500 bg-transparent shadow-none hover:bg-white/10'}`}>Histórico</Button>
-                <Button onClick={() => setActiveTab('stores')} className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-bold whitespace-nowrap border-none ${activeTab === 'stores' ? 'bg-white dark:bg-gray-700 text-brand-600' : 'text-gray-500 bg-transparent shadow-none hover:bg-white/10'}`}>Lojas</Button>
+                <Button
+                    variant="ghost"
+                    onClick={() => setActiveTab('financial')}
+                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'financial' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+                >
+                    <DollarSign className="w-5 h-5" />
+                    <span className="text-[10px] uppercase font-bold">Financeiro</span>
+                </Button>
+                <Button
+                    variant="ghost"
+                    onClick={() => setActiveTab('history')}
+                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'history' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+                >
+                    <History className="w-5 h-5" />
+                    <span className="text-[10px] uppercase font-bold">Histórico</span>
+                </Button>
+                <Button
+                    variant="ghost"
+                    onClick={() => setActiveTab('stores')}
+                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'stores' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+                >
+                    <Store className="w-5 h-5" />
+                    <span className="text-[10px] uppercase font-bold">Lojas</span>
+                </Button>
             </div>
 
-            {activeTab === 'requests' && (
+            {activeTab === 'deliveries' && (
                 <>
                     <PromoSlider audience={userRole === 'store_partner' ? 'merchants' : 'drivers'} />
                     <ScorePanel />
@@ -547,43 +573,43 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     <div>
                         <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2 mt-6">Acessos Rápidos</h3>
                         <div className="grid grid-cols-4 gap-2 mb-4">
-                            <Button onClick={() => setActiveTab('finance')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => setActiveTab('financial')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
                                     <Wallet className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Ganhos</span>
                             </Button>
-                            <Button onClick={() => setActiveTab('history')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => setActiveTab('history')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                                     <HistoryIcon className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Histórico</span>
                             </Button>
-                            <Button onClick={() => setActiveTab('stores')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => setActiveTab('stores')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-full text-pink-600 dark:text-pink-400">
                                     <Store className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Minhas Lojas</span>
                             </Button>
-                            <Button onClick={() => setShowNotifications(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => setShowNotifications(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-full text-yellow-600 dark:text-yellow-400">
                                     <Bell className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Avisos</span>
                             </Button>
-                            <Button onClick={() => onNavigate('zebank')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => onNavigate('zebank')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
                                     <Landmark className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">ZéBank</span>
                             </Button>
-                            <Button onClick={() => setShowReferral(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => setShowReferral(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600 dark:text-indigo-400">
                                     <Gift className="w-5 h-5" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Indicações</span>
                             </Button>
-                            <Button onClick={() => onNavigate('score')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => onNavigate('score')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
                                     <Star className="w-5 h-5" />
                                 </div>
@@ -593,7 +619,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
 
                         <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2">Ferramentas</h3>
                         <div className="grid grid-cols-4 gap-2">
-                            <Button onClick={() => setShowFuelCalc(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => setShowFuelCalc(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
                                     <Fuel className="w-5 h-5" />
                                 </div>
@@ -611,7 +637,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Manutenção</span>
                             </Button>
-                            <Button onClick={() => setShowMerchantPOS(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => setShowMerchantPOS(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
                                     <Smartphone className="w-5 h-5" />
                                 </div>
@@ -716,12 +742,12 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     )}
                 </>
             )}
-            {activeTab === 'finance' && (
+            {activeTab === 'financial' && (
                 <div className="space-y-6">
                     {/* Action Button for Emergency Withdraw (Only Partners) */}
                     {userRole === 'delivery_partner' && summary && summary.settings && (
                         <div className="mb-4">
-                            <Button onClick={() => setShowWithdrawConfirm(true)} className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border-none">
+                            <Button onClick={() => setShowWithdrawConfirm(true)} className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
                                 <Wallet className="w-4 h-4" /> Solicitar Saque Emergencial
                             </Button>
                         </div>

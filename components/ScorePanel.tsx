@@ -14,6 +14,23 @@ interface ScoreEvent {
     created_at: string;
 }
 
+const getEventLabel = (key: string) => {
+    const labels: Record<string, string> = {
+        'ORDER_COMPLETED': 'Pedido Concluído',
+        'DELIVERY_SUCCESS': 'Entrega Concluída',
+        'DELIVERY_IN_TIME': 'Entrega no Prazo',
+        'HIGH_ACCEPTANCE_RATE': 'Alta Taxa de Aceitação',
+        'ORDER_CANCELLED_BY_DRIVER': 'Pedido Cancelado',
+        'ORDER_REFUSED_BY_DRIVER': 'Pedido Recusado',
+        'ABANDON_AFTER_ACCEPT': 'Abandono após Aceite',
+        'CUSTOMER_NEGATIVE_RATING': 'Avaliação Negativa',
+        'CUSTOMER_POSITIVE_RATING': 'Avaliação Positiva',
+        'REPORT_VALIDATED': 'Denúncia Validada',
+        'MANUAL_ADJUSTMENT': 'Ajuste Manual'
+    };
+    return labels[key] || key;
+};
+
 export const ScorePanel: React.FC = () => {
     const [score, setScore] = useState<number | null>(null);
     const [history, setHistory] = useState<ScoreEvent[]>([]);
@@ -65,7 +82,7 @@ export const ScorePanel: React.FC = () => {
     }, []);
 
     if (loading) return (
-        <div className="animate-pulse bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700">
+        <div className="animate-pulse bg-white dark:bg-gray-800 p-6 rounded-3xl">
             <div className="h-4 bg-gray-200 dark:bg-gray-700 w-24 mb-4 rounded"></div>
             <div className="h-10 bg-gray-200 dark:bg-gray-700 w-full rounded"></div>
         </div>
@@ -87,7 +104,7 @@ export const ScorePanel: React.FC = () => {
     };
 
     return (
-        <div id="driver-score-panel" className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden relative">
+        <div id="driver-score-panel" className="bg-white dark:bg-gray-800 p-6 rounded-3xl overflow-hidden relative">
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h3 className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Meu Score</h3>
@@ -160,7 +177,7 @@ export const ScorePanel: React.FC = () => {
                                         {event.impact > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                                     </div>
                                     <div>
-                                        <p className="text-xs font-bold dark:text-gray-200">{event.reason || event.event_key}</p>
+                                        <p className="text-xs font-bold dark:text-gray-200">{event.reason || getEventLabel(event.event_key)}</p>
                                         <p className="text-[10px] text-gray-400">
                                             {new Intl.DateTimeFormat('pt-BR', {
                                                 day: '2-digit',

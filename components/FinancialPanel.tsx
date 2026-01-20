@@ -39,13 +39,13 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'extrato' | 'emprestimos'>(defaultOrigin === 'personal' ? 'emprestimos' : 'extrato');
     const [loanConfig, setLoanConfig] = useState<LoanConfig | null>(null);
-    
+
     // Filters
     const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'custom'>('week');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [origin, setOrigin] = useState<'store' | 'personal'>(defaultOrigin ?? 'store');
     const [opType, setOpType] = useState<'all' | 'earning' | 'debit' | 'withdrawal' | 'refund'>('all');
-    
+
     // Modal
     const [selectedTx, setSelectedTx] = useState<FinancialStatementItem | null>(null);
     const [userName, setUserName] = useState('');
@@ -62,7 +62,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
             // Determine dates based on period
             let start = dateRange.start;
             let end = dateRange.end;
-            
+
             if (period !== 'custom') {
                 const now = new Date();
                 const s = new Date();
@@ -128,7 +128,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
                 const loansData = await cloud.getStoreLoans();
                 setLoans(loansData);
             }
-            
+
             // Get user name for receipt
             const user = await cloud.getClient()?.auth.getUser();
             if (user?.data.user?.user_metadata?.name) {
@@ -147,7 +147,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
     }, [period, dateRange, userRole, origin]);
 
     useEffect(() => {
-        cloud.getLoanConfig().then(setLoanConfig).catch(() => {});
+        cloud.getLoanConfig().then(setLoanConfig).catch(() => { });
     }, []);
 
     useEffect(() => {
@@ -158,12 +158,12 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
             .on('postgres_changes', { event: '*', schema: 'public', table: 'store_wallet_transactions' }, (payload: any) => {
                 const t = payload?.new?.type || payload?.old?.type;
                 if (t === 'loan') {
-                    cloud.getStoreLoans().then(setLoans).catch(() => {});
+                    cloud.getStoreLoans().then(setLoans).catch(() => { });
                 }
             })
             .subscribe();
         return () => {
-            try { (sb as any).removeChannel(channel); } catch {}
+            try { (sb as any).removeChannel(channel); } catch { }
         };
     }, [userRole]);
 
@@ -189,7 +189,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
             t.amount.toFixed(2),
             t.status
         ].join(','));
-        
+
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n" + rows.join('\n');
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -205,7 +205,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
         // Type filter
         if (opType !== 'all') {
             const map: Record<'all' | 'earning' | 'debit' | 'withdrawal' | 'refund', FinancialStatementItem['type'][]> = {
-                all: ['EARNING','DEBIT','WITHDRAWAL','REFUND'],
+                all: ['EARNING', 'DEBIT', 'WITHDRAWAL', 'REFUND'],
                 earning: ['EARNING'],
                 debit: ['DEBIT'],
                 withdrawal: ['WITHDRAWAL'],
@@ -231,7 +231,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
                 return 0;
             });
     }, [loans, loanStatusFilter, loanSort]);
-    
+
     const handleLoanSort = (key: keyof LoanItem) => {
         setLoanSort(prev => ({
             key,
@@ -247,13 +247,13 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
             default: return 'bg-gray-100 text-gray-700';
         }
     };
-    
+
     const renderLoansSection = () => (
         <div className="space-y-4 pt-6">
             <hr className="border-gray-200 dark:border-gray-700" />
             <div className="flex items-center justify-between">
-                 <h3 className="font-bold text-lg text-gray-800 dark:text-white flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-gray-500"/> Gestão de Empréstimos
+                <h3 className="font-bold text-lg text-gray-800 dark:text-white flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-gray-500" /> Gestão de Empréstimos
                 </h3>
                 {/* <Button variant="outline">Novo Empréstimo</Button> */}
             </div>
@@ -294,7 +294,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
                 <h4 className="text-sm font-bold text-gray-600 dark:text-gray-300">Filtrar por Status:</h4>
                 <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
                     {(['ALL', 'EM_DIA', 'VENCIDO', 'PAGO'] as const).map(status => (
-                        <button 
+                        <button
                             key={status}
                             onClick={() => setLoanStatusFilter(status)}
                             className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${loanStatusFilter === status ? 'bg-white dark:bg-gray-600 text-brand-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
@@ -317,19 +317,19 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
                             <th scope="col" className="px-6 py-3 cursor-pointer" onClick={() => handleLoanSort('amount')}
                                 aria-sort={loanSort.key === 'amount' ? (loanSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                                 <Tooltip text="Valor total do empréstimo contratado">
-                                    <div className="flex items-center gap-1">Valor <ChevronsUpDown className="w-3 h-3"/></div>
+                                    <div className="flex items-center gap-1">Valor <ChevronsUpDown className="w-3 h-3" /></div>
                                 </Tooltip>
                             </th>
                             <th scope="col" className="px-6 py-3 cursor-pointer" onClick={() => handleLoanSort('startDate')}
                                 aria-sort={loanSort.key === 'startDate' ? (loanSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                                 <Tooltip text="Data em que o empréstimo foi liberado">
-                                     <div className="flex items-center gap-1">Contratação <ChevronsUpDown className="w-3 h-3"/></div>
+                                    <div className="flex items-center gap-1">Contratação <ChevronsUpDown className="w-3 h-3" /></div>
                                 </Tooltip>
                             </th>
                             <th scope="col" className="px-6 py-3 cursor-pointer" onClick={() => handleLoanSort('dueDate')}
                                 aria-sort={loanSort.key === 'dueDate' ? (loanSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                                 <Tooltip text="Data final para quitação do empréstimo">
-                                    <div className="flex items-center gap-1">Vencimento <ChevronsUpDown className="w-3 h-3"/></div>
+                                    <div className="flex items-center gap-1">Vencimento <ChevronsUpDown className="w-3 h-3" /></div>
                                 </Tooltip>
                             </th>
                             <th scope="col" className="px-6 py-3">
@@ -355,10 +355,10 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
                                 <td className="px-6 py-4 font-bold text-red-500">{formatCurrency(loan.outstandingBalance)}</td>
                             </tr>
                         ))}
-                         {sortedAndFilteredLoans.length === 0 && (
+                        {sortedAndFilteredLoans.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="text-center py-10 text-gray-400">
-                                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-20"/>
+                                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-20" />
                                     Nenhum empréstimo encontrado com os filtros atuais.
                                 </td>
                             </tr>
@@ -421,12 +421,12 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
                 </div>
             )}
 
-            <div className="bg-white dark:bg-gray-800 p-2 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-2">
-                {(['extrato','emprestimos'] as const).map(tab => (
+            <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl flex gap-2 mb-4">
+                {(['extrato', 'emprestimos'] as const).map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold ${activeTab === tab ? 'bg-gray-100 dark:bg-gray-700 text-brand-600 dark:text-white' : 'text-gray-500 dark:text-gray-300'}`}
+                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all ${activeTab === tab ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 dark:text-gray-300'}`}
                     >
                         {tab === 'extrato' ? 'Extrato' : 'Empréstimos'}
                     </button>
@@ -438,101 +438,101 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
             )}
 
             {activeTab === 'extrato' && (
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                        <Filter className="w-4 h-4 text-gray-500"/> Filtros
-                    </h3>
-                    <button onClick={handleExportCSV} className="text-xs font-bold text-brand-600 flex items-center gap-1 hover:underline">
-                        <Download className="w-3 h-3"/> Exportar CSV
-                    </button>
-                </div>
-                
-                <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl mb-4 overflow-x-auto no-scrollbar">
-                    {['day', 'week', 'month', 'custom'].map((p) => (
-                        <button 
-                            key={p}
-                            onClick={() => setPeriod(p as any)}
-                            className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${period === p ? 'bg-white dark:bg-gray-600 text-brand-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
-                        >
-                            {p === 'day' ? 'Hoje' : p === 'week' ? '7 Dias' : p === 'month' ? '30 Dias' : 'Personalizado'}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                            <Filter className="w-4 h-4 text-gray-500" /> Filtros
+                        </h3>
+                        <button onClick={handleExportCSV} className="text-xs font-bold text-brand-600 flex items-center gap-1 hover:underline">
+                            <Download className="w-3 h-3" /> Exportar CSV
                         </button>
-                    ))}
-                </div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div data-testid="origin-filter-group" className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl overflow-x-auto no-scrollbar">
-                        {['store','personal'].map((o) => (
+                    <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl mb-4 overflow-x-auto no-scrollbar">
+                        {['day', 'week', 'month', 'custom'].map((p) => (
                             <button
-                                key={o}
-                                onClick={() => setOrigin(o as any)}
-                                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${origin === o ? 'bg-white dark:bg-gray-600 text-brand-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+                                key={p}
+                                onClick={() => setPeriod(p as any)}
+                                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${period === p ? 'bg-white dark:bg-gray-600 text-brand-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
                             >
-                                {o === 'store' ? 'Loja' : 'Pessoal'}
+                                {p === 'day' ? 'Hoje' : p === 'week' ? '7 Dias' : p === 'month' ? '30 Dias' : 'Personalizado'}
                             </button>
                         ))}
                     </div>
-                    <div data-testid="op-type-filter-group" className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl overflow-x-auto no-scrollbar">
-                        {['all','earning','debit','withdrawal','refund'].map((t) => (
-                            <button
-                                key={t}
-                                onClick={() => setOpType(t as any)}
-                                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${opType === t ? 'bg-white dark:bg-gray-600 text-brand-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
-                            >
-                                {t === 'all' ? 'Todos' : t === 'earning' ? 'Entradas' : t === 'debit' ? 'Saídas' : t === 'withdrawal' ? 'Saques' : 'Estornos'}
-                            </button>
-                        ))}
-                    </div>
-                </div>
 
-                {period === 'custom' && (
-                    <div className="grid grid-cols-2 gap-3 animate-in slide-in-from-top-2">
-                        <CustomDateInput value={dateRange.start} onChange={v => setDateRange({...dateRange, start: v})} label="De"/>
-                        <CustomDateInput value={dateRange.end} onChange={v => setDateRange({...dateRange, end: v})} label="Até"/>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div data-testid="origin-filter-group" className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl overflow-x-auto no-scrollbar">
+                            {['store', 'personal'].map((o) => (
+                                <button
+                                    key={o}
+                                    onClick={() => setOrigin(o as any)}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${origin === o ? 'bg-white dark:bg-gray-600 text-brand-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+                                >
+                                    {o === 'store' ? 'Loja' : 'Pessoal'}
+                                </button>
+                            ))}
+                        </div>
+                        <div data-testid="op-type-filter-group" className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl overflow-x-auto no-scrollbar">
+                            {['all', 'earning', 'debit', 'withdrawal', 'refund'].map((t) => (
+                                <button
+                                    key={t}
+                                    onClick={() => setOpType(t as any)}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${opType === t ? 'bg-white dark:bg-gray-600 text-brand-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+                                >
+                                    {t === 'all' ? 'Todos' : t === 'earning' ? 'Entradas' : t === 'debit' ? 'Saídas' : t === 'withdrawal' ? 'Saques' : 'Estornos'}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                )}
-            </div>
+
+                    {period === 'custom' && (
+                        <div className="grid grid-cols-2 gap-3 animate-in slide-in-from-top-2">
+                            <CustomDateInput value={dateRange.start} onChange={v => setDateRange({ ...dateRange, start: v })} label="De" />
+                            <CustomDateInput value={dateRange.end} onChange={v => setDateRange({ ...dateRange, end: v })} label="Até" />
+                        </div>
+                    )}
+                </div>
             )}
 
             {activeTab === 'extrato' && (
-            <div className="space-y-3">
-                <h3 className="font-bold text-gray-800 dark:text-white px-2">{origin === 'personal' ? 'Extrato Pessoal' : 'Extrato Detalhado'}</h3>
-                
-                {loading ? (
-                    <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-brand-500"/></div>
-                ) : transactions.length === 0 ? (
-                    <div className="text-center py-10 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 text-gray-400">
-                        <FileText className="w-10 h-10 mx-auto mb-2 opacity-20"/>
-                        <p className="text-sm">Nenhuma movimentação no período.</p>
-                    </div>
-                ) : (
-                    filteredTransactions.map((tx) => (
-                        <div key={tx.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between group cursor-pointer hover:border-brand-200 transition-colors" onClick={() => setSelectedTx(tx)}>
-                            <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.amount > 0 ? 'bg-green-100 text-green-600 dark:bg-green-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
-                                    {tx.amount > 0 ? <TrendingUp className="w-5 h-5"/> : <TrendingDown className="w-5 h-5"/>}
-                                </div>
-                                <div>
-                                    <p className="font-bold text-gray-900 dark:text-white text-sm line-clamp-1">{tx.description}</p>
-                                    <p className="text-xs text-gray-400 flex items-center gap-1">
-                                        {new Date(tx.date).toLocaleDateString('pt-BR')} {new Date(tx.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                                        <span className="uppercase font-bold text-[10px] text-gray-500">{tx.type === 'EARNING' ? 'Entrada' : tx.type === 'DEBIT' ? 'Saída' : tx.type === 'WITHDRAWAL' ? 'Saque' : 'Estorno'}</span>
-                                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                                        <span className={`uppercase font-bold text-[10px] ${tx.status === 'COMPLETED' ? 'text-green-500' : tx.status === 'PENDING' ? 'text-yellow-500' : 'text-red-500'}`}>{tx.status === 'COMPLETED' ? 'Concluído' : tx.status === 'PENDING' ? 'Pendente' : 'Falha'}</span>
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className={`font-black text-sm ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
-                                </p>
-                                <span className="text-[10px] text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Ver Recibo</span>
-                            </div>
+                <div className="space-y-3">
+                    <h3 className="font-bold text-gray-800 dark:text-white px-2">{origin === 'personal' ? 'Extrato Pessoal' : 'Extrato Detalhado'}</h3>
+
+                    {loading ? (
+                        <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>
+                    ) : transactions.length === 0 ? (
+                        <div className="text-center py-10 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 text-gray-400">
+                            <FileText className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                            <p className="text-sm">Nenhuma movimentação no período.</p>
                         </div>
-                    ))
-                )}
-            </div>
+                    ) : (
+                        filteredTransactions.map((tx) => (
+                            <div key={tx.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between group cursor-pointer hover:border-brand-200 transition-colors" onClick={() => setSelectedTx(tx)}>
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.amount > 0 ? 'bg-green-100 text-green-600 dark:bg-green-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
+                                        {tx.amount > 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-900 dark:text-white text-sm line-clamp-1">{tx.description}</p>
+                                        <p className="text-xs text-gray-400 flex items-center gap-1">
+                                            {new Date(tx.date).toLocaleDateString('pt-BR')} {new Date(tx.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                            <span className="uppercase font-bold text-[10px] text-gray-500">{tx.type === 'EARNING' ? 'Entrada' : tx.type === 'DEBIT' ? 'Saída' : tx.type === 'WITHDRAWAL' ? 'Saque' : 'Estorno'}</span>
+                                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                            <span className={`uppercase font-bold text-[10px] ${tx.status === 'COMPLETED' ? 'text-green-500' : tx.status === 'PENDING' ? 'text-yellow-500' : 'text-red-500'}`}>{tx.status === 'COMPLETED' ? 'Concluído' : tx.status === 'PENDING' ? 'Pendente' : 'Falha'}</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className={`font-black text-sm ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
+                                    </p>
+                                    <span className="text-[10px] text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Ver Recibo</span>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
             )}
 
             {/* Loans Section */}
@@ -540,9 +540,9 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
 
 
             {selectedTx && (
-                <ReceiptModal 
-                    transaction={selectedTx} 
-                    onClose={() => setSelectedTx(null)} 
+                <ReceiptModal
+                    transaction={selectedTx}
+                    onClose={() => setSelectedTx(null)}
                     userName={userName}
                 />
             )}

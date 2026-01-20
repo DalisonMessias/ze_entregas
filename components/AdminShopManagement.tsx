@@ -341,7 +341,7 @@ export const AdminShopManagement: React.FC = () => {
                     aria-controls="panel-products"
                     tabIndex={activeTab === 'products' ? 0 : -1}
                     onClick={() => setActiveTab('products')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'products' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'products' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
                 >
                     Produtos
                 </button>
@@ -352,7 +352,7 @@ export const AdminShopManagement: React.FC = () => {
                     aria-controls="panel-categories"
                     tabIndex={activeTab === 'categories' ? 0 : -1}
                     onClick={() => setActiveTab('categories')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'categories' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'categories' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
                 >
                     Categorias
                 </button>
@@ -363,7 +363,7 @@ export const AdminShopManagement: React.FC = () => {
                     aria-controls="panel-settings"
                     tabIndex={activeTab === 'settings' ? 0 : -1}
                     onClick={() => setActiveTab('settings')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'settings' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'settings' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
                 >
                     Configurações
                 </button>
@@ -374,7 +374,7 @@ export const AdminShopManagement: React.FC = () => {
                     aria-controls="panel-coupons"
                     tabIndex={activeTab === 'coupons' ? 0 : -1}
                     onClick={() => setActiveTab('coupons')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'coupons' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'coupons' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
                 >
                     Cupons
                 </button>
@@ -390,7 +390,7 @@ export const AdminShopManagement: React.FC = () => {
                         </Button>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500 sticky top-0">
@@ -497,7 +497,7 @@ export const AdminShopManagement: React.FC = () => {
                         </Button>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500 sticky top-0">
@@ -535,7 +535,7 @@ export const AdminShopManagement: React.FC = () => {
                         </Button>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500 sticky top-0">
@@ -610,7 +610,7 @@ export const AdminShopManagement: React.FC = () => {
                     <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500" /> Configurações da Loja</h3>
 
                     {/* General Settings */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6 space-y-4 shadow-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 space-y-4">
                         <h4 className="font-semibold text-gray-900 dark:text-white">Geral</h4>
                         <Switch
                             checked={shopSettings.is_shop_enabled}

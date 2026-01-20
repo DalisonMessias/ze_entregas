@@ -97,7 +97,7 @@ export const AuthWrapper: React.FC = () => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
-  const [authMessage, setAuthMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
+  const [authMessage, setAuthMessage] = useState<{ type: 'error' | 'success' | 'warning', text: string } | null>(null);
 
   const { alert } = useDialog();
 
@@ -182,13 +182,18 @@ export const AuthWrapper: React.FC = () => {
               return;
             }
 
-            if (status === 'banned' || status === 'blocked' || status === 'suspended') {
-              // Nova regra: Não faz signOut. Permite entrar para modo de visualização.
+            if (status === 'blocked' || status === 'suspended' || status === 'pending') {
+              // Permitir entrada para modo de visualização (restrito)
               setSession(initialSession);
               setUserId(initialSession.user.id);
               setUserRole((role || 'delivery_person'));
-              setAuthMessage({ type: 'error', text: 'Conta com restrições de acesso (Modo Visualização).' });
+              setAuthMessage({ type: 'warning', text: 'Conta restrita (Modo Visualização).' });
               redirectToRoleHome(role || 'delivery_person');
+            } else if (status === 'banned') {
+              // Banido não entra
+              await cloud.signOut();
+              handleLogoutAndRedirect("Sua conta foi banida permanentemente.");
+              return;
             } else if (status === 'not_found') {
               setAuthMessage({ type: 'error', text: 'Perfil não encontrado. Tente novamente mais tarde.' });
               setSession(initialSession);
@@ -237,12 +242,16 @@ export const AuthWrapper: React.FC = () => {
           if (currentSession) {
             try {
               const { status, role } = await cloud.getInitialUserData();
-              if (status === 'banned' || status === 'blocked' || status === 'suspended') {
+              if (status === 'blocked' || status === 'suspended' || status === 'pending') {
                 setSession(currentSession);
                 setUserId(currentSession.user.id);
                 setUserRole((role || 'delivery_person'));
-                setAuthMessage({ type: 'error', text: 'Conta com restrições de acesso.' });
+                setAuthMessage({ type: 'warning', text: 'Conta restrita (Modo Visualização).' });
                 redirectToRoleHome(role || 'delivery_person');
+              } else if (status === 'banned') {
+                await cloud.signOut();
+                handleLogoutAndRedirect("Conta banida.");
+                return;
               } else if (status === 'not_found') {
                 handleLogoutAndRedirect("Usuário não encontrado no sistema.");
               } else {
@@ -291,10 +300,15 @@ export const AuthWrapper: React.FC = () => {
           filter: `id=eq.${userId}`,
         },
         (payload: any) => {
-          if (payload.new.status === 'banned' || payload.new.status === 'blocked' || payload.new.status === 'suspended') {
-            // Não desloga mais. Apenas notifica e deixa o App.tsx lidar com as restrições de UI.
-            void alert({ title: 'Atenção', message: 'Sua conta possui restrições de acesso no momento.' });
+          if (payload.new.status === 'banned') {
+            handleLogoutAndRedirect("Sua conta foi banida.");
+            return;
+          }
+          if (payload.new.status === 'blocked' || payload.new.status === 'suspended' || payload.new.status === 'pending') {
+            void alert({ title: 'Atenção', message: 'Sua conta entrou em modo restrito de visualização.' });
             logger.warn('USER_STATUS_RESTRICTED', { userId, status: payload.new.status });
+            // Forçar reload ou re-check pode ser necessário para atualizar a UI do App.tsx, 
+            // mas como o App.tsx escuta userStatus, ele deve atualizar.
             return;
           }
           if (payload.new.status === 'deleted') {

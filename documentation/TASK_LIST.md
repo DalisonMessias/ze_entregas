@@ -10,4 +10,8 @@
 - [x] Desenvolver painel de visualização de Score e Histórico para o entregador
 - [x] Integrar Score no Menu Lateral e Atalhos Rápidos do Entregador
 - [x] Desenvolver interface administrativa para configuração de limites e pesos
-- [ ] Realizar testes de pontuação, bloqueio e restrição de acesso
+- [x] Realizar testes de pontuação, bloqueio e restrição de acesso
+- [x] Refinar bordas dos botões (1px, baixa opacidade, adaptativa ao tema)
+- [x] Remover todas as sombras de botões do sistema para visual "flat premium"
+- [x] Corrigir alternador de temas na barra lateral (Tailwind v4 class strategy)
+- [x] Limpar estilos residuais (border/shadow) nos componentes principais

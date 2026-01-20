@@ -22,6 +22,7 @@ import { MaintenancePage } from './MaintenancePage';
 import { PartnerDocumentation } from './PartnerDocumentation';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { ExclusiveLock } from './ExclusiveLock';
+import { UserStatusBanner } from './UserStatusBanner';
 
 // Lazy Loaded Components
 const AdminPanel = React.lazy(() => import('./AdminPanel').then(module => ({ default: module.AdminPanel })));
@@ -438,10 +439,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                     const { status: freshStatus } = await cloud.getInitialUserData();
                     if (freshStatus) {
                         setUserStatus(freshStatus);
-                        setIsRestrictedMode(['blocked', 'suspended', 'banned'].includes(freshStatus));
+                        setIsRestrictedMode(['blocked', 'suspended', 'pending'].includes(freshStatus));
 
                         // Emitir evento global caso o status mude para restrito
-                        if (['blocked', 'suspended', 'banned'].includes(freshStatus)) {
+                        if (['blocked', 'suspended', 'pending'].includes(freshStatus)) {
                             window.dispatchEvent(new CustomEvent('restricted_mode_active'));
                         }
                     }
@@ -1080,6 +1081,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
             {/* Main Content Area */}
             <main className={`pt-20 px-4 mx-auto transition-all duration-300 ${activeTab !== 'whatsapp_chat' ? 'pb-24' : ''} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
+                <UserStatusBanner status={userStatus} />
                 <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
                     {renderContent()}
                 </Suspense>

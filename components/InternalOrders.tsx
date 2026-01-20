@@ -1010,7 +1010,7 @@ export const InternalOrders: React.FC = () => {
             {view === 'NEW_ORDER' ? (
                 <div className="flex flex-col lg:flex-row flex-1 gap-4 overflow-hidden">
                     {/* Left: Catalog */}
-                    <div className="w-full lg:w-150  bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col overflow-hidden">
+                    <div className="w-full lg:w-150 bg-white dark:bg-gray-800 rounded-2xl p-6 flex flex-col overflow-hidden">
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold dark:text-white">Catálogo</h2>
@@ -1092,7 +1092,7 @@ export const InternalOrders: React.FC = () => {
                     </div>
 
                     {/* Right: Order Ticket */}
-                    <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full lg:h-auto overflow-hidden">
+                    <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl flex flex-col h-full lg:h-auto overflow-hidden">
                         {/* Scrollable Content */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pb-0">
                             <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">

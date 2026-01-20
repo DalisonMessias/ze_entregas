@@ -8,6 +8,7 @@ interface ScoreEventConfig {
     event_key: string;
     impact_value: number;
     is_active: boolean;
+    label?: string;
     description?: string;
 }
 
@@ -73,8 +74,12 @@ export const AdminScoreConfig: React.FC = () => {
     const getEventLabel = (key: string) => {
         const labels: Record<string, string> = {
             'ORDER_COMPLETED': 'Pedido Concluído',
+            'DELIVERY_SUCCESS': 'Entrega Concluída',
+            'DELIVERY_IN_TIME': 'Entrega no Prazo',
+            'HIGH_ACCEPTANCE_RATE': 'Alta Taxa de Aceitação',
             'ORDER_CANCELLED_BY_DRIVER': 'Pedido Cancelado pelo Entregador',
             'ORDER_REFUSED_BY_DRIVER': 'Pedido Recusado pelo Entregador',
+            'ABANDON_AFTER_ACCEPT': 'Abandono após Aceite',
             'CUSTOMER_NEGATIVE_RATING': 'Avaliação Negativa do Cliente',
             'CUSTOMER_POSITIVE_RATING': 'Avaliação Positiva do Cliente',
             'REPORT_VALIDATED': 'Denúncia Validada',
@@ -95,7 +100,7 @@ export const AdminScoreConfig: React.FC = () => {
 
             <div className="flex flex-col md:flex-row gap-6">
                 {/* Score Config Panel */}
-                <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-2xl">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-lg text-brand-600">
                             <Star className="w-5 h-5" />
@@ -105,10 +110,12 @@ export const AdminScoreConfig: React.FC = () => {
 
                     <div className="space-y-4">
                         {scoreConfigs.map(config => (
-                            <div key={config.event_key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div key={config.event_key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div>
-                                    <h4 className="font-bold text-sm dark:text-white">{getEventLabel(config.event_key)}</h4>
-                                    <p className="text-[10px] text-gray-500 uppercase">{config.event_key}</p>
+                                    <h4 className="font-bold text-sm dark:text-white">{config.label || getEventLabel(config.event_key)}</h4>
+                                    <p className="text-[10px] text-gray-500 uppercase tracking-tight font-mono">
+                                        ID: {getEventLabel(config.event_key).toUpperCase().replace(/\s+/g, '_')}
+                                    </p>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <input
@@ -134,7 +141,7 @@ export const AdminScoreConfig: React.FC = () => {
 
                 {/* Blocking Limits Panel */}
                 <div className="w-full md:w-80 space-y-6">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg text-red-600">
                                 <ShieldAlert className="w-5 h-5" />
@@ -173,7 +180,7 @@ export const AdminScoreConfig: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="bg-brand-600 p-6 rounded-2xl text-white shadow-lg">
+                    <div className="bg-brand-600 p-6 rounded-2xl text-white">
                         <h4 className="font-black text-lg mb-2">Dica de Gestão</h4>
                         <p className="text-sm opacity-90 leading-relaxed">
                             O sistema de score incentiva a qualidade do atendimento. Recomenda-se manter o peso de "Pedido Concluído" positivo e o de "Recusas" negativo para equilibrar a balança.
@@ -183,7 +190,7 @@ export const AdminScoreConfig: React.FC = () => {
             </div>
 
             {/* Drivers Overview */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl">
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600">
@@ -228,7 +235,7 @@ export const AdminScoreConfig: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-4 text-center">
                                         <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${driver.status === 'active' ? 'bg-green-100 text-green-700' : driver.status === 'blocked' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                            {driver.status}
+                                            {driver.status === 'active' ? 'Ativo' : driver.status === 'blocked' ? 'Bloqueado' : driver.status === 'suspended' ? 'Suspenso' : driver.status}
                                         </span>
                                     </td>
                                 </tr>
