@@ -228,8 +228,8 @@ export class WhatsappInstance extends EventEmitter {
             // Upsert baseado em store_id,phone_number para unificar (conforme nova constraint)
             // Se for grupo, mantemos o JID como identificador de conflito
             for (const conv of chunk) {
-              const conflictTarget = conv.phone_number ? 'store_id,phone_number' : 'store_id,conversation_id';
-              await supabaseAdmin.from('whatsapp_conversations').upsert(conv, { onConflict: conflictTarget });
+              // Usar store_id e conversation_id como chave de conflito para suportar multi-loja corretamente
+              await supabaseAdmin.from('whatsapp_conversations').upsert(conv, { onConflict: 'store_id,conversation_id' });
             }
           }
           console.log(`[Loja ${this.storeId}] ✅ ${conversationBatch.length} conversas históricas salvas.`);
@@ -260,6 +260,10 @@ export class WhatsappInstance extends EventEmitter {
           else if (messageType === 'videoMessage') content = message.message!.videoMessage!.caption || '[Vídeo]';
           else if (messageType === 'audioMessage') content = '[Áudio]';
           else if (messageType === 'documentMessage') content = `[Documento: ${message.message!.documentMessage!.fileName || 'doc'}]`;
+          else if (messageType === 'contactMessage') content = `[Contato: ${message.message!.contactMessage!.displayName || 'vCard'}]`;
+          else if (messageType === 'locationMessage') content = `[Localização]`;
+          else if (messageType === 'liveLocationMessage') content = `[Localização em tempo real]`;
+          else if (messageType === 'stickerMessage') content = '[Figurinha]';
           else if (message.message?.buttonsMessage) content = message.message.buttonsMessage.contentText || '[Botão]';
           else if (message.message?.templateMessage) content = message.message.templateMessage.hydratedTemplate?.hydratedContentText || '[Template]';
           else if (message.message?.listMessage) content = message.message.listMessage.description || '[Lista]';
@@ -345,6 +349,18 @@ export class WhatsappInstance extends EventEmitter {
           mediaUrl = await saveMediaToStorage(buffer as Buffer, 'document', fileName.split('.').pop() || 'pdf');
         } catch (e) { }
       }
+      else if (messageType === 'contactMessage') {
+        content = `[Contato: ${message.message!.contactMessage!.displayName || 'vCard'}]`;
+        mediaType = 'vcard';
+      }
+      else if (messageType === 'locationMessage') {
+        content = '[Localização]';
+        mediaType = 'location';
+      }
+      else if (messageType === 'stickerMessage') {
+        content = '[Figurinha]';
+        mediaType = 'sticker';
+      }
       else content = `[${messageType?.replace('Message', '') || 'Mídia'}]`;
 
       let contactName = message.pushName || conversationId.split('@')[0];
@@ -367,7 +383,7 @@ export class WhatsappInstance extends EventEmitter {
 
       const phoneNumber = isGroup ? null : conversationId.split('@')[0].split(':')[0].replace(/\D/g, '');
 
-      // 1. Atualiza conversa
+      // 1. Atualiza conversa (onConflict: store_id,conversation_id para evitar colisões)
       const conversationUpsert = {
         store_id: this.storeId,
         conversation_id: conversationId,
@@ -377,8 +393,7 @@ export class WhatsappInstance extends EventEmitter {
         last_message_timestamp: new Date(Number(message.messageTimestamp) * 1000),
       };
 
-      const conflictTarget = phoneNumber ? 'store_id,phone_number' : 'store_id,conversation_id';
-      await supabaseAdmin.from('whatsapp_conversations').upsert(conversationUpsert, { onConflict: conflictTarget });
+      await supabaseAdmin.from('whatsapp_conversations').upsert(conversationUpsert, { onConflict: 'store_id,conversation_id' });
 
       // 2. Insere mensagem
       const senderJid = isFromMe ? this.getMyJid() : (message.key.participant || conversationId);
