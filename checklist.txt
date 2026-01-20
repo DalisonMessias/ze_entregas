@@ -53,3 +53,13 @@
 [20/01/2026] - UI WhatsApp: Refatoração visual completa de mensagens de Enquete (PollMessage com radio buttons e progresso) e Contato (Card nativo).
 [20/01/2026] - UI WhatsApp: Correção do modal "Novo Chat" (agora usa BaseModal) e adição do botão "Gerenciar Contatos" na barra lateral.
 [20/01/2026] - Feature WhatsApp: Picker de Contatos agora busca dados reais do sistema (/contacts).
+[20/01/2026] - Migração Zé Assistente: Substituição da OpenAI pela SDK oficial do Google Gemini e remoção de limite de produtos para IA.
+[20/01/2026] - Fix 503 WhatsApp: Identificado erro de backend e implementado logs de inicialização de serviços para debug.
+[20/01/2026] - Bug Fix: Corrigido erro de permissão 42501 (permission denied for table pwa_settings) criando a tabela no supabase_global.sql com políticas RLS adequadas (leitura pública, escrita admin).
+[20/01/2026] - Bug Fix: Corrigido erro PGRST116 em pwa_settings (múltiplas linhas) substituindo .single() por .limit(1).maybeSingle() nos arquivos server/routes/pwa.ts e services/cloud.ts.
+[20/01/2026] - Bug Fix Critical: Resolvido loop infinito de requisições ao /pwa/manifest.json causado pelo Service Worker tentando cachear endpoint dinâmico. Removido manifest do cache e adicionado filtro /pwa/ no sw.js.
+[20/01/2026] - UI Fix: Corrigidas cores das abas do painel do entregador (/entregador/painel) para melhor visibilidade no tema claro (gray-700) e uso correto da cor brand-600 quando selecionadas.
+[20/01/2026] - Bug Fix Critical: Corrigido erro "permission denied for table user_terminals" ao ativar maquininha. Criada tabela user_terminals com políticas RLS apropriadas (usuário gerencia próprio terminal, admin gerencia todos).
+[20/01/2026] - Enhancement: Substituídos dados fictícios por cálculos reais no Relatório Resumido da maquininha (SummaryReportModal). Agora filtra por período (Hoje/Semana/Mês) e calcula vendas, reembolsos, taxas e estatísticas reais. Corrigida lógica de filtro para responder corretamente às mudanças de período.
+[20/01/2026] - Feature: Sistema completo de gateways de pagamento criado com InfinitePay e Mercado Pago, fallback automático, painel admin (AdminPaymentGateways) e 4 tabelas no banco (driver_wallets, user_terminal_transactions, payment_gateway_settings, payment_gateway_logs). Serviços: paymentGateway.ts, infinitepay.ts, mercadopago.ts.
+[20/01/2026] - Integration: ZePayStoreModule integrado com sistema de gateways. Recarga ZéPay agora funciona com QR Code PIX real via InfinitePay/Mercado Pago, polling automático de status e atualização de saldo após confirmação.

@@ -78,7 +78,6 @@ const routeMap: Record<string, ActiveTab> = {
     '/entregador/rotas': 'route_list',
     '/entregador/ferramentas': 'route_tools',
     '/entregador/historico-local': 'local_history',
-    '/entregador/banco': 'zebank',
     '/entregador/associar': 'associate_driver',
     '/entregador/emprestimos': 'loans',
     '/entregador/tarefas': 'tasks',
@@ -91,9 +90,9 @@ const routeMap: Record<string, ActiveTab> = {
     '/instalar': 'install_app',
     '/upgrade': 'upgrade_to_partner',
     '/ruas': 'streets_list',
-
+    '/carteira': 'zebank',
     // Authentication Routes
-    '/login': 'login',
+    '/login': 'login', 
     '/cadastro': 'signup',
     '/recuperar-senha': 'forgot_password'
 };

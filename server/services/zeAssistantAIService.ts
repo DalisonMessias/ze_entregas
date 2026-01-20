@@ -1,22 +1,15 @@
+import { GoogleGenAI } from '@google/genai';
 import type { ProcessMessageResponse, ConversationContext } from '../../types/zeAssistant.js';
 
 /**
  * Serviço de IA do Zé Assistente
- * Processa mensagens usando inteligência artificial
- * 
- * NOTA: Esta é uma implementação base. Para produção, integrar com:
- * - OpenAI GPT
- * - Google Gemini
- * - Anthropic Claude
- * ou outra API de IA
+ * Processa mensagens usando inteligência artificial do Google Gemini
  */
 export class ZeAssistantAIService {
-    private apiKey: string | undefined;
-    private model: string = 'gpt-3.5-turbo'; // Ou outro modelo
+    private modelName: string = 'gemini-1.5-flash';
 
     constructor() {
-        // API Key deve vir das configurações do sistema
-        this.apiKey = process.env.OPENAI_API_KEY;
+        console.log('🤖 ZeAssistantAIService inicializado');
     }
 
     /**
@@ -25,15 +18,16 @@ export class ZeAssistantAIService {
     async processMessage(
         messageText: string,
         storeContext: any,
-        conversationContext: ConversationContext
+        conversationContext: ConversationContext,
+        apiKey: string
     ): Promise<ProcessMessageResponse> {
 
         // Verificar se IA está configurada
-        if (!this.apiKey) {
+        if (!apiKey) {
             console.warn('IA não configurada - API Key ausente');
             return {
                 success: false,
-                responseText: 'Desculpe, o assistente de IA não está disponível no momento.',
+                responseText: 'Desculpe, o assistente de IA não está disponível no momento (configuração pendente).',
                 responseType: 'AI',
                 shouldHandoff: true,
                 handoffReason: 'IA não configurada'
@@ -43,12 +37,14 @@ export class ZeAssistantAIService {
         try {
             const startTime = Date.now();
 
-            // Montar contexto para IA
+            // Montar prompt de sistema
             const systemPrompt = this.buildSystemPrompt(storeContext);
+
+            // Montar prompt do usuário
             const userPrompt = this.buildUserPrompt(messageText, conversationContext);
 
-            // Chamar API de IA (exemplo com OpenAI)
-            const response = await this.callAIAPI(systemPrompt, userPrompt);
+            // Chamar API do Gemini
+            const response = await this.callAIAPI(apiKey, systemPrompt, userPrompt);
 
             const processingTime = Date.now() - startTime;
 
@@ -60,14 +56,14 @@ export class ZeAssistantAIService {
                 handoffReason: response.handoffReason,
                 confidenceScore: response.confidence,
                 metadata: {
-                    model: this.model,
+                    model: this.modelName,
                     processingTimeMs: processingTime,
                     tokens: response.tokens
                 }
             };
 
         } catch (error) {
-            console.error('Erro ao processar com IA:', error);
+            console.error('Erro ao processar com Gemini:', error);
             return {
                 success: false,
                 responseText: 'Desculpe, tive um problema ao processar sua mensagem.',
@@ -152,66 +148,84 @@ LIMITAÇÕES:
             return 'Nenhum produto cadastrado';
         }
 
+        // REMOVIDO: Limite de 50 produtos. Agora envia todos.
         return products
-            .slice(0, 50) // Limitar a 50 produtos para não sobrecarregar
             .map(p => `- ${p.name}: R$ ${p.price.toFixed(2)}${p.description ? ` (${p.description})` : ''}`)
             .join('\n');
     }
 
     /**
-     * Chama API de IA (OpenAI, Gemini, etc)
-     * IMPLEMENTAÇÃO DE EXEMPLO - ADAPTAR CONFORME API ESCOLHIDA
+     * Chama API do Google Gemini
      */
-    private async callAIAPI(systemPrompt: string, userPrompt: string): Promise<{
+    private async callAIAPI(apiKey: string, systemPrompt: string, userPrompt: string): Promise<{
         text: string;
         confidence: number;
         shouldHandoff: boolean;
         handoffReason?: string;
         tokens?: number;
     }> {
+        // @ts-ignore
+        const ai = new GoogleGenAI({ apiKey });
 
-        // IMPLEMENTAÇÃO DE EXEMPLO COM FETCH PARA OPENAI
-        // Adaptar conforme a API de IA escolhida
-
-        if (!this.apiKey) {
-            throw new Error('API Key não configurada');
-        }
-
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.apiKey}`
-            },
-            body: JSON.stringify({
-                model: this.model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt }
+        try {
+            // @ts-ignore
+            const result = await ai.models.generateContent({
+                model: this.modelName,
+                contents: [
+                    { role: 'user', parts: [{ text: userPrompt }] }
                 ],
-                temperature: 0.7,
-                max_tokens: 150 // Respostas curtas
-            })
-        });
+                config: {
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    temperature: 0.7,
+                    maxOutputTokens: 150,
+                }
+            });
 
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.statusText}`);
+            // Tratamento de resposta da nova SDK
+            let messageContent = '';
+
+            // Tenta acessar .text (getter) ou .text() dependendo da versão
+            // @ts-ignore
+            if (result && result.text) {
+                // @ts-ignore
+                try { messageContent = typeof result.text === 'function' ? result.text() : result.text; } catch (e) { messageContent = result.text || ''; }
+            } else if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                messageContent = result.candidates[0].content.parts[0].text;
+            } else {
+                // Fallback genérico com cast any para evitar erro de 'Property response does not exist'
+                const anyResult = result as any;
+                if (anyResult.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    messageContent = anyResult.response.candidates[0].content.parts[0].text;
+                } else if (anyResult.response?.text) {
+                    try { messageContent = typeof anyResult.response.text === 'function' ? anyResult.response.text() : anyResult.response.text; } catch (e) { }
+                }
+            }
+
+            let tokenCount = 0;
+            if (result?.usageMetadata?.totalTokenCount) {
+                tokenCount = result.usageMetadata.totalTokenCount;
+            } else {
+                const anyResult = result as any;
+                if (anyResult.response?.usageMetadata?.totalTokenCount) {
+                    tokenCount = anyResult.response.usageMetadata.totalTokenCount;
+                }
+            }
+
+            // Detectar se IA sugere handoff
+            const shouldHandoff = messageContent.toLowerCase().includes('[transferir]') ||
+                messageContent.toLowerCase().includes('[humano]');
+
+            return {
+                text: messageContent.replace(/\[(transferir|humano)\]/gi, '').trim(),
+                confidence: 0.9,
+                shouldHandoff,
+                handoffReason: shouldHandoff ? 'IA sugeriu transferência' : undefined,
+                tokens: tokenCount
+            };
+        } catch (e: any) {
+            console.error('Erro na chamada do Gemini:', e);
+            throw e;
         }
-
-        const data = await response.json();
-        const messageContent = data.choices[0]?.message?.content || '';
-
-        // Detectar se IA sugere handoff
-        const shouldHandoff = messageContent.toLowerCase().includes('[transferir]') ||
-            messageContent.toLowerCase().includes('[humano]');
-
-        return {
-            text: messageContent.replace(/\[(transferir|humano)\]/gi, '').trim(),
-            confidence: 0.8, // Ajustar conforme necessário
-            shouldHandoff,
-            handoffReason: shouldHandoff ? 'IA sugeriu transferência' : undefined,
-            tokens: data.usage?.total_tokens
-        };
     }
 
     /**

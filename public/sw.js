@@ -2,7 +2,6 @@ const CACHE_NAME = 'ze-entregas-v2';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
-    '/pwa/manifest.json',
 ];
 
 self.addEventListener('install', (event) => {
@@ -28,8 +27,10 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    // Ignorar requisições de API e Supabase para evitar problemas de cache de dados
-    if (event.request.url.includes('/api/') || event.request.url.includes('supabase.co')) {
+    // Ignorar requisições de API, Supabase e PWA (manifest dinâmico) para evitar problemas de cache
+    if (event.request.url.includes('/api/') ||
+        event.request.url.includes('supabase.co') ||
+        event.request.url.includes('/pwa/')) {
         return;
     }
 

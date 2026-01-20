@@ -217,11 +217,18 @@ export const getProfilePicture = async (req: Request, res: Response) => {
     if (!jid) return res.status(400).json({ error: 'JID é obrigatório' });
 
     const instance = whatsappService.getInstance(storeId);
+
+    if (!instance) {
+      console.warn(`[API] getProfilePicture: Instância não encontrada para loja ${storeId}`);
+      return res.status(404).json({ error: 'WhatsApp não inicializado para esta loja' });
+    }
+
     const profilePicUrl = await instance.getProfilePicture(jid);
 
+    // Se retornar null, apenas mandamos null (não é erro 500)
     res.status(200).json({ profilePicUrl });
   } catch (error: any) {
-    console.error('Erro ao buscar foto de perfil:', error);
+    console.error(`[API] Erro CRÍTICO ao buscar foto de perfil (${req.params.jid}):`, error);
     res.status(500).json({ error: error.message });
   }
 };

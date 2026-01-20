@@ -13,15 +13,89 @@ export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ onClose,
     const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const { alert } = useDialog();
 
-    // Mock calculations - in real app, filter 'data' based on 'period'
-    const summary = {
-        sales: 1250.00,
-        refunds: 50.00,
-        fees: 120.00,
-        net: 1080.00,
-        pendingDeliveries: 5,
-        completedDeliveries: 42
-    };
+    // Calcular dados reais baseados no período selecionado
+    const summary = React.useMemo(() => {
+        if (!data || data.length === 0) {
+            return {
+                sales: 0,
+                refunds: 0,
+                fees: 0,
+                net: 0,
+                pendingDeliveries: 0,
+                completedDeliveries: 0
+            };
+        }
+
+        const now = new Date();
+
+        // Definir filtro de data baseado no período
+        let periodStart: Date;
+
+        switch (period) {
+            case 'daily':
+                // Hoje (desde 00:00:00)
+                periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                break;
+            case 'weekly':
+                // Últimos 7 dias
+                periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+                break;
+            case 'monthly':
+                // Desde o dia 1 do mês atual
+                periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                break;
+            default:
+                periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        }
+
+        // Filtrar dados pelo período
+        const filteredData = data.filter((entry: any) => {
+            if (!entry.created_at && !entry.paidAt && !entry.date) return false;
+
+            const entryDate = new Date(entry.created_at || entry.paidAt || entry.date);
+            return entryDate >= periodStart && entryDate <= now;
+        });
+
+        // Calcular totais
+        let totalSales = 0;
+        let totalRefunds = 0;
+        let totalFees = 0;
+        let pendingCount = 0;
+        let completedCount = 0;
+
+        filteredData.forEach((entry: any) => {
+            const amount = entry.amount || 0;
+
+            // Identificar tipo de transação
+            if (entry.status === 'paid' || entry.status === 'processing' || entry.method) {
+                // É uma venda
+                totalSales += amount;
+                completedCount++;
+
+                // Calcular taxa (assumindo taxa global de ~5%)
+                // Em produção, isso deve vir dos dados reais ou configurações
+                const feePercent = 0.05; // 5%
+                totalFees += amount * feePercent;
+            } else if (entry.type === 'REFUND' || entry.status === 'refunded') {
+                // É um reembolso
+                totalRefunds += Math.abs(amount);
+            } else if (entry.status === 'unpaid' || entry.status === 'pending') {
+                // Pendente
+                pendingCount++;
+            }
+        });
+
+        const netAmount = totalSales - totalRefunds - totalFees;
+
+        return {
+            sales: totalSales,
+            refunds: totalRefunds,
+            fees: totalFees,
+            net: netAmount,
+            pendingDeliveries: pendingCount,
+            completedDeliveries: completedCount
+        };
+    }, [data, period]);
 
     const handleExportPDF = () => {
         try {

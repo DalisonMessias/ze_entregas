@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, CreditCard, Send, Plus, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, Loader2, CheckCircle, AlertTriangle, X, Lock, Eye, EyeOff, Trash2, Sliders, Smartphone, Copy } from 'lucide-react';
 import * as cloud from '../services/cloud';
+import { generatePaymentQRCode, checkPaymentStatus } from '../services/paymentGateway';
 import { ZePayData, StoreVirtualCard } from '../types';
 import { ExclusiveLock } from './ExclusiveLock';
 import { Button } from './Button';
@@ -59,7 +60,8 @@ export const ZePayStore: React.FC = () => {
     const [showPOS, setShowPOS] = useState(false);
     const [showRecharge, setShowRecharge] = useState(false);
     const [rechargeAmount, setRechargeAmount] = useState('');
-    const [pixDetails, setPixDetails] = useState<{ copyPaste: string } | null>(null);
+    const [pixDetails, setPixDetails] = useState<{ copyPaste: string; txId: string; gatewayUsed: string } | null>(null);
+    const [polling, setPolling] = useState(false);
     useEffect(() => {
         if (showRecharge && pixDetails?.copyPaste) {
             try {
@@ -84,6 +86,36 @@ export const ZePayStore: React.FC = () => {
     useEffect(() => {
         checkAccessAndLoad();
     }, []);
+
+    // Polling para verificar status do pagamento
+    useEffect(() => {
+        if (!polling || !pixDetails?.txId) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const status = await checkPaymentStatus(pixDetails.txId);
+                if (status.status === 'paid') {
+                    clearInterval(interval);
+                    setPolling(false);
+                    setToast({ type: 'success', message: `Pagamento confirmado! R$ ${status.amount?.toFixed(2)} recebido.` });
+                    setShowRecharge(false);
+                    setPixDetails(null);
+                    setRechargeAmount('');
+                    // Recarregar saldo
+                    checkAccessAndLoad();
+                } else if (status.status === 'failed' || status.status === 'expired') {
+                    clearInterval(interval);
+                    setPolling(false);
+                    setToast({ type: 'error', message: 'Pagamento expirou ou falhou.' });
+                    setPixDetails(null);
+                }
+            } catch (error: any) {
+                console.error('Erro ao verificar status:', error);
+            }
+        }, 5000); // Verifica a cada 5 segundos
+
+        return () => clearInterval(interval);
+    }, [polling, pixDetails]);
 
     const checkAccessAndLoad = async () => {
         setLoading(true);
@@ -158,6 +190,52 @@ export const ZePayStore: React.FC = () => {
             checkAccessAndLoad();
         } catch (e: any) {
             setToast({ type: 'error', message: e.message });
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleGeneratePayment = async () => {
+        if (!rechargeAmount) {
+            setToast({ type: 'error', message: 'Informe o valor da recarga.' });
+            return;
+        }
+
+        setProcessing(true);
+        try {
+            const amount = parseFloat(rechargeAmount.replace(/\./g, '').replace(',', '.'));
+
+            if (amount < 1) {
+                setToast({ type: 'error', message: 'Valor mínimo: R$ 1,00' });
+                return;
+            }
+
+            // Chamar serviço de payment gateway
+            const result = await generatePaymentQRCode(amount, {
+                description: 'Recarga ZéPay',
+                userId: data?.user_id || '',
+                type: 'zepay_recharge'
+            });
+
+            setPixDetails({
+                copyPaste: result.qrCode,
+                txId: result.txId,
+                gatewayUsed: result.gatewayUsed
+            });
+
+            // Iniciar polling para verificar pagamento
+            setPolling(true);
+
+            setToast({
+                type: 'success',
+                message: `QR Code gerado via ${result.gatewayUsed}!`
+            });
+        } catch (error: any) {
+            console.error('Erro ao gerar pagamento:', error);
+            setToast({
+                type: 'error',
+                message: error.message || 'Erro ao gerar cobrança.'
+            });
         } finally {
             setProcessing(false);
         }
@@ -354,8 +432,8 @@ export const ZePayStore: React.FC = () => {
                                     value={rechargeAmount}
                                     onChange={e => setRechargeAmount(e.target.value)}
                                 />
-                                <Button fullWidth onClick={() => setToast({ type: 'error', message: "Recarga indisponível temporariamente." })}>
-                                    Gerar Cobrança PIX
+                                <Button fullWidth onClick={handleGeneratePayment} disabled={processing}>
+                                    {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Gerar Cobrança PIX'}
                                 </Button>
                             </>
                         ) : (

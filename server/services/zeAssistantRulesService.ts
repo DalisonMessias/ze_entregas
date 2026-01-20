@@ -1,4 +1,4 @@
-import * as cloud from '../../services/cloud.js';
+import { supabaseAdmin } from './supabaseClient.js';
 import type { ZeAssistantRule, ConversationContext } from '../../types/zeAssistant.js';
 
 /**
@@ -11,7 +11,7 @@ export class ZeAssistantRulesService {
      * Busca todas as regras ativas (sistema + personalizadas da loja)
      */
     async getActiveRules(storeId: string): Promise<ZeAssistantRule[]> {
-        const supabase = cloud.getClient();
+        const supabase = supabaseAdmin;
         if (!supabase) return [];
 
         const { data, error } = await supabase
@@ -120,7 +120,7 @@ export class ZeAssistantRulesService {
      * Busca dados da loja para substituição em templates
      */
     private async getStoreData(storeId: string): Promise<any> {
-        const supabase = cloud.getClient();
+        const supabase = supabaseAdmin;
         if (!supabase) return {};
 
         const { data } = await supabase
@@ -154,7 +154,7 @@ export class ZeAssistantRulesService {
      * Cria regra personalizada
      */
     async createCustomRule(storeId: string, rule: Partial<ZeAssistantRule>): Promise<ZeAssistantRule | null> {
-        const supabase = cloud.getClient();
+        const supabase = supabaseAdmin;
         if (!supabase) return null;
 
         const { data, error } = await supabase
@@ -179,7 +179,7 @@ export class ZeAssistantRulesService {
      * Atualiza regra personalizada
      */
     async updateCustomRule(ruleId: string, updates: Partial<ZeAssistantRule>): Promise<boolean> {
-        const supabase = cloud.getClient();
+        const supabase = supabaseAdmin;
         if (!supabase) return false;
 
         const { error } = await supabase
@@ -195,7 +195,7 @@ export class ZeAssistantRulesService {
      * Deleta regra personalizada
      */
     async deleteCustomRule(ruleId: string): Promise<boolean> {
-        const supabase = cloud.getClient();
+        const supabase = supabaseAdmin;
         if (!supabase) return false;
 
         const { error } = await supabase

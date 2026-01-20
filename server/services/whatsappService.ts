@@ -469,10 +469,21 @@ export class WhatsappInstance extends EventEmitter {
   }
 
   public async getProfilePicture(jid: string): Promise<string | null> {
-    if (this.status !== 'CONNECTED' || !this.sock) return null;
+    if (this.status !== 'CONNECTED' || !this.sock) {
+      // Retorna null silenciosamente se desconectado, em vez de deixar estourar erro
+      return null;
+    }
     try {
+      // Pequeno timeout ou validação extra pode ser útil aqui, mas o try/catch resolve
       return await this.sock.profilePictureUrl(jid, 'image') || null;
-    } catch (e) { return null; }
+    } catch (e: any) {
+      // Erros comuns do Baileys ao buscar foto (ex: privacidade, 401, 404) não devem quebrar o servidor
+      if (e?.message?.includes('not-authorized') || e?.data === 401 || e?.data === 404) {
+        return null;
+      }
+      console.warn(`[Loja ${this.storeId}] Falha segura ao buscar foto de ${jid}:`, e.message);
+      return null;
+    }
   }
 
   public async markMessageAsRead(conversationId: string, messageId: string) {

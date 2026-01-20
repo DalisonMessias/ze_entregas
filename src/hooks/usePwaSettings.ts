@@ -39,7 +39,8 @@ export function usePwaSettings() {
             const { data, error } = await supabase
                 .from('pwa_settings')
                 .select('*')
-                .single();
+                .limit(1)
+                .maybeSingle();
 
             if (error) throw error;
             if (data) {

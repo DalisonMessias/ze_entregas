@@ -54,6 +54,7 @@ import { AdminSlides } from './AdminSlides';
 import { AdminPayouts } from './AdminPayouts';
 import { AdminTips } from './AdminTips';
 import { AdminScoreConfig } from './AdminScoreConfig';
+import { AdminPaymentGateways } from './AdminPaymentGateways';
 
 // --- HELPERS ---
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -1159,6 +1160,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'slides': return <AdminSlides />;
             case 'tips': return <AdminTips />;
             case 'score_config': return <AdminScoreConfig />;
+            case 'payment_gateways': return <AdminPaymentGateways />;
 
             default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
         }

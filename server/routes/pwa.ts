@@ -9,7 +9,8 @@ router.get('/manifest.json', async (req, res) => {
         const { data: config, error } = await supabaseAdmin
             .from('pwa_settings')
             .select('*')
-            .single();
+            .limit(1)
+            .maybeSingle();
 
         if (error) throw error;
 

@@ -589,7 +589,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 <Button
                     variant="ghost"
                     onClick={() => setActiveTab('deliveries')}
-                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'deliveries' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'deliveries' ? '!bg-brand-600 !text-white shadow-md' : '!text-gray-700 dark:!text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
                 >
                     <MapPin className="w-5 h-5" />
                     <span className="text-[10px] uppercase font-bold">Entregas</span>
@@ -597,7 +597,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 <Button
                     variant="ghost"
                     onClick={() => setActiveTab('financial')}
-                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'financial' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'financial' ? '!bg-brand-600 !text-white shadow-md' : '!text-gray-700 dark:!text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
                 >
                     <DollarSign className="w-5 h-5" />
                     <span className="text-[10px] uppercase font-bold">Financeiro</span>
@@ -605,7 +605,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 <Button
                     variant="ghost"
                     onClick={() => setActiveTab('history')}
-                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'history' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'history' ? '!bg-brand-600 !text-white shadow-md' : '!text-gray-700 dark:!text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
                 >
                     <History className="w-5 h-5" />
                     <span className="text-[10px] uppercase font-bold">Histórico</span>
@@ -613,7 +613,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 <Button
                     variant="ghost"
                     onClick={() => setActiveTab('stores')}
-                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'stores' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
+                    className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'stores' ? '!bg-brand-600 !text-white shadow-md' : '!text-gray-700 dark:!text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
                 >
                     <Store className="w-5 h-5" />
                     <span className="text-[10px] uppercase font-bold">Lojas</span>

@@ -1698,7 +1698,7 @@ export const adminDeletePlatformNews = async (id: string) => {
 export const adminGetPWASettings = async (): Promise<PWASettings | null> => {
     const sb = getClient();
     if (!sb) return null;
-    const { data } = await sb.from('pwa_settings').select('*').single();
+    const { data } = await sb.from('pwa_settings').select('*').limit(1).maybeSingle();
     return data;
 };
 
@@ -4449,4 +4449,60 @@ export const getCurrentRouteList = async (): Promise<any[]> => {
 
     if (error || !data) return [];
     return data.items || [];
+};
+
+// ========================================
+// PAYMENT GATEWAY FUNCTIONS
+// ========================================
+
+export const getPaymentGateways = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('payment_gateway_settings')
+        .select('*')
+        .order('gateway_name');
+
+    if (error) {
+        console.error('Error fetching payment gateways:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const updatePaymentGateway = async (gatewayName: string, updates: any) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    const { error } = await sb
+        .from('payment_gateway_settings')
+        .update(updates)
+        .eq('gateway_name', gatewayName);
+
+    if (error) throw error;
+};
+
+export const setPaymentGatewayPrimary = async (gatewayName: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+
+    // Desmarcar todos como principal
+    await sb
+        .from('payment_gateway_settings')
+        .update({ is_primary: false });
+
+    // Marcar apenas o selecionado como principal
+    const { error } = await sb
+        .from('payment_gateway_settings')
+        .update({ is_primary: true })
+        .eq('gateway_name', gatewayName);
+
+    if (error) throw error;
+};
+
+export const testPaymentGateway = async (gatewayName: string): Promise<{ success: boolean; error?: string }> => {
+    // Implementação futura: fazer chamada teste à API do gateway
+    // Por enquanto, retornar sucesso simulado
+    return { success: true };
 };

@@ -8296,7 +8296,7 @@ BEGIN
     FOR SELECT USING (true);
 
     -- Garantir permissÃµes de acesso Ã s tabelas
-    GRANT SELECT ON public.pwa_settings TO anon, authenticated;
+    GRANT SELECT ON public.pwa_settings TO anon, authenticated, service_role;
     GRANT SELECT ON public.collaborators TO anon, authenticated;
     GRANT SELECT ON public.orders_collaborators TO anon, authenticated;
 
@@ -8341,5 +8341,254 @@ BEGIN
     );
 
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_stickers TO authenticated;
+
+    -- ==================================================================
+    -- Tabela de Configurações PWA (20/01/2026)
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS public.pwa_settings (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        display_name TEXT DEFAULT 'Zé Entregas',
+        short_name TEXT DEFAULT 'Zé Entregas',
+        description TEXT DEFAULT 'Logística e entregas inteligentes',
+        start_url TEXT DEFAULT '/',
+        display TEXT DEFAULT 'standalone',
+        orientation TEXT DEFAULT 'portrait',
+        theme_color TEXT DEFAULT '#ed2b05',
+        background_color TEXT DEFAULT '#f9fafb',
+        language TEXT DEFAULT 'pt-BR',
+        scope TEXT DEFAULT '/',
+        icons JSONB DEFAULT '[]'::jsonb,
+        shortcuts JSONB DEFAULT '[]'::jsonb,
+        screenshots JSONB DEFAULT '[]'::jsonb,
+        categories JSONB DEFAULT '[]'::jsonb,
+        prefer_related_applications BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Índices para pwa_settings
+    CREATE INDEX IF NOT EXISTS pwa_settings_created_at_idx ON public.pwa_settings(created_at);
+
+    -- Trigger para atualizar updated_at
+    DROP TRIGGER IF EXISTS handle_pwa_settings_updated_at ON public.pwa_settings;
+    CREATE TRIGGER handle_pwa_settings_updated_at BEFORE UPDATE ON public.pwa_settings
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+    -- RLS para pwa_settings
+    ALTER TABLE public.pwa_settings ENABLE ROW LEVEL SECURITY;
+
+    -- Política: Leitura pública (anônimo e autenticado)
+    DROP POLICY IF EXISTS "Public can read pwa_settings" ON public.pwa_settings;
+    CREATE POLICY "Public can read pwa_settings" ON public.pwa_settings
+    FOR SELECT USING (true);
+
+    -- Política: Admin pode gerenciar
+    DROP POLICY IF EXISTS "Admins can manage pwa_settings" ON public.pwa_settings;
+    CREATE POLICY "Admins can manage pwa_settings" ON public.pwa_settings
+    FOR ALL USING (public.is_admin());
+
+    -- Grants para pwa_settings
+    GRANT SELECT ON public.pwa_settings TO anon, authenticated;
+    GRANT INSERT, UPDATE, DELETE ON public.pwa_settings TO authenticated;
+
+    -- Inserir configuração padrão se não existir
+    INSERT INTO public.pwa_settings (id, display_name, short_name, description)
+    VALUES (
+        '00000000-0000-0000-0000-000000000001',
+        'Zé Entregas',
+        'Zé Entregas',
+        'Logística e entregas inteligentes'
+    )
+    ON CONFLICT (id) DO NOTHING;
+
+    -- ==================================================================
+    -- Tabela de Terminais/Maquininhas (20/01/2026)
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS public.user_terminals (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+        terminal_id TEXT UNIQUE NOT NULL,
+        pin_code TEXT,
+        status TEXT DEFAULT 'INACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'BLOCKED')),
+        device_info JSONB DEFAULT '{}'::jsonb,
+        last_used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Índices para user_terminals
+    CREATE INDEX IF NOT EXISTS user_terminals_user_id_idx ON public.user_terminals(user_id);
+    CREATE INDEX IF NOT EXISTS user_terminals_terminal_id_idx ON public.user_terminals(terminal_id);
+    CREATE INDEX IF NOT EXISTS user_terminals_status_idx ON public.user_terminals(status);
+
+    -- Trigger para atualizar updated_at
+    DROP TRIGGER IF EXISTS handle_user_terminals_updated_at ON public.user_terminals;
+    CREATE TRIGGER handle_user_terminals_updated_at BEFORE UPDATE ON public.user_terminals
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+    -- RLS para user_terminals
+    ALTER TABLE public.user_terminals ENABLE ROW LEVEL SECURITY;
+
+    -- Política: Usuário pode ver e gerenciar apenas seu próprio terminal
+    DROP POLICY IF EXISTS "Users can manage own terminal" ON public.user_terminals;
+    CREATE POLICY "Users can manage own terminal" ON public.user_terminals
+    FOR ALL USING (auth.uid() = user_id);
+
+    -- Política: Admin pode ver e gerenciar todos os terminais
+    DROP POLICY IF EXISTS "Admins can manage all terminals" ON public.user_terminals;
+    CREATE POLICY "Admins can manage all terminals" ON public.user_terminals
+    FOR ALL USING (public.is_admin());
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_terminals TO authenticated;
+
+    -- ==================================================================
+    -- Tabela de Carteiras de Entregadores (20/01/2026)
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS public.driver_wallets (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        driver_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+        balance DECIMAL(10,2) DEFAULT 0.00,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(driver_id)
+    );
+
+    -- Índices
+    CREATE INDEX IF NOT EXISTS driver_wallets_driver_id_idx ON public.driver_wallets(driver_id);
+
+    -- Trigger
+    DROP TRIGGER IF EXISTS handle_driver_wallets_updated_at ON public.driver_wallets;
+    CREATE TRIGGER handle_driver_wallets_updated_at BEFORE UPDATE ON public.driver_wallets
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+    -- RLS
+    ALTER TABLE public.driver_wallets ENABLE ROW LEVEL SECURITY;
+
+    DROP POLICY IF EXISTS "Users can view own wallet" ON public.driver_wallets;
+    CREATE POLICY "Users can view own wallet" ON public.driver_wallets
+    FOR SELECT USING (auth.uid() = driver_id);
+
+    DROP POLICY IF EXISTS "Admins can manage all wallets" ON public.driver_wallets;
+    CREATE POLICY "Admins can manage all wallets" ON public.driver_wallets
+    FOR ALL USING (public.is_admin());
+
+    -- Grants
+    GRANT SELECT ON public.driver_wallets TO authenticated;
+    GRANT INSERT, UPDATE, DELETE ON public.driver_wallets TO authenticated;
+
+    -- ==================================================================
+    -- Tabela de Transações da Maquininha (20/01/2026)
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS public.user_terminal_transactions (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        terminal_id UUID REFERENCES public.user_terminals(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+        amount DECIMAL(10,2) NOT NULL,
+        type TEXT CHECK (type IN ('SALE', 'REFUND')),
+        status TEXT DEFAULT 'pending' CHECK (status IN ('paid', 'pending', 'failed', 'processing')),
+        method TEXT CHECK (method IN ('PIX', 'CREDIT_CARD', 'ZE_QR', 'ZE_CODE')),
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Índices
+    CREATE INDEX IF NOT EXISTS user_terminal_transactions_terminal_id_idx ON public.user_terminal_transactions(terminal_id);
+    CREATE INDEX IF NOT EXISTS user_terminal_transactions_user_id_idx ON public.user_terminal_transactions(user_id);
+    CREATE INDEX IF NOT EXISTS user_terminal_transactions_status_idx ON public.user_terminal_transactions(status);
+    CREATE INDEX IF NOT EXISTS user_terminal_transactions_created_at_idx ON public.user_terminal_transactions(created_at DESC);
+
+    -- RLS
+    ALTER TABLE public.user_terminal_transactions ENABLE ROW LEVEL SECURITY;
+
+    DROP POLICY IF EXISTS "Users can view own terminal transactions" ON public.user_terminal_transactions;
+    CREATE POLICY "Users can view own terminal transactions" ON public.user_terminal_transactions
+    FOR SELECT USING (auth.uid() = user_id);
+
+    DROP POLICY IF EXISTS "Users can insert own terminal transactions" ON public.user_terminal_transactions;
+    CREATE POLICY "Users can insert own terminal transactions" ON public.user_terminal_transactions
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+    DROP POLICY IF EXISTS "Admins can manage all terminal transactions" ON public.user_terminal_transactions;
+    CREATE POLICY "Admins can manage all terminal transactions" ON public.user_terminal_transactions
+    FOR ALL USING (public.is_admin());
+
+    -- Grants
+    GRANT SELECT, INSERT ON public.user_terminal_transactions TO authenticated;
+    GRANT UPDATE, DELETE ON public.user_terminal_transactions TO authenticated;
+
+    -- ==================================================================
+    -- Tabela de Configurações de Gateways de Pagamento (20/01/2026)
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS public.payment_gateway_settings (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        gateway_name TEXT UNIQUE NOT NULL CHECK (gateway_name IN ('infinitepay', 'mercadopago')),
+        is_active BOOLEAN DEFAULT FALSE,
+        is_primary BOOLEAN DEFAULT FALSE,
+        credentials JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Índices
+    CREATE INDEX IF NOT EXISTS payment_gateway_settings_gateway_name_idx ON public.payment_gateway_settings(gateway_name);
+    CREATE INDEX IF NOT EXISTS payment_gateway_settings_is_active_idx ON public.payment_gateway_settings(is_active);
+    CREATE INDEX IF NOT EXISTS payment_gateway_settings_is_primary_idx ON public.payment_gateway_settings(is_primary);
+
+    -- Trigger
+    DROP TRIGGER IF EXISTS handle_payment_gateway_settings_updated_at ON public.payment_gateway_settings;
+    CREATE TRIGGER handle_payment_gateway_settings_updated_at BEFORE UPDATE ON public.payment_gateway_settings
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+    -- RLS (apenas admin)
+    ALTER TABLE public.payment_gateway_settings ENABLE ROW LEVEL SECURITY;
+
+    DROP POLICY IF EXISTS "Only admins can manage gateways" ON public.payment_gateway_settings;
+    CREATE POLICY "Only admins can manage gateways" ON public.payment_gateway_settings
+    FOR ALL USING (public.is_admin());
+
+    -- Grants
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.payment_gateway_settings TO authenticated;
+
+    -- Inserir gateways padrão
+    INSERT INTO public.payment_gateway_settings (gateway_name, is_active, is_primary)
+    VALUES 
+        ('infinitepay', true, true),
+        ('mercadopago', false, false)
+    ON CONFLICT (gateway_name) DO NOTHING;
+
+    -- ==================================================================
+    -- Tabela de Logs de Gateways de Pagamento (20/01/2026)
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS public.payment_gateway_logs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        gateway_name TEXT NOT NULL,
+        operation_type TEXT CHECK (operation_type IN ('charge', 'refund', 'check_status')),
+        success BOOLEAN DEFAULT FALSE,
+        request_data JSONB DEFAULT '{}'::jsonb,
+        response_data JSONB DEFAULT '{}'::jsonb,
+        error_message TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Índices
+    CREATE INDEX IF NOT EXISTS payment_gateway_logs_gateway_name_idx ON public.payment_gateway_logs(gateway_name);
+    CREATE INDEX IF NOT EXISTS payment_gateway_logs_success_idx ON public.payment_gateway_logs(success);
+    CREATE INDEX IF NOT EXISTS payment_gateway_logs_created_at_idx ON public.payment_gateway_logs(created_at DESC);
+
+    -- RLS (apenas admin)
+    ALTER TABLE public.payment_gateway_logs ENABLE ROW LEVEL SECURITY;
+
+    DROP POLICY IF EXISTS "Only admins can view logs" ON public.payment_gateway_logs;
+    CREATE POLICY "Only admins can view logs" ON public.payment_gateway_logs
+    FOR SELECT USING (public.is_admin());
+
+    DROP POLICY IF EXISTS "System can insert logs" ON public.payment_gateway_logs;
+    CREATE POLICY "System can insert logs" ON public.payment_gateway_logs
+    FOR INSERT WITH CHECK (true);
+
+    -- Grants
+    GRANT SELECT ON public.payment_gateway_logs TO authenticated;
+    GRANT INSERT ON public.payment_gateway_logs TO authenticated;
+
 
 END $$;

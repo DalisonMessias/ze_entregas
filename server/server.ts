@@ -12,7 +12,10 @@ import zeAssistantRoutes from './routes/zeAssistant.js';
 import pwaRoutes from './routes/pwa.js';
 import { initializeWebSocket } from './websocket.js';
 import './services/whatsappService.js'; // Importa para inicializar o serviço
+import './services/zeAssistantService.js'; // Importa para inicializar o serviço de Assistente
 import { supabaseAdmin } from './services/supabaseClient.js';
+
+console.log('✅ Serviços carregados: WhatsApp, Zé Assistente');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
