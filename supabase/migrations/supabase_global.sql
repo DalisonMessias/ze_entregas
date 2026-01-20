@@ -524,6 +524,63 @@ BEGIN
 
 END $$;
 
+-- Tabela de Histórico de Score Manual (20/01/2026)
+CREATE TABLE IF NOT EXISTS public.score_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.user_profiles(id) NOT NULL,
+    old_score INTEGER NOT NULL,
+    new_score INTEGER NOT NULL,
+    diff INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Garantir que a coluna admin_id exista (em caso de migração parcial anterior)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'score_history' AND column_name = 'admin_id') THEN
+        ALTER TABLE public.score_history ADD COLUMN admin_id UUID REFERENCES public.user_profiles(id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'score_history' AND column_name = 'diff') THEN
+        ALTER TABLE public.score_history ADD COLUMN diff INTEGER NOT NULL DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'score_history' AND column_name = 'old_score') THEN
+        ALTER TABLE public.score_history ADD COLUMN old_score INTEGER NOT NULL DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'score_history' AND column_name = 'new_score') THEN
+        ALTER TABLE public.score_history ADD COLUMN new_score INTEGER NOT NULL DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'score_history' AND column_name = 'reason') THEN
+        ALTER TABLE public.score_history ADD COLUMN reason TEXT NOT NULL DEFAULT '';
+    END IF;
+
+    -- Fix for event_key constraint if it exists (DB mismatch handling)
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'score_history' AND column_name = 'event_key') THEN
+        ALTER TABLE public.score_history ALTER COLUMN event_key DROP NOT NULL;
+    END IF;
+
+    -- Fix for impact constraint if it exists (DB mismatch handling)
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'score_history' AND column_name = 'impact') THEN
+        ALTER TABLE public.score_history ALTER COLUMN impact DROP NOT NULL;
+    END IF;
+
+    -- Fix for previous_score constraint if it exists (DB mismatch handling)
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'score_history' AND column_name = 'previous_score') THEN
+        ALTER TABLE public.score_history ALTER COLUMN previous_score DROP NOT NULL;
+    END IF;
+END $$;
+
+ALTER TABLE public.score_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view score history" ON public.score_history;
+CREATE POLICY "Admins can view score history" ON public.score_history
+    FOR SELECT USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can insert score history" ON public.score_history;
+CREATE POLICY "Admins can insert score history" ON public.score_history
+    FOR INSERT WITH CHECK (public.is_admin());
+
+
 -- Tabela de Dicas do Dia (Adicionada 11/01/2026 e movida para cﾃ｡ para resolver dependﾃｪncia de is_admin)
 CREATE TABLE IF NOT EXISTS public.system_tips (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -1688,21 +1745,37 @@ ALTER TABLE public.score_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blocking_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blocking_history ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read score config" ON public.score_config;
 CREATE POLICY "Anyone can read score config" ON public.score_config FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage score config" ON public.score_config;
 CREATE POLICY "Admins can manage score config" ON public.score_config FOR ALL USING (public.is_admin());
 
+DROP POLICY IF EXISTS "Users can view own score history" ON public.score_history;
 CREATE POLICY "Users can view own score history" ON public.score_history FOR SELECT USING (auth.uid()::text = user_id::text);
+
+DROP POLICY IF EXISTS "Admins can view all score history" ON public.score_history;
 CREATE POLICY "Admins can view all score history" ON public.score_history FOR SELECT USING (public.is_admin());
 
+DROP POLICY IF EXISTS "Anyone can read blocking config" ON public.blocking_config;
 CREATE POLICY "Anyone can read blocking config" ON public.blocking_config FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage blocking config" ON public.blocking_config;
 CREATE POLICY "Admins can manage blocking config" ON public.blocking_config FOR ALL USING (public.is_admin());
 
+DROP POLICY IF EXISTS "Users can view own blocking history" ON public.blocking_history;
 CREATE POLICY "Users can view own blocking history" ON public.blocking_history FOR SELECT USING (auth.uid()::text = user_id::text);
+
+DROP POLICY IF EXISTS "Admins can view all blocking history" ON public.blocking_history;
 CREATE POLICY "Admins can view all blocking history" ON public.blocking_history FOR SELECT USING (public.is_admin());
 
-GRANT SELECT ON public.score_config TO authenticated;
-GRANT SELECT ON public.score_history TO authenticated;
-GRANT SELECT ON public.blocking_config TO authenticated;
+-- Seed initial data for blocking_config
+INSERT INTO public.blocking_config (monthly_cancellation_limit, monthly_refusal_limit)
+SELECT 999, 999
+WHERE NOT EXISTS (SELECT 1 FROM public.blocking_config);
+
+GRANT SELECT, UPDATE ON public.score_config TO authenticated;
+GRANT SELECT, INSERT ON public.score_history TO authenticated;
+GRANT SELECT, UPDATE ON public.blocking_config TO authenticated;
 GRANT SELECT ON public.blocking_history TO authenticated;
 
 -- Função para atualizar Score
@@ -5238,6 +5311,22 @@ CREATE INDEX IF NOT EXISTS api_logs_created_at_idx ON public.api_logs (created_a
 ALTER TABLE public.api_logs ENABLE ROW LEVEL SECURITY;
 
 -- Policies api_logs
+
+DROP POLICY IF EXISTS "Drivers can view assigned orders" ON public.orders;
+CREATE POLICY "Drivers can view assigned orders" ON public.orders FOR SELECT USING (
+    driver_id = auth.uid()
+);
+
+DROP POLICY IF EXISTS "Drivers can update assigned orders status" ON public.orders;
+CREATE POLICY "Drivers can update assigned orders status" ON public.orders FOR UPDATE USING (
+    driver_id = auth.uid()
+);
+
+DROP POLICY IF EXISTS "Users can view their own orders" ON public.orders;
+CREATE POLICY "Users can view their own orders" ON public.orders FOR SELECT USING (
+    auth.uid() = user_id
+);
+
 DROP POLICY IF EXISTS "Users can view their own api logs" ON public.api_logs;
 CREATE POLICY "Users can view their own api logs" ON public.api_logs
     FOR SELECT USING (auth.uid()::text = user_id::text);

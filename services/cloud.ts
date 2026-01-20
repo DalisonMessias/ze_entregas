@@ -259,6 +259,82 @@ export const getAllUsers = async (): Promise<any[]> => {
     return data || [];
 };
 
+export const adminUpdateUserScore = async (userId: string, newScore: number, reason: string) => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not initialized' };
+
+    try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) return { success: false, error: 'Unauthorized' };
+
+        // 1. Get current score
+        const { data: profile, error: fetchError } = await sb
+            .from('user_profiles')
+            .select('score')
+            .eq('id', userId)
+            .single();
+
+        if (fetchError || !profile) throw new Error('User not found');
+
+        const oldScore = profile.score || 0;
+        const diff = newScore - oldScore;
+
+        // 2. Update profile
+        const { error: updateError } = await sb
+            .from('user_profiles')
+            .update({ score: newScore })
+            .eq('id', userId);
+
+        if (updateError) throw updateError;
+
+        // 3. Insert history
+        const { error: historyError } = await sb
+            .from('score_history')
+            .insert({
+                user_id: userId,
+                admin_id: user.id,
+                old_score: oldScore,
+                new_score: newScore,
+                diff: diff,
+                reason: reason
+            });
+
+        if (historyError) {
+            console.error('Error logging score history:', historyError);
+            // Non-blocking error, but worth noting
+        }
+
+        return { success: true };
+    } catch (e: any) {
+        console.error('Error updating score:', e);
+        return { success: false, error: e.message };
+    }
+};
+
+export const adminGetScoreHistory = async (userId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('score_history')
+        .select(`
+            *,
+            admin:admin_id (
+                name,
+                email
+            )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching score history:', error);
+        return [];
+    }
+    return data || [];
+};
+
+
 export const adminGetDriversWithPaymentDetails = async (): Promise<any[]> => {
     const sb = getClient();
     if (!sb) return [];
@@ -1166,6 +1242,65 @@ export const adminUpdateDocumentStatus = async (docId: string, status: string, n
     await sb.from('partner_documents').update({ status, admin_notes: notes }).eq('id', docId);
 };
 
+
+export const getAssociateActiveOrders = async (): Promise<Order[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return [];
+
+    // Busca pedidos onde o driver_id é o usuário logado e não estão finalizados
+    const { data, error } = await sb
+        .from('orders')
+        .select(`
+            *,
+            store:store_id (
+                store_name,
+                phone_number,
+                address_street,
+                address_number,
+                address_district,
+                address_city
+            ),
+            user:user_id (
+                name,
+                phone_number
+            )
+        `)
+        .eq('driver_id', user.id)
+        .neq('status', 'DELIVERED')
+        .neq('status', 'CANCELLED')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching associate orders:', error);
+        return [];
+    }
+
+    return data || [];
+};
+
+export const updateOrderStatus = async (orderId: string, status: string) => {
+    const sb = getClient();
+    if (!sb) return;
+
+    const { error } = await sb
+        .from('orders')
+        .update({
+            status: status,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+    if (error) {
+        console.error('Error updating order status:', error);
+        throw error;
+    }
+};
+
+// --- COUPONS ---
+
 // --- CITIES ---
 
 export const adminGetCities = async (): Promise<City[]> => {
@@ -1795,6 +1930,21 @@ export const getPartnerRequestsAvailable = async (limit: number = 50): Promise<P
     const sb = getClient();
     if (!sb) return [];
     try {
+        const { data: { user } } = await sb.auth.getUser();
+
+        let ignoredStoreIds: string[] = [];
+        if (user) {
+            // Busca lojas onde o usuário é parceiro associado para filtrar pedidos duplicados (evitar conflito)
+            const { data: associations } = await sb
+                .from('store_partners')
+                .select('store_id')
+                .eq('partner_id', user.id);
+
+            if (associations && associations.length > 0) {
+                ignoredStoreIds = associations.map(a => a.store_id);
+            }
+        }
+
         const { data, error } = await sb
             .from('partner_requests')
             .select('*')
@@ -1806,7 +1956,15 @@ export const getPartnerRequestsAvailable = async (limit: number = 50): Promise<P
             // console.error('[getPartnerRequestsAvailable] error:', error);
             return [];
         }
-        return data || [];
+
+        if (!data) return [];
+
+        // Filtra pedidos das lojas associadas (esses devem vir pelo AssociateOrders)
+        if (ignoredStoreIds.length > 0) {
+            return data.filter(req => !ignoredStoreIds.includes(req.store_id));
+        }
+
+        return data;
     } catch (err) {
         // console.error('[getPartnerRequestsAvailable] exception:', err);
         return [];
@@ -2101,10 +2259,8 @@ export const removePartnerAssociation = async (id: string) => {
 export const findPartnerByCode = async (code: string): Promise<ManagedUser | null> => {
     const sb = getClient();
     if (!sb) return null;
-    const { data } = await sb.from('partner_profiles').select('user_id').eq('association_code', code).single();
-    if (!data) return null;
-    const user = await sb.from('user_profiles').select('*').eq('id', data.user_id).single();
-    return user.data;
+    const { data } = await sb.from('user_profiles').select('*').eq('association_code', code).single();
+    return data;
 };
 
 // --- INFINITEPAY ---
@@ -4121,18 +4277,18 @@ export const adminUpdateScoreConfig = async (eventKey: string, impactValue: numb
 export const adminGetBlockingConfig = async () => {
     const sb = getClient();
     if (!sb) return null;
-    const { data, error } = await sb.from('blocking_config').select('*').single();
+    const { data, error } = await sb.from('blocking_config').select('*').limit(1).single();
     if (error) throw error;
     return data;
 };
 
-export const adminUpdateBlockingConfig = async (cancellationLimit: number, refusalLimit: number) => {
+export const adminUpdateBlockingConfig = async (id: string, cancellationLimit: number, refusalLimit: number) => {
     const sb = getClient();
     if (!sb) return;
     const { error } = await sb.from('blocking_config').update({
         monthly_cancellation_limit: cancellationLimit,
         monthly_refusal_limit: refusalLimit,
         updated_at: new Date().toISOString()
-    }).eq('id', '1'); // Assumindo uma única linha com ID '1'
+    }).eq('id', id);
     if (error) throw error;
 };

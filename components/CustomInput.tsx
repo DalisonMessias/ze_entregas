@@ -22,6 +22,20 @@ export const CustomInput: React.FC<CustomInputProps> = ({
     ...props
 }) => {
     const [displayValue, setDisplayValue] = useState('');
+    const [isRestricted, setIsRestricted] = useState(false);
+
+    useEffect(() => {
+        const handleRestricted = () => setIsRestricted(true);
+        const handleUnrestricted = () => setIsRestricted(false);
+
+        window.addEventListener('restricted_mode_active', handleRestricted);
+        window.addEventListener('restricted_mode_inactive', handleUnrestricted);
+
+        return () => {
+            window.removeEventListener('restricted_mode_active', handleRestricted);
+            window.removeEventListener('restricted_mode_inactive', handleUnrestricted);
+        };
+    }, []);
 
     useEffect(() => {
         if (mask === 'currency' && (value !== undefined && value !== null && value !== '')) {
@@ -132,6 +146,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
                     {...props}
                     value={displayValue}
                     onChange={handleChange}
+                    disabled={isRestricted || props.disabled}
                     className={`w-full p-4 bg-gray-50 dark:bg-gray-800/50 border-2 rounded-2xl outline-none transition-all text-gray-700 dark:text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-base
                         ${Icon ? 'pl-12' : 'pl-4'}
                         ${error
@@ -140,6 +155,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
                                 ? 'border-green-200 dark:border-green-900/50 focus:border-green-500 focus:ring-4 focus:ring-green-500/10'
                                 : 'border-gray-100 dark:border-gray-700 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 group-hover:border-gray-200 dark:group-hover:border-gray-600'
                         }
+                        ${isRestricted ? 'bg-gray-100 dark:bg-gray-800' : ''}
                     `}
                 />
             </div>

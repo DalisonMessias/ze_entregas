@@ -37,6 +37,10 @@ export const UserStatusBanner: React.FC<UserStatusBannerProps> = ({ status, reas
         }
     };
 
+    const handleNavigateToSupport = () => {
+        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'support' } }));
+    };
+
     const current = config[status as keyof typeof config];
     if (!current) return null;
 
@@ -60,6 +64,13 @@ export const UserStatusBanner: React.FC<UserStatusBannerProps> = ({ status, reas
                         <span className="font-bold">Motivo:</span> {reason}
                     </div>
                 )}
+
+                <button
+                    onClick={handleNavigateToSupport}
+                    className="mt-3 text-xs font-bold underline cursor-pointer hover:opacity-80 inline-flex items-center gap-1"
+                >
+                    Fale com o Suporte
+                </button>
             </div>
         </div>
     );

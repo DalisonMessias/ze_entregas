@@ -27,3 +27,4 @@
 [20/01/2026] - Refinamento Visual: Implementado estilo "Flat Premium" para todas as abas (tabs) e painéis principais (PartnerArea, FinancialPanel, AdminShopManagement, StoreSettings), removendo bordas brancas (border-gray-100) e sombras residuais.
 [20/01/2026] - Refinamento Visual Final: Abas ativas agora usam cor da marca (brand-600) e bordas de foco brancas foram removidas globalmente.
 [20/01/2026] - Correção AuthWrapper: Adicionado suporte ao tipo 'warning' e corrigida lógica de modo restrito para status 'pending'.
+[20/01/2026] - Banco de Dados: Criada tabela `score_history` para rastrear edições manuais de score dos entregadores.

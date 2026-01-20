@@ -23,11 +23,11 @@ const Tooltip: React.FC<{ text: string, children: React.ReactNode }> = ({ text, 
 
 // Mock Data for Loans
 const mockLoanData: LoanItem[] = [
-    { id: 'L001', borrowerName: 'João da Silva', amount: 5000, startDate: '2024-05-01', dueDate: '2024-11-01', status: 'EM_DIA', outstandingBalance: 2500 },
-    { id: 'L002', borrowerName: 'Maria Oliveira', amount: 10000, startDate: '2024-03-15', dueDate: '2024-09-15', status: 'VENCIDO', outstandingBalance: 3000 },
-    { id: 'L003', borrowerName: 'Carlos Pereira', amount: 2000, startDate: '2024-06-20', dueDate: '2024-08-20', status: 'PAGO', outstandingBalance: 0 },
-    { id: 'L004', borrowerName: 'Ana Costa', amount: 15000, startDate: '2024-01-10', dueDate: '2025-01-10', status: 'EM_DIA', outstandingBalance: 12000 },
-    { id: 'L005', borrowerName: 'Pedro Martins', amount: 3000, startDate: '2023-12-05', dueDate: '2024-06-05', status: 'VENCIDO', outstandingBalance: 1000 },
+    { id: 'L001', borrowerName: 'João da Silva', amount: 5000, startDate: '2024-05-01', dueDate: '2024-11-01', status: 'ACTIVE', outstandingBalance: 2500 },
+    { id: 'L002', borrowerName: 'Maria Oliveira', amount: 10000, startDate: '2024-03-15', dueDate: '2024-09-15', status: 'OVERDUE', outstandingBalance: 3000 },
+    { id: 'L003', borrowerName: 'Carlos Pereira', amount: 2000, startDate: '2024-06-20', dueDate: '2024-08-20', status: 'PAID', outstandingBalance: 0 },
+    { id: 'L004', borrowerName: 'Ana Costa', amount: 15000, startDate: '2024-01-10', dueDate: '2025-01-10', status: 'ACTIVE', outstandingBalance: 12000 },
+    { id: 'L005', borrowerName: 'Pedro Martins', amount: 3000, startDate: '2023-12-05', dueDate: '2024-06-05', status: 'OVERDUE', outstandingBalance: 1000 },
 ];
 
 export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHeader, defaultOrigin }) => {
@@ -172,7 +172,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
         const totalLoaned = loans.reduce((sum, loan) => sum + loan.amount, 0);
         const totalOutstanding = loans.reduce((sum, loan) => sum + loan.outstandingBalance, 0);
         const totalPaid = totalLoaned - totalOutstanding;
-        const overdueCount = loans.filter(loan => loan.status === 'VENCIDO').length;
+        const overdueCount = loans.filter(loan => loan.status === 'OVERDUE').length;
         setLoanSummary({ totalLoaned, totalPaid, totalOutstanding, overdueCount });
     }, [loans]);
 
@@ -241,9 +241,9 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
 
     const getLoanStatusClass = (status: LoanStatus) => {
         switch (status) {
-            case 'PAGO': return 'bg-green-100 text-green-700';
-            case 'VENCIDO': return 'bg-red-100 text-red-700 animate-pulse';
-            case 'EM_DIA': return 'bg-blue-100 text-blue-700';
+            case 'PAID': return 'bg-green-100 text-green-700'; // PAID (PAGO)
+            case 'OVERDUE': return 'bg-red-100 text-red-700 animate-pulse';
+            case 'ACTIVE': return 'bg-blue-100 text-blue-700';
             default: return 'bg-gray-100 text-gray-700';
         }
     };
@@ -293,14 +293,14 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
             <div className="flex items-center gap-4">
                 <h4 className="text-sm font-bold text-gray-600 dark:text-gray-300">Filtrar por Status:</h4>
                 <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
-                    {(['ALL', 'EM_DIA', 'VENCIDO', 'PAGO'] as const).map(status => (
+                    {(['ALL', 'ACTIVE', 'OVERDUE', 'PAID'] as const).map(status => (
                         <button
                             key={status}
                             onClick={() => setLoanStatusFilter(status)}
                             className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${loanStatusFilter === status ? 'bg-white dark:bg-gray-600 text-brand-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
-                            aria-label={`Filtrar empréstimos por status: ${status === 'ALL' ? 'Todos' : status === 'EM_DIA' ? 'Em Dia' : status === 'VENCIDO' ? 'Vencido' : 'Pago'}`}
+                            aria-label={`Filtrar empréstimos por status: ${status === 'ALL' ? 'Todos' : status === 'ACTIVE' ? 'Em Dia' : status === 'OVERDUE' ? 'Vencido' : 'Pago'}`}
                         >
-                            {status === 'ALL' ? 'Todos' : status === 'EM_DIA' ? 'Em Dia' : status === 'VENCIDO' ? 'Vencido' : 'Pago'}
+                            {status === 'ALL' ? 'Todos' : status === 'ACTIVE' ? 'Em Dia' : status === 'OVERDUE' ? 'Vencido' : 'Pago'}
                         </button>
                     ))}
                 </div>
@@ -349,7 +349,7 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
                                 <td className="px-6 py-4">{new Date(loan.dueDate).toLocaleDateString('pt-BR')}</td>
                                 <td className="px-6 py-4">
                                     <span className={`px-2 py-1 text-xs font-bold rounded-full ${getLoanStatusClass(loan.status)}`}>
-                                        {loan.status === 'EM_DIA' ? 'Em Dia' : loan.status}
+                                        {loan.status === 'ACTIVE' ? 'Em Dia' : loan.status === 'OVERDUE' ? 'Vencido' : loan.status === 'PAID' ? 'Pago' : loan.status}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 font-bold text-red-500">{formatCurrency(loan.outstandingBalance)}</td>

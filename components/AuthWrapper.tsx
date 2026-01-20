@@ -4,7 +4,7 @@ import * as cloud from '../services/cloud';
 import * as logger from '../services/logger';
 import { useDialog } from '../utils/dialogService';
 import { App } from './App';
-import { UserRole } from '../types';
+import { UserRole, UserStatus } from '../types';
 import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin, Mail, Lock, User, Phone, FileText, Store as StoreIcon, Home, Truck, RefreshCw } from 'lucide-react';
 import { Button } from './Button';
 import { LandingPage } from './LandingPage';
@@ -43,6 +43,7 @@ export const AuthWrapper: React.FC = () => {
   const [session, setSession] = useState<any | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('delivery_person');
+  const [userStatus, setUserStatus] = useState<UserStatus>('active');
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isRetryingProfile, setIsRetryingProfile] = useState(false);
   const [collaboratorSession, setCollaboratorSession] = useState<any | null>(() => {
@@ -187,6 +188,7 @@ export const AuthWrapper: React.FC = () => {
               setSession(initialSession);
               setUserId(initialSession.user.id);
               setUserRole((role || 'delivery_person'));
+              setUserStatus(status);
               setAuthMessage({ type: 'warning', text: 'Conta restrita (Modo Visualização).' });
               redirectToRoleHome(role || 'delivery_person');
             } else if (status === 'banned') {
@@ -246,6 +248,7 @@ export const AuthWrapper: React.FC = () => {
                 setSession(currentSession);
                 setUserId(currentSession.user.id);
                 setUserRole((role || 'delivery_person'));
+                setUserStatus(status);
                 setAuthMessage({ type: 'warning', text: 'Conta restrita (Modo Visualização).' });
                 redirectToRoleHome(role || 'delivery_person');
               } else if (status === 'banned') {
@@ -554,7 +557,11 @@ export const AuthWrapper: React.FC = () => {
   if (session && userId) {
     return (
       <TourProvider>
-        <App userId={userId} userRole={userRole} />
+        <App
+          userId={userId}
+          userRole={userRole}
+          initialUserStatus={userStatus}
+        />
       </TourProvider>
     );
   }

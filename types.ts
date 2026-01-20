@@ -1289,7 +1289,7 @@ export interface MarketingElement {
 // LOAN MODULE TYPES (2026-01-11)
 // ==================================================================
 
-export type LoanStatus = 'PENDING' | 'APPROVED' | 'ACTIVE' | 'REJECTED' | 'PAID' | 'DEFAULTED';
+export type LoanStatus = 'PENDING' | 'APPROVED' | 'ACTIVE' | 'REJECTED' | 'PAID' | 'DEFAULTED' | 'OVERDUE';
 export type InstallmentStatus = 'PENDING' | 'PAID' | 'PARTIALLY_PAID' | 'OVERDUE';
 
 export interface LoanType {

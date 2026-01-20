@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { adminGetScoreConfig, adminUpdateScoreConfig, adminGetBlockingConfig, adminUpdateBlockingConfig, getAllUsers } from '../services/cloud';
+import { adminGetScoreConfig, adminUpdateScoreConfig, adminGetBlockingConfig, adminUpdateBlockingConfig, getAllUsers, adminUpdateUserScore, adminGetScoreHistory } from '../services/cloud';
 import { Button } from './Button';
-import { Loader2, Save, Star, AlertCircle, TrendingUp, History, UserX, ShieldAlert } from 'lucide-react';
+import { BaseModal } from './BaseModal';
+import { Loader2, Save, Star, AlertCircle, TrendingUp, History, UserX, ShieldAlert, Edit2, CheckCircle2, XCircle, Plus, Minus } from 'lucide-react';
 import { ManagedUser } from '../types';
 
 interface ScoreEventConfig {
@@ -13,17 +14,40 @@ interface ScoreEventConfig {
 }
 
 interface BlockingConfig {
+    id: string;
     monthly_cancellation_limit: number;
     monthly_refusal_limit: number;
 }
 
 export const AdminScoreConfig: React.FC = () => {
+
     const [scoreConfigs, setScoreConfigs] = useState<ScoreEventConfig[]>([]);
     const [blockingConfig, setBlockingConfig] = useState<BlockingConfig | null>(null);
     const [drivers, setDrivers] = useState<ManagedUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+    // Edit Score State
+    const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
+    const [newScore, setNewScore] = useState<string>('');
+    const [editReason, setEditReason] = useState('');
+    const [isSavingScore, setIsSavingScore] = useState(false);
+
+    // History State
+    const [historyUser, setHistoryUser] = useState<ManagedUser | null>(null);
+    const [scoreHistory, setScoreHistory] = useState<any[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+
+    const formatDate = (dateString: string) => {
+        return new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        }).format(new Date(dateString));
+    };
 
     useEffect(() => {
         loadData();
@@ -62,7 +86,7 @@ export const AdminScoreConfig: React.FC = () => {
         if (!blockingConfig) return;
         setSaving(true);
         try {
-            await adminUpdateBlockingConfig(blockingConfig.monthly_cancellation_limit, blockingConfig.monthly_refusal_limit);
+            await adminUpdateBlockingConfig(blockingConfig.id, blockingConfig.monthly_cancellation_limit, blockingConfig.monthly_refusal_limit);
             setToast({ message: 'Limites de bloqueio atualizados', type: 'success' });
         } catch (e) {
             setToast({ message: 'Erro ao salvar limites', type: 'error' });
@@ -86,6 +110,52 @@ export const AdminScoreConfig: React.FC = () => {
             'MANUAL_ADJUSTMENT': 'Ajuste Manual'
         };
         return labels[key] || key;
+    };
+
+    const handleOpenEdit = (user: ManagedUser) => {
+        setEditingUser(user);
+        setNewScore(String(user.score || 0));
+        setEditReason('');
+    };
+
+    const handleSaveScoreEdit = async () => {
+        if (!editingUser) return;
+        if (!editReason.trim()) {
+            setToast({ message: 'Motivo é obrigatório', type: 'error' });
+            return;
+        }
+
+        setIsSavingScore(true);
+        try {
+            const scoreVal = parseInt(newScore);
+            const result = await adminUpdateUserScore(editingUser.id, scoreVal, editReason);
+
+            if (result.success) {
+                setToast({ message: 'Score atualizado com sucesso', type: 'success' });
+                // Update local list
+                setDrivers(prev => prev.map(d => d.id === editingUser.id ? { ...d, score: scoreVal } : d));
+                setEditingUser(null);
+            } else {
+                setToast({ message: 'Erro ao atualizar score: ' + result.error, type: 'error' });
+            }
+        } catch (e) {
+            setToast({ message: 'Erro ao processar requisição', type: 'error' });
+        } finally {
+            setIsSavingScore(false);
+        }
+    };
+
+    const handleOpenHistory = async (user: ManagedUser) => {
+        setHistoryUser(user);
+        setLoadingHistory(true);
+        try {
+            const history = await adminGetScoreHistory(user.id);
+            setScoreHistory(history);
+        } catch (e) {
+            setToast({ message: 'Erro ao carregar histórico', type: 'error' });
+        } finally {
+            setLoadingHistory(false);
+        }
     };
 
     if (loading) return <div className="p-10 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-brand-600" /></div>;
@@ -209,6 +279,7 @@ export const AdminScoreConfig: React.FC = () => {
                                 <th className="px-4 py-3 text-center">Cancelamentos (Mês)</th>
                                 <th className="px-4 py-3 text-center">Recusas (Mês)</th>
                                 <th className="px-4 py-3 text-center">Status</th>
+                                <th className="px-4 py-3 text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y dark:divide-gray-700">
@@ -238,6 +309,25 @@ export const AdminScoreConfig: React.FC = () => {
                                             {driver.status === 'active' ? 'Ativo' : driver.status === 'blocked' ? 'Bloqueado' : driver.status === 'suspended' ? 'Suspenso' : driver.status}
                                         </span>
                                     </td>
+                                    <td className="px-4 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => handleOpenHistory(driver)}
+                                                className="!p-2 h-8 w-8 rounded-full border-gray-200 hover:bg-gray-50 text-gray-500"
+                                                title="Ver Histórico"
+                                            >
+                                                <History className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                onClick={() => handleOpenEdit(driver)}
+                                                className="!p-2 h-8 w-8 rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 border-transparent"
+                                                title="Editar Score Manualmente"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
                             {drivers.length === 0 && (
@@ -251,6 +341,131 @@ export const AdminScoreConfig: React.FC = () => {
                     </table>
                 </div>
             </div>
-        </div>
+
+
+            {/* Edit Modal */}
+            <BaseModal
+                isOpen={!!editingUser}
+                onClose={() => setEditingUser(null)}
+                title="Ajuste Manual de Score"
+            >
+                {editingUser && (
+                    <div className="space-y-4 pt-2">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl flex gap-3 text-blue-700 dark:text-blue-300 text-sm">
+                            <AlertCircle className="w-5 h-5 shrink-0" />
+                            <p>
+                                Você está alterando o score de <strong>{editingUser.name}</strong>.
+                                Esta ação será registrada no histórico e deve ser justificada.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Novo Score (0-1000)</label>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors group"
+                                    onClick={() => {
+                                        const val = parseInt(String(newScore)) || 0;
+                                        setNewScore(String(Math.max(0, val - 10)));
+                                    }}
+                                >
+                                    <Minus className="w-5 h-5 text-red-600 dark:text-red-400 group-hover:scale-110 transition-transform" />
+                                </button>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={newScore}
+                                    className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded-xl text-center text-lg font-bold dark:text-white outline-none cursor-not-allowed"
+                                />
+                                <button
+                                    className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors group"
+                                    onClick={() => {
+                                        const val = parseInt(String(newScore)) || 0;
+                                        setNewScore(String(Math.min(1000, val + 10)));
+                                    }}
+                                >
+                                    <Plus className="w-5 h-5 text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Motivo da Alteração <span className="text-red-500">*</span></label>
+                            <div className="p-0.5">
+                                <textarea
+                                    value={editReason}
+                                    onChange={e => setEditReason(e.target.value)}
+                                    placeholder="Descreva o motivo deste ajuste..."
+                                    className="w-full h-[120px] resize-none p-3 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-brand-500 block"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                            <Button variant="outline" fullWidth onClick={() => setEditingUser(null)}>Cancelar</Button>
+                            <Button fullWidth onClick={handleSaveScoreEdit} disabled={isSavingScore || !editReason.trim()}>
+                                {isSavingScore ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                Salvar Alteração
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </BaseModal>
+
+            {/* History Modal */}
+            <BaseModal
+                isOpen={!!historyUser}
+                onClose={() => setHistoryUser(null)}
+                title="Histórico de Alterações"
+            >
+                <div className="pt-2">
+                    {loadingHistory ? (
+                        <div className="py-10 text-center text-gray-400">
+                            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                            Carregando histórico...
+                        </div>
+                    ) : scoreHistory.length === 0 ? (
+                        <div className="py-10 text-center text-gray-400 flex flex-col items-center">
+                            <History className="w-10 h-10 mb-2 opacity-50" />
+                            <p>Nenhuma alteração manual registrada.</p>
+                        </div>
+                    ) : (
+                        <div className="relative border-l-2 border-gray-100 dark:border-gray-700 ml-3 space-y-6 pb-4">
+                            {scoreHistory.map((item, idx) => (
+                                <div key={item.id || idx} className="ml-6 relative">
+                                    <div className={`absolute -left-[31px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 ${item.diff > 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+
+                                    <div className="flex justify-between items-start mb-1">
+                                        <div className="text-xs font-bold text-gray-400">
+                                            {formatDate(item.created_at)}
+                                        </div>
+                                        <div className={`text-xs font-black px-2 py-0.5 rounded-full ${item.diff > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {item.diff > 0 ? '+' : ''}{item.diff} pts
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl">
+                                        <div className="flex items-center gap-2 mb-2 text-sm">
+                                            <span className="text-gray-500 line-through">{item.old_score}</span>
+                                            <TrendingUp className="w-3 h-3 text-gray-300" />
+                                            <span className="font-bold text-gray-900 dark:text-white">{item.new_score}</span>
+                                        </div>
+
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 italic mb-2">
+                                            "{item.reason}"
+                                        </p>
+
+                                        <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                                            <ShieldAlert className="w-3 h-3" />
+                                            Alterado por: <span className="font-bold">{item.admin?.name || 'Administrador'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </BaseModal>
+        </div >
     );
 };

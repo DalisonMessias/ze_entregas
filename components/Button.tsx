@@ -22,8 +22,15 @@ export const Button: React.FC<ButtonProps> = ({
   React.useEffect(() => {
     // Escuta evento global de modo restrito
     const handleRestricted = () => setIsRestricted(true);
+    const handleUnrestricted = () => setIsRestricted(false);
+
     window.addEventListener('restricted_mode_active', handleRestricted);
-    return () => window.removeEventListener('restricted_mode_active', handleRestricted);
+    window.addEventListener('restricted_mode_inactive', handleUnrestricted);
+
+    return () => {
+      window.removeEventListener('restricted_mode_active', handleRestricted);
+      window.removeEventListener('restricted_mode_inactive', handleUnrestricted);
+    };
   }, []);
 
   // Premium Style: Rounded 2xl, Soft shadows, Modern gradients/flats

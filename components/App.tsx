@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package } from 'lucide-react';
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
@@ -57,6 +57,7 @@ const BenefitsPage = React.lazy(() => import('./BenefitsPage').then(module => ({
 const CloudSync = React.lazy(() => import('./CloudSync').then(module => ({ default: module.CloudSync })));
 const AssociateDriver = React.lazy(() => import('./AssociateDriver').then(module => ({ default: module.AssociateDriver })));
 const DailyPanel = React.lazy(() => import('./DailyPanel').then(module => ({ default: module.DailyPanel })));
+const AssociateOrders = React.lazy(() => import('./AssociateOrders').then(module => ({ default: module.AssociateOrders })));
 const ToolsPage = React.lazy(() => import('./ToolsPage').then(module => ({ default: module.ToolsPage })));
 const StatusPage = React.lazy(() => import('./StatusPage').then(module => ({ default: module.StatusPage })));
 const Heatmap = React.lazy(() => import('./Heatmap').then(module => ({ default: module.Heatmap })));
@@ -119,6 +120,7 @@ export type ActiveTab =
     | 'cloud'
     | 'settings'
     | 'associate_driver'
+    | 'associate_orders'
     | 'status'
     | 'heatmap'
     | 'addresses'
@@ -144,6 +146,7 @@ export type ActiveTab =
 interface AppProps {
     userId: string;
     userRole: UserRole;
+    initialUserStatus?: UserStatus;
 }
 
 // Helper para verificar horário de manutenção
@@ -308,7 +311,7 @@ const UpgradeToPartnerPage: React.FC = () => {
 };
 
 
-export const App: React.FC<AppProps> = ({ userId, userRole }) => {
+export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 'active' }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
         const tabFromUrl = getTabFromUrl(window.location.pathname);
         if (tabFromUrl) return tabFromUrl;
@@ -327,8 +330,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
         return 'profile'; // Fallback padrão
     });
-    const [userStatus, setUserStatus] = useState<UserStatus>('active');
-    const [isRestrictedMode, setIsRestrictedMode] = useState(false);
+    const [userStatus, setUserStatus] = useState<UserStatus>(initialUserStatus || 'active');
+    const [blockingReason, setBlockingReason] = useState<string | null>(null);
+    const [isRestrictedMode, setIsRestrictedMode] = useState(['blocked', 'suspended', 'pending'].includes(initialUserStatus || ''));
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Default collapsed on desktop per user request
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -441,9 +445,12 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                         setUserStatus(freshStatus);
                         setIsRestrictedMode(['blocked', 'suspended', 'pending'].includes(freshStatus));
 
-                        // Emitir evento global caso o status mude para restrito
-                        if (['blocked', 'suspended', 'pending'].includes(freshStatus)) {
-                            window.dispatchEvent(new CustomEvent('restricted_mode_active'));
+                        // Fetch blocking reason if restricted
+                        if (['blocked', 'suspended'].includes(freshStatus)) {
+                            const details = await cloud.getBlockingDetails();
+                            if (details) setBlockingReason(details.reason);
+                        } else {
+                            setBlockingReason(null);
                         }
                     }
 
@@ -664,10 +671,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
         ]),
 
         delivery_partner: new Set<ActiveTab>([
-            'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'loans'
+            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'loans'
         ]),
         delivery_person: new Set<ActiveTab>([
-            'daily_panel', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses'
+            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses'
         ]),
         collaborator: new Set<ActiveTab>(['collaborator_area', 'profile', 'settings', 'support'])
     };
@@ -777,6 +784,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                 case 'tasks': return <TaskList />;
                 case 'zebank': return <Zebank userRole={effectiveRole} />;
                 case 'loans': return <LoansModule />;
+                case 'associate_orders': return <AssociateOrders />;
                 case 'associate_driver': return <AssociateDriver onBack={() => navigate('daily_panel')} />;
                 case 'heatmap': return <Heatmap userRole={effectiveRole} />;
                 case 'local_history': return <LocalHistoryPage />;
@@ -1011,6 +1019,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
                         <>
                             <MenuSection title="Plataforma Zé" />
                             <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
+                            <MenuButton icon={Package} label="Pedidos da Loja" tab="associate_orders" />
                             <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
                             <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
                             <MenuButton icon={Star} label="Meu Score" tab="score" />
@@ -1081,7 +1090,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole }) => {
 
             {/* Main Content Area */}
             <main className={`pt-20 px-4 mx-auto transition-all duration-300 ${activeTab !== 'whatsapp_chat' ? 'pb-24' : ''} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
-                <UserStatusBanner status={userStatus} />
+                {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
                 <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
                     {renderContent()}
                 </Suspense>
