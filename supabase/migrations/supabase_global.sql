@@ -8175,3 +8175,41 @@ VALUES
     ('SYSTEM', 'Fazer Pedido', 'Iniciar pedido', ARRAY['fazer pedido', 'quero pedir', 'gostaria de pedir', 'queria pedir', 'pedido'],
      'Ã“timo! Vou te ajudar a fazer seu pedido. ðŸ›’ Me diga o que vocÃª gostaria!', 95, 'contains')
 ON CONFLICT DO NOTHING;
+
+
+-- ==================================================================
+-- 2.x TABELAS DE ROTAS (Adicionado em 20/01/2026)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.user_saved_routes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.user_profiles(id) NOT NULL,
+    name TEXT,
+    items JSONB DEFAULT '[]'::jsonb, -- Lista de endereços/paradas
+    origin_data JSONB DEFAULT '{}'::jsonb, -- Dados da origem da rota
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Garantir que colunas existam (Migração Aditiva)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_saved_routes' AND column_name = 'origin_data') THEN
+        ALTER TABLE public.user_saved_routes ADD COLUMN origin_data JSONB DEFAULT '{}'::jsonb;
+    END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS handle_user_saved_routes_updated_at ON public.user_saved_routes;
+CREATE TRIGGER handle_user_saved_routes_updated_at BEFORE UPDATE ON public.user_saved_routes
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.user_saved_routes ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de Acesso
+DROP POLICY IF EXISTS "Users can manage their own routes" ON public.user_saved_routes;
+CREATE POLICY "Users can manage their own routes" ON public.user_saved_routes
+    FOR ALL USING (auth.uid()::text = user_id::text);
+
+DROP POLICY IF EXISTS "Admins can view all routes" ON public.user_saved_routes;
+CREATE POLICY "Admins can view all routes" ON public.user_saved_routes
+    FOR SELECT USING (public.is_admin());

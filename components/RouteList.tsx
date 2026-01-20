@@ -43,6 +43,10 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
     // Info Modal State
     const [infoItem, setInfoItem] = useState<RouteListItem | null>(null);
 
+    // SQL GPS Modal State
+    const [gpsModalOpen, setGpsModalOpen] = useState(false);
+    const [selectedRouteForGps, setSelectedRouteForGps] = useState<RouteListItem | null>(null);
+
     // Voice Input State
     const [listeningField, setListeningField] = useState<'name' | 'search' | null>(null);
 
@@ -101,7 +105,21 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
 
 
     useEffect(() => {
-        setItems(storage.getRouteListItems());
+        const loadItems = async () => {
+            const savedItems = await cloud.getCurrentRouteList();
+            if (savedItems && savedItems.length > 0) {
+                setItems(savedItems);
+            } else {
+                // Fallback to local storage if empty (migration) or just empty
+                const localItems = storage.getRouteListItems();
+                if (localItems.length > 0) {
+                    setItems(localItems);
+                    // Optional: migrate to cloud immediately?
+                    // cloud.saveCurrentRouteList(localItems);
+                }
+            }
+        };
+        loadItems();
         const fetchProfile = async () => {
             setIsProfileLoading(true);
             if (userRole !== 'delivery_partner' && userRole !== 'delivery_person') {
@@ -127,6 +145,9 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
 
     const saveAndSetItems = (newItems: RouteListItem[]) => {
         setItems(newItems);
+        // Save to Cloud (Supabase)
+        cloud.saveCurrentRouteList(newItems);
+        // Keep local storage in sync as backup if needed, or remove
         storage.saveRouteListItems(newItems);
     };
 
@@ -220,12 +241,62 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
         saveAndSetItems(newItems);
     };
 
-    const handleNavigate = (item: RouteListItem) => {
-        // User requested Waze navigation specifically
-        openNavigation(item.lat, item.lng, item.address);
+    const handleOpenGpsModal = (item: RouteListItem) => {
+        setSelectedRouteForGps(item);
+        setGpsModalOpen(true);
+    };
+
+    const launchGps = (app: 'waze' | 'google') => {
+        if (!selectedRouteForGps) return;
+        const { lat, lng } = selectedRouteForGps;
+
+        // Tentar obter localização atual para origem com alta precisão
+        if (navigator.geolocation) {
+            // Opções para forçar GPS real (não IP geolocation)
+            const geoOptions = {
+                enableHighAccuracy: true, // Força uso de GPS ao invés de WiFi/IP
+                timeout: 10000, // Máximo 10 segundos para obter localização
+                maximumAge: 0 // Não usar cache, forçar leitura nova
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude: currentLat, longitude: currentLng } = position.coords;
+                    console.log('📍 Localização GPS obtida:', { currentLat, currentLng, accuracy: position.coords.accuracy });
+
+                    if (app === 'waze') {
+                        // Waze com origem e destino
+                        window.open(`https://waze.com/ul?ll=${lat},${lng}&from=${currentLat},${currentLng}&navigate=yes`, '_blank');
+                    } else {
+                        // Google Maps com Origem e Destino
+                        window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${lat},${lng}&travelmode=driving`, '_blank');
+                    }
+                    setGpsModalOpen(false);
+                },
+                (error) => {
+                    console.warn("Erro ao obter localização GPS:", error.message, error.code);
+                    // Fallback: usar apenas destino se GPS falhar
+                    if (app === 'waze') {
+                        window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+                    } else {
+                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank');
+                    }
+                    setGpsModalOpen(false);
+                },
+                geoOptions // Aplicar opções de alta precisão
+            );
+        } else {
+            // Fallback sem geolocation support
+            if (app === 'waze') {
+                window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+            } else {
+                window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank');
+            }
+            setGpsModalOpen(false);
+        }
 
         if (onNavigate) {
-            onNavigate({ lat: item.lat, lng: item.lng, name: item.name, fullAddress: item.address });
+            onNavigate({ lat, lng, name: selectedRouteForGps.name, fullAddress: selectedRouteForGps.address });
         }
     };
 
@@ -284,13 +355,13 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div className="relative flex-grow max-w-[180px]">
+                    <div className="relative flex-grow max-w-[180px] min-w-[150px]">
                         <input
                             type="text"
                             value={newItemName}
                             onChange={e => setNewItemName(e.target.value)}
                             placeholder="Nome (Opcional)"
-                            className="w-full p-3 pr-8 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
+                            className="w-full p-3 pr-8 bg-gray-50 dark:bg-gray-800 rounded-xl outline-none border border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
                             disabled={isProfileLoading || isSearching}
                         />
                         <button
@@ -301,14 +372,14 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                             <Mic className="w-3 h-3" />
                         </button>
                     </div>
-                    <div className="relative flex-grow min-w-[180px]">
+                    <div className="relative flex-grow min-w-[220px]">
                         <StreetAutocomplete
                             city={userCity}
                             value={search}
                             onChange={(val) => setSearch(val)}
                             placeholder="Endereço (Rua)"
                             disabled={isProfileLoading || isSearching}
-                            className="w-full p-3 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 rounded-xl outline-none border border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
                         />
                     </div>
                     <input
@@ -316,7 +387,7 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                         value={newItemNumber}
                         onChange={e => setNewItemNumber(e.target.value)}
                         placeholder="N°"
-                        className="p-3 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50 w-[80px]"
+                        className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl outline-none border border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50 w-[80px]"
                         disabled={isProfileLoading || isSearching}
                     />
                     <input
@@ -324,7 +395,7 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                         value={newItemNeighborhood}
                         onChange={e => setNewItemNeighborhood(e.target.value)}
                         placeholder="Bairro"
-                        className="p-3 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none border border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50 flex-grow max-w-[200px]"
+                        className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl outline-none border border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50 flex-grow max-w-[200px]"
                         disabled={isProfileLoading || isSearching}
                     />
 
@@ -356,10 +427,10 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     </div>
                 ) : (
                     items.map((item, index) => (
-                        <div key={item.id} className={`flex flex-row items-center bg-white dark:bg-gray-800 p-4 rounded-xl border-b border-gray-100 dark:border-gray-700 gap-4 transition-all ${item.completed ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+                        <div key={item.id} className={`flex flex-col sm:flex-row items-start sm:items-center bg-white dark:bg-gray-800 p-4 rounded-xl border-b border-gray-100 dark:border-gray-700 gap-3 sm:gap-4 transition-all ${item.completed ? 'opacity-60 grayscale-[0.5]' : ''}`}>
 
                             {/* Content Section */}
-                            <div className="flex-1 flex items-start gap-3 min-w-0">
+                            <div className="flex-1 flex items-start gap-3 min-w-0 w-full sm:w-auto">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 mt-1 transition-colors ${item.completed ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400'}`}>
                                     {item.completed ? <Check className="w-4 h-4" /> : index + 1}
                                 </div>
@@ -371,29 +442,35 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                                                 type="text"
                                                 value={editName}
                                                 onChange={(e) => setEditName(e.target.value)}
-                                                className="w-full p-1 bg-gray-50 dark:bg-gray-700 border-b border-purple-500 outline-none text-sm font-bold dark:text-white"
+                                                className="flex-1 p-1 bg-gray-50 dark:bg-gray-700 border-b border-purple-500 outline-none text-sm font-bold dark:text-white"
                                                 autoFocus
                                             />
-                                            <button onClick={() => saveEdit(item.id)} className="text-green-500"><Check className="w-4 h-4" /></button>
-                                            <button onClick={cancelEdit} className="text-red-500"><X className="w-4 h-4" /></button>
+                                            <button onClick={() => saveEdit(item.id)} className="text-green-500 flex-shrink-0"><Check className="w-4 h-4" /></button>
+                                            <button onClick={cancelEdit} className="text-red-500 flex-shrink-0"><X className="w-4 h-4" /></button>
                                         </div>
                                     ) : (
-                                        <div className="flex items-center gap-2">
-                                            <p className={`font-bold text-gray-900 dark:text-white text-base truncate ${item.completed ? 'line-through decoration-green-500/50' : ''}`}>{item.name}</p>
-                                            <button onClick={() => startEditing(item)} className="text-gray-300 hover:text-purple-500 transition-colors">
-                                                <Edit2 className="w-3 h-3" />
+                                        <div className="flex items-start gap-2 mb-1">
+                                            <p className={`flex-1 font-bold text-gray-900 dark:text-white text-base break-words ${item.completed ? 'line-through decoration-green-500/50' : ''}`}>
+                                                {item.name}
+                                            </p>
+                                            <button
+                                                onClick={() => startEditing(item)}
+                                                className="text-gray-400 hover:text-purple-500 transition-colors flex-shrink-0 mt-0.5"
+                                                aria-label="Editar nome"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     )}
-                                    <p className={`text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed line-clamp-2 ${item.completed ? 'line-through' : ''}`}>{item.address}</p>
+                                    <p className={`text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-2 ${item.completed ? 'line-through' : ''}`}>{item.address}</p>
                                 </div>
                             </div>
 
                             {/* Actions Section */}
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
                                 <button
                                     onClick={() => handleToggleStatus(item.id)}
-                                    className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 font-bold text-xs ${item.completed
+                                    className={`px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 font-bold text-xs flex-1 sm:flex-none ${item.completed
                                         ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100'
                                         : 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100'
                                         }`}
@@ -402,21 +479,22 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                                     {item.completed ? (
                                         <>
                                             <Undo2 className="w-3.5 h-3.5" />
-                                            Voltar
+                                            <span className="hidden sm:inline">Voltar</span>
                                         </>
                                     ) : (
                                         <>
                                             <CheckCircle className="w-3.5 h-3.5" />
-                                            Entregue
+                                            <span className="hidden sm:inline">Entregue</span>
                                         </>
                                     )}
                                 </button>
 
                                 <Button
-                                    onClick={() => handleNavigate(item)}
-                                    className="px-4 py-2 h-auto text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-sm whitespace-nowrap"
+                                    onClick={() => handleOpenGpsModal(item)}
+                                    className="px-3 sm:px-4 py-2 h-auto text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-sm whitespace-nowrap flex-1 sm:flex-none"
                                 >
-                                    <Navigation className="w-3 h-3 mr-1.5" /> Abrir no Waze
+                                    <Navigation className="w-3 h-3 sm:mr-1.5" />
+                                    <span className="hidden sm:inline ml-1">GPS</span>
                                 </Button>
 
                                 <button
@@ -494,6 +572,47 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                     </div>
                 )}
             </BaseModal>
-        </div >
+
+
+            {/* GPS Selection Modal */}
+            <BaseModal
+                isOpen={gpsModalOpen}
+                onClose={() => setGpsModalOpen(false)}
+                title="Escolha o GPS"
+                icon={<Navigation className="w-6 h-6 text-purple-600" />}
+            >
+                <div className="grid grid-cols-2 gap-4 p-4">
+                    <button
+                        onClick={() => launchGps('waze')}
+                        className="flex flex-col items-center justify-center gap-3 p-6 bg-gray-50 hover:bg-blue-50 dark:bg-gray-700 dark:hover:bg-blue-900/30 rounded-2xl border-2 border-transparent hover:border-blue-400 transition-all group"
+                    >
+                        {/* Waze Icon - Ícone oficial */}
+                        <div className="w-16 h-16 flex items-center justify-center rounded-xl group-hover:scale-110 transition-transform">
+                            <img
+                                src="/waze-icon.png"
+                                alt="Waze"
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+                        <span className="font-bold text-gray-700 dark:text-gray-200">Waze</span>
+                    </button>
+
+                    <button
+                        onClick={() => launchGps('google')}
+                        className="flex flex-col items-center justify-center gap-3 p-6 bg-gray-50 hover:bg-green-50 dark:bg-gray-700 dark:hover:bg-green-900/30 rounded-2xl border-2 border-transparent hover:border-green-500 transition-all group"
+                    >
+                        {/* Google Maps Icon - Ícone oficial */}
+                        <div className="w-16 h-16 flex items-center justify-center rounded-xl group-hover:scale-110 transition-transform">
+                            <img
+                                src="/google-maps-icon.png"
+                                alt="Google Maps"
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+                        <span className="font-bold text-gray-700 dark:text-gray-200">Google Maps</span>
+                    </button>
+                </div>
+            </BaseModal>
+        </div>
     );
 };

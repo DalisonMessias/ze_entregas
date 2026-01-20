@@ -2237,18 +2237,74 @@ export const getStoreAssociatedPartners = async (): Promise<StoreDeliveryPartner
     if (!sb) return [];
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return [];
-    const { data } = await sb.from('store_partners').select('*').eq('store_id', user.id);
-    return data || [];
+
+    // Fetch associations
+    const { data: associations, error } = await sb.from('store_partners').select('*').eq('store_id', user.id);
+    if (error || !associations) return [];
+
+    // Fetch user profiles for these partners
+    const partnerIds = associations.map(a => a.partner_id);
+    if (partnerIds.length === 0) return [];
+
+    const { data: profiles } = await sb.from('user_profiles').select('*').in('id', partnerIds);
+    if (!profiles) return [];
+
+    // Map to StoreDeliveryPartner interface
+    // Assuming backend returns: id, partner_id, store_id etc in associations
+    // We need to merge profile data
+    return associations.map(assoc => {
+        const profile = profiles.find(p => p.id === assoc.partner_id);
+        return {
+            id: assoc.id, // Association ID
+            store_id: assoc.store_id,
+            partner_id: assoc.partner_id,
+            partner_name: profile?.name || 'Desconhecido',
+            partner_phone: profile?.phone_number || '',
+            partner_vehicle: profile?.vehicle_type || 'Desconhecido',
+            created_at: assoc.created_at
+        } as StoreDeliveryPartner;
+    });
 };
 
 export const associatePartnerToStore = async (partnerId: string, fee: number) => {
     const sb = getClient();
     if (!sb) return;
-    const { data: { user } = {} } = await sb.auth.getUser();
+    const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
-    // Charge wallet
-    // Insert association
-    await sb.from('store_partners').insert({ store_id: user.id, partner_id: partnerId });
+
+    // 1. Check Wallet Balance
+    const { data: wallet } = await sb.from('store_wallets').select('*').eq('store_id', user.id).single();
+    if (!wallet) throw new Error("Carteira da loja não encontrada.");
+
+    if (wallet.balance_decimal < fee) {
+        throw new Error("Saldo insuficiente para pagar a taxa de associação.");
+    }
+
+    // 2. Charge Wallet
+    if (fee > 0) {
+        const { error: updateError } = await sb.from('store_wallets').update({
+            balance_decimal: wallet.balance_decimal - fee
+        }).eq('store_id', user.id);
+
+        if (updateError) throw new Error("Erro ao debitar taxa de associação.");
+
+        // 3. Register Transaction
+        await sb.from('wallet_transactions').insert({
+            store_id: user.id,
+            amount: -fee,
+            type: 'DEBIT',
+            description: 'Taxa de Associação de Entregador',
+            status: 'COMPLETED'
+        });
+    }
+
+    // 4. Insert Association
+    const { error: assocError } = await sb.from('store_partners').insert({ store_id: user.id, partner_id: partnerId });
+    if (assocError) {
+        // Rollback wallet charge if possible? 
+        // For MVP, we throw. In production, use RPC transaction.
+        throw new Error("Erro ao criar associação: " + assocError.message);
+    }
 };
 
 export const removePartnerAssociation = async (id: string) => {
@@ -4291,4 +4347,50 @@ export const adminUpdateBlockingConfig = async (id: string, cancellationLimit: n
         updated_at: new Date().toISOString()
     }).eq('id', id);
     if (error) throw error;
+};
+
+// --- USER ROUTES PERSISTENCE ---
+
+export const saveCurrentRouteList = async (items: any[]) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    // Check if a current list exists
+    const { data: existing } = await sb.from('user_saved_routes')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('name', 'current_list')
+        .single();
+
+    if (existing) {
+        await sb.from('user_saved_routes').update({
+            items,
+            updated_at: new Date().toISOString()
+        }).eq('id', existing.id);
+    } else {
+        await sb.from('user_saved_routes').insert({
+            user_id: user.id,
+            name: 'current_list',
+            items
+        });
+    }
+};
+
+export const getCurrentRouteList = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await sb.from('user_saved_routes')
+        .select('items')
+        .eq('user_id', user.id)
+        .eq('name', 'current_list')
+        .single();
+
+    if (error || !data) return [];
+    return data.items || [];
 };

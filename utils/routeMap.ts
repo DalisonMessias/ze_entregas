@@ -33,13 +33,14 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/investimentos': 'admin_investments',
     '/admin/slides': 'admin_slides',
     '/admin/dicas': 'admin_tips',
+    '/admin/whatsapp': 'admin_whatsapp',
 
     // Shared / Core Routes
     '/perfil': 'profile',
     '/suporte': 'support',
-    '/loja': 'shop',
+    '/shop': 'shop',
     '/assistente': 'assistant',
-    '/nova-entrega': 'new_request',
+
     '/historico': 'history',
     '/mapa-calor': 'heatmap',
     '/status': 'status',
@@ -48,6 +49,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/configuracoes': 'settings',
     '/sobre': 'about',
     '/faq': 'faq',
+    '/nuvem': 'cloud',
 
     // Store Partner Routes
     '/loja/equipe': 'store_team',
@@ -66,6 +68,8 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/dashboard': 'wallet',
     '/loja/colaborador': 'collaborator_area',
     '/loja/whatsapp': 'whatsapp_chat',
+    '/loja/nova-entrega': 'new_request',
+    '/loja/pedidos': 'associate_orders',
 
     // Delivery Partner/Person Routes
     '/entregador/inicio': 'daily_panel',
@@ -77,6 +81,11 @@ const routeMap: Record<string, ActiveTab> = {
     '/entregador/banco': 'zebank',
     '/entregador/associar': 'associate_driver',
     '/entregador/emprestimos': 'loans',
+    '/entregador/tarefas': 'tasks',
+    '/entregador/relatorios': 'reports',
+    '/entregador/enderecos': 'addresses',
+    '/entregador/pedidos': 'associate_orders',
+    '/entregador/pontuacao': 'score',
 
     // Public/Misc
     '/instalar': 'install_app',

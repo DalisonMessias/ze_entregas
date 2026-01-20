@@ -41,13 +41,15 @@ export const InstallApp: React.FC<InstallAppProps> = ({ onBack }) => {
         try {
           const inStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
           if (inStandalone) { setInstalled(true); return; }
-          const getRel = (navigator as any).getInstalledRelatedApps;
-          if (typeof getRel === 'function') {
+
+          if ('getInstalledRelatedApps' in navigator) {
+            const getRel = (navigator as any).getInstalledRelatedApps.bind(navigator);
             const related = await getRel();
             if (Array.isArray(related) && related.length > 0) { setInstalled(true); return; }
           }
         } catch (err: any) {
-          setError('Falha ao verificar instalação');
+          console.warn('Check installed failed (likely insecure context or unsupported):', err);
+          // Don't show error to user for a failed background check
         }
       };
 

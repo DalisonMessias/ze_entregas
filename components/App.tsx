@@ -661,10 +661,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const allowedTabs: Record<UserRole, Set<ActiveTab>> = {
         admin: new Set<ActiveTab>([...generalTabs,
             'admin_dashboard', 'admin_users', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
-            'admin_ai_config', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
+            'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
             'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
-            'admin_whatsapp'
+            'admin_investments', 'admin_whatsapp'
         ]),
         store_partner: new Set<ActiveTab>([
             'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans'
@@ -989,6 +989,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Bot} label="Inteligência Artificial" tab="admin_ai_config" />
                             <MenuButton icon={Cloud} label="APIs & Integrações" tab="admin_api_keys" />
                             <MenuButton icon={Smartphone} label="App PWA" tab="admin_pwa" />
+                            <MenuButton icon={Headphones} label="Suporte & Tickets" tab="admin_support" />
+                            <MenuButton icon={Route} label="Config. Roteamento" tab="admin_routing" />
+                            <MenuButton icon={TrendingUp} label="Gestão de Investimentos" tab="admin_investments" />
                         </>
                     )}
 
@@ -1011,6 +1014,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
                             <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
                             <MenuButton icon={FileText} label="Comanda" tab="internal_orders" />
+                            <MenuButton icon={CreditCard} label="Financeiro ZéPay" tab="zepay_store" />
+                            <MenuButton icon={Key} label="Docs API / Integradores" tab="store_api_docs" />
                         </>
                     )}
 
@@ -1034,6 +1039,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={ListPlus} label="Lista de Rotas" tab="route_list" />
                             <MenuButton icon={FileCheck} label="Tarefas" tab="tasks" />
                             <MenuButton icon={BarChart3} label="Relatórios Pessoais" tab="reports" />
+                            <MenuButton icon={Flame} label="Mapa de Calor" tab="heatmap" />
+                            <MenuButton icon={MapPin} label="Meus Endereços" tab="addresses" />
+                            <MenuButton icon={Zap} label="Ferramentas de Rota" tab="route_tools" />
                         </>
                     )}
 
@@ -1050,6 +1058,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
                     <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
                     <MenuButton icon={Info} label="Sobre o App" tab="about" />
+                    <MenuButton icon={Smartphone} label="Instalar App" tab="install_app" />
 
                     {/* --- FOOTER ACTIONS --- */}
                     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
