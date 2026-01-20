@@ -1,15 +1,20 @@
 import React, { useState, useRef } from 'react';
 import { Send, Paperclip, X, Loader2, Smile, Mic, Plus } from 'lucide-react';
 import AttachmentMenu from './AttachmentMenu';
+import { CameraModal } from './Modals/CameraModal';
+import { PollModal } from './Modals/PollModal';
+import { ContactPickerModal } from './Modals/ContactPickerModal';
+import { StickerPickerModal } from './Modals/StickerPickerModal';
 
 interface MessageInputProps {
   onSend: (text: string) => void;
   onSendMedia?: (file: File) => void;
   onSendAudio?: (blob: Blob) => void;
   pixKey?: string;
+  storeId?: string;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSendAudio, pixKey }) => {
+const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSendAudio, pixKey, storeId }) => {
   const [text, setText] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -21,6 +26,40 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Modal States
+  const [showCamera, setShowCamera] = useState(false);
+  const [showPoll, setShowPoll] = useState(false);
+  const [showContact, setShowContact] = useState(false);
+  const [showSticker, setShowSticker] = useState(false);
+
+  const handleCameraCapture = (file: File) => {
+    onSendMedia?.(file);
+  };
+
+  const handlePollSend = (poll: { question: string; options: string[]; allowMultiple: boolean }) => {
+    // Format: POLL:{"question":"...","options":["..."],"allowMultiple":true}
+    const payload = JSON.stringify(poll);
+    onSend(`POLL:${payload}`);
+  };
+
+  const handleContactSelect = (contact: { name: string; phone: string }) => {
+    // Format: CONTACT:{"name":"...","phone":"..."}
+    const payload = JSON.stringify(contact);
+    onSend(`CONTACT:${payload}`);
+  };
+
+  const handleStickerSelect = async (url: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const file = new File([blob], `sticker_${Date.now()}.webp`, { type: 'image/webp' });
+      onSendMedia?.(file);
+    } catch (e) {
+      console.error("Error sending sticker", e);
+    }
+  };
+
 
   const handleSend = () => {
     if (text.trim()) {
@@ -109,6 +148,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
   };
 
   const handleMenuSelect = (type: string) => {
+    setShowMenu(false);
     if (type === 'image') {
       fileInputRef.current?.setAttribute('accept', 'image/*,video/*');
       fileInputRef.current?.click();
@@ -116,13 +156,20 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
       fileInputRef.current?.setAttribute('accept', '*/*');
       fileInputRef.current?.click();
     } else if (type === 'pix') {
-      const keyToUse = pixKey || "00020126580014BR.GOV.BCB.PIX013612345678-1234-1234-1234-1234567890125204000053039865802BR5913LOJAEXEMPLO6008CIDADE62070503***63041234";
+      const keyToUse = pixKey || "";
+      if (!keyToUse) {
+        alert("Nenhuma chave PIX configurada.");
+        return;
+      }
       onSend(`Chave PIX da Loja:\n${keyToUse}\n\nPor favor, envie o comprovante após o pagamento.`);
-      setShowMenu(false);
     } else if (type === 'camera') {
-      fileInputRef.current?.setAttribute('accept', 'image/*');
-      fileInputRef.current?.setAttribute('capture', 'environment');
-      fileInputRef.current?.click();
+      setShowCamera(true);
+    } else if (type === 'poll') {
+      setShowPoll(true);
+    } else if (type === 'contact') {
+      setShowContact(true);
+    } else if (type === 'sticker') {
+      setShowSticker(true);
     }
   };
 
@@ -211,16 +258,27 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
             </button>
 
             {showEmojiPicker && (
-              <div className="absolute bottom-full left-0 mb-2 p-2 bg-white rounded-lg shadow-xl border border-gray-200 grid grid-cols-6 sm:grid-cols-8 gap-2 z-50 w-[240px] sm:w-[320px] max-h-[300px] overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-2">
-                {commonEmojis.map(emoji => (
+              <div className="absolute bottom-full left-0 mb-2 p-3 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 w-[280px] sm:w-[350px] animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Emojis</span>
                   <button
-                    key={emoji}
-                    onClick={() => addEmoji(emoji)}
-                    className="text-2xl hover:bg-gray-100 p-1 rounded transition-colors"
+                    onClick={() => setShowEmojiPicker(false)}
+                    className="p-1 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
                   >
-                    {emoji}
+                    <X size={16} />
                   </button>
-                ))}
+                </div>
+                <div className="grid grid-cols-6 sm:grid-cols-9 gap-1 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                  {commonEmojis.map(emoji => (
+                    <button
+                      key={emoji}
+                      onClick={() => addEmoji(emoji)}
+                      className="text-2xl hover:bg-gray-100 p-1.5 rounded-xl transition-all active:scale-90 hover:scale-110"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -299,6 +357,10 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
           )}
         </div>
       </div>
+      <CameraModal isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
+      <PollModal isOpen={showPoll} onClose={() => setShowPoll(false)} onSend={handlePollSend} />
+      <ContactPickerModal isOpen={showContact} onClose={() => setShowContact(false)} onSelect={handleContactSelect} storeId={storeId} />
+      {storeId && <StickerPickerModal isOpen={showSticker} onClose={() => setShowSticker(false)} onSelect={handleStickerSelect} storeId={storeId} />}
     </div>
   );
 };

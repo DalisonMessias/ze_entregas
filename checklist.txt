@@ -28,3 +28,28 @@
 [20/01/2026] - Refinamento Visual Final: Abas ativas agora usam cor da marca (brand-600) e bordas de foco brancas foram removidas globalmente.
 [20/01/2026] - Correção AuthWrapper: Adicionado suporte ao tipo 'warning' e corrigida lógica de modo restrito para status 'pending'.
 [20/01/2026] - Banco de Dados: Criada tabela `score_history` para rastrear edições manuais de score dos entregadores.
+[20/01/2026] - Correção WhatsApp: Resolvidos problemas de sincronização e exibição de mensagens "[Mídia]" através de mapeamento robusto no backend.
+[20/01/2026] - WhatsApp Multi-loja: Corrigidas restrições de unicidade e políticas de RLS para permitir que colaboradores e múltiplas lojas usem o sistema simultaneamente.
+[20/01/2026] - UI WhatsApp: Implementada renderização de contatos, localizações e figurinhas no chat para uma experiência mais rica.
+[20/01/2026] - Bug Fix: Resolvido erro de importação do serviço `cloud` no `WhatsappContainer.tsx`.
+[20/01/2026] - UI WhatsApp: Adicionado botão de fechar (X) ao seletor de emojis para melhor usabilidade mobile.
+[20/01/2026] - Zé Assistente: Implementada edição e exclusão de regras customizadas e personalização de regras de sistema.
+[20/01/2026] - Zé Assistente: Habilitados recursos de criação de pedidos e agendamento de entrega por IA.
+[20/01/2026] - Documentação: Criado guia de funcionalidades dos filtros de conversa do WhatsApp.
+[20/01/2026] - Bug Fix: Corrigidos erros de tipagem `pix_key` e ícones em StoreSettings.tsx.
+[20/01/2026] - UI StoreSettings: Reorganizado layout da Chave PIX e E-mail para alinhamento perfeito e correção de cores do seletor.
+[20/01/2026] - Bug Fix: Corrigido problema onde a Chave PIX não era carregada do banco de dados (mapeamento ausente no serviço cloud).
+[20/01/2026] - Refatoração Zé Assistente: Substituído modal customizado por Modal Padrão e corrigido bug de edição de regras (carregamento de palavras-chave).
+[20/01/2026] - Feature WhatsApp: Implementado Modal de Câmera (webcam real), Enquete, Contatos e Figurinhas (com suporte a upload e banco de dados).
+[20/01/2026] - UI WhatsApp: Refatoração visual completa de mensagens de Enquete (PollMessage com radio buttons e progresso) e Contato (Card nativo).
+[20/01/2026] - UI WhatsApp: Correção do modal "Novo Chat" (agora usa BaseModal) e adição do botão "Gerenciar Contatos" na barra lateral.
+[20/01/2026] - Feature WhatsApp: Picker de Contatos agora busca dados reais do sistema (/contacts).
+[20/01/2026] - UI WhatsApp: Refinamento "Pixel Perfect" dos balões de mensagem (Cores, Sombra, Timestamp flutuante) e remoção de Avatars no chat.
+[20/01/2026] - UI WhatsApp: Ajuste fino visual - Removida cauda do balão (SVG) e arredondados todos os cantos (rounded-xl) conforme feedback.
+[20/01/2026] - Logic WhatsApp: Revertido envio para usar endpoint padrão (/send/text). O sistema envia a string crua (POLL/CONTACT) e o backend processa, enquanto a UI local renderiza o componente.
+[20/01/2026] - Logic WhatsApp: Lista de conversas é ocultada automaticamente quando o status é desconectado.
+[20/01/2026] - Database Fix: Corrigido script SQL global para evitar duplicação de regras do Zé Assistente (uso de blocos DO/IF NOT EXISTS).
+[20/01/2026] - UI Zé Assistente: Liberado botão de exclusão para todas as regras (Sistema e Personalizadas).
+[20/01/2026] - UI WhatsApp: Refatoração visual completa de mensagens de Enquete (PollMessage com radio buttons e progresso) e Contato (Card nativo).
+[20/01/2026] - UI WhatsApp: Correção do modal "Novo Chat" (agora usa BaseModal) e adição do botão "Gerenciar Contatos" na barra lateral.
+[20/01/2026] - Feature WhatsApp: Picker de Contatos agora busca dados reais do sistema (/contacts).

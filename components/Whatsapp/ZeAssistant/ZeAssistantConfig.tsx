@@ -164,10 +164,10 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                 <div className="space-y-4">
                     <h3 className="font-semibold text-gray-700 flex items-center gap-2">
                         <ShoppingBag className="w-5 h-5" />
-                        Funcionalidades (Em breve)
+                        Funcionalidades
                     </h3>
 
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-4 opacity-75">
+                    <div className="bg-gray-50 p-4 rounded-lg space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="font-medium">Criação de Pedidos</p>
@@ -176,7 +176,6 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                             <Switch
                                 checked={config.can_create_orders}
                                 onChange={(checked) => setConfig({ ...config, can_create_orders: checked })}
-                                disabled
                             />
                         </div>
 

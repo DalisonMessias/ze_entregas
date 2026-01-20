@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { WhatsappMessage } from './types';
-import { Download, Check, CheckCheck } from 'lucide-react';
+import { Download, Check, CheckCheck, User, MapPin } from 'lucide-react';
 import ImageLightbox from './ImageLightbox';
+import { PollMessage } from './Messages/PollMessage';
+import { ContactMessage } from './Messages/ContactMessage';
 
 interface MessageAreaProps {
   messages: WhatsappMessage[];
@@ -148,8 +150,67 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
           </a>
         );
 
+      case 'vcard':
+        return (
+          <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700 min-w-[220px]">
+            <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
+              <User size={24} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                {message.content.replace('[Contato: ', '').replace(']', '')}
+              </p>
+              <p className="text-xs text-gray-500">Contato compartilhado</p>
+            </div>
+          </div>
+        );
+
+      case 'location':
+        return (
+          <div className="space-y-2 max-w-[240px]">
+            <div className="w-full h-32 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center relative overflow-hidden group">
+              <MapPin size={32} className="text-red-500 absolute z-10" />
+              <img
+                src={`https://static-maps.yandex.ru/1.x/?lang=pt_BR&ll=-46.633,-23.550&z=15&l=map&size=240,128`}
+                alt="Mapa"
+                className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform"
+              />
+              <button className="absolute inset-0 bg-black/5 hover:bg-black/10 transition-colors" />
+            </div>
+            <p className="text-xs text-blue-600 font-bold flex items-center gap-1">
+              Ver localização no mapa
+            </p>
+          </div>
+        );
+
+      case 'sticker':
+        return (
+          <div className="p-1">
+            <img
+              src={mediaUrl || 'https://images.unsplash.com/photo-1614680376593-902f74cc0d41?w=200&h=200&fit=crop'}
+              alt="Figurinha"
+              className="w-32 h-32 object-contain"
+            />
+          </div>
+        );
+
       default:
-        return <p className="text-sm break-words">{message.content}</p>;
+        // Detect Poll
+        if (message.content?.startsWith('POLL:')) {
+          try {
+            const pollData = JSON.parse(message.content.substring(5));
+            return <PollMessage question={pollData.question} options={pollData.options} allowMultiple={pollData.allowMultiple} />;
+          } catch (e) { return <p className="text-sm text-red-500">Erro ao renderizar enquete</p>; }
+        }
+        // Detect Contact
+        if (message.content?.startsWith('CONTACT:')) {
+          try {
+            const contactData = JSON.parse(message.content.substring(8));
+            return <ContactMessage name={contactData.name} phone={contactData.phone} />;
+          } catch (e) { return <p className="text-sm text-red-500">Erro ao renderizar contato</p>; }
+        }
+
+        return <p className="text-sm break-words whitespace-pre-wrap">{message.content}</p>;
     }
   };
 
@@ -169,42 +230,33 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
           key={message.message_id}
           className={`flex gap-2 ${message.is_from_me ? 'justify-end' : 'justify-start'}`}
         >
-          {/* Avatar para mensagens recebidas */}
-          {!message.is_from_me && (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-              {getInitials(message.sender_id)}
-            </div>
-          )}
-
           <div
-            className={`max-w-[85%] sm:max-w-[70%] shadow-sm px-2 py-1.5 relative ${message.is_from_me
-              ? 'bg-[#d9fdd3] text-[#111B21] rounded-lg rounded-tr-none'
-              : 'bg-white text-[#111B21] border border-gray-100 rounded-lg rounded-tl-none'
+            className={`max-w-[65%] sm:max-w-[60%] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] relative text-sm ${message.is_from_me
+              ? 'bg-[#d9fdd3] rounded-xl'
+              : 'bg-white rounded-xl'
               }`}
           >
-            {/* Seta do Balão */}
-            <div className={`absolute top-0 w-0 h-0 border-8 border-transparent ${message.is_from_me
-              ? 'right-[-7px] border-t-[#d9fdd3] border-r-0'
-              : 'left-[-7px] border-t-white border-l-0'
-              }`} />
-            {/* Nome do remetente em mensagens de grupos que não são minhas */}
+
+            {/* Nome do remetente em grupos */}
             {!message.is_from_me && message.conversation_id.includes('@g.us') && (
-              <p className="text-[10px] font-bold text-blue-600 mb-1 opacity-90">
+              <p className="px-2 pt-1 text-[12px] font-bold text-[#53bdeb] mb-0.5 opacity-90 leading-tight">
                 {message.sender_id.split('@')[0]}
               </p>
             )}
 
-            {renderMediaContent(message)}
+            <div className={`px-2 py-1.5 ${message.media_type ? 'pb-1' : ''}`}>
+              {renderMediaContent(message)}
+            </div>
 
-            <div className={`flex items-center gap-1 mt-0.5 justify-end`}>
-              <p className="text-[10px] text-[#667781] tabular-nums">
+            <div className={`flex justify-end items-end gap-1 px-2 pb-1.5 -mt-1 select-none pointer-events-none float-right ${message.media_type ? 'relative z-10' : ''}`}>
+              <span className="text-[11px] text-[#667781] leading-none">
                 {new Date(message.message_timestamp).toLocaleTimeString('pt-BR', {
                   hour: '2-digit',
                   minute: '2-digit',
                 })}
-              </p>
+              </span>
               {message.is_from_me && (
-                <span className="flex items-center">
+                <span className="flex items-end">
                   {getStatusIcon(message.status || 'sent')}
                 </span>
               )}

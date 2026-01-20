@@ -7767,25 +7767,29 @@ ALTER TABLE public.whatsapp_messages ENABLE ROW LEVEL SECURITY;
 -- Policies para whatsapp_sessions
 DROP POLICY IF EXISTS "Lojistas gerenciam suas proprias sessoes" ON public.whatsapp_sessions;
 CREATE POLICY "Lojistas gerenciam suas proprias sessoes" ON public.whatsapp_sessions
-    FOR ALL USING (auth.uid()::text = store_id::text);
+    FOR ALL USING (
+        auth.uid()::text = store_id::text OR 
+        EXISTS (SELECT 1 FROM public.collaborators WHERE id::text = auth.uid()::text AND store_id = public.whatsapp_sessions.store_id) OR
+        public.is_admin()
+    );
 
 -- Policies para whatsapp_conversations
 DROP POLICY IF EXISTS "Lojistas veem suas proprias conversas" ON public.whatsapp_conversations;
 CREATE POLICY "Lojistas veem suas proprias conversas" ON public.whatsapp_conversations
-    FOR SELECT USING (auth.uid()::text = store_id::text);
-
-DROP POLICY IF EXISTS "Atendentes veem conversas atribuidas" ON public.whatsapp_conversations;
-CREATE POLICY "Atendentes veem conversas atribuidas" ON public.whatsapp_conversations
-    FOR ALL USING (auth.uid()::text = assigned_to::text OR auth.uid()::text = store_id::text);
+    FOR ALL USING (
+        auth.uid()::text = store_id::text OR 
+        EXISTS (SELECT 1 FROM public.collaborators WHERE id::text = auth.uid()::text AND store_id = public.whatsapp_conversations.store_id) OR
+        public.is_admin()
+    );
 
 -- Policies para whatsapp_messages
 DROP POLICY IF EXISTS "Lojistas e Atendentes veem mensagens da loja" ON public.whatsapp_messages;
 CREATE POLICY "Lojistas e Atendentes veem mensagens da loja" ON public.whatsapp_messages
-    FOR SELECT USING (auth.uid()::text = store_id::text OR EXISTS (
-        SELECT 1 FROM public.whatsapp_conversations 
-        WHERE conversation_id = whatsapp_messages.conversation_id 
-        AND (assigned_to::text = auth.uid()::text OR store_id::text = auth.uid()::text)
-    ));
+    FOR ALL USING (
+        auth.uid()::text = store_id::text OR 
+        EXISTS (SELECT 1 FROM public.collaborators WHERE id::text = auth.uid()::text AND store_id = public.whatsapp_messages.store_id) OR
+        public.is_admin()
+    );
 
 GRANT ALL ON public.whatsapp_sessions TO authenticated, service_role;
 GRANT ALL ON public.whatsapp_conversations TO authenticated, service_role;
@@ -8147,38 +8151,87 @@ COMMENT ON TABLE public.ze_assistant_knowledge_base IS 'Base de conhecimento do 
 -- ==================================================================
 
 -- Inserir regras padrão do sistema (apenas se não existirem)
-INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
-VALUES 
-    ('SYSTEM', 'Saudação', 'Resposta para saudações', ARRAY['oi', 'olá', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'ola'], 
-     'Olá! 👋 Sou o Zé, assistente virtual. Como posso ajudar você hoje?', 90, 'contains'),
-    
-    ('SYSTEM', 'Agradecimento', 'Resposta para agradecimentos', ARRAY['obrigado', 'obrigada', 'valeu', 'muito obrigado'],
-     'Por nada! 😊 Sempre à disposição. Precisa de mais alguma coisa?', 80, 'contains'),
-    
-    ('SYSTEM', 'Despedida', 'Resposta para despedidas', ARRAY['tchau', 'até logo', 'até mais', 'falou', 'bye'],
-     'Até logo! 👋 Volte sempre que precisar!', 85, 'contains'),
-    
-    ('SYSTEM', 'Cardápio/Produtos', 'Solicitar lista de produtos', ARRAY['cardápio', 'cardapio', 'menu', 'produtos', 'o que tem', 'o que vocês tem', 'que tem'],
-     'Claro! Vou buscar nosso cardápio completo para você. Um momento... 📋', 70, 'contains'),
-    
-    ('SYSTEM', 'Preço', 'Pergunta sobre preços', ARRAY['quanto custa', 'preço', 'preco', 'valor', 'quanto é', 'quanto fica'],
-     'Sobre qual produto você gostaria de saber o preço? 💰', 75, 'contains'),
-    
-    ('SYSTEM', 'Forma de Pagamento', 'Pergunta sobre pagamento', ARRAY['pagar', 'pagamento', 'aceita', 'forma de pagamento', 'cartão', 'cartao', 'pix', 'dinheiro'],
-     'Aceitamos diversas formas de pagamento. Deixe-me verificar as opções disponíveis para você! 💳', 70, 'contains'),
-    
-    ('SYSTEM', 'Entrega', 'Pergunta sobre entrega', ARRAY['entrega', 'entregar', 'delivery', 'frete', 'quanto tempo', 'demora'],
-     'Sobre entrega: deixe-me verificar as informações de prazo e taxa para sua região! 🚚', 75, 'contains'),
-    
-    ('SYSTEM', 'Horário', 'Pergunta sobre horário de funcionamento', ARRAY['horário', 'horario', 'abre', 'fecha', 'funciona', 'funcionamento', 'aberto'],
-     'Vou verificar nosso horário de funcionamento para você! ⏰', 80, 'contains'),
-    
-    ('SYSTEM', 'Endereço', 'Pergunta sobre localização', ARRAY['endereço', 'endereco', 'onde fica', 'localização', 'localizacao', 'onde é'],
-     'Vou te passar o endereço da loja! 📍', 75, 'contains'),
-    
-    ('SYSTEM', 'Fazer Pedido', 'Iniciar pedido', ARRAY['fazer pedido', 'quero pedir', 'gostaria de pedir', 'queria pedir', 'pedido'],
-     'Ótimo! Vou te ajudar a fazer seu pedido. 🛒 Me diga o que você gostaria!', 95, 'contains')
-ON CONFLICT DO NOTHING;
+-- Inserir regras padrão do sistema (apenas se não existirem)
+-- Usando DO block para iterar e inserir de forma segura sem duplicar
+
+DO $$
+DECLARE
+    v_rule_name TEXT;
+    v_rule_desc TEXT;
+    v_keywords TEXT[];
+    v_response TEXT;
+    v_priority INTEGER;
+BEGIN
+    -- 1. Saudação
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Saudação' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Saudação', 'Resposta para saudações', ARRAY['oi', 'olá', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'ola'], 
+                'Olá! 👋 Sou o Zé, assistente virtual. Como posso ajudar você hoje?', 90, 'contains');
+    END IF;
+
+    -- 2. Agradecimento
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Agradecimento' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Agradecimento', 'Resposta para agradecimentos', ARRAY['obrigado', 'obrigada', 'valeu', 'muito obrigado'],
+                'Por nada! 😊 Sempre à disposição. Precisa de mais alguma coisa?', 80, 'contains');
+    END IF;
+
+    -- 3. Despedida
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Despedida' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Despedida', 'Resposta para despedidas', ARRAY['tchau', 'até logo', 'até mais', 'falou', 'bye'],
+                'Até logo! 👋 Volte sempre que precisar!', 85, 'contains');
+    END IF;
+
+    -- 4. Cardápio
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Cardápio/Produtos' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Cardápio/Produtos', 'Solicitar lista de produtos', ARRAY['cardápio', 'cardapio', 'menu', 'produtos', 'o que tem', 'o que vocês tem', 'que tem'],
+                'Claro! Vou buscar nosso cardápio completo para você. Um momento... 📋', 70, 'contains');
+    END IF;
+
+    -- 5. Preço
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Preço' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Preço', 'Pergunta sobre preços', ARRAY['quanto custa', 'preço', 'preco', 'valor', 'quanto é', 'quanto fica'],
+                'Sobre qual produto você gostaria de saber o preço? 💰', 75, 'contains');
+    END IF;
+
+    -- 6. Forma de Pagamento
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Forma de Pagamento' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Forma de Pagamento', 'Pergunta sobre pagamento', ARRAY['pagar', 'pagamento', 'aceita', 'forma de pagamento', 'cartão', 'cartao', 'pix', 'dinheiro'],
+                'Aceitamos diversas formas de pagamento. Deixe-me verificar as opções disponíveis para você! 💳', 70, 'contains');
+    END IF;
+
+    -- 7. Entrega
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Entrega' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Entrega', 'Pergunta sobre entrega', ARRAY['entrega', 'entregar', 'delivery', 'frete', 'quanto tempo', 'demora'],
+                'Sobre entrega: deixe-me verificar as informações de prazo e taxa para sua região! 🚚', 75, 'contains');
+    END IF;
+
+    -- 8. Horário
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Horário' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Horário', 'Pergunta sobre horário de funcionamento', ARRAY['horário', 'horario', 'abre', 'fecha', 'funciona', 'funcionamento', 'aberto'],
+                'Vou verificar nosso horário de funcionamento para você! ⏰', 80, 'contains');
+    END IF;
+
+    -- 9. Endereço
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Endereço' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Endereço', 'Pergunta sobre localização', ARRAY['endereço', 'endereco', 'onde fica', 'localização', 'localizacao', 'onde é'],
+                'Vou te passar o endereço da loja! 📍', 75, 'contains');
+    END IF;
+
+    -- 10. Fazer Pedido
+    IF NOT EXISTS (SELECT 1 FROM public.ze_assistant_rules WHERE name = 'Fazer Pedido' AND rule_type = 'SYSTEM') THEN
+        INSERT INTO public.ze_assistant_rules (rule_type, name, description, trigger_keywords, response_template, priority, match_mode)
+        VALUES ('SYSTEM', 'Fazer Pedido', 'Iniciar pedido', ARRAY['fazer pedido', 'quero pedir', 'gostaria de pedir', 'queria pedir', 'pedido'],
+                'Ótimo! Vou te ajudar a fazer seu pedido. 🛒 Me diga o que você gostaria!', 95, 'contains');
+    END IF;
+END $$;
 
 
 -- ==================================================================
@@ -8266,4 +8319,27 @@ BEGIN
 
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.ze_assistant_config TO authenticated;
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.ze_assistant_rules TO authenticated;
+
+    -- Tabela de Figurinhas da Loja
+    CREATE TABLE IF NOT EXISTS public.store_stickers (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        store_id UUID NOT NULL,
+        url TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        is_favorite BOOLEAN DEFAULT FALSE
+    );
+
+    -- RLS para Figurinhas
+    ALTER TABLE public.store_stickers ENABLE ROW LEVEL SECURITY;
+
+    DROP POLICY IF EXISTS "Lojas veem suas figurinhas" ON public.store_stickers;
+    CREATE POLICY "Lojas veem suas figurinhas" ON public.store_stickers
+    FOR ALL USING (
+        auth.uid()::text = store_id::text OR 
+        EXISTS (SELECT 1 FROM public.collaborators WHERE id::text = auth.uid()::text AND store_id = public.store_stickers.store_id) OR
+        public.is_admin()
+    );
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_stickers TO authenticated;
+
 END $$;

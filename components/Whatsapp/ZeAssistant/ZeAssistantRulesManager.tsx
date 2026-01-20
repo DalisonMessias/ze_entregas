@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as cloud from '../../../services/cloud';
 import { Button } from '../../Button';
+import { BaseModal } from '../../BaseModal';
 import { useNotification } from '../../../contexts/NotificationContext';
 import { Plus, Trash2, Pencil, X, MessageSquare, Tag, Loader2 } from 'lucide-react';
 
@@ -69,14 +70,16 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
                 name: editingRule.name,
                 description: editingRule.description,
                 trigger_keywords: Array.isArray(editingRule.trigger_keywords)
-                    ? editingRule.trigger_keywords
-                    : (editingRule.trigger_keywords as string).split(',').map(k => k.trim()),
+                    ? editingRule.trigger_keywords.map(k => k.trim()).filter(k => k.length > 0)
+                    : (editingRule.trigger_keywords as string).split(',').map(k => k.trim()).filter(k => k.length > 0),
                 response_template: editingRule.response_template,
                 priority: editingRule.priority || 100,
                 is_active: true
             };
 
-            if (editingRule.id) {
+            // Se a regra que estamos editando era SYSTEM, devemos INSERIR como CUSTOM
+            // Se já era CUSTOM e tinha ID, fazemos UPDATE
+            if (editingRule.id && editingRule.rule_type === 'CUSTOM') {
                 const { error } = await supabase
                     .from('ze_assistant_rules')
                     .update(ruleData)
@@ -88,7 +91,7 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
                     .from('ze_assistant_rules')
                     .insert(ruleData);
                 if (error) throw error;
-                showNotification('Regra criada!', 'success');
+                showNotification(editingRule.rule_type === 'SYSTEM' ? 'Regra do sistema personalizada!' : 'Regra criada!', 'success');
             }
 
             setIsModalOpen(false);
@@ -172,16 +175,18 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
                                 </span>
                                 <h3 className="font-semibold text-gray-800">{rule.name}</h3>
                             </div>
-                            {rule.rule_type === 'CUSTOM' && (
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => openModal(rule)} className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors">
-                                        <Pencil className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => handleDeleteRule(rule.id)} className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            )}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => openModal(rule)}
+                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                    title={rule.rule_type === 'SYSTEM' ? 'Personalizar Regra do Sistema' : 'Editar Regra'}
+                                >
+                                    <Pencil className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => handleDeleteRule(rule.id)} className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors" title="Excluir Regra">
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
 
                         {rule.description && (
@@ -222,79 +227,80 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
                 )}
             </div>
 
-            {/* Modal Customizado */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] animate-in fade-in duration-200">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 relative">
-                        <button
-                            onClick={() => setIsModalOpen(false)}
-                            className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-600 rounded-full transition-colors"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+            {/* Modal Padrão do Sistema */}
+            <BaseModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                title={editingRule?.id
+                    ? (editingRule.rule_type === 'SYSTEM' ? 'Personalizar Regra do Sistema' : 'Editar Regra')
+                    : 'Nova Regra'}
+            >
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nome da Regra</label>
+                        <input
+                            type="text"
+                            className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                            value={editingRule?.name || ''}
+                            onChange={e => setEditingRule(prev => prev ? ({ ...prev, name: e.target.value }) : null)}
+                            placeholder="Ex: Saudações"
+                        />
+                    </div>
 
-                        <h3 className="text-xl font-bold text-gray-800 mb-6">
-                            {editingRule?.id ? 'Editar Regra' : 'Nova Regra'}
-                        </h3>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Descrição (opcional)</label>
+                        <input
+                            type="text"
+                            className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                            value={editingRule?.description || ''}
+                            onChange={e => setEditingRule(prev => prev ? ({ ...prev, description: e.target.value }) : null)}
+                            placeholder="Ex: Responder quando o cliente disser oi"
+                        />
+                    </div>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Nome da Regra</label>
-                                <input
-                                    type="text"
-                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
-                                    value={editingRule?.name || ''}
-                                    onChange={e => setEditingRule({ ...editingRule, name: e.target.value })}
-                                    placeholder="Ex: Saudações"
-                                />
-                            </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Palavras-chave (separadas por vírgula)</label>
+                        <input
+                            type="text"
+                            className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                            value={Array.isArray(editingRule?.trigger_keywords) ? editingRule?.trigger_keywords.join(', ') : (editingRule?.trigger_keywords || '')}
+                            onChange={e => {
+                                const val = e.target.value;
+                                // Mantemos como string no input visual, mas convertemos para array ao salvar? 
+                                // Não, o state pede string[] na interface ZeAssistantRule, mas Partial pode ser tricky.
+                                // Vamos converter na hora:
+                                setEditingRule(prev => prev ? ({ ...prev, trigger_keywords: val.split(',') }) : null)
+                            }}
+                            placeholder="Ex: oi, olá, bom dia"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">
+                            Separe as palavras por vírgula. Ex: pix, pagamento, conta
+                        </p>
+                    </div>
 
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Descrição (opcional)</label>
-                                <input
-                                    type="text"
-                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
-                                    value={editingRule?.description || ''}
-                                    onChange={e => setEditingRule({ ...editingRule, description: e.target.value })}
-                                    placeholder="Ex: Responder quando o cliente disser oi"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Palavras-chave (separadas por vírgula)</label>
-                                <input
-                                    type="text"
-                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
-                                    value={Array.isArray(editingRule?.trigger_keywords) ? editingRule?.trigger_keywords.join(', ') : editingRule?.trigger_keywords || ''}
-                                    onChange={e => setEditingRule({ ...editingRule, trigger_keywords: e.target.value.split(',').map(s => s.trim()) })}
-                                    placeholder="Ex: oi, olá, bom dia"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Resposta do Assistente</label>
-                                <textarea
-                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all min-h-[100px]"
-                                    rows={4}
-                                    value={editingRule?.response_template || ''}
-                                    onChange={e => setEditingRule({ ...editingRule, response_template: e.target.value })}
-                                    placeholder="Use {{store_name}} para o nome da loja..."
-                                />
-                                <p className="text-[10px] text-gray-400 mt-1 italic">
-                                    Dica: Use {"{{ customer_name }}"} ou {"{{ store_name }}"} para personalizar.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-3 mt-8 pt-4 border-t">
-                            <Button onClick={() => setIsModalOpen(false)} variant="secondary" className="px-6">Cancelar</Button>
-                            <Button onClick={handleSaveRule} className="bg-purple-600 hover:bg-purple-700 text-white px-8">
-                                {editingRule?.id ? 'Atualizar Regra' : 'Salvar Regra'}
-                            </Button>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Resposta do Assistente</label>
+                        <textarea
+                            className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all min-h-[120px]"
+                            rows={4}
+                            value={editingRule?.response_template || ''}
+                            onChange={e => setEditingRule(prev => prev ? ({ ...prev, response_template: e.target.value }) : null)}
+                            placeholder="Olá {{customer_name}}, tudo bem?..."
+                        />
+                        <div className="flex gap-2 mt-2">
+                            <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-500 font-mono cursor-pointer hover:bg-gray-200" onClick={() => setEditingRule(prev => prev ? ({ ...prev, response_template: (prev.response_template || '') + ' {{customer_name}}' }) : null)}>{"{{customer_name}}"}</span>
+                            <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-500 font-mono cursor-pointer hover:bg-gray-200" onClick={() => setEditingRule(prev => prev ? ({ ...prev, response_template: (prev.response_template || '') + ' {{store_name}}' }) : null)}>{"{{store_name}}"}</span>
                         </div>
                     </div>
                 </div>
-            )}
+
+                <div className="flex justify-end gap-3 mt-8 pt-4 border-t dark:border-gray-700">
+                    <Button onClick={() => setIsModalOpen(false)} variant="secondary" className="px-6">Cancelar</Button>
+                    <Button onClick={handleSaveRule} className="bg-purple-600 hover:bg-purple-700 text-white px-8 shadow-lg shadow-purple-200 dark:shadow-none">
+                        {editingRule?.id ? 'Salvar Alterações' : 'Criar Regra'}
+                    </Button>
+                </div>
+            </BaseModal>
         </div>
     );
 };

@@ -616,6 +616,7 @@ export interface PartnerProfile {
     preparation_time_min?: number;
     preparation_time_max?: number;
     super_store_expiration?: string;
+    pix_key?: string;
 }
 
 export interface StoreDailyReport {

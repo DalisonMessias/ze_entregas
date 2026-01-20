@@ -67,7 +67,7 @@ export const CitySearchSelect: React.FC<CitySearchSelectProps> = ({
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-left focus:ring-2 focus:ring-brand-500 outline-none transition-all hover:border-brand-300 dark:hover:border-brand-700 group"
+                className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border-2 border-gray-100 dark:border-gray-700 rounded-2xl text-base text-left focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all hover:border-gray-200 dark:hover:border-gray-600 group"
             >
                 <div className="flex items-center gap-2">
                     <MapPin className={`w-4 h-4 ${value ? 'text-brand-500' : 'text-gray-400'}`} />

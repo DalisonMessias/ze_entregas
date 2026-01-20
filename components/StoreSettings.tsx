@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer } from 'lucide-react';
+import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer, Wallet, ChevronDown } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { StoreShippingRules } from './StoreShippingRules';
@@ -13,6 +13,8 @@ import { PartnerProfile, City } from '../types';
 import { formatPhoneNumber } from '../utils/mapHelpers';
 
 // --- TOAST COMPONENT ---
+type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'random';
+
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
     useEffect(() => {
         const timer = setTimeout(onClose, 3000);
@@ -89,6 +91,8 @@ export const StoreSettings: React.FC = () => {
         pix_key: ''
     });
 
+    const [pixKeyType, setPixKeyType] = useState<PixKeyType>('random');
+
     useEffect(() => {
         const load = async () => {
             setLoading(true);
@@ -133,6 +137,21 @@ export const StoreSettings: React.FC = () => {
                         address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || ''),
                         pix_key: p.pix_key || ''
                     });
+
+                    // Infer PIX Type
+                    const key = p.pix_key || '';
+                    if (key.includes('@')) {
+                        setPixKeyType('email');
+                    } else if (key.length > 14) {
+                        setPixKeyType('cnpj');
+                    } else if (key.length === 11 || (key.length === 14 && key.includes('.'))) { // CPF formatted is 14 chars but structure 3.3.3-2
+                        // Simple heuristic: if likely CPF
+                        if (key.length === 14 && key.charAt(3) === '.') setPixKeyType('cpf');
+                        else if (key.length === 11) setPixKeyType('cpf');
+                        else setPixKeyType('random'); // Could be phone but let's default random or cpf
+                    } else if (key.length > 0) {
+                        setPixKeyType('random');
+                    }
 
                     // Load printer settings
                     const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', p.id).single() || {};
@@ -420,27 +439,32 @@ export const StoreSettings: React.FC = () => {
                             <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
                                 <Store className="w-5 h-5 text-gray-500" /> Informações Básicas
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <CustomInput
-                                    label="Nome da Loja"
-                                    type="text"
-                                    value={form.name}
-                                    onChange={e => handleChange('name', e.target.value)}
-                                    placeholder="Ex: Pizzaria do Zé"
-                                    icon={Store}
-                                />
-                                <CustomInput
-                                    label="Horário de Funcionamento"
-                                    type="text"
-                                    value={form.opening_hours}
-                                    onClick={() => setIsHoursModalOpen(true)}
-                                    readOnly
-                                    placeholder="Toque para configurar horários"
-                                    icon={Clock}
-                                    className="cursor-pointer"
-                                    helperText="Defina os horários que sua loja estará aberta no app."
-                                />
-                                <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-4">
+                                {/* Linha 1: Nome e Horário */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <CustomInput
+                                        label="Nome da Loja"
+                                        type="text"
+                                        value={form.name}
+                                        onChange={e => handleChange('name', e.target.value)}
+                                        placeholder="Ex: Pizzaria do Zé"
+                                        icon={Store}
+                                    />
+                                    <CustomInput
+                                        label="Horário de Funcionamento"
+                                        type="text"
+                                        value={form.opening_hours}
+                                        onClick={() => setIsHoursModalOpen(true)}
+                                        readOnly
+                                        placeholder="Toque para configurar horários"
+                                        icon={Clock}
+                                        className="cursor-pointer"
+                                        helperText="Defina os horários que sua loja estará aberta no app."
+                                    />
+                                </div>
+
+                                {/* Linha 2: Preparo Min, Max e Telefone */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <CustomInput
                                         label="Preparo Mínimo (min)"
                                         type="number"
@@ -459,30 +483,83 @@ export const StoreSettings: React.FC = () => {
                                         icon={Zap}
                                         helperText="Ex: 20 min"
                                     />
+                                    <CustomInput
+                                        label="Telefone / WhatsApp da Loja"
+                                        type="tel"
+                                        value={form.phone_number}
+                                        onChange={e => handleChange('phone_number', e.target.value)}
+                                        placeholder="(00) 00000-0000"
+                                        mask="phone"
+                                        icon={Phone}
+                                    />
                                 </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <CustomInput
-                                    label="Telefone / WhatsApp da Loja"
-                                    type="tel"
-                                    value={form.phone_number}
-                                    onChange={e => handleChange('phone_number', e.target.value)}
-                                    placeholder="(00) 00000-0000"
-                                    mask="phone"
-                                    icon={Phone}
-                                />
-                                icon={Mail}
-                                />
-                                <CustomInput
-                                    label="Chave PIX da Loja"
-                                    type="text"
-                                    value={form.pix_key}
-                                    onChange={e => handleChange('pix_key', e.target.value)}
-                                    placeholder="CPF, CNPJ, Email ou Aleatória"
-                                    icon={Wallet}
-                                    helperText="Usada para facilitar o pagamento via WhatsApp."
-                                />
+                                {/* Linha 3: Email e PIX */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <CustomInput
+                                        label="E-mail da Loja"
+                                        type="email"
+                                        value={form.contact_email}
+                                        onChange={e => handleChange('contact_email', e.target.value)}
+                                        placeholder="email@loja.com"
+                                        icon={Mail}
+                                    />
+                                    <div className="relative">
+                                        <div className="relative mb-1 h-4">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                Chave PIX da Loja
+                                            </label>
+
+                                            {/* Selector (Absolute positioning relative to this header row could handle alignment better, but Flex is safer for responsiveness. Keeping flex but adjusting height match) */}
+                                            {/* Actually, user wants input alignment. Flex row for header is fine as long as height is minimal. 
+                                                Let's try inline styles for colors and compact padding. */}
+                                            <div className="absolute right-0 -top-1 flex gap-1 bg-white dark:bg-gray-800 p-0 pl-2">
+                                                {[
+                                                    { id: 'cpf', label: 'CPF' },
+                                                    { id: 'cnpj', label: 'CNPJ' },
+                                                    { id: 'email', label: 'E-mail' },
+                                                    { id: 'random', label: 'Aleatória' }
+                                                ].map((type) => {
+                                                    const isSelected = pixKeyType === type.id;
+                                                    return (
+                                                        <button
+                                                            key={type.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setPixKeyType(type.id as PixKeyType);
+                                                                handleChange('pix_key', '');
+                                                            }}
+                                                            style={{
+                                                                backgroundColor: isSelected ? '#e50039' : 'transparent',
+                                                                borderColor: isSelected ? '#e50039' : 'transparent',
+                                                                color: isSelected ? '#ffffff' : undefined
+                                                            }}
+                                                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all whitespace-nowrap border ${!isSelected ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700' : ''
+                                                                }`}
+                                                        >
+                                                            {type.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <CustomInput
+                                            type={pixKeyType === 'email' ? 'email' : (pixKeyType === 'random' ? 'text' : 'tel')}
+                                            value={form.pix_key}
+                                            onChange={e => handleChange('pix_key', e.target.value)}
+                                            placeholder={
+                                                pixKeyType === 'cpf' ? '000.000.000-00' :
+                                                    pixKeyType === 'cnpj' ? '00.000.000/0000-00' :
+                                                        pixKeyType === 'email' ? 'email@loja.com' :
+                                                            'Chave Aleatória'
+                                            }
+                                            mask={pixKeyType === 'cpf' ? 'cpf' : pixKeyType === 'cnpj' ? 'cnpj' : undefined}
+                                            icon={Wallet}
+                                            helperText="Esta chave será enviada aos clientes no WhatsApp."
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

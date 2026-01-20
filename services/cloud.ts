@@ -562,7 +562,8 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
 
         is_super_store: userData.is_super_store,
         store_name: userData.store_name,
-        is_open: userData.is_open
+        is_open: userData.is_open,
+        pix_key: userData.pix_key
     };
 
     return profile;
@@ -617,6 +618,61 @@ export const uploadProfilePicture = async (file: File): Promise<string> => {
         .getPublicUrl(filePath);
 
     return publicUrl;
+};
+
+// --- STICKERS ---
+export const getStoreStickers = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb
+        .from('store_stickers')
+        .select('*')
+        .eq('store_id', storeId)
+        .order('created_at', { ascending: false });
+    if (error) {
+        console.error('Error fetching stickers:', error);
+        return [];
+    }
+    return data;
+};
+
+export const uploadSticker = async (file: File, storeId: string): Promise<string | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    // Upload image
+    const fileExt = file.name.split('.').pop();
+    const fileName = `sticker_${Date.now()}.${fileExt}`;
+    const filePath = `stickers/${storeId}/${fileName}`; // Assuming avatars bucket or public bucket?
+    // Let's use 'avatars' bucket as it is likely public/configured
+    const { error: uploadError } = await sb.storage.from('avatars').upload(filePath, file);
+
+    if (uploadError) {
+        console.error('Error uploading sticker:', uploadError);
+        return null;
+    }
+
+    const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(filePath);
+
+    // Save to DB
+    const { error: dbError } = await sb.from('store_stickers').insert({
+        store_id: storeId,
+        url: publicUrl
+    });
+
+    if (dbError) {
+        console.error('Error saving sticker to DB:', dbError);
+        return null;
+    }
+
+    return publicUrl;
+};
+
+export const deleteSticker = async (stickerId: string) => {
+    const sb = getClient();
+    if (!sb) return false;
+    const { error } = await sb.from('store_stickers').delete().eq('id', stickerId);
+    return !error;
 };
 
 export const uploadProductImage = async (file: File): Promise<string> => {

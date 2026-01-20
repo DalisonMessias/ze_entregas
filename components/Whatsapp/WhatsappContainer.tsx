@@ -8,6 +8,7 @@ import MessageInput from './MessageInput';
 import QrCodeModal from './QrCodeModal';
 import SearchBar from './SearchBar';
 import ContactsManager from './ContactsManager';
+import { BaseModal } from '../BaseModal';
 import { ZeAssistantConfig, ZeAssistantRulesManager, ZeAssistantDashboard } from './ZeAssistant/index';
 import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot } from 'lucide-react';
 
@@ -308,6 +309,8 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
       sorted = sorted.filter(c => c.status === 'closed');
     } else if (sortCriteria === 'priority') {
       const priorityScore = { critical: 4, high: 3, normal: 2, low: 1, undefined: 0 };
+      // Filtrar apenas as marcadas como importantes (high ou critical)
+      sorted = sorted.filter(c => c.priority === 'high' || c.priority === 'critical');
       sorted.sort((a, b) => {
         const scoreA = priorityScore[a.priority || 'undefined'] || 0;
         const scoreB = priorityScore[b.priority || 'undefined'] || 0;
@@ -764,6 +767,14 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab(activeTab === 'contacts' ? 'conversations' : 'contacts')}
+              title="Gerenciar Contatos"
+              className={`p-2 rounded-full transition-colors ${activeTab === 'contacts' ? 'bg-[#dcf8c6] text-[#00a884]' : 'hover:bg-gray-200 text-[#54656F]'}`}
+            >
+              <Users size={20} />
+            </button>
+
+            <button
               onClick={() => setShowNewChatModal(true)}
               title="Novo Chat"
               className="p-2 hover:bg-gray-200 rounded-full transition-colors text-[#54656F]"
@@ -898,7 +909,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
 
           <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
             <ConversationList
-              conversations={sortedConversations}
+              conversations={status.status === 'CONNECTED' ? sortedConversations : []}
               selectedId={selectedConversation?.conversation_id}
               onSelectConversation={handleSelectConversation}
               profilePictures={profilePictures}
@@ -977,6 +988,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
                   onSendMedia={handleSendMedia}
                   onSendAudio={handleSendAudio}
                   pixKey={pixKey}
+                  storeId={storeId}
                 />
               </div>
             </>
@@ -1050,37 +1062,38 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
         )
       }
 
-      {/* Modal: Novo Chat */}
-      {showNewChatModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-bold mb-4">Novo Chat</h3>
-            <p className="text-sm text-gray-600 mb-4">Digite o número com DDD e DDI (ex: 5511999999999)</p>
-            <input
-              type="text"
-              placeholder="Número do telefone"
-              className="w-full border rounded p-2 mb-4 outline-none focus:border-green-500"
-              value={newChatNumber}
-              onChange={(e) => setNewChatNumber(e.target.value)}
-              autoFocus
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowNewChatModal(false)}
-                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleStartNewChat}
-                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 font-medium"
-              >
-                Iniciar
-              </button>
-            </div>
+      <BaseModal
+        isOpen={showNewChatModal}
+        onClose={() => setShowNewChatModal(false)}
+        title="Novo Chat"
+        icon={<UserPlus className="w-6 h-6 text-green-600" />}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Digite o número com DDD e DDI (ex: 5511999999999)</p>
+          <input
+            type="text"
+            placeholder="Número do telefone"
+            className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500 bg-gray-50"
+            value={newChatNumber}
+            onChange={(e) => setNewChatNumber(e.target.value)}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setShowNewChatModal(false)}
+              className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleStartNewChat}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium transition-colors shadow-sm"
+            >
+              Iniciar Conversa
+            </button>
           </div>
         </div>
-      )}
+      </BaseModal>
 
       {/* Modal: Detalhes do Contato */}
       {showContactDetails && selectedConversation && (
