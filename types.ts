@@ -466,12 +466,12 @@ export interface PartnerFeeSettings {
 }
 
 export interface PWASettings {
-    name: string;
+    display_name: string; // Prioridade total: Nome usado no Titulo, Manifesto e Splash
     short_name: string;
     theme_color: string;
     background_color: string;
     description: string;
-    display_name?: string;
+    name?: string; // Legado
     start_url?: string;
     orientation?: string;
     language?: string;

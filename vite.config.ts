@@ -28,6 +28,10 @@ export default defineConfig(({ mode }) => {
           target: 'ws://127.0.0.1:4000',
           ws: true,
           rewrite: (path) => path.replace(/^\/ws-whatsapp/, '')
+        },
+        '/pwa': {
+          target: 'http://127.0.0.1:4000',
+          changeOrigin: true
         }
       }
     },

@@ -92,13 +92,17 @@ export const ZeAssistantDashboard: React.FC<ZeAssistantDashboardProps> = ({ stor
     };
 
     if (loading) return (
-        <div className="flex items-center justify-center p-8 text-gray-500">
-            <Activity className="w-6 h-6 animate-spin mr-2" />
-            Carregando métricas...
+        <div className="flex items-center justify-center p-8 text-gray-400 gap-2">
+            <Activity className="w-6 h-6 animate-spin" />
+            <span className="text-sm font-bold uppercase tracking-widest">Carregando métricas...</span>
         </div>
     );
 
-    if (!stats) return null;
+    if (!stats) return (
+        <div className="p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">Nenhuma métrica disponível ainda.</p>
+        </div>
+    );
 
     return (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">

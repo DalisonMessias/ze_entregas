@@ -103,64 +103,87 @@ export const InstallApp: React.FC<InstallAppProps> = ({ onBack }) => {
           </div>
         )}
 
-        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+        {/* Android / Chrome Section */}
+        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl animate-in fade-in duration-300">
           <div className="flex items-center gap-2 mb-2">
-            {platform === 'android_chrome' ? <Chrome className="w-5 h-5 text-brand-600" /> : platform === 'desktop_chrome' ? <MonitorSmartphone className="w-5 h-5 text-brand-600" /> : <Chrome className="w-5 h-5 text-brand-600" />}
-            <h4 className="font-bold text-sm text-gray-900 dark:text-white">{platform === 'desktop_chrome' ? 'Desktop/Chrome' : 'Android/Chrome'}</h4>
+            <Chrome className="w-5 h-5 text-brand-600" />
+            <h4 className="font-bold text-sm text-gray-900 dark:text-white">Android / Google Chrome</h4>
           </div>
           {installed ? (
             <div className="mt-2 p-2 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
               <CheckCircle className="w-4 h-4" /> App instalado neste dispositivo.
             </div>
           ) : (
-            <>
-              <p className="text-xs text-gray-600 dark:text-gray-300">Use o menu do navegador e toque em "Adicionar à tela inicial". Se disponível, use o botão abaixo.</p>
-              <div className="mt-3 flex items-center gap-3">
-                <button
-                  disabled={!canInstall}
-                  onClick={install}
-                  aria-label="Instalar app"
-                  className={`px-4 py-2 rounded-xl text-white text-sm ${canInstall ? 'bg-brand-600 hover:bg-brand-700' : 'bg-gray-400'}`}
-                >
-                  Instalar agora
-                </button>
-                {downloadUrl && (
-                  <a href={downloadUrl} target="_blank" rel="noreferrer" className="text-xs text-brand-700 underline">Saiba mais / Download</a>
-                )}
-              </div>
-            </>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600 dark:text-gray-300">
+                Para instalar no Android:
+                <br />• Abra o menu do Chrome (três pontos no canto superior direito).
+                <br />• Toque em <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
+              </p>
+              {downloadUrl && platform === 'android_chrome' && (
+                <a href={downloadUrl} target="_blank" rel="noreferrer" className="inline-block text-xs text-brand-700 underline font-medium">Saiba mais na Play Store</a>
+              )}
+            </div>
           )}
         </div>
 
-        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+        {/* Desktop / Chrome Section */}
+        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl animate-in fade-in duration-300">
+          <div className="flex items-center gap-2 mb-2">
+            <MonitorSmartphone className="w-5 h-5 text-brand-600" />
+            <h4 className="font-bold text-sm text-gray-900 dark:text-white">Computador / Google Chrome</h4>
+          </div>
+          {installed ? (
+            <div className="mt-2 p-2 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" /> App instalado neste computador.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600 dark:text-gray-300">
+                Para instalar no computador:
+                <br />• Clique no ícone de <strong>Instalar</strong> na barra de endereços (ao lado da estrela de favoritos).
+                <br />• Ou abra o menu (três pontos) e vá em <strong>"Salvar e Compartilhar"</strong> → <strong>"Instalar Zé Entregas"</strong>.
+              </p>
+              {downloadUrl && platform === 'desktop_chrome' && (
+                <a href={downloadUrl} target="_blank" rel="noreferrer" className="inline-block text-xs text-brand-700 underline font-medium">Guia de instalação Desktop</a>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* iOS Section */}
+        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl animate-in fade-in duration-300">
           <div className="flex items-center gap-2 mb-2">
             <Apple className="w-5 h-5 text-brand-600" />
-            <h4 className="font-bold text-sm text-gray-900 dark:text-white">iOS/Safari</h4>
+            <h4 className="font-bold text-sm text-gray-900 dark:text-white">iPhone / iPad (Safari)</h4>
           </div>
           {installed ? (
             <div className="mt-2 p-2 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
               <CheckCircle className="w-4 h-4" /> App instalado neste dispositivo.
             </div>
           ) : (
-            <>
-              <p className="text-xs text-gray-600 dark:text-gray-300">Toque no ícone de compartilhar e selecione "Adicionar à Tela de Início".</p>
-              {downloadUrl && (
-                <div className="mt-2">
-                  <a href={downloadUrl} target="_blank" rel="noreferrer" className="text-xs text-brand-700 underline">Guia de instalação no iOS</a>
-                </div>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600 dark:text-gray-300">
+                Para instalar no iOS:
+                <br />• Toque no botão de <strong>Compartilhar</strong> (ícone de quadrado com seta para cima) na barra inferior.
+                <br />• Role para baixo e selecione <strong>"Adicionar à Tela de Início"</strong>.
+              </p>
+              {downloadUrl && platform === 'ios_safari' && (
+                <a href={downloadUrl} target="_blank" rel="noreferrer" className="inline-block text-xs text-brand-700 underline font-medium">Guia de instalação iOS</a>
               )}
-            </>
+            </div>
           )}
         </div>
 
-        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+        <div className="p-4 bg-brand-50 dark:bg-brand-900/10 rounded-xl border border-brand-100 dark:border-brand-900/20">
           <div className="flex items-center gap-2 mb-2">
-            <Info className="w-5 h-5 text-brand-600" />
-            <h4 className="font-bold text-sm text-gray-900 dark:text-white">Dicas</h4>
+            <Info className="w-4 h-4 text-brand-600" />
+            <h4 className="font-bold text-sm text-gray-900 dark:text-white">Dicas Úteis</h4>
           </div>
-          <ul className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
-            <li>Ative notificações para receber alertas importantes.</li>
-            <li>Mantenha o app atualizado para novas funções.</li>
+          <ul className="text-xs text-gray-600 dark:text-gray-300 space-y-1.5 list-disc list-inside">
+            <li>Ative notificações para receber alertas de novos pedidos.</li>
+            <li>O app instalado economiza dados e carrega mais rápido.</li>
+            <li>Use sempre o navegador oficial (Chrome para Android/PC, Safari para iOS).</li>
           </ul>
         </div>
       </div>

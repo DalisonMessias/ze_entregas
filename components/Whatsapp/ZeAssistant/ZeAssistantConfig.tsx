@@ -3,7 +3,7 @@ import * as cloud from '../../../services/cloud';
 import { Switch } from '../../Switch';
 import { Button } from '../../Button';
 import { useNotification } from '../../../contexts/NotificationContext';
-import { Sparkles, Settings, MessageCircle, ShoppingBag, Loader2 } from 'lucide-react';
+import { Sparkles, Settings, MessageCircle, ShoppingBag, Loader2, Activity } from 'lucide-react';
 
 interface ZeAssistantConfigProps {
     storeId: string;
@@ -89,10 +89,23 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
         }
     };
 
-    if (loading) return <div className="p-4 text-center">Carregando configurações...</div>;
+    if (loading) return (
+        <div className="p-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto text-brand-600 mb-4" />
+            <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">Carregando configurações...</p>
+        </div>
+    );
+
+    if (!config) return (
+        <div className="p-12 text-center bg-red-50 dark:bg-red-900/10 rounded-3xl border border-dashed border-red-200 dark:border-red-800/20">
+            <Activity className="w-8 h-8 mx-auto text-red-500 mb-4" />
+            <p className="text-sm text-red-600 dark:text-red-400 font-bold uppercase tracking-widest">Falha ao carregar configurações.</p>
+            <Button onClick={fetchConfig} className="mt-4 bg-red-600 hover:bg-red-700 text-white text-xs uppercase tracking-widest font-black">Tentar Novamente</Button>
+        </div>
+    );
 
     return (
-        <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6 space-y-6 border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between border-b pb-4">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-purple-100 rounded-lg">

@@ -1,9 +1,10 @@
 {
   "name": "Zé Entregas",
-  "description": "Aplicativo de rastreamento manual de entregas do Zé Entregas. Histórico diário e gestão inteligente.",
+  "description": "Aplicativo de entregas do Zé Entregas. Histórico diário e gestão inteligente.",
   "requestFramePermissions": [
     "microphone",
     "geolocation",
-    "camera"
+    "camera",
+    "notifications"
   ]
 }

@@ -18,7 +18,7 @@
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
     
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/pwa/manifest.json" />
     <meta name="theme-color" content="#e50039" />
     <meta name="description" content="Rastreador de entregas diárias - Zé Entregas" />
     <style>
@@ -146,5 +146,16 @@
   <body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased selection:bg-brand-100 selection:text-brand-900 transition-colors duration-300">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('SW registered:', registration);
+          }).catch(error => {
+            console.log('SW registration failed:', error);
+          });
+        });
+      }
+    </script>
   </body>
 </html>

@@ -77,66 +77,34 @@ export function usePwaSettings() {
             document.title = config.display_name;
         }
 
+        // Atualizar Meta Description
+        const metaDesc = document.querySelector('meta[name="description"]');
+        if (metaDesc && config.description) {
+            metaDesc.setAttribute('content', config.description);
+        }
+
+        // Atualizar Favicon (pega o primeiro ícone disponível ou o de 192x192)
+        const iconUrl = config.icons?.[0]?.src;
+        if (iconUrl) {
+            const favicon = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
+            if (favicon) {
+                favicon.setAttribute('href', iconUrl);
+            } else {
+                const link = document.createElement('link');
+                link.rel = 'icon';
+                link.href = iconUrl;
+                document.head.appendChild(link);
+            }
+        }
+
         // Atualizar Manifest dinamicamente via Blob
         updateManifest(config);
     };
 
     const updateManifest = (config: PWASettings) => {
-        try {
-            const icons = Array.isArray(config.icons) ? config.icons : [];
-            const shortcuts = Array.isArray(config.shortcuts) ? config.shortcuts : [];
-            const screenshots = Array.isArray(config.screenshots) ? config.screenshots : [];
-            const categories = Array.isArray(config.categories) ? config.categories : [];
-            const related_applications = Array.isArray(config.related_applications) ? config.related_applications : [];
-
-            const manifestObject = {
-                name: config.display_name || 'Zé Entregas',
-                short_name: config.short_name || config.display_name || 'Zé Entregas',
-                description: config.description || '',
-                start_url: config.start_url || '/',
-                display: config.display || 'standalone',
-                orientation: config.orientation || 'portrait',
-                theme_color: config.theme_color || '#ed2b05',
-                background_color: config.background_color || '#f9fafb',
-                lang: config.language || 'pt-BR',
-                scope: config.scope || '/',
-                icons: icons.length > 0 ? icons : [
-                    {
-                        "src": "https://raw.githubusercontent.com/DalisonMessias/cdn.rabbit.gg/refs/heads/main/assets/192-192.png",
-                        "sizes": "192x192",
-                        "type": "image/png"
-                    },
-                    {
-                        "src": "https://raw.githubusercontent.com/DalisonMessias/cdn.rabbit.gg/refs/heads/main/assets/512-512.png",
-                        "sizes": "512x512",
-                        "type": "image/png"
-                    }
-                ],
-                shortcuts: shortcuts,
-                screenshots: screenshots,
-                categories: categories,
-                iarc_rating_id: config.iarc_rating_id,
-                related_applications: related_applications,
-                prefer_related_applications: config.prefer_related_applications
-            };
-
-            const stringManifest = JSON.stringify(manifestObject);
-            const blob = new Blob([stringManifest], { type: 'application/json' });
-            const manifestURL = URL.createObjectURL(blob);
-
-            const oldLink = document.querySelector('link[rel="manifest"]');
-            if (oldLink) {
-                oldLink.setAttribute('href', manifestURL);
-            } else {
-                const link = document.createElement('link');
-                link.rel = 'manifest';
-                link.href = manifestURL;
-                document.head.appendChild(link);
-            }
-            // console.log('Manifest updated dynamically');
-        } catch (e) {
-            // console.error('Failed to update manifest:', e);
-        }
+        // A atualização do manifesto agora é feita via backend na rota /pwa/manifest.json
+        // Este hook continua responsável por Meta Tags e Título em tempo real
+        console.log('Manifest dynamic updates handled by Backend Route /pwa/manifest.json');
     };
 
     return { settings, loading };

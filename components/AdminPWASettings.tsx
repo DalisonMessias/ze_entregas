@@ -30,7 +30,14 @@ export const AdminPWASettings: React.FC = () => {
     }, []);
 
     const handleChange = (field: keyof PWASettings, value: any) => {
-        setSettings(prev => prev ? { ...prev, [field]: value } : null);
+        setSettings(prev => {
+            const newSettings = prev ? { ...prev, [field]: value } : {} as PWASettings;
+            // Sincroniza name legado com display_name para evitar quebras
+            if (field === 'display_name') {
+                newSettings.name = value;
+            }
+            return newSettings;
+        });
     };
 
     const handleSaveSettings = async () => {

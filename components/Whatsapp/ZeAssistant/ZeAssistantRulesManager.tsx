@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import * as cloud from '../../../services/cloud';
 import { Button } from '../../Button';
 import { useNotification } from '../../../contexts/NotificationContext';
-import { Plus, Trash2, Pencil, X, MessageSquare, Tag } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, MessageSquare, Tag, Loader2 } from 'lucide-react';
 
 interface ZeAssistantRule {
     id: string;
@@ -24,6 +24,7 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRule, setEditingRule] = useState<Partial<ZeAssistantRule> | null>(null);
+    const [error, setError] = useState(false);
     const { showNotification } = useNotification();
     const supabase = cloud.getClient();
 
@@ -44,8 +45,10 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
 
             if (error) throw error;
             setRules(data || []);
+            setError(false);
         } catch (error) {
             console.error('Erro ao buscar regras:', error);
+            setError(true);
             showNotification('Erro ao carregar regras', 'error');
         } finally {
             setLoading(false);
@@ -131,7 +134,20 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
         setIsModalOpen(true);
     };
 
-    if (loading) return <div className="p-4 text-center">Carregando regras...</div>;
+    if (loading) return (
+        <div className="p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700 mt-6">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-600 mb-2" />
+            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Carregando regras...</p>
+        </div>
+    );
+
+    if (error) return (
+        <div className="p-8 text-center bg-red-50 dark:bg-red-900/10 rounded-3xl border border-dashed border-red-200 dark:border-red-800/20 mt-6">
+            <X className="w-6 h-6 mx-auto text-red-500 mb-2" />
+            <p className="text-xs text-red-600 dark:text-red-400 font-bold uppercase tracking-widest">Falha ao carregar regras.</p>
+            <button onClick={fetchRules} className="text-[10px] font-black text-red-600 underline mt-2 uppercase tracking-tighter">Tentar Novamente</button>
+        </div>
+    );
 
     return (
         <div className="bg-white rounded-lg shadow-sm p-6 space-y-6 mt-6">
@@ -265,7 +281,7 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
                                     placeholder="Use {{store_name}} para o nome da loja..."
                                 />
                                 <p className="text-[10px] text-gray-400 mt-1 italic">
-                                    Dica: Use {{ customer_name }} ou {{ store_name }} para personalizar.
+                                    Dica: Use {"{{ customer_name }}"} ou {"{{ store_name }}"} para personalizar.
                                 </p>
                             </div>
                         </div>

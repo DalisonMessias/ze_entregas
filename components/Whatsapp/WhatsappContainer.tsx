@@ -12,21 +12,24 @@ import { ZeAssistantConfig, ZeAssistantRulesManager, ZeAssistantDashboard } from
 import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot } from 'lucide-react';
 
 import { getApiBaseUrl } from '../../utils/apiConfig';
+import * as cloud from '../../services/cloud';
 
 const API_BASE_URL = getApiBaseUrl();
 
-type TabType = 'conversations' | 'contacts' | 'assistant';
+type TabType = 'conversations' | 'contacts';
 
 import { whatsappOfflineService } from '../../services/whatsappOfflineService';
 
 interface WhatsappContainerProps {
   storeId?: string;
   attendantId?: string; // ID do atendente logado
+  onBack?: () => void; // Função para voltar ao dashboard do app
 }
 
 const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
   storeId = 'default-store-id',
-  attendantId
+  attendantId,
+  onBack
 }) => {
   const { status, setStatus, lastMessage, lastStatusUpdate } = useWhatsappWebSocket(storeId);
   const [hasSession, setHasSession] = useState(false);
@@ -58,6 +61,8 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
   const [showBlockConfirm, setShowBlockConfirm] = useState<'block' | 'report' | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showAssistantModal, setShowAssistantModal] = useState(false);
+  const [pixKey, setPixKey] = useState<string>("");
 
   const scrollFilters = (direction: 'left' | 'right') => {
     if (filterContainerRef.current) {
@@ -603,9 +608,22 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
       }
     };
 
+    const fetchProfile = async () => {
+      try {
+        const { data: { user } } = await cloud.getClient()?.auth.getUser() || { data: { user: null } };
+        if (user) {
+          const { data: profile } = await cloud.getClient()?.from('user_profiles').select('pix_key').eq('id', user.id).single() || { data: null };
+          if (profile?.pix_key) setPixKey(profile.pix_key);
+        }
+      } catch (e) {
+        console.error('Erro ao buscar perfil para PIX:', e);
+      }
+    };
+
     fetchConversations();
     fetchManualOrder();
     fetchStatus();
+    fetchProfile();
 
     // Polling de 8s para status (garante QR code estável)
     const statusInterval = setInterval(fetchStatus, 8000);
@@ -641,7 +659,12 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
       // Atualizar lista de conversas para mostrar mensagem recente
       fetchConversations();
     }
-  }, [lastMessage, selectedConversation, messages]);
+  }, [lastMessage, selectedConversation]); // Removido messages para evitar loops infinitos se fetchMessages mudar o state
+
+  const handleBackToList = () => {
+    setSelectedConversation(null);
+    setMessages([]);
+  };
 
   // Atualizar status da mensagem (ticks) quando chegar via WebSocket
   useEffect(() => {
@@ -683,14 +706,23 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
 
 
   return (
-    <div className="flex w-full h-[calc(100vh-90px)] bg-white font-sans overflow-hidden animate-in fade-in duration-300 shadow-md rounded-lg border border-gray-100 relative">
+    <div className="flex w-full h-full md:h-[calc(100vh-110px)] md:m-4 md:shadow-2xl md:rounded-[32px] md:border md:border-gray-100 bg-white font-sans overflow-hidden animate-in fade-in duration-300 relative">
       {/* Container Full Screen */}
       <div className="z-10 flex w-full h-full">
         {/* Sidebar */}
-        <div className="w-full md:w-[400px] bg-white flex flex-col h-full border-r border-gray-200">
+        <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-[400px] bg-white flex flex-col h-full border-r border-gray-200`}>
           {/* Sidebar Header */}
           <div className="h-16 bg-[#F0F2F5] flex items-center justify-between px-4 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center gap-3">
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="p-2 hover:bg-gray-200 rounded-full text-[#54656F] -ml-2"
+                  title="Voltar ao Sistema"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+              )}
               <div className="w-10 h-10 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center cursor-pointer" onClick={() => setActiveTab('contacts')}>
                 <Users className="text-gray-600" size={24} />
               </div>
@@ -724,11 +756,11 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
             </div>
 
             <button
-              onClick={() => setActiveTab('assistant')}
+              onClick={() => setShowAssistantModal(true)}
               title="Zé Assistente"
-              className={`p-2 rounded-full transition-colors relative ${activeTab === 'assistant' ? 'bg-[#dcf8c6]' : 'hover:bg-gray-200'}`}
+              className={`p-2 rounded-full transition-colors relative hover:bg-gray-200`}
             >
-              <Bot size={20} className={activeTab === 'assistant' ? 'text-green-700' : 'text-[#54656F]'} />
+              <Bot size={20} className="text-[#54656F]" />
             </button>
 
             <button
@@ -791,8 +823,8 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
                   {status.status === 'DISCONNECTED'
                     ? (hasSession ? 'RECONECTAR' : 'CONECTAR')
                     : status.status === 'WAITING_QR'
-                    ? 'CONECTAR'
-                    : 'LIMPAR SESSÃO'}
+                      ? 'CONECTAR'
+                      : 'LIMPAR SESSÃO'}
                 </button>
               </div>
               {isSyncing && (
@@ -812,18 +844,6 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
             />
           )}
 
-          {activeTab === 'assistant' && (
-            <div className="flex-1 overflow-y-auto bg-gray-50 h-[calc(100%-64px)] scrollbar-thin scrollbar-thumb-gray-200">
-              <div className="p-4 space-y-6 pb-20">
-                <button onClick={() => setActiveTab('conversations')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mb-2">
-                  <ArrowLeft size={16} /> Voltar para conversas
-                </button>
-                <ZeAssistantDashboard storeId={storeId} />
-                <ZeAssistantConfig storeId={storeId} />
-                <ZeAssistantRulesManager storeId={storeId} />
-              </div>
-            </div>
-          )}
 
           {/* Search Bar Container */}
           {activeTab === 'conversations' && (
@@ -891,13 +911,18 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
           </div>
         </div>
 
-        {/* Main Chat Area */}
-        <div className={`flex-1 bg-[#ECE5DD] ${(!selectedConversation && activeTab === 'conversations') ? 'hidden md:flex' : (!selectedConversation ? 'hidden' : 'flex')} flex-col relative overflow-hidden`}>
+        <div className={`${!selectedConversation ? 'hidden md:flex' : 'flex'} flex-1 bg-[#ECE5DD] flex-col relative overflow-hidden`}>
           {selectedConversation ? (
             <>
               {/* Chat Header */}
               <div className="h-16 bg-[#F0F2F5] flex items-center px-4 border-b border-gray-200 flex-shrink-0 z-20 justify-between">
-                <div className="flex items-center gap-4 flex-1 cursor-pointer">
+                <div className="flex items-center gap-2 flex-1 cursor-pointer overflow-hidden">
+                  <button
+                    onClick={handleBackToList}
+                    className="md:hidden p-2 -ml-2 hover:bg-gray-200 rounded-full text-[#54656F]"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
                   <div className="w-10 h-10 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center">
                     {profilePictures[selectedConversation.conversation_id] || selectedConversation.profile_pic_url ? (
                       <img
@@ -927,7 +952,6 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
                   </div>
                 </div>
                 <div className="flex gap-4 text-[#54656F]">
-                  <button onClick={() => setSelectedConversation(null)} className="md:hidden p-2 hover:bg-gray-200 rounded-full"><ArrowLeft size={20} /></button>
                   <button onClick={() => setShowContactDetails(true)} className="p-2 hover:bg-gray-200 rounded-full" title="Ver Detalhes"><Users size={20} /></button>
                   <button onClick={() => setShowBlockConfirm('block')} className="p-2 hover:bg-gray-200 rounded-full" title="Bloquear Contato"><AlertTriangle size={20} /></button>
                 </div>
@@ -947,11 +971,12 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
               </div>
 
               {/* Input Area */}
-              <div className="bg-[#F0F2F5] p-0 z-20 min-h-[62px]">
+              <div className="bg-[#F0F2F5] p-0 z-20 min-h-[62px] flex-shrink-0 border-t border-gray-200">
                 <MessageInput
                   onSend={handleSendMessage}
                   onSendMedia={handleSendMedia}
                   onSendAudio={handleSendAudio}
+                  pixKey={pixKey}
                 />
               </div>
             </>
@@ -1157,6 +1182,45 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium"
               >
                 Desconectar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Zé Assistente */}
+      {showAssistantModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 sticky top-0 z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-2xl flex items-center justify-center text-brand-600">
+                  <Bot size={28} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">Zé Assistente</h3>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Inteligência Artificial</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAssistantModal(false)}
+                className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl text-gray-400 transition-colors"
+                title="Fechar"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+              <ZeAssistantDashboard storeId={storeId} />
+              <ZeAssistantConfig storeId={storeId} />
+              <ZeAssistantRulesManager storeId={storeId} />
+            </div>
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex justify-center">
+              <button
+                onClick={() => setShowAssistantModal(false)}
+                className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-black rounded-2xl transition-all shadow-lg active:scale-95 uppercase text-sm tracking-widest"
+              >
+                Entendido
               </button>
             </div>
           </div>

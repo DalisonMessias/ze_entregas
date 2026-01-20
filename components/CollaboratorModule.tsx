@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, CartItem } from '../types';
 import * as cloud from '../services/cloud';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { Loader2, Search, Plus, Minus, ShoppingBag, Send, LogOut, Coffee, LayoutGrid, ClipboardList, CheckCircle, User, Clock, TrendingUp, History, Home, X, ArrowLeft, Printer, Truck, MapPin, RotateCcw, Check, Scan, MessageCircle } from 'lucide-react';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
@@ -644,7 +644,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                         <MessageCircle className="w-7 h-7" />
                     </div>
                     <span className="text-xs font-black dark:text-white uppercase tracking-tighter">WhatsApp</span>
-                    <span className="text-[10px] text-gray-400 font-bold -mt-2">Atendimento</span>
+                    <span className="text-[10px] text-gray-400 font-bold -mt-2">Atendimento Interno</span>
                 </button>
 
                 {/* Botão de Impressão removido para colaboradores */}
@@ -783,9 +783,9 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col font-sans select-none">
-            {/* Header com Navegação */}
-            <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex justify-between items-center z-40 sticky top-0">
+        <div className="h-screen h-[100dvh] bg-gray-100 dark:bg-gray-900 flex flex-col font-sans select-none overflow-hidden">
+            {/* Header com Navegação - Escondido no WhatsApp Chat mobile para ganhar espaço */}
+            <header className={`${view === 'whatsapp_chat' ? 'hidden md:flex' : 'flex'} bg-white dark:bg-gray-800 shadow-md p-4 justify-between items-center z-40 sticky top-0 flex-shrink-0`}>
                 <div className="flex items-center gap-3">
                     {view !== 'dashboard' ? (
                         <button onClick={() => setView('dashboard')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-500"><ArrowLeft className="w-6 h-6" /></button>
@@ -812,9 +812,13 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                 {view === 'reports' && renderReports()}
                 {view === 'orders' && renderOrders()}
                 {view === 'whatsapp_chat' && (
-                    <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="flex-1 flex flex-col overflow-hidden md:items-center md:justify-center md:bg-gray-200/50 md:p-4">
                         <React.Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-brand-600" /></div>}>
-                            <WhatsappContainer storeId={collaborator.store_id} attendantId={collaborator.id} />
+                            <WhatsappContainer
+                                storeId={collaborator.store_id}
+                                attendantId={collaborator.id}
+                                onBack={() => setView('dashboard')}
+                            />
                         </React.Suspense>
                     </div>
                 )}
@@ -1415,29 +1419,66 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
 // Logica separada para garantir cleanup correto do scanner
 const ScannerLogic = ({ onScan, onClose }: { onScan: (text: string) => void, onClose: () => void }) => {
     useEffect(() => {
-        const scanner = new Html5QrcodeScanner(
-            "reader",
-            {
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0,
-                showTorchButtonIfSupported: true
-            },
-            /* verbose= */ false
-        );
+        let html5QrCode: Html5Qrcode | null = null;
+        let isMounted = true;
 
-        scanner.render(
-            (decodedText) => {
-                onScan(decodedText);
-                scanner.clear().catch(console.error);
-            },
-            (error) => {
-                // console.warn(error);
+        const startScanner = async () => {
+            try {
+                html5QrCode = new Html5Qrcode("reader");
+
+                // Configuração da câmera
+                const config = {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
+                };
+
+                // Tenta iniciar a câmera traseira diretamente
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    config,
+                    (decodedText) => {
+                        onScan(decodedText);
+                        if (html5QrCode) {
+                            html5QrCode.stop().then(() => {
+                                html5QrCode?.clear();
+                            }).catch(console.error);
+                        }
+                    },
+                    (errorMessage) => {
+                        // Erro de scan (silencioso)
+                    }
+                );
+            } catch (err) {
+                console.error("Erro ao iniciar câmera:", err);
+                // Se falhar a câmera traseira, tenta qualquer uma disponível
+                try {
+                    if (html5QrCode && isMounted) {
+                        await html5QrCode.start(
+                            { facingMode: "user" }, // fallback para frontal ou padrão
+                            { fps: 10, qrbox: { width: 250, height: 250 } },
+                            (decodedText) => {
+                                onScan(decodedText);
+                            },
+                            () => { }
+                        );
+                    }
+                } catch (e2) {
+                    console.error("Falha total na câmera:", e2);
+                }
             }
-        );
+        };
+
+        const timeout = setTimeout(startScanner, 300); // Pequeno atraso para garantir render do DOM
 
         return () => {
-            scanner.clear().catch(console.error);
+            isMounted = false;
+            clearTimeout(timeout);
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode?.clear();
+                }).catch(console.error);
+            }
         };
     }, []);
 

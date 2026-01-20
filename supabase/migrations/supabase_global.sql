@@ -336,6 +336,10 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'is_active') THEN
         ALTER TABLE public.user_profiles ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'pix_key') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN pix_key TEXT;
+    END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS user_profiles_is_active_idx ON public.user_profiles (is_active);
 CREATE INDEX IF NOT EXISTS user_profiles_is_available_idx ON public.user_profiles (is_available);
@@ -8185,13 +8189,13 @@ CREATE TABLE IF NOT EXISTS public.user_saved_routes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.user_profiles(id) NOT NULL,
     name TEXT,
-    items JSONB DEFAULT '[]'::jsonb, -- Lista de endere�os/paradas
+    items JSONB DEFAULT '[]'::jsonb, -- Lista de endere�os/paradas
     origin_data JSONB DEFAULT '{}'::jsonb, -- Dados da origem da rota
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Garantir que colunas existam (Migra��o Aditiva)
+-- Garantir que colunas existam (Migra��o Aditiva)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_saved_routes' AND column_name = 'origin_data') THEN
@@ -8205,7 +8209,7 @@ FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 ALTER TABLE public.user_saved_routes ENABLE ROW LEVEL SECURITY;
 
--- Pol�ticas de Acesso
+-- Pol�ticas de Acesso
 DROP POLICY IF EXISTS "Users can manage their own routes" ON public.user_saved_routes;
 CREATE POLICY "Users can manage their own routes" ON public.user_saved_routes
     FOR ALL USING (auth.uid()::text = user_id::text);
@@ -8213,3 +8217,53 @@ CREATE POLICY "Users can manage their own routes" ON public.user_saved_routes
 DROP POLICY IF EXISTS "Admins can view all routes" ON public.user_saved_routes;
 CREATE POLICY "Admins can view all routes" ON public.user_saved_routes
     FOR SELECT USING (public.is_admin());
+-- Garante permissÃ£o pÃºblica de leitura para configuraÃ§Ãµes do PWA
+DO $$
+BEGIN
+    DROP POLICY IF EXISTS "Public can read pwa_settings" ON public.pwa_settings;
+    CREATE POLICY "Public can read pwa_settings" ON public.pwa_settings
+    FOR SELECT USING (true);
+END $$;
+-- PolÃ­ticas de RLS para liberar acesso a colaboradores e manifesto
+DO $$
+BEGIN
+    -- Permitir leitura pÃºblica das configuraÃ§Ãµes do PWA (essencial para o manifesto dinÃ¢mico)
+    DROP POLICY IF EXISTS "Public can read pwa_settings" ON public.pwa_settings;
+    CREATE POLICY "Public can read pwa_settings" ON public.pwa_settings
+    FOR SELECT USING (true);
+
+    -- Permitir que colaboradores leiam seus prÃ³prios dados e dados vinculados Ã  sua loja
+    DROP POLICY IF EXISTS "Collaborators can read store data" ON public.collaborators;
+    CREATE POLICY "Collaborators can read store data" ON public.collaborators
+    FOR SELECT USING (true); -- Ajustado para permitir leitura por colaboradores autenticados via login customizado
+
+    -- Permitir leitura de pedidos da loja por colaboradores
+    DROP POLICY IF EXISTS "Collaborators can read store orders" ON public.orders_collaborators;
+    CREATE POLICY "Collaborators can read store orders" ON public.orders_collaborators
+    FOR SELECT USING (true);
+
+    -- Garantir permissÃµes de acesso Ã s tabelas
+    GRANT SELECT ON public.pwa_settings TO anon, authenticated;
+    GRANT SELECT ON public.collaborators TO anon, authenticated;
+    GRANT SELECT ON public.orders_collaborators TO anon, authenticated;
+
+    -- Liberar acesso ao ZÃ© Assistente para colaboradores
+    DROP POLICY IF EXISTS "Colaboradores gerenciam config do assistente" ON public.ze_assistant_config;
+    CREATE POLICY "Colaboradores gerenciam config do assistente" ON public.ze_assistant_config
+    FOR ALL USING (
+        auth.uid()::text = store_id::text OR 
+        EXISTS (SELECT 1 FROM public.collaborators WHERE id::text = auth.uid()::text AND store_id = public.ze_assistant_config.store_id) OR
+        public.is_admin()
+    );
+
+    DROP POLICY IF EXISTS "Colaboradores gerenciam regras do assistente" ON public.ze_assistant_rules;
+    CREATE POLICY "Colaboradores gerenciam regras do assistente" ON public.ze_assistant_rules
+    FOR ALL USING (
+        auth.uid()::text = store_id::text OR 
+        EXISTS (SELECT 1 FROM public.collaborators WHERE id::text = auth.uid()::text AND store_id = public.ze_assistant_rules.store_id) OR
+        public.is_admin()
+    );
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.ze_assistant_config TO authenticated;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.ze_assistant_rules TO authenticated;
+END $$;

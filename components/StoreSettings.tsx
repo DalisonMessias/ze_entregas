@@ -85,7 +85,8 @@ export const StoreSettings: React.FC = () => {
         address_district: '',
         city: '',
         address_state: '',
-        address_complement: ''
+        address_complement: '',
+        pix_key: ''
     });
 
     useEffect(() => {
@@ -129,7 +130,8 @@ export const StoreSettings: React.FC = () => {
                             : (p.city || ''),
 
                         address_state: useStoreAddr ? (p.store_address_state || '') : (p.address_state || p.city?.split(' - ')[1] || ''),
-                        address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || '') // TODO: Add to generic too if needed
+                        address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || ''),
+                        pix_key: p.pix_key || ''
                     });
 
                     // Load printer settings
@@ -227,6 +229,7 @@ export const StoreSettings: React.FC = () => {
                 store_address_city: cityName,
                 store_address_state: cityState,
                 store_address_complement: form.address_complement,
+                pix_key: form.pix_key,
 
                 // Also update legacy/display 'city' field for compatibility if needed, 
                 // but usually 'city' on profile is for search. Let's keep them synced for now or just update store fields.
@@ -469,13 +472,16 @@ export const StoreSettings: React.FC = () => {
                                     mask="phone"
                                     icon={Phone}
                                 />
+                                icon={Mail}
+                                />
                                 <CustomInput
-                                    label="Email de Contato da Loja"
-                                    type="email"
-                                    value={form.contact_email}
-                                    onChange={e => handleChange('contact_email', e.target.value)}
-                                    placeholder="contato@loja.com"
-                                    icon={Mail}
+                                    label="Chave PIX da Loja"
+                                    type="text"
+                                    value={form.pix_key}
+                                    onChange={e => handleChange('pix_key', e.target.value)}
+                                    placeholder="CPF, CNPJ, Email ou Aleatória"
+                                    icon={Wallet}
+                                    helperText="Usada para facilitar o pagamento via WhatsApp."
                                 />
                             </div>
                         </div>

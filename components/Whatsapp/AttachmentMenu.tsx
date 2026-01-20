@@ -3,10 +3,8 @@ import {
     FileText,
     Image as ImageIcon,
     Camera,
-    Mic as AudioIcon,
     User,
     BarChart2,
-    Calendar,
     Sticker,
     Wallet
 } from 'lucide-react';
@@ -14,7 +12,7 @@ import {
 interface AttachmentMenuProps {
     isOpen: boolean;
     onClose: () => void;
-    onSelect: (type: 'document' | 'image' | 'camera' | 'audio' | 'contact' | 'poll' | 'event' | 'sticker' | 'pix') => void;
+    onSelect: (type: 'document' | 'image' | 'camera' | 'contact' | 'poll' | 'sticker' | 'pix') => void;
 }
 
 const AttachmentMenu: React.FC<AttachmentMenuProps> = ({ isOpen, onClose, onSelect }) => {
@@ -39,19 +37,19 @@ const AttachmentMenu: React.FC<AttachmentMenuProps> = ({ isOpen, onClose, onSele
     if (!isOpen) return null;
 
     const menuItems = [
-        { type: 'document', label: 'Documento', icon: <FileText size={20} className="text-purple-500" /> },
-        { type: 'image', label: 'Fotos e vídeos', icon: <ImageIcon size={20} className="text-blue-500" /> },
-        { type: 'camera', label: 'Câmera', icon: <Camera size={20} className="text-pink-500" /> },
-        { type: 'pix', label: 'Chave PIX', icon: <Wallet size={20} className="text-green-600" /> },
-        { type: 'contact', label: 'Contato', icon: <User size={20} className="text-blue-400" /> },
-        { type: 'poll', label: 'Enquete', icon: <BarChart2 size={20} className="text-yellow-500" /> },
-        { type: 'sticker', label: 'Nova figurinha', icon: <Sticker size={20} className="text-teal-500" /> },
+        { type: 'document', label: 'Documento', icon: <FileText size={20} />, color: 'bg-[#7f66ff]' },
+        { type: 'image', label: 'Fotos e vídeos', icon: <ImageIcon size={20} />, color: 'bg-[#007bfc]' },
+        { type: 'camera', label: 'Câmera', icon: <Camera size={20} />, color: 'bg-[#ff2e74]' },
+        { type: 'pix', label: 'Chave PIX', icon: <Wallet size={20} />, color: 'bg-[#00a884]' },
+        { type: 'contact', label: 'Contato', icon: <User size={20} />, color: 'bg-[#009de2]' },
+        { type: 'poll', label: 'Enquete', icon: <BarChart2 size={20} />, color: 'bg-[#ffbc38]' },
+        { type: 'sticker', label: 'Nova figurinha', icon: <Sticker size={20} />, color: 'bg-[#02a698]' },
     ];
 
     return (
         <div
             ref={menuRef}
-            className="absolute bottom-16 left-4 bg-[#233138] rounded-xl shadow-[0_0_20px_rgba(0,0,0,0.3)] py-3 z-50 w-60 animate-in slide-in-from-bottom-5 fade-in duration-200"
+            className="absolute bottom-16 left-4 bg-[#233138] rounded-2xl shadow-[0_4px_20px_0_rgba(0,0,0,0.5)] py-2 z-50 w-64 animate-in slide-in-from-bottom-5 fade-in duration-200 border border-[#303d45]"
         >
             <ul className="flex flex-col">
                 {menuItems.map((item) => (
@@ -61,12 +59,12 @@ const AttachmentMenu: React.FC<AttachmentMenuProps> = ({ isOpen, onClose, onSele
                                 onSelect(item.type as any);
                                 onClose();
                             }}
-                            className="w-full flex items-center gap-4 px-5 py-3 hover:bg-[#182229] transition-colors text-left"
+                            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-[#182229] transition-colors text-left"
                         >
-                            <div className="flex-shrink-0">
+                            <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center text-white shadow-sm`}>
                                 {item.icon}
                             </div>
-                            <span className="text-[#d1d7db] text-[15px] font-normal font-sans tracking-wide">
+                            <span className="text-[#e9edef] text-[16px] font-normal">
                                 {item.label}
                             </span>
                         </button>
