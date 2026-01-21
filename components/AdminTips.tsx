@@ -37,33 +37,59 @@ export const AdminTips: React.FC = () => {
     }, []);
 
     const handleSubmit = async () => {
-        if (!formMessage.trim()) return alert({ title: 'Erro', message: 'A mensagem não pode estar vazia.' });
+        if (!formMessage.trim()) {
+            await alert({ title: 'Mensagem Obrigatória', message: 'A mensagem da dica não pode estar vazia.' });
+            return;
+        }
 
+        setLoading(true);
         try {
             if (editingTip) {
                 await cloud.adminUpdateSystemTip(editingTip.id, { message: formMessage, target_role: formRole });
+                await alert({ title: 'Sucesso', message: 'Dica atualizada com sucesso!' });
             } else {
                 await cloud.adminCreateSystemTip(formMessage, formRole);
+                await alert({ title: 'Sucesso', message: 'Nova dica criada com sucesso!' });
             }
             setShowModal(false);
             resetForm();
-            loadTips();
-        } catch (e) {
+            await loadTips();
+        } catch (e: any) {
             console.error(e);
-            alert({ title: 'Erro', message: 'Falha ao salvar dica.' });
+            await alert({ title: 'Erro ao Salvar', message: 'Falha ao salvar dica: ' + (e.message || 'Erro desconhecido') });
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (await confirm({ title: 'Excluir Dica', message: 'Tem certeza?' })) {
+        const ok = await confirm({ title: 'Excluir Dica', message: 'Tem certeza que deseja excluir esta dica? Esta ação não pode ser desfeita.' });
+        if (!ok) return;
+
+        setLoading(true);
+        try {
             await cloud.adminDeleteSystemTip(id);
-            loadTips();
+            await alert({ title: 'Sucesso', message: 'Dica excluída com sucesso!' });
+            await loadTips();
+        } catch (e: any) {
+            console.error(e);
+            await alert({ title: 'Erro ao Excluir', message: 'Falha ao excluir dica: ' + (e.message || 'Erro desconhecido') });
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleToggleActive = async (tip: SystemTip) => {
-        await cloud.adminUpdateSystemTip(tip.id, { is_active: !tip.is_active });
-        loadTips();
+        setLoading(true);
+        try {
+            await cloud.adminUpdateSystemTip(tip.id, { is_active: !tip.is_active });
+            await loadTips();
+        } catch (e: any) {
+            console.error(e);
+            await alert({ title: 'Erro', message: 'Falha ao alterar status da dica:' + (e.message || 'Erro desconhecido') });
+        } finally {
+            setLoading(false);
+        }
     };
 
     const openEdit = (tip: SystemTip) => {

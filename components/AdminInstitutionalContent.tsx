@@ -3,6 +3,7 @@ import { Plus, Search, Edit2, Trash2, Eye, CheckCircle, AlertTriangle, Loader2, 
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { InstitutionalContent, InstitutionalPageKey, InstitutionalCategory, InstitutionalTag, InstitutionalContentVersion, ContentStatus } from '../types';
+import { useDialog } from '../utils/dialogService';
 
 const pageOptions: { key: InstitutionalPageKey; label: string }[] = [
   { key: 'landing', label: 'Página Inicial' },
@@ -26,7 +27,7 @@ export const AdminInstitutionalContent: React.FC = () => {
   const [previewItem, setPreviewItem] = useState<InstitutionalContent | null>(null);
   const [versions, setVersions] = useState<InstitutionalContentVersion[]>([]);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const { confirm, alert } = useDialog();
 
   useEffect(() => {
     const load = async () => {
@@ -38,7 +39,7 @@ export const AdminInstitutionalContent: React.FC = () => {
         ]);
         setCategories(cats);
         setTags(tgs);
-      } finally {}
+      } finally { }
       await refresh();
       setLoading(false);
     };
@@ -64,12 +65,12 @@ export const AdminInstitutionalContent: React.FC = () => {
   };
 
   const handleCreate = async () => {
-    if (!validateForm()) { setToast({ type: 'error', text: 'Preencha título e slug.' }); return; }
+    if (!validateForm()) { await alert({ title: 'Aviso', message: 'Preencha título e slug.' }); return; }
     setSaving(true);
     try {
       const created = await cloud.adminCreateInstitutionalContent({ base: form, images: formImages, tagIds: formTagIds });
       if (created) {
-        setToast({ type: 'success', text: 'Conteúdo criado.' });
+        await alert({ title: 'Sucesso', message: 'Conteúdo criado com sucesso!' });
         setCreating(false);
         setForm({ page_key: pageKey, title: '', description: '', slug: '', status: 'draft', is_active: true, order_index: 0 });
         setFormImages([]);
@@ -77,7 +78,7 @@ export const AdminInstitutionalContent: React.FC = () => {
         await refresh();
       }
     } catch (e: any) {
-      setToast({ type: 'error', text: e.message || 'Erro ao criar.' });
+      await alert({ title: 'Erro', message: e.message || 'Erro ao criar conteúdo.' });
     } finally { setSaving(false); }
   };
 
@@ -86,22 +87,41 @@ export const AdminInstitutionalContent: React.FC = () => {
     setSaving(true);
     try {
       await cloud.adminUpdateInstitutionalContent(editing.id, { title: editing.title, description: editing.description, slug: editing.slug, status: editing.status, is_active: editing.is_active, order_index: editing.order_index, category_id: editing.category_id, metadata: editing.metadata });
-      setToast({ type: 'success', text: 'Atualizado.' });
+      await alert({ title: 'Sucesso', message: 'Conteúdo atualizado com sucesso!' });
       const vers = await cloud.adminGetInstitutionalVersions(editing.id);
       setVersions(vers);
       await refresh();
-    } catch (e: any) { setToast({ type: 'error', text: e.message || 'Erro ao atualizar.' }); } finally { setSaving(false); }
+    } catch (e: any) {
+      await alert({ title: 'Erro', message: e.message || 'Erro ao atualizar conteúdo.' });
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (item: InstitutionalContent) => {
-    if (!window.confirm('Confirma excluir este conteúdo? Um backup será gerado automaticamente.')) return;
+    const isConfirmed = await confirm({
+      title: 'Confirmar Exclusão',
+      message: 'Confirma excluir este conteúdo? Um backup será gerado automaticamente.',
+      confirmButtonText: 'Excluir'
+    });
+    if (!isConfirmed) return;
     setSaving(true);
-    try { await cloud.adminDeleteInstitutionalContent(item.id); setToast({ type: 'success', text: 'Excluído com backup.' }); await refresh(); } catch (e: any) { setToast({ type: 'error', text: e.message || 'Erro ao excluir.' }); } finally { setSaving(false); }
+    try {
+      await cloud.adminDeleteInstitutionalContent(item.id);
+      await alert({ title: 'Sucesso', message: 'Conteúdo excluído com sucesso!' });
+      await refresh();
+    } catch (e: any) {
+      await alert({ title: 'Erro', message: e.message || 'Erro ao excluir conteúdo.' });
+    } finally { setSaving(false); }
   };
 
   const handleTogglePublish = async (item: InstitutionalContent, next: ContentStatus) => {
     setSaving(true);
-    try { await cloud.adminSetInstitutionalStatus(item.id, next); setToast({ type: 'success', text: next === 'published' ? 'Publicado.' : 'Atualizado status.' }); await refresh(); } catch (e: any) { setToast({ type: 'error', text: e.message || 'Erro ao alterar status.' }); } finally { setSaving(false); }
+    try {
+      await cloud.adminSetInstitutionalStatus(item.id, next);
+      await alert({ title: 'Sucesso', message: next === 'published' ? 'Conteúdo publicado com sucesso!' : 'Status atualizado com sucesso!' });
+      await refresh();
+    } catch (e: any) {
+      await alert({ title: 'Erro', message: e.message || 'Erro ao alterar status.' });
+    } finally { setSaving(false); }
   };
 
   const openEdit = async (item: InstitutionalContent) => {
@@ -110,19 +130,8 @@ export const AdminInstitutionalContent: React.FC = () => {
     setVersions(vers);
   };
 
-  const Toast = () => (
-    toast ? (
-      <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 border ${toast.type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
-        <div className={`p-2 rounded-full ${toast.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{toast.type === 'success' ? <CheckCircle className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>}</div>
-        <div><h4 className={`font-bold text-sm ${toast.type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>{toast.type === 'success' ? 'Sucesso' : 'Erro'}</h4><p className="text-xs text-gray-500 dark:text-gray-400">{toast.text}</p></div>
-        <button onClick={() => setToast(null)} className="ml-2 text-gray-400 hover:text-gray-600">×</button>
-      </div>
-    ) : null
-  );
-
   return (
     <div className="space-y-6 animate-in fade-in">
-      <Toast />
       <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-wrap gap-2 items-center justify-between">
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {pageOptions.map(p => (
@@ -132,7 +141,7 @@ export const AdminInstitutionalContent: React.FC = () => {
         <div className="flex gap-2 items-center">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por título..." className="pl-10 p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none"/>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por título..." className="pl-10 p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none" />
           </div>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-xs">
             <option value="all">Todos</option>
@@ -145,13 +154,13 @@ export const AdminInstitutionalContent: React.FC = () => {
             <option value="NONE">Sem categoria</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <Button onClick={() => setCreating(true)}><Plus className="w-4 h-4 mr-2"/> Novo conteúdo</Button>
+          <Button onClick={() => setCreating(true)}><Plus className="w-4 h-4 mr-2" /> Novo conteúdo</Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
         {loading ? (
-          <div className="text-center p-10"><Loader2 className="w-8 h-8 animate-spin mx-auto text-brand-600"/></div>
+          <div className="text-center p-10"><Loader2 className="w-8 h-8 animate-spin mx-auto text-brand-600" /></div>
         ) : items.length === 0 ? (
           <div className="text-center p-10 bg-white dark:bg-gray-800 rounded-2xl text-gray-400 border border-dashed border-gray-200 dark:border-gray-700">Nenhum conteúdo encontrado.</div>
         ) : (
@@ -165,18 +174,18 @@ export const AdminInstitutionalContent: React.FC = () => {
                 <h4 className="font-bold text-gray-900 dark:text-white truncate">{item.title}</h4>
                 {item.description && <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{item.description}</p>}
                 <div className="flex items-center gap-2 mt-2 text-[10px] text-gray-400">
-                  {item.tags && item.tags.map(t => <span key={t.id} className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700"><Tag className="w-3 h-3 inline mr-1"/>{t.name}</span>)}
+                  {item.tags && item.tags.map(t => <span key={t.id} className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700"><Tag className="w-3 h-3 inline mr-1" />{t.name}</span>)}
                 </div>
               </div>
               <div className="flex gap-2 w-full md:w-auto justify-end">
-                <Button size="sm" variant="outline" onClick={() => setPreviewItem(item)}><Eye className="w-3 h-3 mr-1.5"/> Pré-visualizar</Button>
-                <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Edit2 className="w-3 h-3 mr-1.5"/> Editar</Button>
+                <Button size="sm" variant="outline" onClick={() => setPreviewItem(item)}><Eye className="w-3 h-3 mr-1.5" /> Pré-visualizar</Button>
+                <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Edit2 className="w-3 h-3 mr-1.5" /> Editar</Button>
                 {item.status !== 'published' ? (
-                  <Button size="sm" onClick={() => handleTogglePublish(item, 'published')}><CheckCircle className="w-3 h-3 mr-1.5"/> Publicar</Button>
+                  <Button size="sm" onClick={() => handleTogglePublish(item, 'published')}><CheckCircle className="w-3 h-3 mr-1.5" /> Publicar</Button>
                 ) : (
                   <Button size="sm" variant="outline" onClick={() => handleTogglePublish(item, 'disabled')}>Desativar</Button>
                 )}
-                <Button size="sm" variant="danger" onClick={() => handleDelete(item)}><Trash2 className="w-3 h-3 mr-1.5"/> Excluir</Button>
+                <Button size="sm" variant="danger" onClick={() => handleDelete(item)}><Trash2 className="w-3 h-3 mr-1.5" /> Excluir</Button>
               </div>
             </div>
           ))
@@ -186,18 +195,18 @@ export const AdminInstitutionalContent: React.FC = () => {
       {creating && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setCreating(false)}>
           <div className="bg-white dark:bg-gray-800 p-6 rounded-[32px] w-full max-w-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-black text-xl dark:text-white mb-4 flex items-center gap-2"><FileText className="w-5 h-5"/> Novo Conteúdo</h3>
+            <h3 className="font-black text-xl dark:text-white mb-4 flex items-center gap-2"><FileText className="w-5 h-5" /> Novo Conteúdo</h3>
             <div className="grid grid-cols-1 gap-3">
               <label className="text-xs font-bold text-gray-500 uppercase">Página</label>
               <select value={form.page_key as any} onChange={e => setForm(prev => ({ ...prev, page_key: e.target.value as any }))} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-xs">
                 {pageOptions.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
               </select>
               <label className="text-xs font-bold text-gray-500 uppercase">Título</label>
-              <input value={form.title || ''} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Título" className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl"/>
+              <input value={form.title || ''} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Título" className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl" />
               <label className="text-xs font-bold text-gray-500 uppercase">Descrição</label>
-              <textarea value={form.description || ''} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} rows={4} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl"/>
+              <textarea value={form.description || ''} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} rows={4} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl" />
               <label className="text-xs font-bold text-gray-500 uppercase">Slug</label>
-              <input value={form.slug || ''} onChange={e => setForm(prev => ({ ...prev, slug: e.target.value }))} placeholder="slug-exemplo" className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl"/>
+              <input value={form.slug || ''} onChange={e => setForm(prev => ({ ...prev, slug: e.target.value }))} placeholder="slug-exemplo" className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl" />
               <label className="text-xs font-bold text-gray-500 uppercase">Categoria</label>
               <select value={form.category_id || ''} onChange={e => setForm(prev => ({ ...prev, category_id: e.target.value || null }))} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-xs">
                 <option value="">Sem categoria</option>
@@ -212,12 +221,12 @@ export const AdminInstitutionalContent: React.FC = () => {
               <label className="text-xs font-bold text-gray-500 uppercase">Imagens</label>
               <div className="flex items-center gap-2">
                 <input type="file" onChange={e => { if (e.target.files && e.target.files[0]) setFormImages(prev => [...prev, e.target.files![0]]); }} />
-                <div className="text-[10px] text-gray-500 flex items-center gap-1"><ImageIcon className="w-3 h-3"/> {formImages.length} selecionada(s)</div>
+                <div className="text-[10px] text-gray-500 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> {formImages.length} selecionada(s)</div>
               </div>
             </div>
             <div className="flex gap-2 justify-end mt-4">
               <Button variant="outline" onClick={() => setCreating(false)}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Save className="w-4 h-4 mr-1.5"/> Criar</>}</Button>
+              <Button onClick={handleCreate} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Criar</>}</Button>
             </div>
           </div>
         </div>
@@ -226,19 +235,19 @@ export const AdminInstitutionalContent: React.FC = () => {
       {editing && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setEditing(null)}>
           <div className="bg-white dark:bg-gray-800 p-6 rounded-[32px] w-full max-w-3xl shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-black text-xl dark:text-white mb-4 flex items-center gap-2"><Edit2 className="w-5 h-5"/> Editar Conteúdo</h3>
+            <h3 className="font-black text-xl dark:text-white mb-4 flex items-center gap-2"><Edit2 className="w-5 h-5" /> Editar Conteúdo</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Título</label>
-                <input value={editing.title} onChange={e => setEditing(prev => ({ ...prev!, title: e.target.value }))} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl"/>
+                <input value={editing.title} onChange={e => setEditing(prev => ({ ...prev!, title: e.target.value }))} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl" />
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Slug</label>
-                <input value={editing.slug} onChange={e => setEditing(prev => ({ ...prev!, slug: e.target.value }))} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl"/>
+                <input value={editing.slug} onChange={e => setEditing(prev => ({ ...prev!, slug: e.target.value }))} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl" />
               </div>
               <div className="md:col-span-2">
                 <label className="text-xs font-bold text-gray-500 uppercase">Descrição</label>
-                <textarea value={editing.description || ''} onChange={e => setEditing(prev => ({ ...prev!, description: e.target.value }))} rows={4} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl"/>
+                <textarea value={editing.description || ''} onChange={e => setEditing(prev => ({ ...prev!, description: e.target.value }))} rows={4} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl" />
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
@@ -257,7 +266,7 @@ export const AdminInstitutionalContent: React.FC = () => {
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Ordem</label>
-                <input type="number" value={editing.order_index || 0} onChange={e => setEditing(prev => ({ ...prev!, order_index: Number(e.target.value) }))} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl"/>
+                <input type="number" value={editing.order_index || 0} onChange={e => setEditing(prev => ({ ...prev!, order_index: Number(e.target.value) }))} className="p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl" />
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Categoria</label>
@@ -279,7 +288,7 @@ export const AdminInstitutionalContent: React.FC = () => {
             </div>
             <div className="flex gap-2 justify-end mt-4">
               <Button variant="outline" onClick={() => setEditing(null)}>Fechar</Button>
-              <Button onClick={handleUpdate} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Save className="w-4 h-4 mr-1.5"/> Salvar</>}</Button>
+              <Button onClick={handleUpdate} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Salvar</>}</Button>
             </div>
           </div>
         </div>
@@ -288,14 +297,14 @@ export const AdminInstitutionalContent: React.FC = () => {
       {previewItem && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setPreviewItem(null)}>
           <div className="bg-white dark:bg-gray-800 p-6 rounded-[32px] w-full max-w-xl shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-black text-xl dark:text-white mb-4 flex items-center gap-2"><Eye className="w-5 h-5"/> Pré-visualização</h3>
+            <h3 className="font-black text-xl dark:text-white mb-4 flex items-center gap-2"><Eye className="w-5 h-5" /> Pré-visualização</h3>
             <div className="space-y-2">
               <h4 className="font-bold text-gray-900 dark:text-white">{previewItem.title}</h4>
               {previewItem.description && <p className="text-sm text-gray-600 dark:text-gray-300">{previewItem.description}</p>}
               {previewItem.images && previewItem.images.length > 0 && (
                 <div className="grid grid-cols-2 gap-2">
                   {previewItem.images.map(img => (
-                    <img key={img.id} src={cloud.getClient()?.storage.from('public-files').getPublicUrl(img.storage_path).data.publicUrl || ''} alt={img.alt_text || ''} className="w-full h-28 object-cover rounded-xl"/>
+                    <img key={img.id} src={cloud.getClient()?.storage.from('public-files').getPublicUrl(img.storage_path).data.publicUrl || ''} alt={img.alt_text || ''} className="w-full h-28 object-cover rounded-xl" />
                   ))}
                 </div>
               )}

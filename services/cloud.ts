@@ -2,7 +2,8 @@
 import {
     PartnerRequest, UserRole, UserStatus, ManagedUser, PartnerProfile, PartnerDocument,
     City, CityRequest, PayoutSettings, PartnerLevelBenefit, PartnerFeeSettings,
-    BlacklistEntry, FraudAlert, PartnerRating, Claim, PlatformNews,
+    InstitutionalCategory, InstitutionalTag, InstitutionalContent, InstitutionalContentVersion,
+    PlatformNews, MaintenanceSettings, CofrinhoSettings,
     ShopSettings, Product, Category, Order, StoreWallet, WalletTransaction,
     LiveLocationPayload, NotificationPreferences, ChatMessageData, BlitzAlert,
     StoreDeliveryPartner, DailySummary, FinancialStatementItem,
@@ -1625,7 +1626,35 @@ export const adminGetPayoutSettings = async (): Promise<PayoutSettings | null> =
 export const adminUpdatePayoutSettings = async (settings: Partial<PayoutSettings>) => {
     const sb = getClient();
     if (!sb) return;
-    await sb.from('payout_settings').update(settings).eq('id', true); // Assuming singleton
+    const { error } = await sb.from('payout_settings').update(settings).eq('id', 1); // Garante que o ID correto seja usado
+    if (error) throw error;
+};
+
+export const adminBulkSetDriverAutomaticPayouts = async (enabled: boolean): Promise<number> => {
+    const sb = getClient();
+    if (!sb) return 0;
+    const { data, error } = await sb
+        .from('user_profiles')
+        .update({ automatic_payouts_enabled: enabled })
+        .eq('role', 'driver')
+        .select('id');
+
+    if (error) throw error;
+    return data?.length || 0;
+};
+
+export const adminUpdateDriverAutomaticPayouts = async (driverId: string, enabled: boolean) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('user_profiles').update({ automatic_payouts_enabled: enabled }).eq('id', driverId);
+    if (error) throw error;
+};
+
+export const adminUpdateDriverPreferredPayoutMethod = async (driverId: string, method: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('user_profiles').update({ preferred_payout_method_type: method }).eq('id', driverId);
+    if (error) throw error;
 };
 
 // function duplicate removed (getStoreCollaborators)
@@ -1891,21 +1920,6 @@ export const cancelLoan = async (loanId: string) => {
     if (error) throw error;
 };
 
-export const getMaintenanceSettings = async (): Promise<MaintenanceData | null> => {
-    const sb = getClient();
-    if (!sb) return null;
-    try {
-        const { data, error } = await sb.from('maintenance_settings').select('*').single();
-        if (error) {
-            console.error('[getMaintenanceSettings] DB Error:', error);
-            return null;
-        }
-        return data;
-    } catch (err) {
-        console.error('[getMaintenanceSettings] Exception:', err);
-        return null;
-    }
-};
 
 // --- SUPPORT CHAT ---
 
@@ -4648,3 +4662,239 @@ export const saveServiceConfig = async (serviceName: string, config: ServiceConf
     await updatePaymentGateway(serviceName, { credentials: config as any });
 };
 
+// --- INSTITUTIONAL CONTENT (CMS) FUNCTIONS ---
+
+export const adminListInstitutionalCategories = async (): Promise<InstitutionalCategory[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.from('institutional_categories').select('*').order('name');
+    if (error) {
+        console.error('Error listing institutional categories:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const adminListInstitutionalTags = async (): Promise<InstitutionalTag[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.from('institutional_tags').select('*').order('name');
+    if (error) {
+        console.error('Error listing institutional tags:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const adminListInstitutionalContents = async (filters: { pageKey?: string; status?: string; categoryId?: string | null; search?: string }): Promise<InstitutionalContent[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    let query = sb.from('institutional_contents').select(`
+        *,
+        institutional_categories (id, name, slug),
+        institutional_content_images (*),
+        institutional_content_tags (
+            institutional_tags (id, name, slug)
+        )
+    `);
+
+    if (filters.pageKey) query = query.eq('page_key', filters.pageKey);
+    if (filters.status && filters.status !== 'all') query = query.eq('status', filters.status);
+
+    if (filters.categoryId === null) {
+        query = query.is('category_id', null);
+    } else if (filters.categoryId) {
+        query = query.eq('category_id', filters.categoryId);
+    }
+
+    if (filters.search) {
+        query = query.ilike('title', `%${filters.search}%`);
+    }
+
+    const { data, error } = await query.order('order_index', { ascending: true }).order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error listing institutional contents:', error);
+        return [];
+    }
+
+    // Transformar a estrutura de tags para o formato esperado pelo frontend
+    return (data || []).map((item: any) => ({
+        ...item,
+        tags: item.institutional_content_tags?.map((ct: any) => ct.institutional_tags).filter(Boolean) || [],
+        images: item.institutional_content_images || []
+    }));
+};
+
+export const adminCreateInstitutionalContent = async ({ base, images, tagIds }: { base: Partial<InstitutionalContent>; images: any[]; tagIds: string[] }) => {
+    const sb = getClient();
+    if (!sb) throw new Error("No client");
+    const { user, error: userError } = await getUserWithCache();
+    if (!user) throw new Error("Not logged in");
+
+    // 1. Criar o conteúdo base
+    const { data: content, error: createError } = await sb.from('institutional_contents').insert({
+        ...base,
+        author_id: user.id
+    }).select().single();
+
+    if (createError) throw createError;
+
+    // 2. Lidar com Tags
+    if (tagIds.length > 0) {
+        const tagEntries = tagIds.map(tagId => ({
+            content_id: content.id,
+            tag_id: tagId
+        }));
+        await sb.from('institutional_content_tags').insert(tagEntries);
+    }
+
+    // 3. Lidar com Imagens (assumindo que já são caminhos de storage ou precisam de upload)
+    if (images.length > 0) {
+        const imageEntries = images.map((img, idx) => ({
+            content_id: content.id,
+            storage_path: typeof img === 'string' ? img : img.storage_path,
+            alt_text: img.alt_text || '',
+            order_index: img.order_index || idx
+        }));
+        await sb.from('institutional_content_images').insert(imageEntries);
+    }
+
+    return content;
+};
+
+export const adminUpdateInstitutionalContent = async (id: string, updates: Partial<InstitutionalContent>) => {
+    const sb = getClient();
+    if (!sb) throw new Error("No client");
+
+    // 1. Criar versão antes de atualizar
+    const { data: current } = await sb.from('institutional_contents').select('*').eq('id', id).single();
+    if (current) {
+        const { data: lastVersion } = await sb.from('institutional_content_versions')
+            .select('version')
+            .eq('content_id', id)
+            .order('version', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        const nextVersion = (lastVersion?.version || 0) + 1;
+        const { user } = await getUserWithCache();
+        await sb.from('institutional_content_versions').insert({
+            content_id: id,
+            version: nextVersion,
+            snapshot: current,
+            created_by: user?.id
+        });
+    }
+
+    // 2. Atualizar o conteúdo
+    const { error } = await sb.from('institutional_contents').update(updates).eq('id', id);
+    if (error) throw error;
+};
+
+export const adminGetInstitutionalVersions = async (contentId: string): Promise<InstitutionalContentVersion[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.from('institutional_content_versions')
+        .select('*')
+        .eq('content_id', contentId)
+        .order('version', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching institutional versions:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const adminDeleteInstitutionalContent = async (id: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("No client");
+    const { error } = await sb.from('institutional_contents').delete().eq('id', id);
+    if (error) throw error;
+};
+
+export const adminSetInstitutionalStatus = async (id: string, status: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('institutional_contents').update({ status }).eq('id', id);
+    if (error) throw error;
+};
+
+// --- MAINTENANCE SETTINGS ---
+export const getMaintenanceSettings = async (): Promise<MaintenanceSettings | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data, error } = await sb.from('maintenance_settings').select('*').single();
+    if (error) {
+        console.error('Error fetching maintenance settings:', error);
+        return null;
+    }
+    return data as MaintenanceSettings;
+};
+
+export const updateMaintenanceSettings = async (settings: MaintenanceSettings): Promise<void> => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('maintenance_settings').upsert({
+        ...settings,
+        updated_at: new Date().toISOString()
+    });
+    if (error) {
+        console.error('Error updating maintenance settings:', error);
+        throw error;
+    }
+};
+
+// --- COFRINHO (INVESTMENTS) SETTINGS ---
+export const getCofrinhoSettings = async (): Promise<CofrinhoSettings | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data, error } = await sb.from('cofrinho_settings').select('*').single();
+    if (error) {
+        console.error('Error fetching cofrinho settings:', error);
+        return null;
+    }
+    return data as CofrinhoSettings;
+};
+
+export const adminUpdateCofrinhoSettings = async (settings: CofrinhoSettings): Promise<void> => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('cofrinho_settings').upsert({
+        ...settings,
+        updated_at: new Date().toISOString()
+    });
+    if (error) {
+        console.error('Error updating cofrinho settings:', error);
+        throw error;
+    }
+};
+
+// --- PLATFORM NEWS ---
+export const adminAddPlatformNews = async (news: Partial<PlatformNews>): Promise<PlatformNews | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data, error } = await sb.from('platform_news').upsert({
+        ...news,
+        updated_at: new Date().toISOString()
+    }).select().single();
+    if (error) {
+        console.error('Error adding platform news:', error);
+        throw error;
+    }
+    return data as PlatformNews;
+};
+
+export const adminUploadPlatformNewsImage = async (newsId: string, file: File): Promise<string | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const filePath = `news/${newsId}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await sb.storage.from('public-files').upload(filePath, file, { upsert: true });
+    if (uploadError) throw uploadError;
+    const { data: { publicUrl } } = sb.storage.from('public-files').getPublicUrl(filePath);
+    const { error: updateError } = await sb.from('platform_news').update({ image_url: publicUrl }).eq('id', newsId);
+    if (updateError) throw updateError;
+    return publicUrl;
+};

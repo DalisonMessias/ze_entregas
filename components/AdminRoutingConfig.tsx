@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, Map, Save, Lock, Eye, EyeOff, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
-import { ShopSettings } from '../types';
+import { useDialog } from '../utils/dialogService';
 
 export const AdminRoutingConfig: React.FC = () => {
+    const { alert } = useDialog();
     const [apiKey, setApiKey] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -18,24 +18,24 @@ export const AdminRoutingConfig: React.FC = () => {
                 // Now fetching from api_keys table
                 const key = await cloud.getApiKey('open_route_service');
                 setApiKey(key || '');
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Error loading routing settings:", e);
-                setFeedback({ type: 'error', text: 'Erro ao carregar configurações de roteamento.' });
+                await alert({ title: 'Erro de Carregamento', message: 'Erro ao carregar configurações de roteamento: ' + (e.message || 'Erro desconhecido') });
             } finally {
                 setLoading(false);
             }
         };
         loadSettings();
-    }, []);
+    }, [alert]);
 
     const handleSaveApiKey = async () => {
         setSaving(true);
-        setFeedback(null);
         try {
             await cloud.adminUpdateApiKey('open_route_service', apiKey);
-            setFeedback({ type: 'success', text: 'Chave de API do OpenRouteService salva com sucesso!' });
+            await alert({ title: 'Configurações Salvas', message: 'Chave de API do OpenRouteService salva com sucesso!' });
         } catch (e: any) {
-            setFeedback({ type: 'error', text: 'Erro ao salvar chave de API: ' + e.message });
+            console.error(e);
+            await alert({ title: 'Erro ao Salvar', message: 'Erro ao salvar chave de API: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setSaving(false);
         }
@@ -76,12 +76,6 @@ export const AdminRoutingConfig: React.FC = () => {
                     </div>
                 </div>
 
-                {feedback && (
-                    <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                        {feedback.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                        <span className="font-bold text-sm">{feedback.text}</span>
-                    </div>
-                )}
 
                 <Button fullWidth onClick={handleSaveApiKey} disabled={saving} className="mt-6 py-4 text-lg shadow-lg">
                     {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Chave</>}

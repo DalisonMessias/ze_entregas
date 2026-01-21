@@ -7,33 +7,12 @@ import { Loader2, CheckCircle, AlertTriangle, Clock, CalendarDays, Settings, His
 import { Switch } from './Switch';
 import { CustomSelect } from './CustomSelect';
 // --- TOAST COMPONENT (copied from AdminPanel.tsx for consistency) ---
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
-
-    return (
-        <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-10 fade-in duration-300 border ${type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
-            <div className={`p-2 rounded-full ${type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-            </div>
-            <div>
-                <h4 className={`font-bold text-sm ${type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {type === 'success' ? 'Sucesso' : 'Erro'}
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-            </div>
-            <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600"><CloseIcon className="w-4 h-4"/></button>
-        </div>
-    );
-};
 
 export const AdminPayouts: React.FC = () => {
     const [payoutSettings, setPayoutSettings] = useState<PayoutSettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const { alert, confirm } = useDialog();
     const [activeTab, setActiveTab] = useState<'general' | 'drivers' | 'pending'>('general'); // New state for tabs
 
     // New state for payout specific settings
@@ -63,8 +42,8 @@ export const AdminPayouts: React.FC = () => {
                 try {
                     const fetchedDrivers = await cloud.adminGetDriversWithPaymentDetails();
                     setDrivers(fetchedDrivers);
-                } catch {}
-                setToast({ type: 'success', message: 'Configurações sincronizadas.' });
+                } catch { }
+                // Excluído toast de sincronização para evitar poluição visual
             })
             .subscribe();
 
@@ -101,9 +80,9 @@ export const AdminPayouts: React.FC = () => {
             const fetchedPendingPayouts = await cloud.adminGetPendingPayouts();
             setPendingPayouts(fetchedPendingPayouts);
 
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to load payout settings, drivers or pending payouts:", e);
-            setToast({ type: 'error', message: "Erro ao carregar configurações de repasse, entregadores ou repasses pendentes." });
+            await alert("Erro ao carregar configurações de repasse, entregadores ou repasses pendentes.");
         } finally {
             setLoading(false);
         }
@@ -125,45 +104,51 @@ export const AdminPayouts: React.FC = () => {
             if (prevEnabled !== automaticPayoutsEnabled) {
                 const affected = await cloud.adminBulkSetDriverAutomaticPayouts(automaticPayoutsEnabled);
                 setDrivers(prev => prev.map(d => ({ ...d, automatic_payouts_enabled: automaticPayoutsEnabled })));
-                setToast({ type: 'success', message: automaticPayoutsEnabled ? `Repasses automáticos ativados para ${affected} entregadores.` : `Repasses automáticos desativados para ${affected} entregadores.` });
+                await alert(automaticPayoutsEnabled ? `Repasses automáticos ativados para ${affected} entregadores.` : `Repasses automáticos desativados para ${affected} entregadores.`);
             } else {
-                setToast({ type: 'success', message: "Configurações de repasse salvas com sucesso!" });
+                await alert("Configurações de repasse salvas com sucesso!");
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to save payout settings:", e);
-            setToast({ type: 'error', message: "Erro ao salvar configurações de repasse." });
+            await alert("Erro ao salvar configurações de repasse: " + (e.message || "Erro desconhecido"));
         } finally {
             setIsSaving(false);
         }
     };
 
     const handleToggleDriverAutomaticPayouts = async (driverId: string, enabled: boolean) => {
+        setIsSaving(true);
         try {
             await cloud.adminUpdateDriverAutomaticPayouts(driverId, enabled);
-            setDrivers(prevDrivers => 
-                prevDrivers.map(driver => 
+            setDrivers(prevDrivers =>
+                prevDrivers.map(driver =>
                     driver.id === driverId ? { ...driver, automatic_payouts_enabled: enabled } : driver
                 )
             );
-            setToast({ type: 'success', message: `Repasse automático para ${drivers.find(d => d.id === driverId)?.name} ${enabled ? 'ativado' : 'desativado'}!` });
-        } catch (e) {
+            await alert(`Repasse automático para ${drivers.find(d => d.id === driverId)?.name} ${enabled ? 'ativado' : 'desativado'}!`);
+        } catch (e: any) {
             console.error("Failed to update driver automatic payouts:", e);
-            setToast({ type: 'error', message: "Erro ao atualizar repasse automático do entregador." });
+            await alert("Erro ao atualizar repasse automático do entregador: " + (e.message || "Erro desconhecido"));
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleUpdateDriverPreferredPayoutMethod = async (driverId: string, method: 'PIX' | 'BANK_TRANSFER') => {
+        setIsSaving(true);
         try {
             await cloud.adminUpdateDriverPreferredPayoutMethod(driverId, method);
-            setDrivers(prevDrivers => 
-                prevDrivers.map(driver => 
+            setDrivers(prevDrivers =>
+                prevDrivers.map(driver =>
                     driver.id === driverId ? { ...driver, preferred_payout_method_type: method } : driver
                 )
             );
-            setToast({ type: 'success', message: `Preferência de repasse para ${drivers.find(d => d.id === driverId)?.name} atualizada para ${method}!` });
-        } catch (e) {
+            await alert(`Preferência de repasse para ${drivers.find(d => d.id === driverId)?.name} atualizada para ${method}!`);
+        } catch (e: any) {
             console.error("Failed to update driver preferred payout method:", e);
-            setToast({ type: 'error', message: "Erro ao atualizar preferência de repasse do entregador." });
+            await alert("Erro ao atualizar preferência de repasse do entregador: " + (e.message || "Erro desconhecido"));
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -200,7 +185,6 @@ export const AdminPayouts: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
             {/* Header */}
             <div className="flex items-center gap-3">
@@ -254,8 +238,8 @@ export const AdminPayouts: React.FC = () => {
             <div className="mt-6">
                 {activeTab === 'general' && (
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-5">
-                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500"/> Configurações Gerais</h3>
-                        
+                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500" /> Configurações Gerais</h3>
+
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valor Mínimo para Repasse (R$)</label>
@@ -301,7 +285,7 @@ export const AdminPayouts: React.FC = () => {
 
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                             <Button onClick={handleSaveSettings} disabled={isSaving}>
-                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2"/> : <CheckCircle className="w-5 h-5 mr-2"/>}
+                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <CheckCircle className="w-5 h-5 mr-2" />}
                                 Salvar Configurações
                             </Button>
                         </div>
@@ -310,8 +294,8 @@ export const AdminPayouts: React.FC = () => {
 
                 {activeTab === 'drivers' && (
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-5">
-                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Banknote className="w-5 h-5 text-gray-500"/> Preferências de Repasse por Entregador</h3>
-                        
+                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Banknote className="w-5 h-5 text-gray-500" /> Preferências de Repasse por Entregador</h3>
+
                         {drivers.length === 0 ? (
                             <div className="p-10 text-center text-gray-500 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
                                 <p>Nenhum entregador encontrado ou cadastrado.</p>
@@ -383,8 +367,8 @@ export const AdminPayouts: React.FC = () => {
 
                 {activeTab === 'pending' && (
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-5">
-                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Banknote className="w-5 h-5 text-gray-500"/> Repasses Pendentes</h3>
-                        
+                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Banknote className="w-5 h-5 text-gray-500" /> Repasses Pendentes</h3>
+
                         {pendingPayouts.length === 0 ? (
                             <div className="p-10 text-center text-gray-500 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
                                 <p>Nenhum repasse pendente encontrado.</p>

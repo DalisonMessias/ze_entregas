@@ -21,28 +21,6 @@ const parseCurrency = (val: string): number => {
     return parseFloat(val.replace(/\./g, '').replace(',', '.'));
 };
 
-// --- TOAST COMPONENT ---
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
-
-    return (
-        <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-10 fade-in duration-300 border ${type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
-            <div className={`p-2 rounded-full ${type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-            </div>
-            <div>
-                <h4 className={`font-bold text-sm ${type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {type === 'success' ? 'Sucesso' : 'Erro'}
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-            </div>
-            <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-        </div>
-    );
-};
 
 export const AdminShopManagement: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'settings' | 'coupons'>('products');
@@ -50,7 +28,6 @@ export const AdminShopManagement: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
     // Products State
     const [products, setProducts] = useState<Product[]>([]);
@@ -70,7 +47,7 @@ export const AdminShopManagement: React.FC = () => {
 
 
 
-    const { confirm } = useDialog();
+    const { confirm, alert } = useDialog();
 
     const loadData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -97,17 +74,17 @@ export const AdminShopManagement: React.FC = () => {
     // --- Product Management ---
     const handleAddEditProduct = async () => {
         if (!currentProduct?.name || !currentProduct?.price || !currentProduct?.category_id) {
-            setToast({ type: 'error', message: "Preencha todos os campos obrigatórios." });
+            await alert("Preencha todos os campos obrigatórios.");
             return;
         }
         if (submitting) return;
 
         setSubmitting(true);
-        setSaving(true); // UI feedback specific to button
+        setSaving(true);
         try {
             const productToSave = {
                 ...currentProduct,
-                price: parseCurrency(currentProduct.price as any) // Ensure price is number
+                price: parseCurrency(currentProduct.price as any)
             };
 
             if (currentProduct.id) {
@@ -117,11 +94,10 @@ export const AdminShopManagement: React.FC = () => {
             }
             setShowProductModal(false);
             setCurrentProduct(null);
-            setToast({ type: 'success', message: "Produto salvo com sucesso!" });
-
-            loadData(true); // Silent refresh
+            await alert("Produto salvo com sucesso!");
+            loadData(true);
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao salvar: " + e.message });
+            await alert("Erro ao salvar: " + (e.message || "Erro desconhecido"));
         } finally {
             setSaving(false);
             setSubmitting(false);
@@ -137,10 +113,10 @@ export const AdminShopManagement: React.FC = () => {
 
         try {
             await cloud.deleteStoreProduct(id);
-            setToast({ type: 'success', message: "Produto excluído!" });
-            loadData(true); // Silent refresh
+            await alert("Produto excluído!");
+            loadData(true);
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao excluir: " + e.message });
+            await alert("Erro ao excluir: " + (e.message || "Erro desconhecido"));
         } finally {
             setSubmitting(false);
         }
@@ -156,10 +132,10 @@ export const AdminShopManagement: React.FC = () => {
         try {
             await cloud.createStoreCategory(newCategoryName);
             setNewCategoryName('');
-            setToast({ type: 'success', message: "Categoria adicionada!" });
-            loadData(true); // Silent refresh
+            await alert("Categoria adicionada!");
+            loadData(true);
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao adicionar categoria: " + e.message });
+            await alert("Erro ao adicionar categoria: " + (e.message || "Erro desconhecido"));
         } finally {
             setSaving(false);
             setSubmitting(false);
@@ -175,10 +151,10 @@ export const AdminShopManagement: React.FC = () => {
 
         try {
             await cloud.deleteStoreCategory(id);
-            setToast({ type: 'success', message: "Categoria excluída!" });
-            loadData(true); // Silent
+            await alert("Categoria excluída!");
+            loadData(true);
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao excluir categoria: " + e.message });
+            await alert("Erro ao excluir categoria: " + (e.message || "Erro desconhecido"));
         } finally {
             setSubmitting(false);
         }
@@ -192,7 +168,6 @@ export const AdminShopManagement: React.FC = () => {
         setSubmitting(true);
         setSaving(true);
         try {
-            // Only update general shop settings here. Institutional and Support are in their own modules.
             await cloud.adminUpdateShopSettings({
                 is_shop_enabled: shopSettings.is_shop_enabled,
                 shop_name: shopSettings.shop_name,
@@ -205,11 +180,10 @@ export const AdminShopManagement: React.FC = () => {
                 payment_methods: shopSettings.payment_methods,
                 coupons: shopSettings.coupons
             });
-            setToast({ type: 'success', message: "Configurações da loja salvas!" });
-            // No need to reload data usually, but if we do, silent
+            await alert("Configurações da loja salvas!");
             loadData(true);
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao salvar configurações: " + e.message });
+            await alert("Erro ao salvar configurações: " + (e.message || "Erro desconhecido"));
         } finally {
             setSaving(false);
             setSubmitting(false);
@@ -244,13 +218,6 @@ export const AdminShopManagement: React.FC = () => {
         });
     };
 
-    /**
-     * Atualiza um campo específico de um cupom existente no estado da loja.
-     * Garante que o percentual de desconto seja sempre um número.
-     * @param index O índice do cupom a ser atualizado.
-     * @param field O campo do cupom a ser modificado ('code', 'discount_percent', 'active').
-     * @param value O novo valor para o campo especificado.
-     */
     const updateCoupon = (index: number, field: keyof ShopCoupon, value: any) => {
         setShopSettings(prev => {
             if (!prev) return null;
@@ -262,10 +229,6 @@ export const AdminShopManagement: React.FC = () => {
         });
     };
 
-    /**
-     * Remove um cupom do estado da loja com base no seu índice.
-     * @param index O índice do cupom a ser removido.
-     */
     const removeCoupon = (index: number) => {
         setShopSettings(prev => {
             if (!prev) return null;
@@ -277,7 +240,7 @@ export const AdminShopManagement: React.FC = () => {
 
     const handleSaveCoupon = async () => {
         if (!currentCoupon?.code || currentCoupon.discount_percent === undefined) {
-            setToast({ type: 'error', message: 'Preencha todos os campos obrigatórios para o cupom.' });
+            await alert('Preencha todos os campos obrigatórios para o cupom.');
             return;
         }
 
@@ -291,8 +254,7 @@ export const AdminShopManagement: React.FC = () => {
 
             const existingCouponIndex = shopSettings?.coupons.findIndex(c => c.code === couponToSave.code);
 
-            if (existingCouponIndex !== -1) {
-                // Update existing coupon
+            if (existingCouponIndex !== -1 && existingCouponIndex !== undefined) {
                 setShopSettings(prev => {
                     if (!prev) return null;
                     const updatedCoupons = [...(prev.coupons || [])];
@@ -302,7 +264,6 @@ export const AdminShopManagement: React.FC = () => {
                     return { ...prev, coupons: updatedCoupons };
                 });
             } else {
-                // Add new coupon
                 setShopSettings(prev => {
                     if (!prev) return null;
                     return {
@@ -311,12 +272,12 @@ export const AdminShopManagement: React.FC = () => {
                     };
                 });
             }
-            await handleSaveShopSettings(); // Save the entire shop settings after coupon changes
+            await handleSaveShopSettings();
             setShowCouponModal(false);
             setCurrentCoupon(null);
-            setToast({ type: 'success', message: 'Cupom salvo com sucesso!' });
+            await alert('Cupom salvo com sucesso!');
         } catch (e: any) {
-            setToast({ type: 'error', message: 'Erro ao salvar cupom: ' + e.message });
+            await alert('Erro ao salvar cupom: ' + (e.message || "Erro desconhecido"));
         } finally {
             setSaving(false);
         }
@@ -331,7 +292,6 @@ export const AdminShopManagement: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
             <div role="tablist" className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full mx-auto mb-[15px]">
                 <button

@@ -113,35 +113,13 @@ const getStatusColor = (status: string) => {
     }
 };
 
-// --- TOAST COMPONENT ---
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
-
-    return (
-        <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-10 fade-in duration-300 border ${type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
-            <div className={`p-2 rounded-full ${type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-            </div>
-            <div>
-                <h4 className={`font-bold text-sm ${type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {type === 'success' ? 'Sucesso' : 'Erro'}
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-            </div>
-            <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-        </div>
-    );
-};
 
 // --- USER MANAGEMENT MODULE ---
 const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<ManagedUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const { alert } = useDialog();
 
     // Edit State
     const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
@@ -193,10 +171,12 @@ const UserManagement: React.FC = () => {
         try {
             const data = await getAllUsers();
             setUsers(data);
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            setToast({ type: 'error', message: 'Erro ao carregar usuários.' });
-        } finally { if (!silent) setLoading(false); }
+            await alert('Erro ao carregar usuários: ' + (e.message || 'Erro desconhecido'));
+        } finally {
+            if (!silent) setLoading(false);
+        }
     };
 
     const handleEditClick = (user: ManagedUser) => {
@@ -222,7 +202,6 @@ const UserManagement: React.FC = () => {
     const handleSaveUser = async () => {
         if (!selectedUser) return;
 
-        // Regra de validação de motivo
         const restrictedStatuses = ['banned', 'pending', 'blocked', 'suspended'];
         const isRestricted = restrictedStatuses.includes(editForm.status);
         const wasRestricted = restrictedStatuses.includes(selectedUser.status);
@@ -231,7 +210,7 @@ const UserManagement: React.FC = () => {
         const requiresReason = isRestricted || isReactivation;
 
         if (requiresReason && !editForm.reason.trim()) {
-            setToast({ type: 'error', message: 'O motivo da alteração é obrigatório para este status ou reativação.' });
+            await alert('O motivo da alteração é obrigatório para este status ou reativação.');
             return;
         }
 
@@ -259,16 +238,15 @@ const UserManagement: React.FC = () => {
                 await adminUpdateUserPassword(selectedUser.id, editForm.password);
             }
 
-            // Log de Status
             if (requiresReason && selectedUser.status !== editForm.status) {
                 await adminLogStatusChange(selectedUser.id, selectedUser.status, editForm.status, editForm.reason);
             }
 
-            setToast({ type: 'success', message: "Dados do usuário atualizados com sucesso!" });
+            await alert("Dados do usuário atualizados com sucesso!");
             setSelectedUser(null);
             loadUsers(true); // Silent refresh
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao salvar: " + e.message });
+            await alert("Erro ao salvar usuário: " + (e.message || "Erro desconhecido"));
         } finally {
             setIsSaving(false);
         }
@@ -276,7 +254,7 @@ const UserManagement: React.FC = () => {
 
     const handleAddUser = async () => {
         if (!addForm.email || !addForm.password || !addForm.name) {
-            setToast({ type: 'error', message: "Preencha nome, email e senha." });
+            await alert("Preencha nome, email e senha.");
             return;
         }
         setIsSaving(true);
@@ -293,13 +271,13 @@ const UserManagement: React.FC = () => {
 
             await adminCreateUserManual(addForm.email, addForm.password, metadata);
 
-            setToast({ type: 'success', message: "Usuário criado com sucesso!" });
+            await alert("Usuário criado com sucesso!");
             setIsAddingUser(false);
             setAddForm({ name: '', email: '', password: '', phone: '', cpf: '', city: '', role: 'store_partner', is_super_store: false });
             setIsEditingAddCity(true); // Reset for next add
             loadUsers(true); // Silent refresh
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao criar: " + e.message });
+            await alert("Erro ao criar usuário: " + (e.message || "Erro desconhecido"));
         } finally {
             setIsSaving(false);
         }
@@ -314,7 +292,7 @@ const UserManagement: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
             {/* Header & Filters */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
                 <div className="relative flex-1 w-full md:max-w-md">
@@ -727,8 +705,7 @@ const PartnerVerification: React.FC = () => {
     const [selectedPartner, setSelectedPartner] = useState<ManagedUser | null>(null);
     const [partnerDetails, setPartnerDetails] = useState<{ profile: PartnerProfile, documents: PartnerDocument[] } | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
-    const { prompt, confirm: dialogConfirm } = useDialog();
+    const { prompt, confirm: dialogConfirm, alert } = useDialog();
 
     useEffect(() => {
         loadPendingPartners();
@@ -761,10 +738,11 @@ const PartnerVerification: React.FC = () => {
 
         try {
             await adminUpdateDocumentStatus(docId, status, notes || '');
-            // Refresh details
-            if (selectedPartner) openPartnerDetails(selectedPartner);
-            setToast({ type: 'success', message: "Documento atualizado!" });
-        } catch (e: any) { setToast({ type: 'error', message: "Erro: " + e.message }); }
+            if (selectedPartner) await openPartnerDetails(selectedPartner);
+            await alert("Documento atualizado com sucesso!");
+        } catch (e: any) {
+            await alert("Erro ao atualizar documento: " + (e.message || "Erro desconhecido"));
+        }
     };
 
     const handleUpdatePartnerStatus = async (userId: string, status: 'APPROVED' | 'REJECTED' | 'BLOCKED') => {
@@ -772,15 +750,17 @@ const PartnerVerification: React.FC = () => {
         if (!ok) return;
         try {
             await adminUpdatePartnerStatus(userId, status);
-            setToast({ type: 'success', message: "Status do parceiro atualizado!" });
-            if (selectedPartner) openPartnerDetails(selectedPartner); // Refresh
-            loadPendingPartners(true); // Refresh list silently in case status changes
-        } catch (e: any) { setToast({ type: 'error', message: "Erro: " + e.message }); }
+            await alert(`Status do parceiro atualizado para ${status}!`);
+            if (selectedPartner) await openPartnerDetails(selectedPartner);
+            await loadPendingPartners(true);
+        } catch (e: any) {
+            await alert("Erro ao atualizar status do parceiro: " + (e.message || "Erro desconhecido"));
+        }
     };
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
@@ -854,7 +834,7 @@ const CityManagement: React.FC = () => {
     const [requests, setRequests] = useState<CityRequest[]>([]);
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const { confirm: dialogConfirm, alert } = useDialog();
 
     // Add City Form
     const [isAddCityModalOpen, setIsAddCityModalOpen] = useState(false);
@@ -867,7 +847,6 @@ const CityManagement: React.FC = () => {
     const [editName, setEditName] = useState('');
     const [editState, setEditState] = useState('');
     const [editIbgeCode, setEditIbgeCode] = useState('');
-    const { confirm: dialogConfirm } = useDialog();
 
     useEffect(() => {
         loadData();
@@ -885,7 +864,7 @@ const CityManagement: React.FC = () => {
             }
         } catch (e: any) {
             console.error(e);
-            setToast({ type: 'error', message: "Erro ao carregar dados: " + (e.message || 'Erro desconhecido') });
+            await alert("Erro ao carregar dados: " + (e.message || 'Erro desconhecido'));
         } finally {
             if (!silent) setLoading(false);
         }
@@ -894,7 +873,7 @@ const CityManagement: React.FC = () => {
     const handleAddCity = async () => {
         if (!newName || !newState) {
             console.warn('[handleAddCity] Campos vazios');
-            return setToast({ type: 'error', message: "Preencha nome e estado." });
+            await alert("Preencha nome e estado.");
         }
         if (submitting) return; // Prevent double click
 
@@ -909,7 +888,7 @@ const CityManagement: React.FC = () => {
             setNewIbgeCode('');
             setIsAddCityModalOpen(false); // Close modal
 
-            setToast({ type: 'success', message: "Cidade adicionada com sucesso!" });
+            await alert("Cidade adicionada com sucesso!");
 
             // Refresh list separately without blocking UI
             if (activeTab === 'active' || activeTab === 'inactive') {
@@ -917,7 +896,7 @@ const CityManagement: React.FC = () => {
             }
         } catch (e: any) {
             console.error('[handleAddCity] Erro capturado:', e);
-            setToast({ type: 'error', message: e.message || "Erro desconhecido ao adicionar." });
+            await alert("Erro ao adicionar cidade: " + (e.message || "Erro desconhecido"));
         } finally {
             setSubmitting(false);
         }
@@ -933,14 +912,11 @@ const CityManagement: React.FC = () => {
 
         try {
             await adminUpdateCityStatus(city.id, !city.is_active);
-            setToast({ type: 'success', message: `Cidade ${action === 'ativar' ? 'ativada' : 'desativada'}!` });
-
-            // Background refresh (silent)
+            await alert(`Cidade ${action === 'ativar' ? 'ativada' : 'desativada'} com sucesso!`);
             loadData(true);
         } catch (e: any) {
-            // Revert optimistic update
             setCities(prev => prev.map(c => c.id === city.id ? { ...c, is_active: city.is_active } : c));
-            setToast({ type: 'error', message: "Erro: " + e.message });
+            await alert("Erro ao alterar status da cidade: " + (e.message || "Erro desconhecido"));
         }
     };
 
@@ -954,12 +930,10 @@ const CityManagement: React.FC = () => {
         try {
             await adminDeleteCity(city.id);
             setCities(prev => prev.filter(c => c.id !== city.id));
-            setToast({ type: 'success', message: "Cidade excluída com sucesso!" });
-
-            // Background refresh (silent)
+            await alert("Cidade excluída com sucesso!");
             loadData(true);
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao excluir: " + e.message });
+            await alert("Erro ao excluir cidade: " + (e.message || "Erro desconhecido"));
         } finally {
             setSubmitting(false);
         }
@@ -980,13 +954,10 @@ const CityManagement: React.FC = () => {
         try {
             await adminEditCity(editingCity.id, editName, editState, editIbgeCode);
             setEditingCity(null);
-
-            setToast({ type: 'success', message: "Cidade editada com sucesso!" });
-
-            // Background refresh (silent)
+            await alert("Cidade editada com sucesso!");
             loadData(true);
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao editar: " + e.message });
+            await alert("Erro ao editar cidade: " + (e.message || "Erro desconhecido"));
         } finally {
             setSubmitting(false);
         }
@@ -995,10 +966,10 @@ const CityManagement: React.FC = () => {
     const handleProcessRequest = async (id: string, status: 'APPROVED' | 'REJECTED') => {
         try {
             await adminProcessCityRequest(id, status);
-            loadData();
-            setToast({ type: 'success', message: `Solicitação ${status === 'APPROVED' ? 'aprovada' : 'rejeitada'}!` });
+            await loadData();
+            await alert(`Solicitação ${status === 'APPROVED' ? 'aprovada' : 'rejeitada'} com sucesso!`);
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro: " + e.message });
+            await alert("Erro ao processar solicitação: " + (e.message || "Erro desconhecido"));
         }
     };
 
@@ -1007,7 +978,7 @@ const CityManagement: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
             <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-fit flex-wrap">
                 <button onClick={() => setActiveTab('active')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'active' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Ativas</button>
                 <button onClick={() => setActiveTab('inactive')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'inactive' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Desativadas</button>

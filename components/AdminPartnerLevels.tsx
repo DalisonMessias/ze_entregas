@@ -6,11 +6,10 @@ import { PartnerLevelBenefit } from '../types';
 import { useDialog } from '../utils/dialogService';
 
 export const AdminPartnerLevels = () => {
-    const { confirm } = useDialog();
     const [levels, setLevels] = useState<PartnerLevelBenefit[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const { confirm, alert } = useDialog();
 
     const loadLevels = useCallback(async () => {
         setLoading(true);
@@ -19,7 +18,7 @@ export const AdminPartnerLevels = () => {
             setLevels(data);
         } catch (error) {
             console.error("Failed to load partner levels:", error);
-            setFeedback({ type: 'error', text: 'Erro ao carregar os níveis de parceiro.' });
+            await alert({ title: 'Erro', message: 'Erro ao carregar os níveis de parceiro.' });
         } finally {
             setLoading(false);
         }
@@ -58,23 +57,25 @@ export const AdminPartnerLevels = () => {
         if (confirmed) {
             if (levelId.startsWith('new-')) {
                 setLevels(prev => prev.filter(l => l.id !== levelId));
-                setFeedback({ type: 'success', text: 'Nível removido.' });
+                await alert({ title: 'Sucesso', message: 'Nível removido da lista.' });
                 return;
             }
 
+            setSaving(true);
             try {
                 await cloud.adminDeletePartnerLevel(levelId);
-                setFeedback({ type: 'success', text: 'Nível excluído com sucesso!' });
-                loadLevels();
+                await alert({ title: 'Sucesso', message: 'Nível excluído com sucesso!' });
+                await loadLevels();
             } catch (e: any) {
-                setFeedback({ type: 'error', text: 'Erro ao excluir o nível: ' + e.message });
+                await alert({ title: 'Erro', message: 'Erro ao excluir o nível: ' + e.message });
+            } finally {
+                setSaving(false);
             }
         }
     };
 
     const handleSaveChanges = async () => {
         setSaving(true);
-        setFeedback(null);
         try {
             // Remove temporary IDs before saving
             const levelsToSave = levels.map(l => {
@@ -85,10 +86,10 @@ export const AdminPartnerLevels = () => {
                 return l;
             });
             await cloud.adminUpdatePartnerLevels(levelsToSave);
-            setFeedback({ type: 'success', text: 'Níveis de parceiro salvos com sucesso!' });
-            loadLevels(); // Recarregar para obter IDs do banco de dados
+            await alert({ title: 'Sucesso', message: 'Níveis de parceiro salvos com sucesso!' });
+            await loadLevels(); // Recarregar para obter IDs do banco de dados
         } catch (e: any) {
-            setFeedback({ type: 'error', text: 'Erro ao salvar os níveis: ' + e.message });
+            await alert({ title: 'Erro', message: 'Erro ao salvar os níveis: ' + e.message });
         } finally {
             setSaving(false);
         }
@@ -161,13 +162,6 @@ export const AdminPartnerLevels = () => {
                         </div>
                     ))}
                 </div>
-
-                {feedback && (
-                    <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                        {feedback.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                        <span className="font-bold text-sm">{feedback.text}</span>
-                    </div>
-                )}
 
                 <Button fullWidth onClick={handleSaveChanges} disabled={saving} className="mt-6 py-4 text-lg shadow-lg">
                     {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Alterações</>}

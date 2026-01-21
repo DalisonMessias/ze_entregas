@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { BaseModal } from './BaseModal';
 import { Loader2, Save, Star, AlertCircle, TrendingUp, History, UserX, ShieldAlert, Edit2, CheckCircle2, XCircle, Plus, Minus } from 'lucide-react';
 import { ManagedUser } from '../types';
+import { useDialog } from '../utils/dialogService';
 
 interface ScoreEventConfig {
     event_key: string;
@@ -20,13 +21,12 @@ interface BlockingConfig {
 }
 
 export const AdminScoreConfig: React.FC = () => {
-
+    const { alert } = useDialog();
     const [scoreConfigs, setScoreConfigs] = useState<ScoreEventConfig[]>([]);
     const [blockingConfig, setBlockingConfig] = useState<BlockingConfig | null>(null);
     const [drivers, setDrivers] = useState<ManagedUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
     // Edit Score State
     const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
@@ -64,21 +64,21 @@ export const AdminScoreConfig: React.FC = () => {
             setScoreConfigs(configs);
             setBlockingConfig(block);
             setDrivers(allUsers.filter(u => u.role === 'delivery_partner'));
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            setToast({ message: 'Erro ao carregar configurações', type: 'error' });
+            await alert({ title: 'Erro de Carregamento', message: 'Erro ao carregar configurações de pontuação: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setLoading(false);
         }
     };
 
-    const handleUpdateScore = async (eventKey: string, val: number, active: boolean) => {
+    const handleUpdateScore = async (event_key: string, val: number, active: boolean) => {
         try {
-            await adminUpdateScoreConfig(eventKey, val, active);
-            setScoreConfigs(prev => prev.map(c => c.event_key === eventKey ? { ...c, impact_value: val, is_active: active } : c));
-            setToast({ message: 'Score atualizado com sucesso', type: 'success' });
-        } catch (e) {
-            setToast({ message: 'Erro ao atualizar score', type: 'error' });
+            await adminUpdateScoreConfig(event_key, val, active);
+            setScoreConfigs(prev => prev.map(c => c.event_key === event_key ? { ...c, impact_value: val, is_active: active } : c));
+            await alert({ title: 'Sucesso', message: 'Configuração de score atualizada.' });
+        } catch (e: any) {
+            await alert({ title: 'Erro ao Atualizar', message: 'Erro ao atualizar score: ' + (e.message || 'Erro desconhecido') });
         }
     };
 
@@ -87,9 +87,9 @@ export const AdminScoreConfig: React.FC = () => {
         setSaving(true);
         try {
             await adminUpdateBlockingConfig(blockingConfig.id, blockingConfig.monthly_cancellation_limit, blockingConfig.monthly_refusal_limit);
-            setToast({ message: 'Limites de bloqueio atualizados', type: 'success' });
-        } catch (e) {
-            setToast({ message: 'Erro ao salvar limites', type: 'error' });
+            await alert({ title: 'Sucesso', message: 'Limites de bloqueio atualizados!' });
+        } catch (e: any) {
+            await alert({ title: 'Erro ao Salvar', message: 'Erro ao salvar limites: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setSaving(false);
         }
@@ -121,7 +121,7 @@ export const AdminScoreConfig: React.FC = () => {
     const handleSaveScoreEdit = async () => {
         if (!editingUser) return;
         if (!editReason.trim()) {
-            setToast({ message: 'Motivo é obrigatório', type: 'error' });
+            await alert({ title: 'Atenção', message: 'O motivo é obrigatório para ajustes manuais.' });
             return;
         }
 
@@ -131,15 +131,14 @@ export const AdminScoreConfig: React.FC = () => {
             const result = await adminUpdateUserScore(editingUser.id, scoreVal, editReason);
 
             if (result.success) {
-                setToast({ message: 'Score atualizado com sucesso', type: 'success' });
-                // Update local list
+                await alert({ title: 'Sucesso', message: 'Score do usuário atualizado com sucesso!' });
                 setDrivers(prev => prev.map(d => d.id === editingUser.id ? { ...d, score: scoreVal } : d));
                 setEditingUser(null);
             } else {
-                setToast({ message: 'Erro ao atualizar score: ' + result.error, type: 'error' });
+                await alert({ title: 'Erro ao Atualizar', message: 'Erro ao atualizar score: ' + result.error });
             }
-        } catch (e) {
-            setToast({ message: 'Erro ao processar requisição', type: 'error' });
+        } catch (e: any) {
+            await alert({ title: 'Erro no Processamento', message: 'Erro ao processar requisição: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setIsSavingScore(false);
         }
@@ -151,8 +150,8 @@ export const AdminScoreConfig: React.FC = () => {
         try {
             const history = await adminGetScoreHistory(user.id);
             setScoreHistory(history);
-        } catch (e) {
-            setToast({ message: 'Erro ao carregar histórico', type: 'error' });
+        } catch (e: any) {
+            await alert({ title: 'Erro ao Carregar Histórico', message: 'Falha ao buscar histórico de score: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setLoadingHistory(false);
         }
@@ -162,11 +161,6 @@ export const AdminScoreConfig: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto pb-10">
-            {toast && (
-                <div className={`fixed top-24 right-4 z-50 p-4 rounded-xl shadow-lg border animate-in slide-in-from-right-10 ${toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                    {toast.message}
-                </div>
-            )}
 
             <div className="flex flex-col md:flex-row gap-6">
                 {/* Score Config Panel */}

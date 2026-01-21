@@ -5,15 +5,17 @@ import { AdminWalletUser, FinancialStatementItem, UserRole } from '../types';
 import { Button } from './Button';
 import { CustomDateInput } from './CustomDateInput';
 import { ReceiptModal } from './ReceiptModal';
+import { useDialog } from '../utils/dialogService';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 const formatDateTime = (isoString: string) => new Date(isoString).toLocaleString('pt-BR');
 
 export const AdminStoreFinance: React.FC = () => {
+    const { alert } = useDialog();
     const [stores, setStores] = useState<AdminWalletUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    
+
     // Modal for store's financial details
     const [showStoreDetailModal, setShowStoreDetailModal] = useState(false);
     const [selectedStore, setSelectedStore] = useState<AdminWalletUser | null>(null);
@@ -27,12 +29,13 @@ export const AdminStoreFinance: React.FC = () => {
         try {
             const data = await cloud.adminGetAllWallets();
             setStores(data.filter(u => u.role === 'store_partner'));
-        } catch (e) {
+        } catch (e: any) {
             console.error("Error loading store wallets:", e);
+            await alert({ title: 'Erro de Carregamento', message: 'Falha ao carregar carteiras das lojas: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [alert]);
 
     useEffect(() => {
         loadStores();
@@ -43,15 +46,16 @@ export const AdminStoreFinance: React.FC = () => {
         try {
             const { items } = await cloud.getFinancialStatement('store_partner', startDate, endDate);
             setStoreTransactions(items);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Error loading store transactions:", e);
+            await alert({ title: 'Erro no Extrato', message: 'Falha ao carregar extrato financeiro: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setLoadingStoreTxs(false);
         }
-    }, []);
+    }, [alert]);
 
-    const filteredStores = stores.filter(store => 
-        (store.name || '').toLowerCase().includes(search.toLowerCase()) || 
+    const filteredStores = stores.filter(store =>
+        (store.name || '').toLowerCase().includes(search.toLowerCase()) ||
         (store.email || '').toLowerCase().includes(search.toLowerCase())
     );
 
@@ -73,7 +77,7 @@ export const AdminStoreFinance: React.FC = () => {
                     </h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
                     <div className="bg-gradient-to-br from-green-600 to-green-700 text-white p-4 rounded-xl shadow-lg">
                         <p className="text-xs font-bold uppercase opacity-80">Saldo Atual</p>
@@ -81,17 +85,17 @@ export const AdminStoreFinance: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2">
-                        <CustomDateInput value={txDateRange.start} onChange={v => setTxDateRange(prev => ({...prev, start: v}))} label="De" />
-                        <CustomDateInput value={txDateRange.end} onChange={v => setTxDateRange(prev => ({...prev, end: v}))} label="Até" />
+                        <CustomDateInput value={txDateRange.start} onChange={v => setTxDateRange(prev => ({ ...prev, start: v }))} label="De" />
+                        <CustomDateInput value={txDateRange.end} onChange={v => setTxDateRange(prev => ({ ...prev, end: v }))} label="Até" />
                         <Button onClick={() => loadStoreTransactions(store.user_id, txDateRange.start, txDateRange.end)} className="py-2 px-3 self-end">
-                            <Filter className="w-4 h-4"/>
+                            <Filter className="w-4 h-4" />
                         </Button>
                     </div>
 
-                    <h4 className="font-bold text-gray-900 dark:text-white text-md mt-4 flex items-center gap-2"><FileText className="w-4 h-4"/> Extrato</h4>
+                    <h4 className="font-bold text-gray-900 dark:text-white text-md mt-4 flex items-center gap-2"><FileText className="w-4 h-4" /> Extrato</h4>
                     <div className="space-y-3">
                         {loadingStoreTxs ? (
-                            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-brand-500"/></div>
+                            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-brand-500" /></div>
                         ) : storeTransactions.length === 0 ? (
                             <div className="text-center text-gray-400 py-8">Nenhuma transação encontrada no período.</div>
                         ) : (
@@ -118,17 +122,17 @@ export const AdminStoreFinance: React.FC = () => {
         <div className="space-y-6 animate-in fade-in">
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                 <div className="relative flex-1 w-full sm:w-auto">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"/>
-                    <input 
-                        type="text" 
-                        placeholder="Buscar loja por nome ou email..." 
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Buscar loja por nome ou email..."
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="w-full pl-10 p-3 bg-white dark:bg-gray-800 rounded-xl outline-none border border-gray-200 dark:border-gray-700 dark:text-white"
                     />
                 </div>
                 <button onClick={loadStores} className="p-3 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 transition-colors">
-                    <RefreshCw className="w-5 h-5 text-gray-500"/>
+                    <RefreshCw className="w-5 h-5 text-gray-500" />
                 </button>
             </div>
 
@@ -143,7 +147,7 @@ export const AdminStoreFinance: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading && <tr><td colSpan={3} className="text-center p-8"><Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-500"/></td></tr>}
+                            {loading && <tr><td colSpan={3} className="text-center p-8"><Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-500" /></td></tr>}
                             {!loading && filteredStores.length === 0 && <tr><td colSpan={3} className="text-center p-8 text-gray-400">Nenhuma loja encontrada.</td></tr>}
                             {!loading && filteredStores.map(store => (
                                 <tr key={store.user_id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
@@ -156,7 +160,7 @@ export const AdminStoreFinance: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <Button size="sm" variant="outline" onClick={() => openStoreDetails(store)} className="px-3 py-1.5 text-xs">
-                                            <Eye className="w-4 h-4 mr-1"/> Ver Finanças
+                                            <Eye className="w-4 h-4 mr-1" /> Ver Finanças
                                         </Button>
                                     </td>
                                 </tr>

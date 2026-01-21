@@ -10,8 +10,8 @@ interface DialogOptions {
 }
 
 interface DialogContextType {
-    alert: (options: DialogOptions) => Promise<void>;
-    confirm: (options: DialogOptions) => Promise<boolean>;
+    alert: (options: string | DialogOptions) => Promise<void>;
+    confirm: (options: string | DialogOptions) => Promise<boolean>;
     prompt: (options: DialogOptions) => Promise<string | null>;
 }
 
@@ -43,6 +43,16 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const typeRef = useRef<'alert' | 'confirm' | 'prompt' | null>(null);
 
     const closeDialog = () => {
+        // Se houver uma promessa pendente ao fechar (ex: clicando fora ou no X),
+        // precisamos resolvê-la para não travar a execução de quem chamou.
+        if (resolveRef.current) {
+            if (typeRef.current === 'confirm') resolveRef.current(false);
+            else if (typeRef.current === 'prompt') resolveRef.current(null);
+            else resolveRef.current(); // alert resolve as void
+
+            resolveRef.current = null;
+            typeRef.current = null;
+        }
         setDialogState(prev => ({ ...prev, isOpen: false }));
     };
 
@@ -76,35 +86,37 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         closeDialog();
     };
 
-    const alert = (options: DialogOptions): Promise<void> => {
+    const alert = (options: string | DialogOptions): Promise<void> => {
+        const opt = typeof options === 'string' ? { title: 'Aviso', message: options } : options;
         return new Promise(resolve => {
             setDialogState({
                 isOpen: true,
                 type: 'alert',
-                title: options.title,
-                message: options.message,
+                title: opt.title,
+                message: opt.message,
                 resolve: resolve,
                 reject: null,
-                confirmButtonText: options.confirmButtonText || 'OK',
+                confirmButtonText: opt.confirmButtonText || 'OK',
             });
             resolveRef.current = resolve;
             typeRef.current = 'alert';
         });
     };
 
-    const confirm = (options: DialogOptions): Promise<boolean> => {
+    const confirm = (options: string | DialogOptions): Promise<boolean> => {
+        const opt = typeof options === 'string' ? { title: 'Confirmação', message: options } : options;
         return new Promise(resolve => {
             setDialogState({
                 isOpen: true,
                 type: 'confirm',
-                title: options.title,
-                message: options.message,
+                title: opt.title,
+                message: opt.message,
                 resolve: resolve,
                 reject: null,
-                confirmButtonText: options.confirmButtonText || 'Confirmar',
-                cancelButtonText: options.cancelButtonText || 'Cancelar',
+                confirmButtonText: opt.confirmButtonText || 'Confirmar',
+                cancelButtonText: opt.cancelButtonText || 'Cancelar',
             });
-            resolveRef.current = resolve as any;
+            resolveRef.current = resolve;
             typeRef.current = 'confirm';
         });
     };

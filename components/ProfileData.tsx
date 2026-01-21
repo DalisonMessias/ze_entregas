@@ -10,29 +10,10 @@ import * as cloud from '../services/cloud';
 import { formatPhoneNumber } from '../utils/mapHelpers';
 import { Switch } from './Switch';
 import { CitySearchSelect } from './CitySearchSelect';
+import { useDialog } from '../utils/dialogService';
 
 // --- TOAST COMPONENT ---
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
 
-    return (
-        <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-10 fade-in duration-300 border ${type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
-            <div className={`p-2 rounded-full ${type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-            </div>
-            <div>
-                <h4 className={`font-bold text-sm ${type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {type === 'success' ? 'Sucesso' : 'Erro'}
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-            </div>
-            <button onClick={onClose} aria-label="Fechar" className="ml-2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-        </div>
-    );
-};
 
 // Internal Component for Orders
 const MyOrders: React.FC = () => {
@@ -206,7 +187,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
     const [profileError, setProfileError] = useState<string | null>(null);
 
     // Toast State (Replaces Status Message)
-    const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const { alert } = useDialog();
     const [showSensitive, setShowSensitive] = useState(false);
 
     const [user, setUser] = useState<any | null>(null);
@@ -331,7 +312,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
             const client = cloud.getClient();
             if (user && client) {
                 if (!personalData.address.trim() || !addressNumber.trim() || !addressNeighborhood.trim()) {
-                    setToast({ type: 'error', message: 'Rua, Número e Bairro são obrigatórios.' });
+                    await alert({ title: 'Erro', message: 'Rua, Número e Bairro são obrigatórios.' });
                     setIsLoading(false);
                     return;
                 }
@@ -360,11 +341,11 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                     });
                 }
 
-                setToast({ type: 'success', message: 'Dados atualizados com sucesso!' });
+                await alert({ title: 'Sucesso', message: 'Dados atualizados com sucesso!' });
                 setShowBankModal(false);
             }
         } catch (e: any) {
-            setToast({ type: 'error', message: 'Erro ao salvar: ' + e.message });
+            await alert({ title: 'Erro ao Salvar', message: 'Erro ao salvar: ' + e.message });
         } finally {
             setIsLoading(false);
         }
@@ -384,9 +365,9 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                     avatar_url: publicUrl
                 }).eq('id', user.id);
             }
-            setToast({ type: 'success', message: 'Foto de perfil atualizada!' });
+            await alert({ title: 'Sucesso', message: 'Foto de perfil atualizada!' });
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro no upload da foto: " + e.message });
+            await alert({ title: 'Erro no Upload', message: "Erro no upload da foto: " + e.message });
         } finally {
             setUploadingAvatar(false);
         }
@@ -395,7 +376,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
     const copyPixKey = () => {
         if (bankDetails.pixKey) {
             navigator.clipboard.writeText(bankDetails.pixKey);
-            setToast({ type: 'success', message: "Chave PIX copiada!" });
+            await alert({ title: 'Sucesso', message: "Chave PIX copiada!" });
         }
     };
 
@@ -431,7 +412,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
 
             {/* Profile Picture Section */}
             <div className="flex flex-col items-center justify-center py-6">

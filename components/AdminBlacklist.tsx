@@ -10,15 +10,15 @@ const formatDateTime = (isoString: string) => new Date(isoString).toLocaleString
 export const AdminBlacklist: React.FC = () => {
     const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
     const [loading, setLoading] = useState(true);
-    
+
     // Add Entry State
     const [email, setEmail] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [reason, setReason] = useState('');
     const [adding, setAdding] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [isRemoving, setIsRemoving] = useState(false);
 
-    const { confirm } = useDialog();
+    const { confirm, alert } = useDialog();
 
     const loadBlacklist = useCallback(async () => {
         setLoading(true);
@@ -38,16 +38,15 @@ export const AdminBlacklist: React.FC = () => {
 
     const handleAddEntry = async () => {
         if (!email.trim() && !phoneNumber.trim()) {
-            setFeedback({ type: 'error', text: 'Preencha email ou telefone.' });
+            await alert('Preencha email ou telefone.');
             return;
         }
         if (!reason.trim()) {
-            setFeedback({ type: 'error', text: 'Preencha o motivo.' });
+            await alert('Preencha o motivo.');
             return;
         }
 
         setAdding(true);
-        setFeedback(null);
         try {
             const entry: Partial<BlacklistEntry> = {
                 email: email.trim() === '' ? undefined : email.trim(),
@@ -57,27 +56,30 @@ export const AdminBlacklist: React.FC = () => {
                 status: 'active'
             };
             await cloud.adminAddToBlacklist(entry);
-            setFeedback({ type: 'success', text: 'Usuário adicionado à lista negra.' });
+            await alert('Usuário adicionado à lista negra com sucesso!');
             setEmail('');
             setPhoneNumber('');
             setReason('');
             loadBlacklist();
         } catch (e: any) {
-            setFeedback({ type: 'error', text: 'Erro ao adicionar: ' + e.message });
+            await alert('Erro ao adicionar à lista negra: ' + (e.message || 'Erro desconhecido'));
         } finally {
             setAdding(false);
         }
     };
 
     const handleRemoveEntry = async (id: string) => {
-        const ok = await confirm({ title: 'Remover da lista negra', message: 'Tem certeza que deseja remover este usuário da lista negra?' });
+        const ok = await confirm('Tem certeza que deseja remover este usuário da lista negra?');
         if (!ok) return;
+        setIsRemoving(true);
         try {
             await cloud.adminRemoveFromBlacklist(id);
-            setFeedback({ type: 'success', text: 'Usuário removido da lista negra.' });
+            await alert('Usuário removido da lista negra com sucesso!');
             loadBlacklist();
         } catch (e: any) {
-            setFeedback({ type: 'error', text: 'Erro ao remover: ' + e.message });
+            await alert('Erro ao remover da lista negra: ' + (e.message || 'Erro desconhecido'));
+        } finally {
+            setIsRemoving(false);
         }
     };
 
@@ -103,16 +105,10 @@ export const AdminBlacklist: React.FC = () => {
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Motivo (Obrigatório)</label>
                         <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 resize-y" placeholder="Ex: Fraude, Comportamento inadequado..." />
                     </div>
-                    
-                    {feedback && (
-                        <div className={`p-4 rounded-xl flex items-center gap-3 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                            {feedback.type === 'success' ? <CheckCircle className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>}
-                            <span className="font-bold text-sm">{feedback.text}</span>
-                        </div>
-                    )}
+
 
                     <Button fullWidth onClick={handleAddEntry} disabled={adding} className="py-4 text-lg shadow-lg">
-                        {adding ? <Loader2 className="w-6 h-6 animate-spin"/> : <><Plus className="w-5 h-5 mr-2"/> Adicionar à Lista Negra</>}
+                        {adding ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Plus className="w-5 h-5 mr-2" /> Adicionar à Lista Negra</>}
                     </Button>
                 </div>
             </div>
@@ -146,7 +142,11 @@ export const AdminBlacklist: React.FC = () => {
                                     <td className="px-4 py-3 text-xs text-gray-700 dark:text-gray-300">{entry.reason}</td>
                                     <td className="px-4 py-3 text-xs text-gray-500">{formatDateTime(entry.created_at)}</td>
                                     <td className="px-4 py-3 text-right">
-                                        <button onClick={() => handleRemoveEntry(entry.id)} className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200">
+                                        <button
+                                            onClick={() => handleRemoveEntry(entry.id)}
+                                            disabled={isRemoving}
+                                            className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                                        >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </td>

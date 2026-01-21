@@ -47,6 +47,7 @@ export const AdminStores: React.FC = () => {
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [isProductManagerOpen, setIsProductManagerOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     const { confirm, alert } = useDialog();
 
@@ -68,17 +69,15 @@ export const AdminStores: React.FC = () => {
 
     const handleUpdateStatus = async () => {
         if (!selectedStore || !nextStatus || !statusReason.trim()) {
-            void alert({ title: 'Atenção', message: 'Por favor, informe o motivo da alteração.' });
+            await alert('Por favor, informe o motivo da alteração.');
             return;
         }
 
-        const ok = await confirm({
-            title: 'Confirmar Alteração',
-            message: `Deseja realmente alterar o status da loja "${selectedStore.name}" para ${getStatusLabel(nextStatus)}?`
-        });
+        const ok = await confirm(`Deseja realmente alterar o status da loja "${selectedStore.name}" para ${getStatusLabel(nextStatus)}?`);
 
         if (!ok) return;
 
+        setIsSaving(true);
         try {
             const result = await adminUpdateStoreStatus(
                 selectedStore.id,
@@ -91,17 +90,20 @@ export const AdminStores: React.FC = () => {
                 setStores(prev => prev.map(s => s.id === selectedStore.id ? { ...s, status: nextStatus as any } : s));
                 setIsStatusModalOpen(false);
                 setStatusReason('');
-                void alert({ title: 'Sucesso', message: 'Status atualizado com sucesso!' });
+                await alert('Status atualizado com sucesso!');
 
                 // Refresh details if open
                 if (selectedStore) {
                     setSelectedStore({ ...selectedStore, status: nextStatus as any });
                 }
             } else {
-                void alert({ title: 'Erro', message: 'Não foi possível atualizar o status.' });
+                await alert('Não foi possível atualizar o status.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error updating status:', error);
+            await alert('Erro ao atualizar status: ' + (error.message || 'Erro desconhecido'));
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -505,12 +507,12 @@ export const AdminStores: React.FC = () => {
                             <Button
                                 fullWidth
                                 onClick={handleUpdateStatus}
-                                disabled={!statusReason.trim()}
+                                disabled={!statusReason.trim() || isSaving}
                                 className={`py-4 rounded-2xl font-black shadow-lg ${nextStatus === 'blocked' ? 'bg-red-600 hover:bg-red-700 shadow-red-500/30' :
                                     nextStatus === 'suspended' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30' : 'bg-green-600 hover:bg-green-700 shadow-green-500/30'
                                     }`}
                             >
-                                Confirmar Alteração
+                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Confirmar Alteração'}
                             </Button>
                         </div>
                     </div>

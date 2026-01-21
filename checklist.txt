@@ -73,3 +73,5 @@
 [21/01/2026] - Segurança: Logs de alteração de status agora incluem o motivo obrigatório e o administrador que realizou a ação.
 [FIX] Implementado gerenciamento de produtos (Importa��o/Exporta��o) via Admin para lojas espec�ficas
 [FEAT] Dashboard Admin: Adicionado painel financeiro detalhado com Recargas, Taxas de Lojistas e Taxas de Entregadores
+[21/01/2026] - Correção: Resolvido problema de redirecionamento automático para a Home no reload. Agora o sistema preserva a rota atual ao usar F5 ou atualizar a página.
+[21/01/2026] - Ajuste AuthWrapper: Corrigida lógica de sincronização de URL que forçava redirecionamento para '/' antes da verificação da sessão. Agora rotas internas do App são preservadas no recarregamento (F5).

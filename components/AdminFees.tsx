@@ -6,6 +6,7 @@ import { Loader2, DollarSign, Save, Settings, CheckCircle, AlertTriangle } from 
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { PartnerFeeSettings } from '../types';
+import { useDialog } from '../utils/dialogService';
 
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "");
@@ -35,11 +36,11 @@ const parsePercent = (val: string): number => {
 };
 
 export const AdminFees: React.FC = () => {
+    const { alert } = useDialog();
     const [originalFees, setOriginalFees] = useState<PartnerFeeSettings | null>(null);
     const [formValues, setFormValues] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     useEffect(() => {
         const loadFees = async () => {
@@ -62,7 +63,7 @@ export const AdminFees: React.FC = () => {
                     });
                 }
             } catch (e: any) {
-                setFeedback({ type: 'error', text: 'Erro ao carregar taxas: ' + e.message });
+                await alert('Erro ao carregar taxas: ' + (e.message || 'Erro desconhecido'));
             } finally {
                 setLoading(false);
             }
@@ -76,7 +77,6 @@ export const AdminFees: React.FC = () => {
 
     const handleSaveFees = async () => {
         setSaving(true);
-        setFeedback(null);
         try {
             const payload: Partial<PartnerFeeSettings> = {
                 global_tax_fixed: parseCurrency(formValues.global_tax_fixed),
@@ -91,13 +91,12 @@ export const AdminFees: React.FC = () => {
                 pos_max_value: parseCurrency(formValues.pos_max_value),
             };
 
-            // Mantém campos não editáveis do original para não serem sobrescritos
             const finalPayload = { ...originalFees, ...payload };
 
             await cloud.adminUpdateFeeSettings(finalPayload as PartnerFeeSettings);
-            setFeedback({ type: 'success', text: 'Taxas atualizadas com sucesso!' });
+            await alert('Taxas atualizadas com sucesso!');
         } catch (e: any) {
-            setFeedback({ type: 'error', text: 'Erro ao salvar: ' + e.message });
+            await alert('Erro ao salvar: ' + (e.message || 'Erro desconhecido'));
         } finally {
             setSaving(false);
         }
@@ -185,12 +184,6 @@ export const AdminFees: React.FC = () => {
                     </div>
                 </div>
 
-                {feedback && (
-                    <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                        {feedback.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                        <span className="font-bold text-sm">{feedback.text}</span>
-                    </div>
-                )}
 
                 <Button fullWidth onClick={handleSaveFees} disabled={saving} className="mt-6 py-4 text-lg shadow-lg">
                     {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Taxas</>}

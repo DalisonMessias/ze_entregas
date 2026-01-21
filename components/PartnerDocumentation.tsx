@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
 import { PartnerProfile, PartnerDocument, DocumentType, VehicleType } from '../types';
+import { useDialog } from '../utils/dialogService';
 
 interface PartnerDocumentationProps {
     profile: PartnerProfile | null;
@@ -18,28 +19,7 @@ interface PartnerDocumentationProps {
     onRefreshAdmin?: () => void;
 }
 
-// --- TOAST COMPONENT ---
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
 
-    return (
-        <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-10 fade-in duration-300 border ${type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
-            <div className={`p-2 rounded-full ${type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-            </div>
-            <div>
-                <h4 className={`font-bold text-sm ${type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {type === 'success' ? 'Sucesso' : 'Erro'}
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-            </div>
-            <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-        </div>
-    );
-};
 
 const requiredDocs: Record<VehicleType, { type: DocumentType, name: string }[]> = {
     'moto': [
@@ -91,7 +71,7 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
     const [loadingDocs, setLoadingDocs] = useState(true);
     const [docError, setDocError] = useState<string | null>(null);
     const [fetchTrigger, setFetchTrigger] = useState(0);
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const { alert } = useDialog();
 
     const [vehicleDetails, setVehicleDetails] = useState({
         vehicle_type: profile?.vehicle_type || 'moto',
@@ -157,9 +137,9 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
         try {
             await cloud.updateMyPartnerProfile({ vehicle_type: type });
             if (profile) onProfileUpdate({ ...profile, vehicle_type: type });
-            setToast({ type: 'success', message: "Tipo de veículo atualizado!" });
+            await alert({ title: 'Sucesso', message: "Tipo de veículo atualizado!" });
         } catch (e) {
-            setToast({ type: 'error', message: "Erro ao atualizar tipo de veículo." });
+            await alert({ title: 'Erro', message: "Erro ao atualizar tipo de veículo." });
         }
     };
 
@@ -177,9 +157,9 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
                     vehicle_model: vehicleDetails.vehicle_model,
                 });
             }
-            setToast({ type: 'success', message: "Detalhes do veículo salvos!" });
+            await alert({ title: 'Sucesso', message: "Detalhes do veículo salvos!" });
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao salvar: " + e.message });
+            await alert({ title: 'Erro ao Salvar', message: "Erro ao salvar: " + e.message });
         } finally {
             setSavingDetails(false);
         }
@@ -212,7 +192,7 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
 
             clearInterval(progressInterval);
             setUploadProgress(prev => ({ ...prev, [typeToUpload]: 100 }));
-            setToast({ type: 'success', message: "Documento enviado com sucesso!" });
+            await alert({ title: 'Sucesso', message: "Documento enviado com sucesso!" });
 
             // Wait a bit on 100% to give user feedback
             setTimeout(() => {
@@ -226,7 +206,7 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
 
         } catch (err: any) {
             clearInterval(progressInterval);
-            setToast({ type: 'error', message: "Erro no upload: " + err.message });
+            await alert({ title: 'Erro no Upload', message: "Erro no upload: " + err.message });
             setUploading(null);
             setUploadProgress(prev => ({ ...prev, [typeToUpload]: undefined }));
         } finally {
@@ -249,9 +229,9 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
             if (profile) {
                 onProfileUpdate({ ...profile, verification_status: 'PENDING_REVIEW' });
             }
-            setToast({ type: 'success', message: "Documentação enviada para análise!" });
+            await alert({ title: 'Sucesso', message: "Documentação enviada para análise!" });
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao enviar: " + e.message });
+            await alert({ title: 'Erro ao Enviar', message: "Erro ao enviar: " + e.message });
         } finally {
             setSubmitting(false);
         }
@@ -330,7 +310,7 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,application/pdf" />
 
             <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">

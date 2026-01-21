@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Send, Loader2, Megaphone, CheckCircle, AlertTriangle, X, User, Search } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
+import { useDialog } from '../utils/dialogService';
 
 type NotifType = 'global' | 'individual';
 
 export const AdminNotifications: React.FC = () => {
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
+    const { alert } = useDialog();
     const [sending, setSending] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [activeType, setActiveType] = useState<NotifType>('global');
 
     // State for Individual Notification
@@ -41,24 +42,23 @@ export const AdminNotifications: React.FC = () => {
 
     const handleSendNotification = async () => {
         if (!title.trim() || !message.trim()) {
-            setFeedback({ type: 'error', text: 'Preencha o título e a mensagem.' });
+            await alert('Preencha o título e a mensagem.');
             return;
         }
 
         if (activeType === 'individual' && !selectedUser) {
-            setFeedback({ type: 'error', text: 'Selecione um usuário para a notificação individual.' });
+            await alert('Selecione um usuário para a notificação individual.');
             return;
         }
 
         setSending(true);
-        setFeedback(null);
         try {
             if (activeType === 'global') {
                 await cloud.adminSendGlobalNotification(title, message);
-                setFeedback({ type: 'success', text: 'Notificação global enviada com sucesso!' });
+                await alert('Notificação global enviada com sucesso!');
             } else {
                 await cloud.adminSendIndividualNotification(selectedUser.id, title, message);
-                setFeedback({ type: 'success', text: `Notificação enviada para ${selectedUser.name}!` });
+                await alert(`Notificação enviada para ${selectedUser.name}!`);
             }
 
             // Força o App a recarregar a lista de notificações localmente se o admin for o próprio destinatário
@@ -71,7 +71,7 @@ export const AdminNotifications: React.FC = () => {
                 setSearchQuery('');
             }
         } catch (e: any) {
-            setFeedback({ type: 'error', text: 'Erro ao enviar notificação: ' + e.message });
+            await alert('Erro ao enviar notificação: ' + (e.message || 'Erro desconhecido'));
         } finally {
             setSending(false);
         }
@@ -84,7 +84,6 @@ export const AdminNotifications: React.FC = () => {
                 <button
                     onClick={() => {
                         setActiveType('global');
-                        setFeedback(null);
                     }}
                     className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeType === 'global' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                 >
@@ -93,7 +92,6 @@ export const AdminNotifications: React.FC = () => {
                 <button
                     onClick={() => {
                         setActiveType('individual');
-                        setFeedback(null);
                     }}
                     className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeType === 'individual' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                 >
@@ -201,13 +199,6 @@ export const AdminNotifications: React.FC = () => {
                     </div>
                 </div>
 
-                {feedback && (
-                    <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 animate-in zoom-in-95 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                        {feedback.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <AlertTriangle className="w-5 h-5 flex-shrink-0" />}
-                        <span className="font-bold text-sm flex-1">{feedback.text}</span>
-                        <button onClick={() => setFeedback(null)} className="p-1 hover:bg-black/5 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
-                    </div>
-                )}
 
                 <Button
                     fullWidth

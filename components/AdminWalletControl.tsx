@@ -44,8 +44,9 @@ export const AdminWalletControl: React.FC = () => {
         try {
             const data = await cloud.adminGetAllWallets();
             setWallets(data);
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
+            await alert({ title: 'Erro de Carregamento', message: 'Falha ao carregar carteiras: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setLoading(false);
         }

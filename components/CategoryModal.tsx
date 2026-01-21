@@ -20,7 +20,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     const [newCategoryName, setNewCategoryName] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const { confirm } = useDialog();
+    const { confirm, alert } = useDialog();
 
     const loadCategories = async () => {
         setIsLoading(true);
@@ -48,9 +48,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             setNewCategoryName('');
             await loadCategories();
             onCategoriesChange?.();
-        } catch (error) {
+            await alert({ title: 'Sucesso', message: 'Categoria criada com sucesso!' });
+        } catch (error: any) {
             console.error("Erro ao criar categoria:", error);
-            alert("Erro ao criar categoria. Verifique se o nome já existe.");
+            await alert({ title: 'Erro', message: "Erro ao criar categoria: " + (error.message || 'Verifique se o nome já existe.') });
         } finally {
             setIsSaving(false);
         }
@@ -64,13 +65,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         });
 
         if (confirmed) {
+            setIsSaving(true);
             try {
                 await cloud.deleteStoreCategory(id);
                 await loadCategories();
                 onCategoriesChange?.();
+                await alert({ title: 'Sucesso', message: 'Categoria excluída!' });
             } catch (error) {
                 console.error("Erro ao excluir categoria:", error);
-                alert("Não foi possível excluir a categoria.");
+                await alert({ title: 'Erro', message: "Não foi possível excluir a categoria." });
+            } finally {
+                setIsSaving(false);
             }
         }
     };

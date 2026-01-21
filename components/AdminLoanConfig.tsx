@@ -4,33 +4,14 @@ import * as cloud from '../services/cloud';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
 import { LoanType, LoanLevelLimit, PartnerLoan } from '../types';
+import { useDialog } from '../utils/dialogService';
 
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
-
-    return (
-        <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-10 fade-in duration-300 border ${type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
-            <div className={`p-2 rounded-full ${type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
-            </div>
-            <div>
-                <h4 className={`font-bold text-sm ${type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {type === 'success' ? 'Sucesso' : 'Erro'}
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-            </div>
-        </div>
-    );
-};
 
 export const AdminLoanConfig: React.FC = () => {
+    const { alert, confirm } = useDialog();
     const [activeTab, setActiveTab] = useState<'types' | 'levels' | 'loans'>('types');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
     // Loan Types State
     const [loanTypes, setLoanTypes] = useState<LoanType[]>([]);
@@ -48,15 +29,6 @@ export const AdminLoanConfig: React.FC = () => {
     const [rejectModalOpen, setRejectModalOpen] = useState(false);
     const [loanToReject, setLoanToReject] = useState<string | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
-
-    // Confirmation Modals
-    const [confirmModal, setConfirmModal] = useState<{
-        open: boolean;
-        title: string;
-        message: string;
-        action: () => void;
-        type: 'danger' | 'success';
-    } | null>(null);
 
     useEffect(() => {
         loadData();
@@ -76,7 +48,7 @@ export const AdminLoanConfig: React.FC = () => {
                 setLoans(allLoans);
             }
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro ao carregar dados' });
+            await alert({ title: 'Erro de Carregamento', message: e.message || 'Erro ao carregar dados de empréstimos' });
         } finally {
             setLoading(false);
         }
@@ -91,33 +63,34 @@ export const AdminLoanConfig: React.FC = () => {
             } else {
                 await cloud.adminCreateLoanType(editingType);
             }
-            setToast({ type: 'success', message: 'Tipo de empréstimo salvo com sucesso!' });
+            await alert({ title: 'Sucesso', message: 'Tipo de empréstimo salvo com sucesso!' });
             setEditingType(null);
-            loadData();
+            await loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro ao salvar' });
+            await alert({ title: 'Erro ao Salvar', message: e.message || 'Erro ao salvar tipo de empréstimo' });
         } finally {
             setSaving(false);
         }
     };
 
     const handleDeleteLoanType = async (id: string) => {
-        setConfirmModal({
-            open: true,
+        const ok = await confirm({
             title: 'Excluir Tipo de Empréstimo',
-            message: 'Tem certeza que deseja excluir este tipo de empréstimo? Esta ação não pode ser desfeita.',
-            type: 'danger',
-            action: async () => {
-                try {
-                    await cloud.adminDeleteLoanType(id);
-                    setToast({ type: 'success', message: 'Tipo de empréstimo excluído!' });
-                    loadData();
-                } catch (e: any) {
-                    setToast({ type: 'error', message: e.message || 'Erro ao excluir' });
-                }
-                setConfirmModal(null);
-            }
+            message: 'Tem certeza que deseja excluir este tipo de empréstimo? Esta ação não pode ser desfeita.'
         });
+
+        if (!ok) return;
+
+        setSaving(true);
+        try {
+            await cloud.adminDeleteLoanType(id);
+            await alert({ title: 'Sucesso', message: 'Tipo de empréstimo excluído!' });
+            await loadData();
+        } catch (e: any) {
+            await alert({ title: 'Erro ao Excluir', message: e.message || 'Erro ao excluir tipo de empréstimo' });
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleSaveLevelLimit = async () => {
@@ -125,11 +98,11 @@ export const AdminLoanConfig: React.FC = () => {
         setSaving(true);
         try {
             await cloud.adminUpsertLoanLevelLimit(editingLimit);
-            setToast({ type: 'success', message: 'Limite salvo com sucesso!' });
+            await alert({ title: 'Sucesso', message: 'Limite de nível salvo com sucesso!' });
             setEditingLimit(null);
-            loadData();
+            await loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro ao salvar' });
+            await alert({ title: 'Erro ao Salvar', message: e.message || 'Erro ao salvar limite de nível' });
         } finally {
             setSaving(false);
         }
@@ -152,17 +125,15 @@ export const AdminLoanConfig: React.FC = () => {
     const confirmApproveLoan = async () => {
         if (!loanToApprove) return;
 
-        // Fechar modal antes para feedback instantâneo ou manter aberto com loading?
-        // Vamos manter loading
         setSaving(true);
         try {
             await cloud.adminApproveLoan(loanToApprove.id);
-            setToast({ type: 'success', message: 'Empréstimo aprovado com sucesso!' });
+            await alert({ title: 'Sucesso', message: 'Empréstimo aprovado com sucesso!' });
             setApproveModalOpen(false);
             setLoanToApprove(null);
-            loadData();
+            await loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro ao aprovar' });
+            await alert({ title: 'Erro ao Aprovar', message: e.message || 'Erro ao aprovar empréstimo' });
         } finally {
             setSaving(false);
         }
@@ -175,18 +146,21 @@ export const AdminLoanConfig: React.FC = () => {
 
     const confirmRejectLoan = async () => {
         if (!loanToReject || !rejectionReason.trim()) {
-            setToast({ type: 'error', message: 'Por favor, informe o motivo da rejeição' });
+            await alert({ title: 'Atenção', message: 'Por favor, informe o motivo da rejeição' });
             return;
         }
+        setSaving(true);
         try {
             await cloud.adminRejectLoan(loanToReject, rejectionReason);
-            setToast({ type: 'success', message: 'Empréstimo rejeitado!' });
+            await alert({ title: 'Sucesso', message: 'Empréstimo rejeitado com sucesso!' });
             setRejectModalOpen(false);
             setLoanToReject(null);
             setRejectionReason('');
-            loadData();
+            await loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Erro ao rejeitar' });
+            await alert({ title: 'Erro ao Rejeitar', message: e.message || 'Erro ao rejeitar empréstimo' });
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -447,7 +421,6 @@ export const AdminLoanConfig: React.FC = () => {
 
     return (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
             <div className="flex gap-2 border-b border-gray-100 dark:border-gray-700 pb-4 overflow-x-auto">
                 <Button variant={activeTab === 'types' ? 'primary' : 'ghost'} onClick={() => setActiveTab('types')}>
@@ -861,33 +834,6 @@ export const AdminLoanConfig: React.FC = () => {
                 </div>
             )}
 
-            {/* Modal genérico (mantido para exclusão etc) */}
-            {confirmModal && confirmModal.open && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110]" onClick={() => setConfirmModal(null)}>
-                    {/* ... (existing generic modal) */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-                        <div className="flex flex-col items-center text-center">
-                            <div className={`w-16 h-16 ${confirmModal.type === 'danger' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'} rounded-full flex items-center justify-center mb-4`}>
-                                {confirmModal.type === 'danger' ? <Trash2 className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
-                            </div>
-                            <h3 className="font-bold text-xl text-gray-800 dark:text-white mb-2">{confirmModal.title}</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                                {confirmModal.message}
-                            </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <Button variant="outline" onClick={() => setConfirmModal(null)} fullWidth>Cancelar</Button>
-                            <Button
-                                onClick={confirmModal.action}
-                                className={confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-700' : ''}
-                                fullWidth
-                            >
-                                Confirmar
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

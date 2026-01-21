@@ -62,7 +62,7 @@ export const AdminSlides: React.FC = () => {
 
     const handleSave = async () => {
         if (!formData.name || !formData.image_url) {
-            alert({ title: 'Campos obrigatórios', message: 'Por favor, preencha o nome e a URL da imagem.' });
+            await alert({ title: 'Campos Obrigatórios', message: 'Por favor, preencha o nome e selecione uma imagem para o slide.' });
             return;
         }
 
@@ -70,14 +70,16 @@ export const AdminSlides: React.FC = () => {
         try {
             if (editingSlide) {
                 await cloud.adminUpdateSlide(editingSlide.id, formData);
+                await alert({ title: 'Sucesso', message: 'Slide atualizado com sucesso!' });
             } else {
                 await cloud.adminCreateSlide(formData);
+                await alert({ title: 'Sucesso', message: 'Novo slide criado com sucesso!' });
             }
             setIsModalOpen(false);
-            loadSlides();
-        } catch (error) {
+            await loadSlides();
+        } catch (error: any) {
             console.error('Error saving slide:', error);
-            alert({ title: 'Erro ao salvar', message: 'Ocorreu um erro ao salvar o slide.' });
+            await alert({ title: 'Erro ao Salvar', message: 'Ocorreu um erro ao salvar o slide: ' + (error.message || 'Erro desconhecido') });
         } finally {
             setIsSaving(false);
         }
@@ -91,12 +93,16 @@ export const AdminSlides: React.FC = () => {
 
         if (!ok) return;
 
+        setLoading(true);
         try {
             await cloud.adminDeleteSlide(id);
+            await alert({ title: 'Sucesso', message: 'Slide excluído com sucesso!' });
             setSlides(prev => prev.filter(s => s.id !== id));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error deleting slide:', error);
-            alert({ title: 'Erro ao excluir', message: 'Ocorreu um erro ao excluir o slide.' });
+            await alert({ title: 'Erro ao Excluir', message: 'Ocorreu um erro ao excluir o slide: ' + (error.message || 'Erro desconhecido') });
+        } finally {
+            setLoading(false);
         }
     };
 

@@ -11,31 +11,12 @@ import { OpeningHoursModal } from './OpeningHoursModal';
 import * as cloud from '../services/cloud';
 import { PartnerProfile, City } from '../types';
 import { formatPhoneNumber } from '../utils/mapHelpers';
+import { useDialog } from '../utils/dialogService';
 
 // --- TOAST COMPONENT ---
 type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'random';
 
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
 
-    return (
-        <div className={`fixed top-24 right-4 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-10 fade-in duration-300 border ${type === 'success' ? 'bg-white border-green-100 dark:bg-gray-800 dark:border-green-900' : 'bg-white border-red-100 dark:bg-gray-800 dark:border-red-900'}`}>
-            <div className={`p-2 rounded-full ${type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-            </div>
-            <div>
-                <h4 className={`font-bold text-sm ${type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {type === 'success' ? 'Sucesso' : 'Erro'}
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-            </div>
-            <button onClick={onClose} className="ml-2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-        </div>
-    );
-};
 
 export const StoreSettings: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'general' | 'shipping' | 'printer'>('general');
@@ -45,7 +26,7 @@ export const StoreSettings: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [isSuperStore, setIsSuperStore] = useState(false);
     const [expirationDate, setExpirationDate] = useState<string | null>(null);
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const { alert } = useDialog();
     const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
 
     // Branding State
@@ -209,10 +190,10 @@ export const StoreSettings: React.FC = () => {
                 await cloud.updateMyPartnerProfile({ store_logo_url: url });
             }
 
-            setToast({ type: 'success', message: `${type === 'cover' ? 'Capa' : 'Logo'} atualizada com sucesso!` });
+            await alert({ title: 'Sucesso', message: `${type === 'cover' ? 'Capa' : 'Logo'} atualizada com sucesso!` });
         } catch (err: any) {
             // console.error(err);
-            setToast({ type: 'error', message: "Erro no upload: " + err.message });
+            await alert({ title: 'Erro no Upload', message: "Erro no upload: " + err.message });
         } finally {
             setUploadingAsset(null);
         }
@@ -257,9 +238,9 @@ export const StoreSettings: React.FC = () => {
                 // We only save to store_address_*.
             });
 
-            setToast({ type: 'success', message: "Dados da loja atualizados com sucesso!" });
+            await alert({ title: 'Sucesso', message: "Dados da loja atualizados com sucesso!" });
         } catch (e: any) {
-            setToast({ type: 'error', message: "Erro ao salvar: " + e.message });
+            await alert({ title: 'Erro ao Salvar', message: "Erro ao salvar: " + e.message });
         } finally {
             setSaving(false);
         }
@@ -279,14 +260,14 @@ export const StoreSettings: React.FC = () => {
             if (isMobile) {
                 suggestedWidth = '58';
                 suggestedType = 'thermal';
-                setToast({
-                    type: 'success',
+                await alert({
+                    title: 'Dispositivo Detectado',
                     message: 'Dispositivo móvel detectado! Configurações ajustadas para impressora térmica 58mm.'
                 });
             } else {
                 // Desktop: padrão 80mm
-                setToast({
-                    type: 'success',
+                await alert({
+                    title: 'Impressora Padrão',
                     message: 'Configurações ajustadas para impressora térmica 80mm (padrão desktop).'
                 });
             }
@@ -300,8 +281,8 @@ export const StoreSettings: React.FC = () => {
 
         } catch (error: any) {
             console.error('Erro ao detectar impressora:', error);
-            setToast({
-                type: 'error',
+            await alert({
+                title: 'Erro na Detecção',
                 message: 'Não foi possível detectar impressoras. Configure manualmente.'
             });
         } finally {
@@ -330,9 +311,9 @@ export const StoreSettings: React.FC = () => {
             const { error } = await cloud.getClient()?.from('printer_settings').upsert(payload, { onConflict: 'store_id' }) || {};
             if (error) throw error;
 
-            setToast({ type: 'success', message: 'Configurações de impressora salvas!' });
+            await alert({ title: 'Sucesso', message: 'Configurações de impressora salvas!' });
         } catch (e: any) {
-            setToast({ type: 'error', message: 'Erro ao salvar: ' + e.message });
+            await alert({ title: 'Erro ao Salvar', message: 'Erro ao salvar: ' + e.message });
         } finally {
             setSavingPrinter(false);
         }
@@ -342,7 +323,7 @@ export const StoreSettings: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in pb-24">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
 
             <OpeningHoursModal
                 isOpen={isHoursModalOpen}

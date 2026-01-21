@@ -30,20 +30,7 @@ const parseCurrency = (val: string) => {
 };
 
 
-// --- TOAST COMPONENT ---
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
 
-    return (
-        <div className={`absolute top-4 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-in slide-in-from-top-5 fade-in duration-300 ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
-            {type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-            <span className="text-sm font-bold">{message}</span>
-        </div>
-    );
-};
 
 const WhatsAppReceiptModal = ({
     isOpen,
@@ -366,7 +353,6 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const [confirmPin, setConfirmPin] = useState(''); // For confirmation
     const [pinAttempts, setPinAttempts] = useState(0); // For brute force protection
     const [lockoutUntil, setLockoutUntil] = useState<Date | null>(null); // For lockout timer
-    const [toast, setToast] = useState<{ message: string, type: 'error' | 'success' } | null>(null);
 
     // Coupon state
     const [couponCode, setCouponCode] = useState('');
@@ -425,10 +411,10 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     }, []);
 
     const handleCopyToClipboard = (text: string, label: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setToast({ message: `${label} copiado!`, type: 'success' });
+        navigator.clipboard.writeText(text).then(async () => {
+            await alert({ title: 'Sucesso', message: `${label} copiado!` });
         }).catch(async (err) => {
-            setToast({ message: 'Falha ao copiar', type: 'error' });
+            await alert({ title: 'Erro ao Copiar', message: 'Falha ao copiar conteúdo.' });
             await cloud.logClientError('clipboard_copy', String(err), { label });
         });
     };
@@ -456,17 +442,17 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
             const activatedTerminal = await cloud.activateMyTerminal();
             if (activatedTerminal) {
                 setTerminal(activatedTerminal);
-                setToast({ type: 'success', message: 'ZéPoint ativada com sucesso!' });
+                await alert({ title: 'Sucesso', message: 'ZéPoint ativada com sucesso!' });
                 // Add a 10-second delay for the animation
                 setTimeout(() => {
                     setStep('create_pin');
                 }, 10000); // 10000 milliseconds = 10 seconds
             } else {
-                setToast({ type: 'error', message: 'Falha ao ativar ZéPoint: Terminal não retornado.' });
+                await alert({ title: 'Erro na Ativação', message: 'Falha ao ativar ZéPoint: Terminal não retornado.' });
                 setStep('inactive');
             }
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Falha ao ativar ZéPoint.' });
+            await alert({ title: 'Erro', message: e.message || 'Falha ao ativar ZéPoint.' });
             setErrorMsg(e.message || 'Erro desconhecido durante a ativação.');
             setErrorType('unknown');
             setStep('error');
@@ -623,10 +609,10 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 net_value: simulatorCalculations.rawNet,
                 fees: simulatorCalculations.rawFees,
             });
-            setToast({ message: 'Simulação salva!', type: 'success' });
+            await alert({ title: 'Sucesso', message: 'Simulação salva com sucesso!' });
             setSimulatorAmount('0,00'); // Reset amount
         } catch (e: any) {
-            setToast({ message: 'Falha ao salvar.', type: 'error' });
+            await alert({ title: 'Erro ao Salvar', message: 'Falha ao salvar simulação: ' + (e.message || 'Erro desconhecido') });
             await cloud.logClientError('sales_simulator_save', e?.message, {});
         }
     };
@@ -637,7 +623,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 const historyData = await cloud.getMySalesSimulations();
                 setSimulationHistory(historyData);
             } catch (e: any) {
-                setToast({ message: 'Falha ao buscar histórico.', type: 'error' });
+                await alert({ title: 'Erro no Histórico', message: 'Falha ao buscar histórico de simulações.' });
                 await cloud.logClientError('sales_simulator_history', e?.message, {});
             }
         }
@@ -645,15 +631,19 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     };
 
     const handleClearSimulationHistory = async () => {
-        const isConfirmed = window.confirm('Deseja apagar todo o histórico de simulações? Esta ação não pode ser desfeita.');
+        const isConfirmed = await (confirm as any)({
+            title: 'Limpar Histórico',
+            message: 'Deseja apagar todo o histórico de simulações? Esta ação não pode ser desfeita.',
+            confirmButtonText: 'Limpar'
+        });
 
         if (isConfirmed) {
             try {
                 await cloud.clearMySalesSimulations();
                 setSimulationHistory([]);
-                setToast({ message: 'Histórico limpo!', type: 'success' });
+                await alert({ title: 'Sucesso', message: 'Histórico de simulações limpo!' });
             } catch (e: any) {
-                setToast({ message: 'Falha ao limpar o histórico.', type: 'error' });
+                await alert({ title: 'Erro ao Limpar', message: 'Falha ao limpar o histórico.' });
                 await cloud.logClientError('sales_simulator_clear', e?.message, {});
             }
         }
@@ -684,14 +674,14 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
             else if (error.name === 'NotFoundError') message = 'Nenhuma câmera encontrada.';
             else if (error.name === 'NotReadableError') message = 'Câmera em uso por outro app.';
 
-            setToast({ type: 'error', message });
+            await alert({ title: 'Erro de Câmera', message });
             return false;
         }
     };
 
     const confirmPayment = async (paymentId: string, method: 'PIX' | 'ZE_QR' | 'USER_CODE', payload: string) => {
         if (!terminal) {
-            setToast({ type: 'error', message: 'Terminal não inicializado.' });
+            await alert({ title: 'Erro', message: 'Terminal não inicializado.' });
             return;
         }
 
@@ -719,11 +709,11 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                     selectedStore?.id
                 );
 
-                setToast({ type: 'success', message: 'Pagamento confirmado!' });
+                await alert({ title: 'Sucesso', message: 'Pagamento confirmado!' });
                 setStep('success');
             }
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Falha ao confirmar pagamento.' });
+            await alert({ title: 'Erro no Pagamento', message: e.message || 'Falha ao confirmar pagamento.' });
             await cloud.logClientError('pos_confirm_payment', e?.message, {});
         }
     };
@@ -775,7 +765,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                         setIsPolling(false);
                         setPixCodeData(null);
                         setPixTxId(null);
-                        setToast({ type: 'success', message: 'Pagamento recebido!' });
+                        await alert({ title: 'Pagamento Recebido', message: 'Pagamento recebido com sucesso!' });
                         // Como confirmPayment agora gera novo QR code se method=PIX, e aqui queremos finalizar...
                         // Mas espere, confirmPayment com 'PIX' GERA o QR code.
                         // Aqui o pagamento JÁ FOI confirmado externamente.
@@ -783,7 +773,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                         setStep('success');
                     } else if (status.status === 'failed' || status.status === 'expired') {
                         setIsPolling(false);
-                        setToast({ type: 'error', message: 'Pagamento expirou.' });
+                        await alert({ title: 'Pagamento Expirado', message: 'O tempo limite para o pagamento expirou.' });
                     }
                 } catch (e) {
                     console.error('Polling error', e);
@@ -905,25 +895,25 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         }
     }, [step]);
 
-    const handleSendWhatsAppReceipt = (phone: string, message: string) => {
+    const handleSendWhatsAppReceipt = async (phone: string, message: string) => {
         const encodedText = encodeURIComponent(message);
         const url = `https://wa.me/55${phone}?text=${encodedText}`;
         window.open(url, '_blank');
-        setToast({ message: "Abrindo WhatsApp...", type: 'success' });
+        await alert({ title: 'Sucesso', message: "Abrindo WhatsApp..." });
     };
 
     const receiptRef = useRef<HTMLDivElement>(null);
 
-    const handleDownloadReceipt = () => {
+    const handleDownloadReceipt = async () => {
         if (!receiptRef.current) return;
         html2canvas(receiptRef.current, { backgroundColor: '#ffffff' }).then(canvas => {
             const link = document.createElement('a');
             link.download = 'comprovante-ze-entregas.png';
             link.href = canvas.toDataURL('image/png');
             link.click();
-            setToast({ message: "Comprovante baixado!", type: 'success' });
+            await alert({ title: 'Sucesso', message: "Comprovante baixado!" });
         }).catch(async (err) => {
-            setToast({ message: 'Falha ao gerar comprovante', type: 'error' });
+            await alert({ title: 'Erro', message: 'Falha ao gerar comprovante' });
             await cloud.logClientError('receipt', 'html2canvas_failed', { error: String(err) });
         });
     };
@@ -952,7 +942,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
     const handlePinVerify = async () => {
         if (lockoutUntil && new Date() < lockoutUntil) {
-            setToast({ type: 'error', message: 'Terminal bloqueado. Tente novamente mais tarde.' });
+            await alert({ title: 'Terminal Bloqueado', message: 'Terminal bloqueado. Tente novamente mais tarde.' });
             setPinEntry('');
             return;
         }
@@ -973,19 +963,19 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 const lockoutTime = new Date(new Date().getTime() + 5 * 60 * 1000); // 5 minutes lockout
                 setLockoutUntil(lockoutTime);
                 localStorage.setItem('pos_lockout_until', lockoutTime.toISOString());
-                setToast({ type: 'error', message: `PIN incorreto. Terminal bloqueado por 5 minutos.` });
+                await alert({ title: 'Erro', message: `PIN incorreto. Terminal bloqueado por 5 minutos.` });
             } else {
-                setToast({ type: 'error', message: `PIN incorreto. Tentativas restantes: ${3 - newAttempts}.` });
+                await alert({ title: 'Erro', message: `PIN incorreto. Tentativas restantes: ${3 - newAttempts}.` });
             }
             setPinEntry('');
         }
     };
 
-    const handleCreatePin = () => {
+    const handleCreatePin = async () => {
         // Validation for newPin
         const pinRegex = /^\d{4,6}$/; // 4 to 6 digits numeric
         if (!pinRegex.test(newPin)) {
-            setToast({ type: 'error', message: 'PIN deve ter 4 a 6 dígitos numéricos.' });
+            await alert({ title: 'PIN Inválido', message: 'PIN deve ter 4 a 6 dígitos numéricos.' });
             return;
         }
         setStep('confirm_pin');
@@ -993,13 +983,13 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
     const handleCreatePinConfirm = async () => {
         if (!terminal) {
-            setToast({ type: 'error', message: 'Terminal não inicializado ou não encontrado.' });
+            await alert({ title: 'Erro', message: 'Terminal não inicializado ou não encontrado.' });
             setStep('inactive');
             return;
         }
 
         if (newPin !== confirmPin) {
-            setToast({ type: 'error', message: 'Os PINs não coincidem. Tente novamente.' });
+            await alert({ title: 'Erro', message: 'Os PINs não coincidem. Tente novamente.' });
             setConfirmPin(''); // Clear confirm pin for retry
             return;
         }
@@ -1007,7 +997,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         // Final validation before saving
         const pinRegex = /^\d{4,6}$/;
         if (!pinRegex.test(newPin)) {
-            setToast({ type: 'error', message: 'PIN inválido. Deve ter 4 a 6 dígitos numéricos.' });
+            await alert({ title: 'PIN Inválido', message: 'PIN inválido. Deve ter 4 a 6 dígitos numéricos.' });
             setNewPin('');
             setConfirmPin('');
             setStep('create_pin');
@@ -1019,13 +1009,13 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
             setTerminal(prev => prev ? { ...prev, pin_code: newPin } : null);
             setNewPin('');
             setConfirmPin('');
-            setToast({ type: 'success', message: 'PIN criado com sucesso!' });
+            await alert({ title: 'Sucesso', message: 'PIN criado com sucesso!' });
             setStep('activating_animation_2');
             setTimeout(() => {
                 setStep('home');
             }, 5000);
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Falha ao criar PIN.' });
+            await alert({ title: 'Erro', message: e.message || 'Falha ao criar PIN.' });
             await cloud.logClientError('pos_pin_create', e?.message, {});
         }
     };
@@ -1075,14 +1065,14 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         setPartialAmounts(prev => prev.filter(p => p.id !== id));
     };
 
-    const addPartialAmount = () => {
+    const addPartialAmount = async () => {
         const currentAmount = parseCurrency(amount);
         if (currentAmount <= 0) {
-            setToast({ type: 'error', message: 'O valor deve ser maior que zero.' });
+            await alert({ title: 'Erro', message: 'O valor deve ser maior que zero.' });
             return;
         }
         if (currentAmount > remainingToSplit) {
-            setToast({ type: 'error', message: `O valor excede o restante a ser dividido (${formatCurrency(remainingToSplit)}).` });
+            await alert({ title: 'Erro', message: `O valor excede o restante a ser dividido (${formatCurrency(remainingToSplit)}).` });
             return;
         }
         setPartialAmounts(prev => [...prev, { id: crypto.randomUUID(), amount: currentAmount, status: 'unpaid' }]);
@@ -1206,7 +1196,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 setErrorMsg('Falha ao gerar PIX: ' + msg);
                 setErrorType(type);
                 // Dont go to error step immediately, allow retry
-                setToast({ type: 'error', message: 'Falha ao gerar PIX: ' + msg });
+                await alert({ title: 'Erro no PIX', message: 'Falha ao gerar PIX: ' + msg });
                 // closePaymentOverlay();
             }
         }
@@ -1238,7 +1228,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
             setHistory(prev => reset ? data : [...prev, ...data]);
             setHistoryPage(page + 1);
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Falha ao carregar histórico' });
+            await alert({ title: 'Erro', message: e.message || 'Falha ao carregar histórico' });
         } finally {
             setLoadingHistory(false);
         }
@@ -1269,7 +1259,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         if (isDemoMode) {
             // Just proceed to success in demo
             // Maybe add to mock history if needed (already handled by getMockData logic perhaps?)
-            setToast({ type: 'success', message: 'Venda Demo Registrada!' });
+            await alert({ title: 'Sucesso', message: 'Venda Demo Registrada!' });
             setStep('success');
             setProcessing(false);
             return;
@@ -1279,7 +1269,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
             await cloud.createTerminalTransaction(transaction);
             setStep('success');
         } catch (e: any) {
-            setToast({ type: 'error', message: 'Erro ao registrar venda. Tentando offline...' });
+            await alert({ title: 'Erro no Registro', message: 'Erro ao registrar venda. Tentando offline...' });
             setStep('success'); // Optimistic success
         } finally {
             setProcessing(false);
@@ -1292,7 +1282,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
     const handleSaveSettings = async () => {
         // Placeholder for future settings
-        setToast({ type: 'success', message: 'Configurações salvas!' });
+        await alert({ title: 'Sucesso', message: 'Configurações salvas!' });
         setStep('home');
     };
 
@@ -1304,10 +1294,10 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         setDeactivateModalOpen(false);
         try {
             await cloud.deactivateMyTerminal();
-            setToast({ type: 'success', message: 'Terminal desativado.' });
+            await alert({ title: 'Sucesso', message: 'Terminal desativado.' });
             setStep('inactive');
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro', message: e.message });
         }
     };
 
@@ -1933,27 +1923,27 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                                         </div>
                                         <div className="flex gap-2 justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
                                             <button
-                                                onClick={() => {
-                                                    const reason = window.prompt('Descreva o problema com esta venda:');
-                                                    if (reason) setToast({ type: 'success', message: 'Problema reportado com sucesso.' });
+                                                onClick={async () => {
+                                                    const reason = await prompt({ title: 'Reportar Problema', message: 'Descreva o problema com esta venda:', placeholder: 'Ex: Valor incorreto' });
+                                                    if (reason) await alert({ title: 'Sucesso', message: 'Problema reportado com sucesso.' });
                                                 }}
                                                 className="p-2 text-xs font-bold text-orange-600 bg-orange-50 dark:bg-orange-900/20 rounded-lg hover:bg-orange-100 transition-colors flex items-center gap-1"
                                             >
                                                 <AlertTriangle className="w-3 h-3" /> Problema
                                             </button>
                                             <button
-                                                onClick={() => {
-                                                    const note = window.prompt('Adicionar observação:');
-                                                    if (note) setToast({ type: 'success', message: 'Observação salva.' });
+                                                onClick={async () => {
+                                                    const note = await prompt({ title: 'Adicionar Nota', message: 'Adicionar observação:', placeholder: 'Observações...' });
+                                                    if (note) await alert({ title: 'Sucesso', message: 'Observação salva.' });
                                                 }}
                                                 className="p-2 text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
                                             >
                                                 <FileText className="w-3 h-3" /> Nota
                                             </button>
                                             <button
-                                                onClick={() => {
-                                                    if (window.confirm('Confirmar reembolso desta venda?')) {
-                                                        setToast({ type: 'success', message: 'Solicitação de reembolso enviada.' });
+                                                onClick={async () => {
+                                                    if (await (confirm as any)({ title: 'Confirmar Reembolso', message: 'Confirmar reembolso desta venda?', confirmButtonText: 'Reembolsar' })) {
+                                                        await alert({ title: 'Sucesso', message: 'Solicitação de reembolso enviada.' });
                                                     }
                                                 }}
                                                 className="p-2 text-xs font-bold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1"
@@ -2013,9 +2003,9 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                                         onClick={async () => {
                                             try {
                                                 await backupService.createBackup(terminal?.user_id || 'unknown');
-                                                setToast({ type: 'success', message: 'Backup criado!' });
+                                                await alert({ title: 'Sucesso', message: 'Backup criado!' });
                                             } catch (e) {
-                                                setToast({ type: 'error', message: 'Erro no backup' });
+                                                await alert({ title: 'Erro', message: 'Erro no backup' });
                                             }
                                         }}
                                     >
@@ -2030,10 +2020,10 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                                                 if (e.target.files?.[0]) {
                                                     try {
                                                         const res = await backupService.restoreBackup(e.target.files[0]);
-                                                        setToast({ type: 'success', message: `Restaurado: ${res.count} itens.` });
+                                                        await alert({ title: 'Sucesso', message: `Restaurado: ${res.count} itens.` });
                                                         window.location.reload(); // Reload to apply
                                                     } catch (err) {
-                                                        setToast({ type: 'error', message: 'Falha ao restaurar.' });
+                                                        await alert({ title: 'Erro', message: 'Falha ao restaurar.' });
                                                     }
                                                 }
                                             }}
@@ -2195,7 +2185,6 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                         <div className="w-12 h-1.5 bg-gray-700 rounded-full"></div>
                     </div>
                     <StatusBar />
-                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
                     {renderScreenContent()}
                     {renderPaymentOverlay()}
                     <WhatsAppReceiptModal

@@ -37,25 +37,13 @@ const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val
     setter(formatted);
 };
 
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
 
-    return (
-        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-5 fade-in duration-300 ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
-            {type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-            <span className="text-sm font-bold">{message}</span>
-        </div>
-    );
-};
 
 export const ZePayStore: React.FC = () => {
     const [data, setData] = useState<ZePayData | null>(null);
     const [isSuperStore, setIsSuperStore] = useState<boolean | null>(null); // Null = loading check
     const [loading, setLoading] = useState(true);
-    const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const { alert } = useDialog();
     const [activeTab, setActiveTab] = useState<'overview' | 'extract'>('overview');
     const [showPOS, setShowPOS] = useState(false);
     const [showRecharge, setShowRecharge] = useState(false);
@@ -97,7 +85,7 @@ export const ZePayStore: React.FC = () => {
                 if (status.status === 'paid') {
                     clearInterval(interval);
                     setPolling(false);
-                    setToast({ type: 'success', message: `Pagamento confirmado! R$ ${status.amount?.toFixed(2)} recebido.` });
+                    await alert({ title: 'Pagamento Confirmado', message: `R$ ${status.amount?.toFixed(2)} recebido com sucesso.` });
                     setShowRecharge(false);
                     setPixDetails(null);
                     setRechargeAmount('');
@@ -106,7 +94,7 @@ export const ZePayStore: React.FC = () => {
                 } else if (status.status === 'failed' || status.status === 'expired') {
                     clearInterval(interval);
                     setPolling(false);
-                    setToast({ type: 'error', message: 'Pagamento expirou ou falhou.' });
+                    await alert({ title: 'Pagamento Expirado', message: 'Pagamento expirou ou falhou.' });
                     setPixDetails(null);
                 }
             } catch (error: any) {
@@ -136,7 +124,7 @@ export const ZePayStore: React.FC = () => {
             }
         } catch (e: any) {
             // console.error(e);
-            setToast({ type: 'error', message: "Erro ao carregar dados." });
+            await alert({ title: 'Erro', message: "Erro ao carregar dados." });
         } finally {
             setLoading(false);
         }
@@ -148,12 +136,12 @@ export const ZePayStore: React.FC = () => {
         try {
             const amount = parseFloat(transferForm.amount.replace(/\./g, '').replace(',', '.'));
             await cloud.zebankTransferP2P(transferForm.code.toUpperCase(), amount);
-            setToast({ type: 'success', message: 'Transferência realizada com sucesso!' });
+            await alert({ title: 'Sucesso', message: 'Transferência realizada com sucesso!' });
             setShowTransfer(false);
             setTransferForm({ code: '', amount: '' });
             checkAccessAndLoad(); // Refresh
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro na Transferência', message: e.message });
         } finally {
             setProcessing(false);
         }
@@ -164,12 +152,12 @@ export const ZePayStore: React.FC = () => {
         setProcessing(true);
         try {
             await cloud.zebankCreateVirtualCard(cardForm.name);
-            setToast({ type: 'success', message: 'Cartão virtual criado!' });
+            await alert({ title: 'Sucesso', message: 'Cartão virtual criado!' });
             setShowNewCard(false);
             setCardForm({ name: '' });
             checkAccessAndLoad(); // Refresh
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro na Criação', message: e.message });
         } finally {
             setProcessing(false);
         }
@@ -185,11 +173,11 @@ export const ZePayStore: React.FC = () => {
         setProcessing(true);
         try {
             await cloud.updateCardLimit(showLimitModal.id, limitForm, 'STORE');
-            setToast({ type: 'success', message: 'Limite atualizado!' });
+            await alert({ title: 'Sucesso', message: 'Limite atualizado!' });
             setShowLimitModal(null);
             checkAccessAndLoad();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro no Limite', message: e.message });
         } finally {
             setProcessing(false);
         }
@@ -197,7 +185,7 @@ export const ZePayStore: React.FC = () => {
 
     const handleGeneratePayment = async () => {
         if (!rechargeAmount) {
-            setToast({ type: 'error', message: 'Informe o valor da recarga.' });
+            await alert({ title: 'Aviso', message: 'Informe o valor da recarga.' });
             return;
         }
 
@@ -206,7 +194,7 @@ export const ZePayStore: React.FC = () => {
             const amount = parseFloat(rechargeAmount.replace(/\./g, '').replace(',', '.'));
 
             if (amount < 1) {
-                setToast({ type: 'error', message: 'Valor mínimo: R$ 1,00' });
+                await alert({ title: 'Aviso', message: 'Valor mínimo: R$ 1,00' });
                 return;
             }
 
@@ -229,14 +217,14 @@ export const ZePayStore: React.FC = () => {
             // Iniciar polling para verificar pagamento
             setPolling(true);
 
-            setToast({
-                type: 'success',
+            await alert({
+                title: 'Sucesso',
                 message: `QR Code gerado via ${result.gatewayUsed}!`
             });
         } catch (error: any) {
             console.error('Erro ao gerar pagamento:', error);
-            setToast({
-                type: 'error',
+            await alert({
+                title: 'Erro na Cobrança',
                 message: error.message || 'Erro ao gerar cobrança.'
             });
         } finally {
@@ -252,7 +240,7 @@ export const ZePayStore: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in pb-24">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
 
             <div className="bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-1 overflow-x-auto no-scrollbar">
                 <button onClick={() => setActiveTab('overview')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap ${activeTab === 'overview' ? 'bg-gray-100 dark:bg-gray-700' : ''}`}>Visão Geral</button>

@@ -19,14 +19,14 @@ const ICON_OPTIONS = [
 ];
 
 export const AdminPlatformNews: React.FC = () => {
+    const { alert, confirm } = useDialog();
     const [newsItems, setNewsItems] = useState<PlatformNews[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    
+
     // Add/Edit Modal State
     const [showModal, setShowModal] = useState(false);
     const [currentNews, setCurrentNews] = useState<Partial<PlatformNews> | null>(null);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -35,14 +35,13 @@ export const AdminPlatformNews: React.FC = () => {
         try {
             const data = await cloud.adminGetPlatformNews();
             setNewsItems(data);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Error loading platform news:", e);
+            await alert({ title: 'Erro de Carregamento', message: 'Falha ao carregar notícias: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setLoading(false);
         }
-    }, []); // Removed unnecessary dependency
-
-    const { confirm } = useDialog();
+    }, [alert]);
 
     useEffect(() => {
         loadNews();
@@ -50,26 +49,26 @@ export const AdminPlatformNews: React.FC = () => {
 
     const handleAddEditNews = async () => {
         if (!currentNews?.title || !currentNews.description || !currentNews.icon_name) {
-            setFeedback({ type: 'error', text: 'Preencha título, descrição e ícone.' });
+            await alert({ title: 'Dados Incompletos', message: 'Por favor, preencha título, descrição e ícone.' });
             return;
         }
 
         setSaving(true);
-        setFeedback(null);
         try {
             const saved = await cloud.adminAddPlatformNews(currentNews);
             const savedId = (saved?.id || currentNews.id) as string | undefined;
             if (imageFile && savedId) {
                 await cloud.adminUploadPlatformNewsImage(savedId, imageFile);
             }
+            await alert({ title: 'Sucesso', message: 'Notícia salva com sucesso!' });
             setShowModal(false);
             setCurrentNews(null);
             setImageFile(null);
             setImagePreview(null);
-            loadNews();
-            setFeedback({ type: 'success', text: 'Notícia salva com sucesso!' });
+            await loadNews();
         } catch (e: any) {
-            setFeedback({ type: 'error', text: 'Erro ao salvar notícia: ' + e.message });
+            console.error(e);
+            await alert({ title: 'Erro ao Salvar', message: 'Erro ao salvar notícia: ' + (e.message || 'Erro desconhecido') });
         } finally {
             setSaving(false);
         }
@@ -78,12 +77,16 @@ export const AdminPlatformNews: React.FC = () => {
     const handleDeleteNews = async (id: string) => {
         const ok = await confirm({ title: 'Excluir notícia', message: 'Tem certeza que deseja excluir esta notícia?' });
         if (!ok) return;
+        setLoading(true);
         try {
             await cloud.adminDeletePlatformNews(id);
-            loadNews();
-            setFeedback({ type: 'success', text: 'Notícia excluída.' });
+            await alert({ title: 'Sucesso', message: 'Notícia excluída com sucesso!' });
+            await loadNews();
         } catch (e: any) {
-            setFeedback({ type: 'error', text: 'Erro ao excluir notícia: ' + e.message });
+            console.error(e);
+            await alert({ title: 'Erro ao Excluir', message: 'Erro ao excluir notícia: ' + (e.message || 'Erro desconhecido') });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -123,10 +126,10 @@ export const AdminPlatformNews: React.FC = () => {
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ordem de Exibição</label>
                         <input type="number" value={news.sort_order || 0} onChange={e => setCurrentNews(prev => prev ? { ...prev, sort_order: Number(e.target.value) } : null)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600" />
                     </div>
-                    <Switch 
-                        checked={news.is_active || false} 
-                        onChange={c => setCurrentNews(prev => prev ? { ...prev, is_active: c } : null)} 
-                        label="Ativa" 
+                    <Switch
+                        checked={news.is_active || false}
+                        onChange={c => setCurrentNews(prev => prev ? { ...prev, is_active: c } : null)}
+                        label="Ativa"
                     />
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Imagem</label>
@@ -139,7 +142,7 @@ export const AdminPlatformNews: React.FC = () => {
                                     if (!f) { setImageFile(null); setImagePreview(null); return; }
                                     const maxSize = 4 * 1024 * 1024;
                                     if (f.size > maxSize) {
-                                        setFeedback({ type: 'error', text: 'Imagem muito grande. Máximo 4MB.' });
+                                        alert({ title: 'Arquivo muito grande', message: 'Imagem muito grande. Máximo 4MB.' });
                                         return;
                                     }
                                     setImageFile(f);
@@ -171,7 +174,7 @@ export const AdminPlatformNews: React.FC = () => {
                     <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
                         <Newspaper className="w-6 h-6 text-brand-600" /> Gerenciar Notícias
                     </h2>
-                    <Button onClick={openModalForAdd}><Plus className="w-5 h-5 mr-2"/> Nova Notícia</Button>
+                    <Button onClick={openModalForAdd}><Plus className="w-5 h-5 mr-2" /> Nova Notícia</Button>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Mantenha os usuários informados sobre novidades e atualizações da plataforma.</p>
 

@@ -2,27 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Wallet, Settings, Check, X, TestTube, Activity } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
+import { useDialog } from '../utils/dialogService';
 import type { PaymentGatewayConfig, FinancialTransaction } from '../types';
-
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
-
-    return (
-        <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-5 fade-in duration-300 ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
-            <span className="text-sm font-bold">{message}</span>
-            <button onClick={onClose} className="ml-2"><X className="w-4 h-4" /></button>
-        </div>
-    );
-};
 
 export const AdminPaymentGateways = () => {
     const [gateways, setGateways] = useState<PaymentGatewayConfig[]>([]);
     const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
     const [loading, setLoading] = useState(true);
-    const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const { alert } = useDialog();
 
     const [editingGateway, setEditingGateway] = useState<string | null>(null);
     const [credentials, setCredentials] = useState<Record<string, string>>({});
@@ -41,7 +28,7 @@ export const AdminPaymentGateways = () => {
             setGateways(gatewaysData || []);
             setTransactions(txData || []);
         } catch (error: any) {
-            setToast({ type: 'error', message: error.message });
+            await alert({ title: 'Erro', message: error.message });
         } finally {
             setLoading(false);
         }
@@ -51,8 +38,8 @@ export const AdminPaymentGateways = () => {
         // Validação: não permitir desativar ambos
         const activeCount = gateways.filter(g => g.is_active).length;
         if (currentState && activeCount === 1) {
-            setToast({
-                type: 'error',
+            await alert({
+                title: 'Aviso',
                 message: 'Não é possível desativar todos os gateways. Mantenha pelo menos um ativo.'
             });
             return;
@@ -60,32 +47,32 @@ export const AdminPaymentGateways = () => {
 
         try {
             await cloud.updatePaymentGateway(gatewayName, { is_active: !currentState });
-            setToast({ type: 'success', message: 'Gateway atualizado com sucesso!' });
+            await alert({ title: 'Sucesso', message: 'Gateway atualizado com sucesso!' });
             loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error.message });
+            await alert({ title: 'Erro', message: error.message });
         }
     };
 
     const handleSetPrimary = async (gatewayName: string) => {
         try {
             await cloud.setPaymentGatewayPrimary(gatewayName);
-            setToast({ type: 'success', message: `${gatewayName} definido como principal!` });
+            await alert({ title: 'Sucesso', message: `${gatewayName} definido como principal!` });
             loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error.message });
+            await alert({ title: 'Erro', message: error.message });
         }
     };
 
     const handleSaveCredentials = async (gatewayName: string) => {
         try {
             await cloud.updatePaymentGateway(gatewayName, { credentials });
-            setToast({ type: 'success', message: 'Credenciais salvas com sucesso!' });
+            await alert({ title: 'Sucesso', message: 'Credenciais salvas com sucesso!' });
             setEditingGateway(null);
             setCredentials({});
             loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error.message });
+            await alert({ title: 'Erro', message: error.message });
         }
     };
 
@@ -93,15 +80,15 @@ export const AdminPaymentGateways = () => {
         try {
             const result = await cloud.testPaymentGateway(gatewayName);
             if (result.success) {
-                setToast({ type: 'success', message: 'Conexão testada com sucesso!' });
+                await alert({ title: 'Sucesso', message: 'Conexão testada com sucesso!' });
             } else {
-                setToast({ type: 'error', message: `Teste falhou: ${result.error}` });
+                await alert({ title: 'Falha no Teste', message: `Teste falhou: ${result.error}` });
             }
             // Recarregar logs para mostrar o resultado do teste
             const txData = await cloud.getAllFinancialTransactions();
             setTransactions(txData || []);
         } catch (error: any) {
-            setToast({ type: 'error', message: error.message });
+            await alert({ title: 'Erro', message: error.message });
         }
     };
 
@@ -270,8 +257,8 @@ export const AdminPaymentGateways = () => {
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${['COMPLETED', 'PAID', 'SUCCESS', 'ACTIVE'].includes(tx.status?.toUpperCase())
-                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30'
-                                                    : 'bg-red-100 text-red-700 dark:bg-red-900/30'
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30'
+                                                : 'bg-red-100 text-red-700 dark:bg-red-900/30'
                                                 }`}>
                                                 {tx.status}
                                             </span>
@@ -286,8 +273,7 @@ export const AdminPaymentGateways = () => {
                     </table>
                 </div>
             </div>
-
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 };
+

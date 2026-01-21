@@ -21,13 +21,18 @@ type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_pa
 
 // Helper simples para navegar e atualizar URL sem reload (apenas auth flows que não estão no App.tsx router principal)
 const updateAuthUrl = (view: AuthView) => {
-  let path = '/';
+  // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
+  const isAppRoute = getTabFromUrl(window.location.pathname) !== null;
+  const authRoutes = ['/login', '/cadastro', '/recuperar-senha'];
+
+  // Se for uma rota de autenticação, forçamos o path correto
+  let path = window.location.pathname;
   if (view === 'login') path = '/login';
   else if (view === 'signup_city' || view === 'signup_form') path = '/cadastro';
   else if (view === 'forgot_password') path = '/recuperar-senha';
-  else path = '/'; // landing
+  else if (view === 'landing' && !isAppRoute) path = '/';
 
-  if (window.location.pathname !== path) {
+  if (window.location.pathname !== path && authRoutes.includes(path)) {
     window.history.pushState({ authView: view }, '', path);
   }
 };
@@ -65,10 +70,12 @@ export const AuthWrapper: React.FC = () => {
   // Inicializa view baseado na URL
   const [view, setView] = useState<AuthView>(() => getAuthViewFromUrl());
 
-  // Sincroniza URL quando view muda
+  // Sincroniza URL quando view muda e NÃO temos sessão ativa
   useEffect(() => {
-    updateAuthUrl(view);
-  }, [view]);
+    if (!session && !userId) {
+      updateAuthUrl(view);
+    }
+  }, [view, session, userId]);
 
   // Handle browser back/forward buttons
   useEffect(() => {

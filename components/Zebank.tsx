@@ -40,22 +40,7 @@ const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val
     setter(formatted);
 };
 
-// --- TOAST COMPONENT ---
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error' | 'info', onClose: () => void }) => {
-    useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
 
-    return (
-        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-5 fade-in duration-300 ${type === 'success' ? 'bg-green-600 text-white' : type === 'error' ? 'bg-red-600 text-white' : 'bg-gray-800 text-white'}`}>
-            {type === 'success' && <CheckCircle className="w-4 h-4" />}
-            {type === 'error' && <AlertTriangle className="w-4 h-4" />}
-            {type === 'info' && <CheckCircle className="w-4 h-4" />}
-            <span className="text-sm font-bold">{message}</span>
-        </div>
-    );
-};
 
 // --- QR OVERLAY COMPONENT ---
 const CardQROverlay = ({ cardId, onClose }: { cardId: string, onClose: () => void }) => {
@@ -389,7 +374,7 @@ interface ZebankProps {
 export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [data, setData] = useState<ZebankData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
+    const { alert, confirm } = useDialog();
     const [activeTab, setActiveTab] = useState<'home' | 'savings' | 'cards' | 'history'>('home');
     const [showBalance, setShowBalance] = useState(false);
 
@@ -416,19 +401,15 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [simCardId, setSimCardId] = useState('');
     const [amount, setAmount] = useState(''); // Shared amount state for simple inputs
 
-    const { confirm } = useDialog(); // Use the custom dialog service
+
 
     const isNormalDriver = userRole === 'delivery_person';
 
-    const showToast = (type: 'success' | 'error' | 'info', msg: string) => {
-        setToast({ message: msg, type });
-    };
+    const copyToClipboard = async (text: string, label: string) => {
+        if (!text) return await alert({ title: 'Erro', message: 'Nada para copiar.' });
 
-    const copyToClipboard = (text: string, label: string) => {
-        if (!text) return showToast('error', 'Nada para copiar.');
-
-        const handleSuccess = () => showToast('success', `${label} copiado!`);
-        const handleError = () => showToast('error', "Erro ao copiar.");
+        const handleSuccess = async () => await alert({ title: 'Sucesso', message: `${label} copiado!` });
+        const handleError = async () => await alert({ title: 'Erro', message: "Erro ao copiar." });
 
         if (navigator.clipboard && window.isSecureContext) {
             navigator.clipboard.writeText(text).then(handleSuccess).catch(() => {
@@ -439,7 +420,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         }
     };
 
-    const fallbackCopy = (text: string, onSuccess: () => void, onError: () => void) => {
+    const fallbackCopy = async (text: string, onSuccess: () => void, onError: () => void) => {
         try {
             const textArea = document.createElement("textarea");
             textArea.value = text;
@@ -465,7 +446,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
             setData(d);
         } catch (e: any) {
             // console.error('[Zebank] Load Error:', e);
-            setToast({ type: 'error', message: 'Falha ao carregar dados do banco.' });
+            await alert({ title: 'Erro', message: 'Falha ao carregar dados do banco.' });
         } finally {
             setLoading(false);
         }
@@ -488,11 +469,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         try {
             const amountVal = parseFloat(p2pForm.amount.replace(/\./g, '').replace(',', '.'));
             await cloud.zebankTransferP2P(p2pForm.code.toUpperCase(), amountVal);
-            setToast({ type: 'success', message: 'Transferência enviada!' });
+            await alert({ title: 'Sucesso', message: 'Transferência enviada!' });
             setShowP2P(false);
             loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro na Transferência', message: e.message });
         } finally {
             setProcessing(false);
         }
@@ -503,11 +484,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         try {
             const amountVal = parseFloat(savingsForm.amount.replace(/\./g, '').replace(',', '.'));
             await cloud.zebankManageSavings(savingsForm.action as 'DEPOSIT' | 'RETRIEVE', amountVal);
-            setToast({ type: 'success', message: 'Operação realizada!' });
+            await alert({ title: 'Sucesso', message: 'Operação realizada!' });
             setShowSavings(false);
             loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro na Operação', message: e.message });
         } finally {
             setProcessing(false);
         }
@@ -515,16 +496,16 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
 
     const handleCreateCard = async () => {
         if (data?.cards && data.cards.length >= 2) {
-            return showToast('error', "Limite de 2 cartões atingido.");
+            return await alert({ title: 'Aviso', message: "Limite de 2 cartões atingido." });
         }
         setProcessing(true);
         try {
             await cloud.zebankCreateVirtualCard(newCardForm.name);
-            setToast({ type: 'success', message: 'Cartão criado!' });
+            await alert({ title: 'Sucesso', message: 'Cartão criado!' });
             setShowNewCard(false);
             loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro na Criação', message: e.message });
         } finally {
             setProcessing(false);
         }
@@ -534,11 +515,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         const newStatus = card.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
         try {
             await cloud.zebankToggleCardStatus(card.id, newStatus);
-            setToast({ type: 'info', message: `Cartão ${newStatus === 'ACTIVE' ? 'desbloqueado' : 'bloqueado'}.` });
+            await alert({ title: 'Status do Cartão', message: `Cartão ${newStatus === 'ACTIVE' ? 'desbloqueado' : 'bloqueado'}.` });
             setShowCardOptions(null);
             loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro no Bloqueio', message: e.message });
         }
     };
 
@@ -547,11 +528,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         if (!result) return;
         try {
             await cloud.zebankDeleteCard(cardId);
-            setToast({ type: 'info', message: `Cartão excluído.` });
+            await alert({ title: 'Sucesso', message: `Cartão excluído.` });
             setShowCardOptions(null);
             loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro na Exclusão', message: e.message });
         }
     };
 
@@ -560,11 +541,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         setProcessing(true);
         try {
             await cloud.simulateCardTransaction(showTestConfirm.id, 0.50, 'Teste de Validação');
-            setToast({ type: 'success', message: 'Cartão validado com sucesso!' });
+            await alert({ title: 'Sucesso', message: 'Cartão validado com sucesso!' });
             setShowTestConfirm(null);
             loadData(); // To refresh transactions list
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message || "Falha na simulação." });
+            await alert({ title: 'Erro na Validação', message: e.message || "Falha na simulação." });
         } finally {
             setProcessing(false);
         }
@@ -581,11 +562,11 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         setProcessing(true);
         try {
             await cloud.updateCardLimit(showLimitModal.id, limitForm, 'USER');
-            setToast({ type: 'success', message: 'Limite atualizado!' });
+            await alert({ title: 'Sucesso', message: 'Limite atualizado!' });
             setShowLimitModal(null);
             loadData();
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message });
+            await alert({ title: 'Erro no Limite', message: e.message });
         } finally {
             setProcessing(false);
         }
@@ -624,7 +605,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
 
     return (
         <div className="space-y-8 animate-in fade-in pb-24 px-4 sm:px-8 md:px-16">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
 
             {/* Main Balance Card */}
             <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white p-8 rounded-[32px] shadow-2xl shadow-gray-900/20 relative overflow-hidden">
