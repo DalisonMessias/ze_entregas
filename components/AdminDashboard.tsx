@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { BarChart3, TrendingUp, Users, DollarSign, Download, Store, Bike, Activity, Loader2, ArrowUpRight, ArrowDownRight, Layout, Construction, Award, Star, ShieldOff, Link2, Globe, Newspaper, Banknote, Bot, MapPin, Zap, CreditCard, FileCheck, Wallet, Megaphone, Headphones, ShieldAlert, Smartphone, Key } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, DollarSign, Download, Store, Bike, Activity, Loader2, ArrowUpRight, ArrowDownRight, Layout, Construction, Award, Star, ShieldOff, Link2, Globe, Newspaper, Banknote, Bot, MapPin, Zap, CreditCard, FileCheck, Wallet, Megaphone, Headphones, ShieldAlert, Smartphone, Key, Package, LayoutGrid } from 'lucide-react';
 import { Button } from './Button';
 import { DataErrorDisplay } from './DataErrorDisplay';
 import * as cloud from '../services/cloud';
@@ -230,6 +230,13 @@ export const AdminDashboard = () => {
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Loja Admin</span>
                     </Button>
 
+                    <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_base_catalog' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                        <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
+                            <Package className="w-5 h-5" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Catálogo Base</span>
+                    </Button>
+
                     <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_cities' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                         <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
                             <MapPin className="w-5 h-5" />
@@ -242,6 +249,13 @@ export const AdminDashboard = () => {
                             <Globe className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Mapa</span>
+                    </Button>
+
+                    <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_store_categories' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
+                            <LayoutGrid className="w-5 h-5" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Categorias</span>
                     </Button>
 
                     <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_fees' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">

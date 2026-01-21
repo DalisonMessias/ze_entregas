@@ -1469,11 +1469,14 @@ const ScannerLogic = ({ onScan, onClose }: { onScan: (text: string) => void, onC
             }
         };
 
-        const timeout = setTimeout(startScanner, 300); // Pequeno atraso para garantir render do DOM
+        const startScannerDirect = () => {
+            // Lógica de início imediato
+            startScanner();
+        };
+        startScannerDirect();
 
         return () => {
             isMounted = false;
-            clearTimeout(timeout);
             if (html5QrCode && html5QrCode.isScanning) {
                 html5QrCode.stop().then(() => {
                     html5QrCode?.clear();

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { StoreProduct } from '../types';
-import { Plus, Search, Edit2, Trash2, Package, Loader2, ShoppingBag, LayoutGrid, Layers, Tag as TagIcon } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, Loader2, ShoppingBag, LayoutGrid, Layers, Tag as TagIcon, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
@@ -11,7 +11,7 @@ import { AddonManager } from './AddonManager';
 import { ProfileValidationAlert } from './ProfileValidationAlert';
 import { validateStoreProfile } from '../utils/profileValidation';
 
-type Tab = 'products' | 'categories' | 'addons';
+type Tab = 'products' | 'categories' | 'addons' | 'import';
 
 export const StoreCatalog: React.FC = () => {
     const [activeTab, setActiveTab] = useState<Tab>('products');
@@ -31,8 +31,25 @@ export const StoreCatalog: React.FC = () => {
     useEffect(() => {
         if (activeTab === 'products') {
             loadProducts();
+        } else if (activeTab === 'import') {
+            loadBaseProducts();
         }
     }, [activeTab]);
+
+    const [baseProducts, setBaseProducts] = useState<any[]>([]);
+    const [isImportLoading, setIsImportLoading] = useState(false);
+
+    const loadBaseProducts = async () => {
+        setIsImportLoading(true);
+        try {
+            const data = await cloud.getCatalogBaseProducts();
+            setBaseProducts(data);
+        } catch (error) {
+            console.error("Erro ao carregar catálogo base:", error);
+        } finally {
+            setIsImportLoading(false);
+        }
+    };
 
     const loadProducts = async () => {
         setIsLoading(true);
@@ -76,6 +93,20 @@ export const StoreCatalog: React.FC = () => {
             } else {
                 alert("Erro ao salvar produto. Verifique sua conexão.");
             }
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleImportProduct = async (baseProduct: any) => {
+        setIsSaving(true);
+        try {
+            await cloud.importBaseProductToStore(baseProduct);
+            showMessage({ title: 'Sucesso', message: `"${baseProduct.name}" importado com sucesso!` });
+            setActiveTab('products');
+            loadProducts();
+        } catch (error) {
+            alert("Erro ao importar produto.");
         } finally {
             setIsSaving(false);
         }
@@ -155,6 +186,16 @@ export const StoreCatalog: React.FC = () => {
                 >
                     <Layers className="w-4 h-4" />
                     Adicionais
+                </button>
+                <button
+                    onClick={() => setActiveTab('import')}
+                    className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'import'
+                        ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                        }`}
+                >
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Importar Produtos
                 </button>
             </div>
 
@@ -264,6 +305,56 @@ export const StoreCatalog: React.FC = () => {
                 {activeTab === 'categories' && <CategoryManager />}
 
                 {activeTab === 'addons' && <AddonManager />}
+
+                {activeTab === 'import' && (
+                    <div className="animate-in fade-in duration-300">
+                        <div className="mb-8">
+                            <h2 className="text-xl font-black dark:text-white mb-2">Sugestões da Plataforma</h2>
+                            <p className="text-sm text-gray-500">Produtos otimizados e prontos para o seu cardápio</p>
+                        </div>
+
+                        {isImportLoading ? (
+                            <div className="flex flex-col items-center justify-center py-20">
+                                <Loader2 className="w-12 h-12 animate-spin text-brand-600 mb-4" />
+                                <p className="text-gray-500 font-bold">Buscando sugestões...</p>
+                            </div>
+                        ) : baseProducts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
+                                <Sparkles className="w-16 h-16 mb-4 text-amber-500" />
+                                <h3 className="font-bold text-lg dark:text-white">Nenhum produto disponível</h3>
+                                <p className="text-sm">Aguarde novas sugestões da administração.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {baseProducts.map(bp => (
+                                    <div key={bp.id} className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex flex-col">
+                                        <div className="flex gap-4 mb-4">
+                                            <div className="w-16 h-16 rounded-2xl bg-white dark:bg-gray-800 flex items-center justify-center border border-gray-100 dark:border-gray-700 flex-shrink-0">
+                                                <Package className="w-8 h-8 text-amber-500" />
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase text-brand-600 block mb-1">{bp.category || 'Geral'}</span>
+                                                <h4 className="font-bold dark:text-white leading-tight">{bp.name}</h4>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-gray-500 line-clamp-3 mb-4 flex-1">{bp.description}</p>
+                                        <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase">Preço Sugerido</p>
+                                                <p className="text-xl font-black dark:text-white">
+                                                    R$ {bp.valor_sugerido?.toFixed(2)}
+                                                </p>
+                                            </div>
+                                            <Button size="sm" onClick={() => handleImportProduct(bp)} disabled={isSaving}>
+                                                Importar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <ProductModal

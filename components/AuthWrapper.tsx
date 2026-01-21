@@ -245,7 +245,7 @@ export const AuthWrapper: React.FC = () => {
         }
       } finally {
         if (mounted) {
-          setTimeout(() => setIsCheckingSession(false), 500);
+          setIsCheckingSession(false);
         }
       }
 

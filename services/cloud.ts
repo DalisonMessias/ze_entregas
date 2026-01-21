@@ -12,7 +12,8 @@ import {
     AppNotification, PayoutSummary, AppSlide, StoreProduct,
     UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator, StoreAddonOption, StoreAddonGroup,
     StoreDeliverySettings, StoreNeighborhoodFee, PaymentGatewayConfig, PaymentGatewayLog,
-    FinancialTransaction
+    FinancialTransaction, BlacklistEntry, PartnerRating, Claim,
+    CatalogBaseProduct
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -195,7 +196,7 @@ export const getBlockingDetails = async (): Promise<{ reason: string; created_at
  */
 export const getSystemPulse = async (): Promise<{
     notifications: AppNotification[],
-    maintenance: MaintenanceData | null,
+    maintenance: MaintenanceSettings | null,
     role: UserRole
 }> => {
     // Carregamos em paralelo no Cloud.ts para aproveitar a latência mínima entre os serviços do Supabase
@@ -2038,17 +2039,26 @@ export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
         // vamos fazer o fetch de forma um pouco mais eficiente ou usar um RPC se existisse.
         // Por enquanto, vamos manter o fetch mas garantir que seja rápido.
 
-        const [usersRes, walletsRes] = await Promise.all([
+
+        const [usersRes, storeWalletsRes, userWalletsRes] = await Promise.all([
             sb.from('user_profiles').select('id, name, email, role, is_super_store').order('name'),
-            sb.from('store_wallets').select('store_id, balance_decimal')
+            sb.from('store_wallets').select('store_id, balance_decimal'),
+            sb.from('wallets').select('user_id, balance')
         ]);
 
         if (usersRes.error) throw usersRes.error;
         if (!usersRes.data) return [];
 
-        const walletMap = new Map<string, number>();
-        walletsRes.data?.forEach((w: any) => {
-            walletMap.set(w.store_id, Number(w.balance_decimal || 0));
+        // Map para carteira da loja
+        const storeWalletMap = new Map<string, number>();
+        storeWalletsRes.data?.forEach((w: any) => {
+            storeWalletMap.set(w.store_id, Number(w.balance_decimal || 0));
+        });
+
+        // Map para carteira do usuário
+        const userWalletMap = new Map<string, number>();
+        userWalletsRes.data?.forEach((w: any) => {
+            userWalletMap.set(w.user_id, Number(w.balance || 0));
         });
 
         return usersRes.data.map(u => ({
@@ -2056,7 +2066,8 @@ export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
             name: u.name || u.email || 'Sem Nome',
             email: u.email || '',
             role: u.role,
-            balance: walletMap.get(u.id) || 0,
+            balance: storeWalletMap.get(u.id) || 0, // Carteira da loja
+            user_balance: userWalletMap.get(u.id) || 0, // Carteira do usuário
             is_super_store: u.is_super_store
         }));
 
@@ -2087,6 +2098,57 @@ export const adminAdjustBalance = async (userId: string, amount: number, reason:
 
     return data;
 };
+
+/**
+ * Atualiza diretamente o saldo da carteira de uma loja (não ajusta, define um novo valor)
+ */
+export const adminUpdateWalletBalance = async (userId: string, newBalance: number, reason: string = 'Ajuste manual pelo admin') => {
+    const sb = getClient();
+    if (!sb) throw new Error("Supabase client not initialized");
+
+    try {
+        // Primeiro, buscar o saldo atual
+        const { data: wallet, error: fetchError } = await sb
+            .from('store_wallets')
+            .select('balance_decimal')
+            .eq('store_id', userId)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        const currentBalance = Number(wallet?.balance_decimal || 0);
+        const adjustmentAmount = newBalance - currentBalance;
+
+        // Usar a função de ajuste existente
+        return await adminAdjustBalance(userId, adjustmentAmount, reason);
+    } catch (error) {
+        console.error("Error in adminUpdateWalletBalance:", error);
+        throw error;
+    }
+};
+
+/**
+ * Atualiza o saldo da carteira do usuário (tabela wallets)
+ */
+export const adminUpdateUserWalletBalance = async (userId: string, newBalance: number) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Supabase client not initialized");
+
+    try {
+        const { error } = await sb
+            .from('wallets')
+            .update({ balance: newBalance })
+            .eq('user_id', userId);
+
+        if (error) throw error;
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error in adminUpdateUserWalletBalance:", error);
+        throw error;
+    }
+};
+
 
 // --- PARTNER REQUESTS ---
 
@@ -3298,7 +3360,7 @@ export const getOrdersTickets = async (storeId: string) => {
     const { data, error } = await sb.from('orders_tickets')
         .select(`
             *,
-            orders (
+            orders!order_id (
                 id,
                 customer_name,
                 order_type,
@@ -4664,7 +4726,7 @@ export const saveServiceConfig = async (serviceName: string, config: ServiceConf
 
 // --- INSTITUTIONAL CONTENT (CMS) FUNCTIONS ---
 
-export const adminListInstitutionalCategories = async (): Promise<InstitutionalCategory[]> => {
+export const getInstitutionalCategories = async (): Promise<InstitutionalCategory[]> => {
     const sb = getClient();
     if (!sb) return [];
     const { data, error } = await sb.from('institutional_categories').select('*').order('name');
@@ -4674,6 +4736,29 @@ export const adminListInstitutionalCategories = async (): Promise<InstitutionalC
     }
     return data || [];
 };
+
+export const createInstitutionalCategory = async (category: Partial<InstitutionalCategory>) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+    const { error } = await sb.from('institutional_categories').insert(category);
+    if (error) throw error;
+};
+
+export const updateInstitutionalCategory = async (id: string, category: Partial<InstitutionalCategory>) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+    const { error } = await sb.from('institutional_categories').update(category).eq('id', id);
+    if (error) throw error;
+};
+
+export const deleteInstitutionalCategory = async (id: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not initialized');
+    const { error } = await sb.from('institutional_categories').delete().eq('id', id);
+    if (error) throw error;
+};
+
+export const adminListInstitutionalCategories = getInstitutionalCategories;
 
 export const adminListInstitutionalTags = async (): Promise<InstitutionalTag[]> => {
     const sb = getClient();
@@ -4897,4 +4982,97 @@ export const adminUploadPlatformNewsImage = async (newsId: string, file: File): 
     const { error: updateError } = await sb.from('platform_news').update({ image_url: publicUrl }).eq('id', newsId);
     if (updateError) throw updateError;
     return publicUrl;
+};
+
+// --- CATALOGO BASE DE PRODUTOS ---
+
+/**
+ * Busca todos os produtos do catálogo base (ativos).
+ */
+export const getCatalogBaseProducts = async (): Promise<CatalogBaseProduct[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('catalog_base_products')
+        .select('*')
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching catalog base products:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const adminCreateBaseProduct = async (product: Partial<CatalogBaseProduct>) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+
+    const { data, error } = await sb
+        .from('catalog_base_products')
+        .insert(product)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const adminUpdateBaseProduct = async (id: string, product: Partial<CatalogBaseProduct>) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+
+    const { data, error } = await sb
+        .from('catalog_base_products')
+        .update(product)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const adminDeleteBaseProduct = async (id: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+
+    const { error } = await sb.from('catalog_base_products').delete().eq('id', id);
+    if (error) throw error;
+};
+
+/**
+ * Loja: Importa um produto do catálogo base para a loja atual.
+ */
+
+/**
+ * Loja: Importa um produto do catálogo base para a loja atual.
+ */
+export const importBaseProductToStore = async (baseProduct: CatalogBaseProduct) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const newProduct = {
+        store_id: user.id,
+        name: baseProduct.name,
+        description: baseProduct.description,
+        price: baseProduct.valor_sugerido,
+        is_active: true,
+        base_product_id: baseProduct.id,
+        observations: baseProduct.observations
+        // Note: category_id needs to be handled separately or store will need to select one
+    };
+
+    const { data, error } = await sb
+        .from('products')
+        .insert(newProduct)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, LayoutGrid } from 'lucide-react';
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
@@ -88,7 +88,7 @@ export type ActiveTab =
     | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_location_map'
+    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_location_map' | 'admin_base_catalog' | 'admin_store_categories'
     | 'profile'
     | 'support'
     | 'shop'
@@ -393,9 +393,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         const hasSeenWelcomeTour = localStorage.getItem(`tour-completed-${welcomeTourKey}`);
 
         if (!hasSeenWelcomeTour && tourSteps.universal?.welcome) {
-            setTimeout(() => {
-                startTour(tourSteps.universal.welcome, welcomeTourKey);
-            }, 1500);
+            startTour(tourSteps.universal.welcome, welcomeTourKey);
         }
     }, [effectiveRole, startTour]);
 
@@ -408,9 +406,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         const stepsForPage = tourSteps[effectiveRole]?.[activeTab] ?? null;
 
         if (stepsForPage && !hasSeenTour) {
-            setTimeout(() => {
-                startTour(stepsForPage, tourKey);
-            }, 500);
+            startTour(stepsForPage, tourKey);
         }
     }, [activeTab, effectiveRole, isTourRunning, startTour]);
 
@@ -509,16 +505,22 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     // Lógica principal de Roteamento / Aba Inicial
     useEffect(() => {
-        // 1. Tenta recuperar aba da URL
         const tabFromUrl = getTabFromUrl(window.location.pathname);
         const authTabs = ['login', 'signup', 'forgot_password'];
 
+        // Se a aba da URL é uma página de autenticação, não fazemos nada aqui.
+        // O AuthWrapper é responsável por redirecionar o usuário após o login.
+        if (tabFromUrl && authTabs.includes(tabFromUrl)) {
+            logger.info('ROUTING_SKIPPED_ON_AUTH_PAGE', { tab: tabFromUrl });
+            return;
+        }
+
+        // Se a URL já aponta para uma aba válida (e não de autenticação), usamos ela.
         if (tabFromUrl && !authTabs.includes(tabFromUrl)) {
-            // Se a URL tem uma aba válida e NÃO é aba de autenticação, usamos ela
             setActiveTab(tabFromUrl);
             logger.info('ACTIVE_TAB_FROM_URL', { tab: tabFromUrl });
         } else {
-            // 2. Se não tem URL válida, usa o default do Role
+            // Se a URL não tem uma aba válida (ex: rota raiz '/'), definimos a aba padrão baseada na role.
             if (effectiveRole === 'admin') { setActiveTab('admin_dashboard'); }
             else if (effectiveRole === 'store_partner') { setActiveTab('wallet'); }
             else if (effectiveRole === 'delivery_partner') { setActiveTab('partner'); }
@@ -964,6 +966,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                             <MenuSection title="Operacional" />
                             <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
+                            <MenuButton icon={Package} label="Catálogo Base" tab="admin_base_catalog" />
+                            <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
                             <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                             <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
                             <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
@@ -1108,7 +1112,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             </div>
 
             {/* Main Content Area */}
-            <main className={`pt-20 px-4 mx-auto transition-all duration-300 ${activeTab !== 'whatsapp_chat' ? 'pb-24' : ''} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
+            <main className={`pt-20 px-4 mx-auto transition-all duration-300 ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
                 {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
                 <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
                     {renderContent()}

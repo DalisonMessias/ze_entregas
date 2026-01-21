@@ -8922,3 +8922,108 @@ BEGIN
     );
 END;
 $$;
+
+-- ==================================================================
+-- ÍNDICES DE PERFORMANCE (ADICIONADOS 21/01/2026)
+-- ==================================================================
+CREATE INDEX IF NOT EXISTS wallet_transactions_store_id_created_at_idx ON public.wallet_transactions (store_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS partner_requests_status_idx ON public.partner_requests (status);
+CREATE INDEX IF NOT EXISTS user_profiles_store_slug_idx ON public.user_profiles (store_slug);
+CREATE INDEX IF NOT EXISTS user_profiles_city_slug_idx ON public.user_profiles (city_slug);
+
+-- ==================================================================
+-- CATÁLOGO BASE DE PRODUTOS (ADICIONADO 21/01/2026)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.catalog_base_products (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT,
+    brand TEXT,
+    category TEXT,
+    brand TEXT,
+    observations TEXT,
+    valor_sugerido NUMERIC(10, 2),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Garantir campo brand se tabela já existir
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'catalog_base_products' AND column_name = 'brand') THEN
+        ALTER TABLE public.catalog_base_products ADD COLUMN brand TEXT;
+    END IF;
+END $$;
+
+-- Habilitar RLS
+ALTER TABLE public.catalog_base_products ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de RLS para catalog_base_products
+DROP POLICY IF EXISTS "Public can read active base products" ON public.catalog_base_products;
+CREATE POLICY "Public can read active base products" ON public.catalog_base_products
+    FOR SELECT USING (is_active = TRUE OR public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can manage base products" ON public.catalog_base_products;
+CREATE POLICY "Admins can manage base products" ON public.catalog_base_products
+    FOR ALL USING (public.is_admin());
+
+-- Trigger para updated_at
+DROP TRIGGER IF EXISTS handle_catalog_base_products_updated_at ON public.catalog_base_products;
+CREATE TRIGGER handle_catalog_base_products_updated_at BEFORE UPDATE ON public.catalog_base_products
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Adicionar referência no catálogo de lojistas e campo brand
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'base_product_id') THEN
+        ALTER TABLE public.products ADD COLUMN base_product_id UUID REFERENCES public.catalog_base_products(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'brand') THEN
+        ALTER TABLE public.products ADD COLUMN brand TEXT;
+    END IF;
+END $$;
+
+-- Vincular Lojas a Categorias Institucionais
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_category_id') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_category_id UUID REFERENCES public.institutional_categories(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Popular Categorias Institucionais Iniciais (Modo Idempotente)
+INSERT INTO public.institutional_categories (name, slug)
+VALUES 
+    ('Pizzaria', 'pizzaria'),
+    ('Hamburgueria', 'hamburgueria'),
+    ('Cafeteria', 'cafeteria'),
+    ('Farmácia', 'farmacia'),
+    ('Supermercado', 'supermercado'),
+    ('Bebidas', 'bebidas'),
+    ('Pet Shop', 'pet-shop'),
+    ('Restaurante', 'restaurante'),
+    ('Japonês', 'japones'),
+    ('Sorveteria', 'sorveteria')
+ON CONFLICT (slug) DO NOTHING;
+
+-- Habilitar RLS em institutional_categories
+ALTER TABLE public.institutional_categories ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de RLS para institutional_categories
+DROP POLICY IF EXISTS "Public can read institutional categories" ON public.institutional_categories;
+CREATE POLICY "Public can read institutional categories" ON public.institutional_categories
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage institutional categories" ON public.institutional_categories;
+CREATE POLICY "Admins can manage institutional categories" ON public.institutional_categories
+    FOR ALL USING (public.is_admin());
+
+-- Permissões para institutional_categories
+GRANT SELECT ON public.institutional_categories TO anon, authenticated;
+GRANT ALL ON public.institutional_categories TO authenticated;
+
+-- Permissões
+GRANT SELECT ON public.catalog_base_products TO anon, authenticated;
+GRANT ALL ON public.catalog_base_products TO authenticated;

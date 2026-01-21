@@ -3,7 +3,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-brand-50:  #ffe6ec;
+  --color-brand-50: #ffe6ec;
   --color-brand-100: #ffccd9;
   --color-brand-200: #ff99b3;
   --color-brand-300: #ff668c;
@@ -15,7 +15,7 @@
   --color-brand-900: #33000d;
   --color-brand-950: #1a0006;
 
-  --color-gray-50:  #f9fafb;
+  --color-gray-50: #f9fafb;
   --color-gray-100: #f3f4f6;
   --color-gray-200: #e5e7eb;
   --color-gray-300: #d1d5db;
@@ -32,14 +32,16 @@
   --color-whatsapp-teal-dark: #054c44;
   --color-whatsapp-light: #DCF8C6;
   --color-whatsapp-bg: #ECE5DD;
-  --color-whatsapp-app-bg: #F0F2F5; /* Background geral do app (zapping web) */
+  --color-whatsapp-app-bg: #F0F2F5;
+  /* Background geral do app (zapping web) */
   --color-whatsapp-secondary: #8696A0;
   --color-whatsapp-incoming: #FFFFFF;
   --color-whatsapp-header: #F0F2F5;
   --color-whatsapp-input-bg: #FFFFFF;
 }
 
-button, [role="button"] {
+button,
+[role="button"] {
   cursor: pointer;
 }
 
@@ -59,19 +61,38 @@ main .grid {
   }
 }
 
-main .grid > * {
+main .grid>* {
   margin-top: 0;
   margin-bottom: 0;
+}
+
+/* Definir cores padrão para bordas para evitar o preto puro */
+.border-b,
+.border-t,
+.border-l,
+.border-r,
+.border {
+  border-color: var(--color-gray-200);
+}
+
+.dark .border-b,
+.dark .border-t,
+.dark .border-l,
+.dark .border-r,
+.dark .border {
+  border-color: var(--color-gray-700);
 }
 
 /* Hide scrollbar for custom scroll areas */
 .custom-scrollbar::-webkit-scrollbar,
 .no-scrollbar::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
 
 .custom-scrollbar,
 .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }

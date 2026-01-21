@@ -1684,8 +1684,10 @@ export const InternalOrders: React.FC = () => {
                                     <p className="text-gray-500 text-sm">Controle de comandas abertas pelos garçons</p>
                                 </div>
                                 <div className="bg-brand-50 dark:bg-brand-900/20 px-4 py-2 rounded-xl border border-brand-100">
-                                    <p className="text-[10px] font-black text-brand-600 uppercase">Pedidos Ativos</p>
-                                    <p className="text-xl font-black text-brand-600">{activeOrders.length}</p>
+                                    <p className="text-[10px] font-black text-brand-600 uppercase">Mesas Ativas</p>
+                                    <p className="text-xl font-black text-brand-600">
+                                        {activeOrders.filter(o => o.origin === 'COLLABORATOR').length}
+                                    </p>
                                 </div>
                             </div>
 
@@ -1759,10 +1761,18 @@ export const InternalOrders: React.FC = () => {
                                     <h2 className="text-2xl font-bold dark:text-white uppercase tracking-tight">Produção e Entrega</h2>
                                     <p className="text-gray-500 text-sm">Gerencie pedidos por etapa do fluxo</p>
                                 </div>
-                                <Button size="sm" variant="secondary" onClick={loadTickets} className="rounded-xl h-10 px-4 flex items-center gap-2" disabled={isRefreshing}>
-                                    {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <HistoryIcon className="w-4 h-4" />}
-                                    {isRefreshing ? 'Atualizando...' : 'Atualizar'}
-                                </Button>
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-orange-50 dark:bg-orange-900/20 px-4 py-2 rounded-xl border border-orange-100 text-right">
+                                        <p className="text-[10px] font-black text-orange-600 uppercase">Pedidos na Fila</p>
+                                        <p className="text-xl font-black text-orange-600">
+                                            {tickets.filter(t => t.status === 'pending').length}
+                                        </p>
+                                    </div>
+                                    <Button size="sm" variant="secondary" onClick={loadTickets} className="rounded-xl h-10 px-4 flex items-center gap-2" disabled={isRefreshing}>
+                                        {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <HistoryIcon className="w-4 h-4" />}
+                                        {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+                                    </Button>
+                                </div>
                             </div>
 
                             {/* Sub-abas de Produção */}

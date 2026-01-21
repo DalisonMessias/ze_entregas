@@ -35,7 +35,7 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
     if (scrollTop < 50) {
       setIsLoadingMore(true);
       onLoadMore();
-      setTimeout(() => setIsLoadingMore(false), 1000);
+      setIsLoadingMore(false);
     }
   }, [onLoadMore, hasMore, isLoadingMore]);
 

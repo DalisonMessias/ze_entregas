@@ -540,7 +540,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
       });
 
       // Recarregar mensagens após envio
-      setTimeout(() => fetchMessages(selectedConversation.conversation_id), 1000);
+      fetchMessages(selectedConversation.conversation_id);
     } catch (error) {
       console.error('Erro ao enviar mídia:', error);
       alert('Erro ao enviar mídia: ' + (error as any).message);

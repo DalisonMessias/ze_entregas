@@ -38,6 +38,8 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/gateways': 'admin_payment_gateways',
     '/admin/mercadopago': 'admin_mercadopago',
     '/admin/mapa-localizacao': 'admin_location_map',
+    '/admin/catalogo-produtos': 'admin_base_catalog',
+    '/admin/categorias-loja': 'admin_store_categories',
 
     // Shared / Core Routes
     '/perfil': 'profile',

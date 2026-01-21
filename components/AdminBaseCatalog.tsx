@@ -1,0 +1,754 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Bot, Search, Plus, Loader2, Sparkles, Send, Trash2, Edit2, Check, X, Package, MessageSquare } from 'lucide-react';
+import { Button } from './Button';
+import * as cloud from '../services/cloud';
+import { CatalogBaseProduct } from '../types';
+import { useDialog } from '../utils/dialogService';
+import { GoogleGenAI } from '@google/genai';
+
+export const AdminBaseCatalog: React.FC = () => {
+    const [products, setProducts] = useState<CatalogBaseProduct[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isAILoading, setIsAILoading] = useState(false);
+    const [aiMessage, setAiMessage] = useState('');
+    const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'model', content: string }[]>([]);
+    const [apiKey, setApiKey] = useState<string>('');
+    const [existingCategories, setExistingCategories] = useState<string[]>([]);
+
+    // Generator Modes & Multi-Product State
+    const [generatorMode, setGeneratorMode] = useState<'chat' | 'batch'>('chat');
+    const [batchInput, setBatchInput] = useState('');
+    const [pendingReviewProducts, setPendingReviewProducts] = useState<Partial<CatalogBaseProduct & { id_temp: string }>[]>([]);
+    const [isBatchLoading, setIsBatchLoading] = useState(false);
+
+    // Manual Creation State
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+    const [manualProduct, setManualProduct] = useState<Partial<CatalogBaseProduct>>({
+        name: '',
+        description: '',
+        brand: '',
+        category: '',
+        valor_sugerido: 0,
+        is_active: true
+    });
+    const [isSavingManual, setIsSavingManual] = useState(false);
+
+    const { confirm, alert: showMessage } = useDialog();
+    const chatEndRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatHistory]);
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const [baseProducts, settings] = await Promise.all([
+                cloud.getCatalogBaseProducts(),
+                cloud.getShopSettings()
+            ]);
+            setProducts(baseProducts);
+            setApiKey(settings?.google_gemini_api_key || '');
+
+            // Extrair categorias únicas para contexto da IA
+            const cats = Array.from(new Set(baseProducts.map(p => p.category || 'Geral').filter(Boolean)));
+            setExistingCategories(cats);
+        } catch (error) {
+            console.error("Error loading base catalog:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const checkForDuplicates = (newProduct: Partial<CatalogBaseProduct>) => {
+        if (!newProduct.name) return { isDuplicate: false };
+
+        const normalizedNewName = newProduct.name.toLowerCase().trim();
+
+        // Busca exata por nome
+        const existing = products.find(p =>
+            p.name.toLowerCase().trim() === normalizedNewName
+        );
+
+        if (existing) {
+            return { isDuplicate: true, existingProduct: existing };
+        }
+
+        // Busca por descrição similar ou nome contido
+        const partialMatch = products.find(p => {
+            const pName = p.name.toLowerCase().trim();
+            return normalizedNewName.includes(pName) || pName.includes(normalizedNewName);
+        });
+
+        if (partialMatch) {
+            return { isDuplicate: true, existingProduct: partialMatch };
+        }
+
+        return { isDuplicate: false };
+    };
+
+    const handleSendMessage = async () => {
+        if (!aiMessage.trim() || !apiKey) {
+            if (!apiKey) showMessage({ title: 'Configuração Necessária', message: 'Configure a chave da API do Gemini em IA Config.' });
+            return;
+        }
+
+        const userMsg = aiMessage;
+        setAiMessage('');
+        setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
+        setIsAILoading(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: apiKey });
+
+            const prompt = `Atue como um especialista em catálogo de produtos para deliverys. 
+            Categorias existentes no catálogo base da loja: ${existingCategories.join(', ') || 'Geral, Bebidas, Lanches, Pizzas'}.
+            
+            Analise a solicitação do usuário: "${userMsg}".
+
+            Sua tarefa é identificar se o usuário:
+            1. Está com uma DÚVIDA ou quer apenas INFORMAÇÃO.
+            2. Quer CRIAR um ou mais produtos (mesmo que seja uma lista).
+
+            Responda em JSON rigoroso com a seguinte estrutura:
+            {
+                "type": "INFORMATION" | "PRODUCT_CREATION",
+                "content": "Sua resposta em HTML elegante (use <strong>, <em>, <p>, <ul>, <li>). Organize a informação de forma atraente e fácil de ler.",
+                "products": [
+                    {
+                        "name": "Nome do Produto",
+                        "description": "Descrição atraente e detalhada",
+                        "brand": "Sugestão de Marca (ex: Coca-Cola, Nestlé) ou vazio se não aplicável",
+                        "category": "Categoria Sugerida (tente usar categorias existentes)",
+                        "valor_sugerido": 25.00,
+                        "observations": "Observações técnicas ou curiosidades"
+                    }
+                ]
+            }
+
+            - Se for INFORMATION: Mantenha "products" como um array vazio [].
+            - Se for PRODUCT_CREATION: Gere os detalhes dos produtos no array "products".
+            - No "content", explique o que foi feito ou responda a dúvida usando HTML semântico.
+            - Mantenha o tom profissional e amigável em Português do Brasil.
+            - Responda APENAS o JSON.`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: prompt }] }]
+            });
+
+            if (response.text) {
+                const text = response.text;
+
+                try {
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    const jsonData = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+
+                    if (jsonData.type === 'PRODUCT_CREATION' && Array.isArray(jsonData.products)) {
+                        const productsWithIds = jsonData.products.map((p: any) => {
+                            const duplicateInfo = checkForDuplicates(p);
+                            return {
+                                ...p,
+                                id_temp: crypto.randomUUID(),
+                                is_active: true,
+                                isDuplicate: duplicateInfo.isDuplicate,
+                                existingProduct: duplicateInfo.existingProduct
+                            };
+                        });
+                        setPendingReviewProducts(prev => [...prev, ...productsWithIds]);
+                    }
+
+                    setChatHistory(prev => [...prev, {
+                        role: 'model',
+                        content: jsonData.content || (jsonData.type === 'PRODUCT_CREATION' ? "Gerei estas sugestões para você." : "Entendido.")
+                    }]);
+                } catch (e) {
+                    console.error("Erro ao processar JSON da IA:", e);
+                    setChatHistory(prev => [...prev, { role: 'model', content: text }]);
+                }
+            }
+        } catch (error: any) {
+            setChatHistory(prev => [...prev, { role: 'model', content: "Erro ao consultar IA: " + error.message }]);
+        } finally {
+            setIsAILoading(false);
+        }
+    };
+
+    const handleBatchGenerate = async () => {
+        if (!batchInput.trim() || !apiKey) {
+            if (!apiKey) showMessage({ title: 'Configuração Necessária', message: 'Configure a chave da API do Gemini.' });
+            return;
+        }
+
+        setIsBatchLoading(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: apiKey });
+            const prompt = `Analise a seguinte lista de produtos/itens e gere sugestões completas para um catálogo de delivery:
+            LISTA: "${batchInput}"
+
+            Responda APENAS um JSON rigoroso no formato de um ARRAY de objetos:
+            [
+                {
+                    "name": "Nome do Produto",
+                    "description": "Descrição atraente e detalhada",
+                    "brand": "Marca Sugerida (Ex: Coca-Cola, Heinz) ou vazio",
+                    "category": "Categoria Sugerida",
+                    "valor_sugerido": 25.0,
+                    "observations": "Breve nota técnica"
+                },
+                ...
+            ]
+            Se o item for vago, tente deduzir o melhor nome, marca e preço para um delivery padrão.`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: prompt }] }]
+            });
+
+            if (response.text) {
+                const jsonMatch = response.text.match(/\[[\s\S]*\]/);
+                const items = JSON.parse(jsonMatch ? jsonMatch[0] : response.text);
+
+                if (Array.isArray(items)) {
+                    const productsWithIds = items.map(it => {
+                        const duplicateInfo = checkForDuplicates(it);
+                        return {
+                            ...it,
+                            id_temp: crypto.randomUUID(),
+                            is_active: true,
+                            isDuplicate: duplicateInfo.isDuplicate,
+                            existingProduct: duplicateInfo.existingProduct
+                        };
+                    });
+                    setPendingReviewProducts(productsWithIds);
+                } else {
+                    throw new Error("Resposta da IA não é uma lista válida.");
+                }
+            }
+        } catch (error: any) {
+            showMessage({ title: 'Erro na Geração', message: 'Não foi possível gerar a lista: ' + error.message });
+        } finally {
+            setIsBatchLoading(false);
+        }
+    };
+
+    const handleApproveRecommendation = async (tempId: string) => {
+        const prod = pendingReviewProducts.find(p => p.id_temp === tempId);
+        if (!prod) return;
+
+        try {
+            const productData = {
+                name: String(prod.name || 'Produto sem nome'),
+                description: String(prod.description || ''),
+                brand: String(prod.brand || ''),
+                category: String(prod.category || 'Sem categoria'),
+                valor_sugerido: Number(prod.valor_sugerido) || 0,
+                observations: String(prod.observations || ''),
+                is_active: true
+            };
+
+            if (prod.isDuplicate && prod.existingProduct?.id) {
+                await cloud.adminUpdateBaseProduct(prod.existingProduct.id, productData);
+                showMessage({ title: 'Atualizado', message: 'Produto existente atualizado com sucesso.' });
+            } else {
+                await cloud.adminCreateBaseProduct(productData);
+                showMessage({ title: 'Sucesso', message: 'Produto adicionado ao catálogo base.' });
+            }
+
+            setPendingReviewProducts(prev => prev.filter(p => p.id_temp !== tempId));
+            await loadData();
+        } catch (error: any) {
+            alert("Erro ao salvar produto sugerido: " + (error.message || "Erro desconhecido"));
+        }
+    };
+
+    const handleConfirmBatch = async () => {
+        if (pendingReviewProducts.length === 0) return;
+
+        const ok = await confirm({
+            title: 'Salvar Lista',
+            message: `Deseja adicionar estes ${pendingReviewProducts.length} produtos ao catálogo?`
+        });
+
+        if (!ok) return;
+
+        setIsSavingManual(true);
+        try {
+            for (const prod of pendingReviewProducts) {
+                const cleanProd = {
+                    name: prod.name,
+                    description: prod.description,
+                    category: prod.category,
+                    valor_sugerido: Number(prod.valor_sugerido) || 0,
+                    observations: prod.observations,
+                    is_active: prod.is_active
+                };
+                await cloud.adminCreateBaseProduct(cleanProd);
+            }
+            setPendingReviewProducts([]);
+            setBatchInput('');
+            loadData();
+            showMessage({ title: 'Sucesso', message: 'Produtos importados com sucesso.' });
+        } catch (error) {
+            alert("Erro ao salvar alguns produtos do lote.");
+        } finally {
+            setIsSavingManual(false);
+        }
+    };
+
+    const handleDiscardPending = (tempId: string) => {
+        setPendingReviewProducts(prev => prev.filter(p => p.id_temp !== tempId));
+    };
+
+    const handleDuplicatePending = (product: any) => {
+        setPendingReviewProducts(prev => [
+            ...prev,
+            { ...product, id_temp: crypto.randomUUID(), name: `${product.name} (Cópia)` }
+        ]);
+    };
+
+    const handleDelete = async (id: string, name: string) => {
+        const ok = await confirm({ title: 'Excluir Produto', message: `Deseja remover "${name}" do Catálogo Base?` });
+        if (ok) {
+            try {
+                await cloud.adminDeleteBaseProduct(id);
+                loadData();
+            } catch (error) {
+                alert("Erro ao deletar.");
+            }
+        }
+    };
+
+    const handleSaveManual = async () => {
+        setIsSavingManual(true);
+        try {
+            const productData = {
+                ...manualProduct,
+                name: manualProduct.name || 'Produto sem nome',
+                category: manualProduct.category || 'Sem categoria',
+                valor_sugerido: Number(manualProduct.valor_sugerido) || 0
+            };
+
+            if (manualProduct.id) {
+                await cloud.adminUpdateBaseProduct(manualProduct.id!, productData);
+                showMessage({ title: 'Sucesso', message: 'Produto atualizado com sucesso.' });
+            } else if ((manualProduct as any).id_temp) {
+                // Atualiza na lista de revisão
+                setPendingReviewProducts(prev => prev.map(p =>
+                    p.id_temp === (manualProduct as any).id_temp ? { ...p, ...productData } : p
+                ));
+                showMessage({ title: 'Sucesso', message: 'Sugestão atualizada.' });
+            } else {
+                await cloud.adminCreateBaseProduct(productData);
+                showMessage({ title: 'Sucesso', message: 'Produto cadastrado manualmente.' });
+            }
+
+            setIsManualModalOpen(false);
+            setManualProduct({ name: '', description: '', category: '', valor_sugerido: 0, is_active: true });
+            loadData();
+        } catch (error) {
+            console.error("Erro ao salvar produto:", error);
+            alert("Erro ao salvar produto.");
+        } finally {
+            setIsSavingManual(false);
+        }
+    };
+
+    const handleEdit = (product: CatalogBaseProduct | any) => {
+        setManualProduct(product);
+        setIsManualModalOpen(true);
+    };
+
+    const handleToggleStatus = async (product: CatalogBaseProduct) => {
+        try {
+            const newStatus = !product.is_active;
+            await cloud.adminUpdateBaseProduct(product.id, {
+                is_active: newStatus
+            });
+            loadData();
+            // showMessage({ title: 'Status Atualizado', message: `${product.name} está agora ${newStatus ? 'ativo' : 'inativo'}.` });
+        } catch (error) {
+            alert("Erro ao alterar status.");
+        }
+    };
+
+    const filteredProducts = products.filter(p =>
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.category?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] animate-in fade-in duration-500">
+            {/* Left Column: AI Assistant */}
+            <div className="w-full lg:w-96 flex flex-col bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden h-full">
+                <div className="p-4 border-b dark:border-gray-700 bg-brand-50/50 dark:bg-brand-900/10 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center">
+                            <Bot className="w-5 h-5 text-brand-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-sm dark:text-white">Gerador de Produtos</h3>
+                            <div className="flex gap-2 mt-0.5">
+                                <button
+                                    onClick={() => setGeneratorMode('chat')}
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-all ${generatorMode === 'chat' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                                >
+                                    CONVERSA
+                                </button>
+                                <button
+                                    onClick={() => setGeneratorMode('batch')}
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-all ${generatorMode === 'batch' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                                >
+                                    LISTA (PWA)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {(isAILoading || isBatchLoading) && <Loader2 className="w-4 h-4 animate-spin text-brand-600" />}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                    {generatorMode === 'chat' ? (
+                        <>
+                            {chatHistory.length === 0 && (
+                                <div className="flex flex-col items-center justify-center text-center h-full py-10 opacity-50">
+                                    <Sparkles className="w-12 h-12 text-brand-500 mb-4" />
+                                    <p className="text-sm font-medium">Peça à IA para sugerir produtos.<br />Ex: "Sugerir hambúrguer de picanha"</p>
+                                </div>
+                            )}
+
+                            {chatHistory.map((chat, idx) => (
+                                <div key={idx} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${chat.role === 'user'
+                                        ? 'bg-brand-600 text-white rounded-tr-none'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-tl-none prose prose-sm dark:prose-invert max-w-none'
+                                        }`}
+                                        {...(chat.role === 'model' ? { dangerouslySetInnerHTML: { __html: chat.content } } : { children: chat.content })}
+                                    />
+                                </div>
+                            ))}
+
+                            {pendingReviewProducts.length > 0 && (
+                                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase ml-1">Sugestões Pendentes ({pendingReviewProducts.length})</p>
+                                    {pendingReviewProducts.map((prod) => (
+                                        <div key={prod.id_temp} className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 p-4 rounded-2xl shadow-sm">
+                                            <div className="flex items-start gap-3 mb-3">
+                                                <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
+                                                    <Package className="w-5 h-5 text-amber-600" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="font-bold text-sm dark:text-white">{prod.name}</h4>
+                                                        {prod.isDuplicate && (
+                                                            <span className="text-[9px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded shadow-sm border border-amber-200">
+                                                                DUPLICADO
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-500 line-clamp-1">
+                                                        {prod.brand ? `${prod.brand} • ` : ''}{prod.category} • R$ {prod.valor_sugerido?.toFixed(2)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    fullWidth
+                                                    variant={prod.isDuplicate ? "secondary" : "success"}
+                                                    onClick={() => handleApproveRecommendation(prod.id_temp!)}
+                                                >
+                                                    <Check className="w-3 h-3 mr-1" /> {prod.isDuplicate ? 'Atualizar' : 'Aprovar'}
+                                                </Button>
+                                                <button onClick={() => handleEdit(prod)} className="p-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors" title="Editar">
+                                                    <Edit2 className="w-4 h-4 text-gray-500" />
+                                                </button>
+                                                <button onClick={() => handleDiscardPending(prod.id_temp!)} className="p-2 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors" title="Descartar">
+                                                    <X className="w-4 h-4 text-red-500" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="space-y-4 h-full flex flex-col">
+                            <div className="flex-1">
+                                <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">Lista de Itens (um por linha)</label>
+                                <textarea
+                                    value={batchInput}
+                                    onChange={(e) => setBatchInput(e.target.value)}
+                                    placeholder="Ex:&#10;Coca Cola 2L&#10;Pizza Calabresa&#10;Hambúrguer Gourmet"
+                                    className="w-full h-40 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none"
+                                />
+                                <Button
+                                    fullWidth
+                                    size="sm"
+                                    className="mt-2"
+                                    onClick={handleBatchGenerate}
+                                    disabled={isBatchLoading || !batchInput.trim()}
+                                >
+                                    {isBatchLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                                    Gerar Produtos da Lista
+                                </Button>
+                            </div>
+
+                            {pendingReviewProducts.length > 0 && (
+                                <div className="border-t dark:border-gray-700 pt-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="font-bold text-xs uppercase text-gray-400">Revisão ({pendingReviewProducts.length})</h4>
+                                        <button
+                                            onClick={() => setPendingReviewProducts([])}
+                                            className="text-[10px] font-bold text-red-500 hover:underline"
+                                        >
+                                            LIMPAR TUDO
+                                        </button>
+                                    </div>
+                                    <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                        {pendingReviewProducts.map((prod) => (
+                                            <div key={prod.id_temp} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700 group">
+                                                <div className="flex justify-between items-start gap-2">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <h5 className="font-bold text-xs dark:text-white line-clamp-1">{prod.name}</h5>
+                                                            {prod.isDuplicate && (
+                                                                <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1 py-0.2 rounded border border-amber-200">EXISTE</span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[10px] text-gray-500 font-bold">
+                                                            {prod.brand ? `${prod.brand} • ` : ''}R$ {prod.valor_sugerido?.toFixed(2)}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={() => handleEdit(prod)} className="p-1 hover:bg-white dark:hover:bg-gray-700 rounded text-gray-400" title="Editar"><Edit2 className="w-3 h-3" /></button>
+                                                        <button onClick={() => handleDuplicatePending(prod)} className="p-1 hover:bg-white dark:hover:bg-gray-700 rounded text-gray-400" title="Duplicar"><Plus className="w-3 h-3" /></button>
+                                                        <button onClick={() => handleDiscardPending(prod.id_temp!)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-400" title="Remover"><Trash2 className="w-3 h-3" /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Button
+                                        fullWidth
+                                        variant="success"
+                                        size="sm"
+                                        className="mt-4"
+                                        onClick={handleConfirmBatch}
+                                        disabled={isSavingManual}
+                                    >
+                                        <Check className="w-4 h-4 mr-2" /> Confirmar e Salvar {pendingReviewProducts.length} Produtos
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <div ref={chatEndRef} />
+                </div>
+
+
+                {generatorMode === 'chat' && (
+                    <div className="p-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={aiMessage}
+                                onChange={(e) => setAiMessage(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                                placeholder="Descreva o produto..."
+                                className="flex-1 bg-white dark:bg-gray-800 border-none rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500 dark:text-white shadow-sm"
+                            />
+                            <button
+                                onClick={handleSendMessage}
+                                disabled={isAILoading || !aiMessage.trim()}
+                                className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition-colors disabled:opacity-50"
+                            >
+                                <Send className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Right Column: Base Catalog List */}
+            <div className="flex-1 flex flex-col h-full">
+                <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-6">
+                    <div className="relative w-full md:w-80">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar no catálogo base..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white shadow-sm"
+                        />
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                        <Button onClick={() => setIsManualModalOpen(true)} className="flex-1 md:flex-none">
+                            <Plus className="w-4 h-4 mr-2" /> Manual
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm flex-1 overflow-hidden flex flex-col">
+                    <div className="overflow-y-auto flex-1 p-6 custom-scrollbar">
+                        {loading ? (
+                            <div className="flex items-center justify-center h-full">
+                                <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+                            </div>
+                        ) : filteredProducts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center py-20 opacity-50">
+                                <Package className="w-16 h-16 mb-4" />
+                                <h3 className="font-bold text-lg dark:text-white">Catálogo Vazio</h3>
+                                <p className="text-sm">Use o assistente ao lado para popular seu catálogo base.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                {filteredProducts.map(p => (
+                                    <div key={p.id} className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 group transition-all hover:border-brand-500">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-[10px] font-black uppercase text-brand-600 bg-brand-50 dark:bg-brand-900/20 px-2 py-0.5 rounded-full">
+                                                {p.category || 'Geral'}
+                                            </span>
+                                            <div className="flex gap-1 opacity-10 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-white dark:hover:bg-gray-800 rounded-lg text-gray-500 shadow-sm">
+                                                    <Edit2 className="w-3 h-3" />
+                                                </button>
+                                                <button onClick={() => handleDelete(p.id, p.name)} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-500 shadow-sm">
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <h4 className="font-bold text-gray-900 dark:text-white line-clamp-1">
+                                            {p.brand ? `${p.brand} - ` : ''}{p.name}
+                                        </h4>
+                                        <p className="text-xs text-gray-500 line-clamp-2 mt-1 h-8">{p.description}</p>
+                                        <div className="mt-4 flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-3">
+                                            <span className="text-lg font-black dark:text-white">
+                                                R$ {p.valor_sugerido?.toFixed(2)}
+                                            </span>
+                                            <button
+                                                onClick={() => handleToggleStatus(p)}
+                                                className={`w-10 h-5 rounded-full transition-colors relative ${p.is_active ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                                title={p.is_active ? 'Clique para Desativar' : 'Clique para Ativar'}
+                                            >
+                                                <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${p.is_active ? 'right-1' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Manual Creation Modal */}
+            {isManualModalOpen && (
+                <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] w-full max-w-md shadow-2xl space-y-4 border border-gray-100 dark:border-gray-700">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="font-black text-xl dark:text-white flex items-center gap-2">
+                                {manualProduct.id ? <Edit2 className="w-5 h-5 text-brand-600" /> : <Plus className="w-5 h-5 text-brand-600" />}
+                                {manualProduct.id ? 'Editar Produto' : 'Novo Produto Manual'}
+                            </h3>
+                            <button onClick={() => {
+                                setIsManualModalOpen(false);
+                                setManualProduct({ name: '', description: '', category: '', valor_sugerido: 0, is_active: true });
+                            }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                                <X className="w-5 h-5 text-gray-400" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Nome do Produto</label>
+                                <input
+                                    type="text"
+                                    value={manualProduct.name}
+                                    onChange={e => setManualProduct({ ...manualProduct, name: e.target.value })}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                    placeholder="Ex: Coca-Cola 350ml"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Marca (Opcional)</label>
+                                <input
+                                    type="text"
+                                    value={manualProduct.brand || ''}
+                                    onChange={e => setManualProduct({ ...manualProduct, brand: e.target.value })}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                    placeholder="Ex: Coca-Cola, Heinz, Nestlé"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Marca (Opcional)</label>
+                                <input
+                                    type="text"
+                                    value={manualProduct.brand}
+                                    onChange={e => setManualProduct({ ...manualProduct, brand: e.target.value })}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                    placeholder="Ex: Coca-Cola, Heinz"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Categoria</label>
+                                    <input
+                                        type="text"
+                                        value={manualProduct.category}
+                                        onChange={e => setManualProduct({ ...manualProduct, category: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                        placeholder="Ex: Bebidas"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Preço Sugerido</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">R$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={manualProduct.valor_sugerido}
+                                            onChange={e => setManualProduct({ ...manualProduct, valor_sugerido: parseFloat(e.target.value) || 0 })}
+                                            className="w-full pl-9 p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 dark:text-white font-bold"
+                                            placeholder="0,00"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Descrição</label>
+                                <textarea
+                                    value={manualProduct.description || ''}
+                                    onChange={e => setManualProduct({ ...manualProduct, description: e.target.value })}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 dark:text-white min-h-[100px] resize-none"
+                                    placeholder="Detalhes do produto..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-4">
+                            <Button variant="outline" fullWidth onClick={() => {
+                                setIsManualModalOpen(false);
+                                setManualProduct({ name: '', description: '', category: '', valor_sugerido: 0, is_active: true });
+                            }}>Cancelar</Button>
+                            <Button fullWidth onClick={handleSaveManual} disabled={isSavingManual}>
+                                {isSavingManual ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                                {manualProduct.id ? 'Salvar Alterações' : 'Salvar Produto'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};

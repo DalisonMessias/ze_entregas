@@ -65,14 +65,7 @@ export interface DailyTransaction {
     isRefunded?: boolean;
 }
 
-export interface DailySummary {
-    profit: number;
-    deliveryCount: number;
-    km: number;
-    expenses: number;
-    goal: number | null;
-    location: { lat: number, lng: number } | null;
-}
+// DailySummary consolidated at line 195
 
 export interface UserBankDetails {
     fullName: string;
@@ -196,13 +189,14 @@ export interface DailySummary {
     profit: number;
     deliveryCount: number;
     km: number;
+    expenses?: number; // Added from line 68
     goal: number | null;
     location: { lat: number; lng: number } | null;
-    address: string;
-    name: string;
-    lat: number;
-    lng: number;
-    completed: boolean;
+    address?: string;
+    name?: string;
+    lat?: number;
+    lng?: number;
+    completed?: boolean;
 }
 
 // Order interface consolidated below (lines 371-403)
@@ -238,18 +232,10 @@ export interface ManagedUser {
     preparation_time_max?: number;
     super_store_expiration?: string;
     store_document?: string;
+    store_category_id?: string;
 }
 
-export interface CompanyInfo {
-    about_text?: string;
-    careers_email?: string;
-    careers_text?: string;
-    press_email?: string;
-    press_text?: string;
-    contact_address?: string;
-    contact_support_email?: string;
-    contact_commercial_email?: string;
-}
+// CompanyInfo consolidated at line 916
 
 export interface GlobalNotification {
     id: string;
@@ -262,6 +248,7 @@ export interface Product {
     id: string;
     name: string;
     description?: string;
+    brand?: string;
     price: number;
     category_id: string;
     images?: string[];
@@ -301,6 +288,7 @@ export interface StoreProduct {
     store_id: string;
     name: string;
     description?: string;
+    brand?: string;
     price: number;
     category?: string; // Legacy: Name
     category_id?: string | null; // Correct: ID
@@ -314,6 +302,24 @@ export interface StoreProduct {
     observations?: string;
     origin_prefix?: string;
     stock_quantity?: number | null;
+    base_product_id?: string | null;
+}
+
+export interface CatalogBaseProduct {
+    id: string;
+    name: string;
+    description?: string;
+    brand?: string;
+    category?: string;
+    observations?: string;
+    valor_sugerido: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+
+    // Suporte para detecção de duplicados (UI/Staging)
+    isDuplicate?: boolean;
+    existingProduct?: CatalogBaseProduct;
 }
 
 
@@ -612,6 +618,7 @@ export interface PartnerProfile {
     store_address_complement?: string;
 
     is_super_store?: boolean;
+    store_category_id?: string;
     store_name?: string;
     is_open?: boolean;
     preparation_time?: number;
@@ -715,14 +722,7 @@ export interface PartnerRating {
     created_at: string;
 }
 
-export interface WorkShift {
-    id: string;
-    partner_id: string;
-    start_time: string;
-    end_time?: string;
-    status: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
-    breaks?: { start: string, end?: string }[];
-}
+// WorkShift consolidated at line 875
 
 export interface WorkShiftBreak {
     start: string;
@@ -732,7 +732,7 @@ export interface WorkShiftBreak {
 // Consolidated FinancialStatementItem below
 
 
-export interface LiveLocationPayload {
+export interface PhotoVerificationPayload {
     id: string;
     user_id: string;
     photo_url: string;
@@ -753,16 +753,7 @@ export interface FraudAlert {
     created_at: string;
 }
 
-export interface PlatformNews {
-    id: string;
-    title: string;
-    description: string;
-    icon_name: string;
-    is_active: boolean;
-    sort_order: number;
-    created_at: string;
-    image_url?: string;
-}
+// PlatformNews consolidated at line 902
 
 export interface SystemTip {
     id: string;
@@ -826,7 +817,7 @@ export interface FinancialTransaction {
     created_at: string;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp' | 'score_config' | 'mercadopago' | 'location_map';
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories';
 
 export interface AppNotification {
     id: string;
@@ -905,9 +896,11 @@ export interface PlatformNews {
     description: string;
     icon_name: string;
     is_active: boolean;
+    sort_order?: number; // Added from line 756
+    image_url?: string;  // Added from line 756
     created_at: string;
-    peakHours: { hour: number, count: number }[];
-    driverPerformance: { partner_id: string, partner_name: string, count: number }[];
+    peakHours?: { hour: number, count: number }[];
+    driverPerformance?: { partner_id: string, partner_name: string, count: number }[];
     counts?: { completed: number; cancelled: number; failed: number };
 }
 
@@ -1031,7 +1024,9 @@ export interface AdminWalletUser {
     name: string;
     email: string;
     role: string;
-    balance: number;
+    balance: number; // Saldo da carteira da loja (store_wallets)
+    user_balance?: number; // Saldo da carteira do usuário (wallets)
+    is_super_store?: boolean;
 }
 
 export interface FinancialStatementItem {

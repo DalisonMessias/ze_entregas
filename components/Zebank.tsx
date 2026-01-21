@@ -440,7 +440,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     };
 
     const loadData = async () => {
-        setLoading(true);
+        if (!data) setLoading(true);
         try {
             const d = await cloud.getZebankDashboardData();
             setData(d);

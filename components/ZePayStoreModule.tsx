@@ -106,7 +106,7 @@ export const ZePayStore: React.FC = () => {
     }, [polling, pixDetails]);
 
     const checkAccessAndLoad = async () => {
-        setLoading(true);
+        if (!data) setLoading(true);
         try {
             // 1. Check Profile (Exclusive Lock)
             const profile = await cloud.getMyPartnerProfile();

@@ -4,6 +4,7 @@ import * as cloud from '../services/cloud';
 import { AdminWalletUser, FinancialStatementItem, UserRole } from '../types';
 import { Button } from './Button';
 import { CustomDateInput } from './CustomDateInput';
+import { CustomInput } from './CustomInput';
 import { ReceiptModal } from './ReceiptModal';
 import { useDialog } from '../utils/dialogService';
 
@@ -26,6 +27,9 @@ export const AdminStoreFinance: React.FC = () => {
     const [isEditingBalance, setIsEditingBalance] = useState(false);
     const [editBalanceValue, setEditBalanceValue] = useState('');
     const [savingBalance, setSavingBalance] = useState(false);
+    const [isEditingUserBalance, setIsEditingUserBalance] = useState(false);
+    const [editUserBalanceValue, setEditUserBalanceValue] = useState('');
+    const [savingUserBalance, setSavingUserBalance] = useState(false);
 
     const loadStores = useCallback(async () => {
         setLoading(true);
@@ -84,6 +88,13 @@ export const AdminStoreFinance: React.FC = () => {
         }
     };
 
+    const handleEditUserBalance = () => {
+        if (selectedStore) {
+            setEditUserBalanceValue((selectedStore.user_balance || 0).toString());
+            setIsEditingUserBalance(true);
+        }
+    };
+
     const handleSaveBalance = async () => {
         if (!selectedStore) return;
 
@@ -94,10 +105,14 @@ export const AdminStoreFinance: React.FC = () => {
 
         setSavingBalance(true);
         try {
-            // TODO: Implementar chamada ao cloud para atualizar saldo
-            // await cloud.adminUpdateWalletBalance(selectedStore.user_id, parseFloat(editBalanceValue));
+            // Chamar função do cloud para atualizar saldo no banco
+            await cloud.adminUpdateWalletBalance(
+                selectedStore.user_id,
+                parseFloat(editBalanceValue),
+                'Ajuste manual via painel administrativo'
+            );
 
-            // Atualizar localmente por enquanto
+            // Atualizar localmente após sucesso
             setSelectedStore({ ...selectedStore, balance: parseFloat(editBalanceValue) });
             const updatedStores = stores.map(s =>
                 s.user_id === selectedStore.user_id
@@ -115,10 +130,44 @@ export const AdminStoreFinance: React.FC = () => {
         }
     };
 
+    const handleSaveUserBalance = async () => {
+        if (!selectedStore) return;
+
+        await alert({
+            title: 'Confirmar Alteração',
+            message: `Tem certeza que deseja alterar o saldo do usuário de ${formatCurrency(selectedStore.user_balance || 0)} para ${formatCurrency(parseFloat(editUserBalanceValue))}?`
+        });
+
+        setSavingUserBalance(true);
+        try {
+            // Chamar função do cloud para atualizar saldo do usuário no banco
+            await cloud.adminUpdateUserWalletBalance(
+                selectedStore.user_id,
+                parseFloat(editUserBalanceValue)
+            );
+
+            // Atualizar localmente após sucesso
+            setSelectedStore({ ...selectedStore, user_balance: parseFloat(editUserBalanceValue) });
+            const updatedStores = stores.map(s =>
+                s.user_id === selectedStore.user_id
+                    ? { ...s, user_balance: parseFloat(editUserBalanceValue) }
+                    : s
+            );
+            setStores(updatedStores);
+
+            setIsEditingUserBalance(false);
+            await alert({ title: 'Sucesso', message: 'Saldo do usuário atualizado com sucesso!' });
+        } catch (error) {
+            await alert({ title: 'Erro', message: 'Falha ao atualizar saldo do usuário: ' + (error as Error).message });
+        } finally {
+            setSavingUserBalance(false);
+        }
+    };
+
     const StoreDetailModal: React.FC<{ store: AdminWalletUser, onClose: () => void }> = ({ store, onClose }) => (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white dark:bg-gray-800 w-full max-w-2xl max-h-[90vh] rounded-2xl p-6 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-4 border-b dark:border-gray-700 pb-4">
+                <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-4">
                     <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
                         <User className="w-5 h-5 text-gray-500" /> Finanças de {store.name}
                     </h3>
@@ -129,7 +178,7 @@ export const AdminStoreFinance: React.FC = () => {
                     <div className="bg-gradient-to-br from-green-600 to-green-700 text-white p-5 rounded-xl shadow-lg relative">
                         <div className="flex justify-between items-start mb-2">
                             <div className="flex-1">
-                                <p className="text-xs font-bold uppercase opacity-80 mb-1">Saldo Atual</p>
+                                <p className="text-xs font-bold uppercase opacity-80 mb-1">Saldo do Usuário</p>
                                 {!isEditingBalance ? (
                                     <h4 className="text-3xl font-black">{formatCurrency(store.balance)}</h4>
                                 ) : (
@@ -175,6 +224,61 @@ export const AdminStoreFinance: React.FC = () => {
                                     >
                                         <Save className="w-4 h-4" />
                                         {savingBalance ? 'Salvando...' : 'Salvar'}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Card da Carteira do Usuário */}
+                    <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white p-5 rounded-xl shadow-lg relative">
+                        <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                                <p className="text-xs font-bold uppercase opacity-80 mb-1">Saldo Atual</p>
+                                {!isEditingUserBalance ? (
+                                    <h4 className="text-3xl font-black">{formatCurrency(store.user_balance || 0)}</h4>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <CustomInput
+                                            type="number"
+                                            step="0.01"
+                                            value={editUserBalanceValue}
+                                            onChange={(e) => setEditUserBalanceValue(e.target.value)}
+                                            placeholder="0.00"
+                                            className="!bg-white/20 !text-white !text-2xl !font-black !border-white/40 focus:!border-white placeholder:text-white/50"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            {!isEditingUserBalance ? (
+                                <button
+                                    onClick={handleEditUserBalance}
+                                    className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-1.5 text-sm font-medium"
+                                    title="Editar saldo do usuário"
+                                >
+                                    <Edit3 className="w-4 h-4" />
+                                    Editar Saldo
+                                </button>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => setIsEditingUserBalance(false)}
+                                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-1.5 text-sm font-medium"
+                                        title="Cancelar"
+                                    >
+                                        <X className="w-4 h-4" />
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleSaveUserBalance}
+                                        disabled={savingUserBalance}
+                                        className="px-3 py-1.5 bg-white hover:bg-white/90 text-blue-700 rounded-lg transition-colors flex items-center gap-1.5 text-sm font-medium disabled:opacity-50"
+                                        title="Salvar"
+                                    >
+                                        <Save className="w-4 h-4" />
+                                        {savingUserBalance ? 'Salvando...' : 'Salvar'}
                                     </button>
                                 </>
                             )}
