@@ -3,6 +3,7 @@ import * as cloud from '../../../services/cloud';
 import { Button } from '../../Button';
 import { BaseModal } from '../../BaseModal';
 import { useNotification } from '../../../contexts/NotificationContext';
+import { useDialog } from '../../../utils/dialogService';
 import { Plus, Trash2, Pencil, X, MessageSquare, Tag, Loader2 } from 'lucide-react';
 
 interface ZeAssistantRule {
@@ -27,6 +28,7 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
     const [editingRule, setEditingRule] = useState<Partial<ZeAssistantRule> | null>(null);
     const [error, setError] = useState(false);
     const { showNotification } = useNotification();
+    const { confirm } = useDialog();
     const supabase = cloud.getClient();
 
     useEffect(() => {
@@ -104,7 +106,8 @@ export const ZeAssistantRulesManager: React.FC<ZeAssistantRulesManagerProps> = (
 
     const handleDeleteRule = async (id: string) => {
         if (!supabase) return;
-        if (!confirm('Tem certeza que deseja excluir esta regra?')) return;
+        const confirmed = await confirm({ title: 'Excluir Regra', message: 'Tem certeza que deseja excluir esta regra?' });
+        if (!confirmed) return;
 
         try {
             const { error } = await supabase

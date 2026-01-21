@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, Edit2, Trash2, X, Phone, Mail, Tag } from 'lucide-react';
 import axios from 'axios';
 import { BaseModal } from '../BaseModal';
+import { useDialog } from '../../utils/dialogService';
 import { getApiBaseUrl } from '../../utils/apiConfig';
 
 interface Contact {
@@ -30,7 +31,7 @@ const ContactsManager: React.FC<ContactsManagerProps> = ({ storeId, onStartChat 
         notes: '',
         tags: [] as string[],
     });
-
+    const { alert, confirm } = useDialog();
     const API_BASE_URL = getApiBaseUrl();
 
     useEffect(() => {
@@ -96,12 +97,13 @@ const ContactsManager: React.FC<ContactsManagerProps> = ({ storeId, onStartChat 
             fetchContacts();
             handleCloseModal();
         } catch (error: any) {
-            alert(error.response?.data?.error || 'Erro ao salvar contato');
+            await alert({ title: 'Erro', message: error.response?.data?.error || 'Erro ao salvar contato' });
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Deseja realmente excluir este contato?')) return;
+        const confirmed = await confirm({ title: 'Excluir Contato', message: 'Deseja realmente excluir este contato?' });
+        if (!confirmed) return;
 
         try {
             await axios.delete(`${API_BASE_URL}/contacts/${id}`);

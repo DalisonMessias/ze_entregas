@@ -307,7 +307,6 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
 
     const handleSaveAll = async () => {
         setIsLoading(true);
-        setToast(null); // Clear previous message
         try {
             const client = cloud.getClient();
             if (user && client) {

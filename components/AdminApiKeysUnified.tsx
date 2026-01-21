@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, Bot, Map, Save, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Key, Shield, Activity, Trash2 } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
+import { useDialog } from '../utils/dialogService';
 import { ShopSettings } from '../types';
 // Inicializar cliente local via cloud service
 const getSupabase = () => cloud.getClient();
@@ -53,6 +54,7 @@ export const AdminApiKeysUnified: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [showKeys, setShowKeys] = useState<{ [key: string]: boolean }>({});
     const [feedback, setFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const { alert, confirm } = useDialog();
 
     // Estados para gerenciamento de chaves de loja
     const [storeKeys, setStoreKeys] = useState<ApiKey[]>([]);
@@ -147,23 +149,29 @@ export const AdminApiKeysUnified: React.FC = () => {
     };
 
     const toggleStatus = async (key: ApiKey) => {
-        if (!confirm(`Deseja ${key.is_active ? 'desativar' : 'ativar'} esta chave?`)) return;
+        const confirmed = await confirm({ title: 'Confirmar Ação', message: `Deseja ${key.is_active ? 'desativar' : 'ativar'} esta chave?` });
+        if (!confirmed) return;
         const sb = getSupabase();
         if (!sb) return;
         try {
             await sb.from('api_keys').update({ is_active: !key.is_active }).eq('id', key.id);
             loadStoreData();
-        } catch (e) { alert('Erro ao atualizar'); }
+        } catch (e) {
+            await alert({ title: 'Erro', message: 'Erro ao atualizar' });
+        }
     };
 
     const deleteKey = async (id: string) => {
-        if (!confirm('Tem certeza? Isso quebrará a integração do lojista.')) return;
+        const confirmed = await confirm({ title: 'Atenção', message: 'Tem certeza? Isso quebrará a integração do lojista.' });
+        if (!confirmed) return;
         const sb = getSupabase();
         if (!sb) return;
         try {
             await sb.from('api_keys').delete().eq('id', id);
             loadStoreData();
-        } catch (e) { alert('Erro ao deletar'); }
+        } catch (e) {
+            await alert({ title: 'Erro', message: 'Erro ao deletar' });
+        }
     };
 
     const renderApiKeyInput = (id: keyof ShopSettings, label: string, placeholder: string, link: string, linkText: string) => (
