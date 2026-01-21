@@ -1,12 +1,14 @@
-# Lista de Tarefas - Melhorias no Catálogo e Categorias IA
+# TASK LIST
 
-[x] Atualizar schema do banco de dados (colunas brand e store_category_id)
-[x] Atualizar interface `CatalogBaseProduct` e `PartnerProfile`
-[x] Implementar detecção de duplicados no `AdminBaseCatalog.tsx`
-[x] Refinar prompt da IA para incluir marcas e suporte a HTML
-[x] Estilizar chat da IA para renderização de HTML semântico
-[x] Criar componente `AdminStoreCategories.tsx` para gestão institucional
-[x] Implementar serviços CRUD no `cloud.ts`
-[x] Integrar Gerenciamento de Categorias no menu e dashboard administrativo
-[x] Atualizar histórico de alterações em `checklist.txt`
-[x] Corrigir erros de compilação (imports e assinaturas de funções)
+## Funcionalidades de IA e Catálogo
+
+- [x] Criar componente `StoreAIGenerator.tsx` com suporte a Chat e Lista
+- [x] Implementar funcionalidade de salvamento direto no catálogo da loja
+- [x] Adicionar lógica de mapeamento automático de categorias pela IA
+- [x] Integrar `StoreAIGenerator` no `StoreCatalog.tsx` (sidebar para Super Lojistas)
+- [x] Implementar banner promocional para usuários não-Super
+- [x] Adicionar funcionalidade de Análise de Catálogo no `StoreAIGenerator`
+- [x] Implementar sugestões interativas (melhoria de produto e novos produtos)
+- [x] Adicionar filtro de pesquisa funcional na aba "Importar" do Catálogo da Loja
+- [x] Atualizar `AdminBaseCatalog.tsx` com modo de Análise de Catálogo e botão correspondente
+- [x] Refatorar layout do Admin para acomodar novos modos de IA

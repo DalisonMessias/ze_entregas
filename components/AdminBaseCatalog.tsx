@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Search, Plus, Loader2, Sparkles, Send, Trash2, Edit2, Check, X, Package, MessageSquare } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Sparkles, Send, Trash2, Edit2, Check, X, Package, MessageSquare, BarChart3 } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { CatalogBaseProduct } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { GoogleGenAI } from '@google/genai';
+
+interface AnalysisSuggestion {
+    id: string;
+    type: 'improvement' | 'new_product';
+    target_product_name?: string;
+    suggestion: string;
+    reason: string;
+    new_data?: Partial<CatalogBaseProduct>;
+}
 
 export const AdminBaseCatalog: React.FC = () => {
     const [products, setProducts] = useState<CatalogBaseProduct[]>([]);
@@ -17,10 +26,12 @@ export const AdminBaseCatalog: React.FC = () => {
     const [existingCategories, setExistingCategories] = useState<string[]>([]);
 
     // Generator Modes & Multi-Product State
-    const [generatorMode, setGeneratorMode] = useState<'chat' | 'batch'>('chat');
+    const [generatorMode, setGeneratorMode] = useState<'chat' | 'batch' | 'analyze'>('chat');
     const [batchInput, setBatchInput] = useState('');
     const [pendingReviewProducts, setPendingReviewProducts] = useState<Partial<CatalogBaseProduct & { id_temp: string }>[]>([]);
+    const [analysisSuggestions, setAnalysisSuggestions] = useState<AnalysisSuggestion[]>([]);
     const [isBatchLoading, setIsBatchLoading] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     // Manual Creation State
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -236,6 +247,96 @@ export const AdminBaseCatalog: React.FC = () => {
         }
     };
 
+    const handleAnalyzeCatalog = async () => {
+        if (!apiKey) {
+            showMessage({ title: 'Configuração Necessária', message: 'API Key não configurada.' });
+            return;
+        }
+
+        setIsAnalyzing(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: apiKey });
+            const catalogSummary = products.slice(0, 100).map(p => `${p.name} (R$${p.valor_sugerido}) - ${p.category}`).join('\n');
+            const catNames = existingCategories.join(', ');
+
+            const prompt = `Atue como um Consultor de Catálogo de Delivery.
+            Analise este catálogo base (amostra):
+            ${catalogSummary}
+
+            Categorias existentes: ${catNames}.
+
+            Sugira melhorias pontuais ou novos produtos essenciais para um catálogo base completo.
+            Retorne APENAS um JSON array com sugestões:
+            
+            [
+                {
+                    "type": "improvement",
+                    "target_product_name": "Nome exato",
+                    "suggestion": "Título da Sugestão",
+                    "reason": "Motivo",
+                    "new_data": { "name": "...", "valor_sugerido": 25.00, "category": "..." }
+                }
+            ]
+            
+            Limite a 5 sugestões de alto impacto.`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: prompt }] }]
+            });
+
+            if (response.text) {
+                const jsonMatch = response.text.match(/\[[\s\S]*\]/);
+                const items = JSON.parse(jsonMatch ? jsonMatch[0] : '[]');
+
+                if (Array.isArray(items)) {
+                    setAnalysisSuggestions(items.map((it: any) => ({ ...it, id: crypto.randomUUID() })));
+                }
+            }
+
+        } catch (error: any) {
+            showMessage({ title: 'Erro', message: 'Falha na análise: ' + error.message });
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleApplySuggestion = async (suggestion: AnalysisSuggestion) => {
+        setIsSavingManual(true);
+        try {
+            if (suggestion.type === 'new_product' && suggestion.new_data) {
+                await cloud.adminCreateBaseProduct({
+                    ...suggestion.new_data, // TS Partial match
+                    name: suggestion.new_data.name || 'Novo Produto',
+                    description: suggestion.new_data.description || '',
+                    brand: suggestion.new_data.brand || '',
+                    category: suggestion.new_data.category || 'Geral',
+                    valor_sugerido: suggestion.new_data.valor_sugerido || 0,
+                    observations: suggestion.new_data.observations || '',
+                    is_active: true
+                });
+                showMessage({ title: 'Criado', message: 'Produto sugerido foi criado!' });
+            } else if (suggestion.type === 'improvement' && suggestion.target_product_name && suggestion.new_data) {
+                const target = products.find(p => p.name === suggestion.target_product_name);
+                if (target) {
+                    await cloud.adminUpdateBaseProduct(target.id, {
+                        ...suggestion.new_data
+                    });
+                    showMessage({ title: 'Atualizado', message: 'Produto atualizado com sucesso!' });
+                } else {
+                    alert('Produto original não encontrado para atualização.');
+                    return;
+                }
+            }
+            setAnalysisSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+            loadData();
+        } catch (error: any) {
+            showMessage({ title: 'Erro', message: 'Falha ao aplicar: ' + error.message });
+        } finally {
+            setIsSavingManual(false);
+        }
+    };
+
     const handleApproveRecommendation = async (tempId: string) => {
         const prod = pendingReviewProducts.find(p => p.id_temp === tempId);
         if (!prod) return;
@@ -405,6 +506,12 @@ export const AdminBaseCatalog: React.FC = () => {
                                 >
                                     LISTA (PWA)
                                 </button>
+                                <button
+                                    onClick={() => setGeneratorMode('analyze')}
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-all ${generatorMode === 'analyze' ? 'bg-amber-500 text-white' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                                >
+                                    ANÁLISE
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -412,7 +519,7 @@ export const AdminBaseCatalog: React.FC = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-                    {generatorMode === 'chat' ? (
+                    {generatorMode === 'chat' && (
                         <>
                             {chatHistory.length === 0 && (
                                 <div className="flex flex-col items-center justify-center text-center h-full py-10 opacity-50">
@@ -476,7 +583,9 @@ export const AdminBaseCatalog: React.FC = () => {
                                 </div>
                             )}
                         </>
-                    ) : (
+                    )}
+
+                    {generatorMode === 'batch' && (
                         <div className="space-y-4 h-full flex flex-col">
                             <div className="flex-1">
                                 <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">Lista de Itens (um por linha)</label>
@@ -543,6 +652,47 @@ export const AdminBaseCatalog: React.FC = () => {
                                     >
                                         <Check className="w-4 h-4 mr-2" /> Confirmar e Salvar {pendingReviewProducts.length} Produtos
                                     </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {generatorMode === 'analyze' && (
+                        <div className="flex flex-col h-full animate-in fade-in">
+                            {analysisSuggestions.length === 0 ? (
+                                <div className="text-center py-6 flex flex-col items-center justify-center h-full">
+                                    <BarChart3 className="w-12 h-12 text-amber-500 mb-3" />
+                                    <h3 className="font-bold text-sm dark:text-white">Análise de Catálogo</h3>
+                                    <p className="text-xs text-gray-500 mb-4 px-4 text-center max-w-[200px]">
+                                        Use a IA para detectar oportunidades de melhoria e produtos essenciais faltantes no catálogo base.
+                                    </p>
+                                    <Button size="sm" onClick={handleAnalyzeCatalog} disabled={isAnalyzing}>
+                                        <Sparkles className="w-4 h-4 mr-2" />
+                                        {isAnalyzing ? 'Analisando...' : 'Iniciar Análise'}
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 h-full flex flex-col">
+                                    <div className="flex justify-between items-center mb-2 flex-shrink-0">
+                                        <h4 className="font-bold text-xs uppercase text-gray-400">Sugestões ({analysisSuggestions.length})</h4>
+                                        <button onClick={() => setAnalysisSuggestions([])} className="text-[10px] text-gray-400 underline">Limpar</button>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
+                                        {analysisSuggestions.map(sug => (
+                                            <div key={sug.id} className="bg-amber-50 dark:bg-amber-900/10 p-3 rounded-2xl border border-amber-100 dark:border-amber-900/20">
+                                                <div className="flex gap-2 mb-2">
+                                                    <div className="mt-0.5"><Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0" /></div>
+                                                    <div>
+                                                        <h5 className="font-bold text-xs text-gray-800 dark:text-white">{sug.suggestion}</h5>
+                                                        <p className="text-[10px] text-gray-500 leading-tight mt-1">{sug.reason}</p>
+                                                    </div>
+                                                </div>
+                                                <Button size="sm" fullWidth variant="secondary" onClick={() => handleApplySuggestion(sug)} disabled={isSavingManual}>
+                                                    Aplicar Sugestão
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </div>
