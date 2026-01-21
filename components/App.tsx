@@ -88,7 +88,7 @@ export type ActiveTab =
     | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago'
+    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_location_map'
     | 'profile'
     | 'support'
     | 'shop'
@@ -666,7 +666,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
             'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
-            'admin_investments', 'admin_whatsapp', 'admin_payment_gateways', 'admin_mercadopago'
+            'admin_investments', 'admin_whatsapp', 'admin_payment_gateways', 'admin_mercadopago', 'admin_location_map'
         ]),
         store_partner: new Set<ActiveTab>([
             'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans'

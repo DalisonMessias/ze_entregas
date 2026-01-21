@@ -37,6 +37,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/whatsapp': 'admin_whatsapp',
     '/admin/gateways': 'admin_payment_gateways',
     '/admin/mercadopago': 'admin_mercadopago',
+    '/admin/mapa-localizacao': 'admin_location_map',
 
     // Shared / Core Routes
     '/perfil': 'profile',

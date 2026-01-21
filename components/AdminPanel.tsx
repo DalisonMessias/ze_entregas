@@ -26,6 +26,7 @@ import { CitySelector } from './CitySelector';
 import { useDialog } from '../utils/dialogService';
 import { Switch } from './Switch';
 import { CitiesAndDistricts } from '../pages/admin/CitiesAndDistricts';
+import { MapaLocalizacao } from '../pages/admin/MapaLocalizacao';
 
 // Imported Modules (from Common/HEAD)
 import { AdminDashboard } from './AdminDashboard';
@@ -1179,6 +1180,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'score_config': return <AdminScoreConfig />;
             case 'payment_gateways': return <AdminPaymentGateways />;
             case 'mercadopago': return <AdminMercadoPagoConfig />;
+            case 'location_map': return <MapaLocalizacao />;
 
             default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
         }
