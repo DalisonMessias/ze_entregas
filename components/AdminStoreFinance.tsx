@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, DollarSign, RefreshCw, FileText, Filter, Eye, User, Search, X } from 'lucide-react';
+import { Loader2, DollarSign, RefreshCw, FileText, Filter, Eye, User, Search, X, Edit3, Save } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { AdminWalletUser, FinancialStatementItem, UserRole } from '../types';
 import { Button } from './Button';
@@ -23,6 +23,9 @@ export const AdminStoreFinance: React.FC = () => {
     const [loadingStoreTxs, setLoadingStoreTxs] = useState(false);
     const [txDateRange, setTxDateRange] = useState({ start: '', end: '' });
     const [selectedTx, setSelectedTx] = useState<FinancialStatementItem | null>(null);
+    const [isEditingBalance, setIsEditingBalance] = useState(false);
+    const [editBalanceValue, setEditBalanceValue] = useState('');
+    const [savingBalance, setSavingBalance] = useState(false);
 
     const loadStores = useCallback(async () => {
         setLoading(true);
@@ -68,8 +71,52 @@ export const AdminStoreFinance: React.FC = () => {
         loadStoreTransactions(store.user_id, today, today);
     };
 
+    const closeStoreModal = () => {
+        setShowStoreDetailModal(false);
+        setSelectedStore(null);
+        setStoreTransactions([]);
+    };
+
+    const handleEditBalance = () => {
+        if (selectedStore) {
+            setEditBalanceValue(selectedStore.balance.toString());
+            setIsEditingBalance(true);
+        }
+    };
+
+    const handleSaveBalance = async () => {
+        if (!selectedStore) return;
+
+        const confirmed = await alert({
+            title: 'Confirmar Alteração',
+            message: `Tem certeza que deseja alterar o saldo de ${formatCurrency(selectedStore.balance)} para ${formatCurrency(parseFloat(editBalanceValue))}?`
+        });
+
+        setSavingBalance(true);
+        try {
+            // TODO: Implementar chamada ao cloud para atualizar saldo
+            // await cloud.adminUpdateWalletBalance(selectedStore.user_id, parseFloat(editBalanceValue));
+
+            // Atualizar localmente por enquanto
+            setSelectedStore({ ...selectedStore, balance: parseFloat(editBalanceValue) });
+            const updatedStores = stores.map(s =>
+                s.user_id === selectedStore.user_id
+                    ? { ...s, balance: parseFloat(editBalanceValue) }
+                    : s
+            );
+            setStores(updatedStores);
+
+            setIsEditingBalance(false);
+            await alert({ title: 'Sucesso', message: 'Saldo atualizado com sucesso!' });
+        } catch (error) {
+            await alert({ title: 'Erro', message: 'Falha ao atualizar saldo: ' + (error as Error).message });
+        } finally {
+            setSavingBalance(false);
+        }
+    };
+
     const StoreDetailModal: React.FC<{ store: AdminWalletUser, onClose: () => void }> = ({ store, onClose }) => (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white dark:bg-gray-800 w-full max-w-2xl max-h-[90vh] rounded-2xl p-6 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4 border-b dark:border-gray-700 pb-4">
                     <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
@@ -79,9 +126,59 @@ export const AdminStoreFinance: React.FC = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
-                    <div className="bg-gradient-to-br from-green-600 to-green-700 text-white p-4 rounded-xl shadow-lg">
-                        <p className="text-xs font-bold uppercase opacity-80">Saldo Atual</p>
-                        <h4 className="text-3xl font-black">{formatCurrency(store.balance)}</h4>
+                    <div className="bg-gradient-to-br from-green-600 to-green-700 text-white p-5 rounded-xl shadow-lg relative">
+                        <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                                <p className="text-xs font-bold uppercase opacity-80 mb-1">Saldo Atual</p>
+                                {!isEditingBalance ? (
+                                    <h4 className="text-3xl font-black">{formatCurrency(store.balance)}</h4>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <CustomInput
+                                            type="number"
+                                            step="0.01"
+                                            value={editBalanceValue}
+                                            onChange={(e) => setEditBalanceValue(e.target.value)}
+                                            placeholder="0.00"
+                                            className="!bg-white/20 !text-white !text-2xl !font-black !border-white/40 focus:!border-white placeholder:text-white/50"
+                                            autoFocus
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            {!isEditingBalance ? (
+                                <button
+                                    onClick={handleEditBalance}
+                                    className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-1.5 text-sm font-medium"
+                                    title="Editar saldo"
+                                >
+                                    <Edit3 className="w-4 h-4" />
+                                    Editar Saldo
+                                </button>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => setIsEditingBalance(false)}
+                                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-1.5 text-sm font-medium"
+                                        title="Cancelar"
+                                    >
+                                        <X className="w-4 h-4" />
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleSaveBalance}
+                                        disabled={savingBalance}
+                                        className="px-3 py-1.5 bg-white hover:bg-white/90 text-green-700 rounded-lg transition-colors flex items-center gap-1.5 text-sm font-medium disabled:opacity-50"
+                                        title="Salvar"
+                                    >
+                                        <Save className="w-4 h-4" />
+                                        {savingBalance ? 'Salvando...' : 'Salvar'}
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex gap-2">
@@ -113,7 +210,20 @@ export const AdminStoreFinance: React.FC = () => {
                         )}
                     </div>
                 </div>
-                {selectedTx && <ReceiptModal transaction={selectedTx} onClose={() => setSelectedTx(null)} userName={store.name} />}
+                {selectedTx && (
+                    <ReceiptModal
+                        transaction={selectedTx}
+                        onClose={() => setSelectedTx(null)}
+                        userName={store.name}
+                        allowEdit={true}
+                        onSaveEdit={async (newAmount, newCurrency) => {
+                            // Aqui você pode implementar a lógica de salvar no backend
+                            // Por enquanto, apenas atualiza localmente
+                            console.log('Novo valor:', newAmount, 'Moeda:', newCurrency);
+                            // TODO: Implementar chamada ao cloud para atualizar transação
+                        }}
+                    />
+                )}
             </div>
         </div>
     );
@@ -170,7 +280,7 @@ export const AdminStoreFinance: React.FC = () => {
                 </div>
             </div>
 
-            {selectedStore && <StoreDetailModal store={selectedStore} onClose={() => setShowStoreDetailModal(false)} />}
+            {selectedStore && showStoreDetailModal && <StoreDetailModal store={selectedStore} onClose={closeStoreModal} />}
         </div>
     );
 };

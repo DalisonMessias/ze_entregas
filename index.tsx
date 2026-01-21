@@ -99,6 +99,8 @@ if ('serviceWorker' in navigator) {
 }
 
 import { NotificationProvider } from './contexts/NotificationContext';
+import { UserDataProvider } from './contexts/UserDataContext';
+
 
 // ... existing code ...
 
@@ -108,7 +110,9 @@ root.render(
     <ErrorBoundary> {/* Add ErrorBoundary here */}
       <DialogProvider> {/* Wrap AuthWrapper with DialogProvider */}
         <NotificationProvider>
-          <AuthWrapper />
+          <UserDataProvider>
+            <AuthWrapper />
+          </UserDataProvider>
         </NotificationProvider>
       </DialogProvider>
     </ErrorBoundary>

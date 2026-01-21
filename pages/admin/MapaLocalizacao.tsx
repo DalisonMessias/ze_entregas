@@ -93,28 +93,16 @@ export const MapaLocalizacao: React.FC = () => {
         }
 
         try {
-            const map = L.map(mapContainerRef.current, {
-                center: [coords.lat, coords.lng],
-                zoom: 13,
-                zoomControl: true,
-                attributionControl: false,
-                dragging: true,
-                touchZoom: true,
-                scrollWheelZoom: true,
-                doubleClickZoom: true,
-                boxZoom: true,
-                keyboard: true,
-                tap: true,
-                trackResize: true
-            });
+            const map = L.map(mapContainerRef.current);
+
+            map.setView([coords.lat, coords.lng], 13);
 
             // Adicionar camada de tiles do OpenStreetMap com estilo mais clean
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                className: 'map-tiles'
+                maxZoom: 19
             }).addTo(map);
 
-            // Adicionar controle de zoom personalizado no canto superior direito
+            // Mover controle de zoom para o canto superior direito
             map.zoomControl.setPosition('topright');
 
             // Adicionar evento de clique no mapa
@@ -128,7 +116,7 @@ export const MapaLocalizacao: React.FC = () => {
                 if (map) {
                     map.invalidateSize();
                 }
-            }, 200);
+            }, 250);
 
             mapRef.current = map;
         } catch (error) {
@@ -269,8 +257,9 @@ export const MapaLocalizacao: React.FC = () => {
                             ref={mapContainerRef}
                             className="w-full h-[500px] lg:h-[600px] bg-gray-100 dark:bg-gray-700"
                             style={{
-                                filter: 'contrast(1.05) saturate(0.9)',
-                                borderRadius: '0 0 1rem 1rem'
+                                position: 'relative',
+                                cursor: 'grab',
+                                touchAction: 'none'
                             }}
                         />
                     </div>
