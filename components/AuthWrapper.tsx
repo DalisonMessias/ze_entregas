@@ -15,6 +15,7 @@ import { Logo } from './Logo';
 import { CustomInput } from './CustomInput';
 import { CollaboratorModule } from './CollaboratorModule';
 import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
+import { getTabFromUrl } from '../utils/routeMap';
 
 type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_password' | 'signup_type_selection';
 
@@ -112,6 +113,16 @@ export const AuthWrapper: React.FC = () => {
 
   const redirectToRoleHome = (role: UserRole) => {
     try {
+      // Se já estamos em uma rota interna válida (via URL), não redirecionamos para a Home do cargo
+      const currentTab = getTabFromUrl(window.location.pathname);
+      const authTabs = ['login', 'signup', 'forgot_password'];
+
+      // Se a URL atual mapeia para uma aba que não seja de autenticação, mantemos ela
+      if (currentTab && !authTabs.includes(currentTab)) {
+        logger.info('REDIRECT_SKIPPED_EXISTING_PATH', { currentTab, path: window.location.pathname });
+        return;
+      }
+
       const tab = defaultTabByRole[role] || 'shop';
       logger.info('ROLE_REDIRECT', { role, tab });
       window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));

@@ -16,7 +16,8 @@ import {
     adminDeleteCity,
     adminProcessCityRequest,
     adminUpdateUserPassword,
-    adminCreateUserManual
+    adminCreateUserManual,
+    adminLogStatusChange
 } from '../services/cloud';
 import { ManagedUser, UserRole, UserStatus, PartnerProfile, PartnerDocument, City, CityRequest, AdminSubTab, PartnerLevelBenefit } from '../types';
 import { Button } from './Button';
@@ -42,6 +43,7 @@ import { AdminBlacklist } from './AdminBlacklist';
 import { AdminInstitutionalContent } from './AdminInstitutionalContent';
 import { AdminPlatformNews } from './AdminPlatformNews';
 import { AdminStoreFinance } from './AdminStoreFinance';
+import { AdminMercadoPagoConfig } from './AdminMercadoPagoConfig';
 import { AdminInfinitePayConfig } from './AdminInfinitePayConfig';
 import { AdminApiKeysUnified } from './AdminApiKeysUnified';
 import { AdminAIConfig } from './AdminAIConfig';
@@ -55,6 +57,7 @@ import { AdminPayouts } from './AdminPayouts';
 import { AdminTips } from './AdminTips';
 import { AdminScoreConfig } from './AdminScoreConfig';
 import { AdminPaymentGateways } from './AdminPaymentGateways';
+import { AdminStores } from './AdminStores';
 
 // --- HELPERS ---
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -154,7 +157,8 @@ const UserManagement: React.FC = () => {
         partner_level: '',
         is_super_store: false,
         super_store_expiration: '',
-        password: ''
+        password: '',
+        reason: ''
     });
     const [isSaving, setIsSaving] = useState(false);
     const [isEditingCity, setIsEditingCity] = useState(false); // Toggle for city editing 
@@ -209,13 +213,28 @@ const UserManagement: React.FC = () => {
             partner_level: user.partner_level || 'BRONZE',
             is_super_store: user.is_super_store || false,
             super_store_expiration: user.super_store_expiration ? user.super_store_expiration.split('T')[0] : '', // Format YYYY-MM-DD
-            password: '' // Reset password field
+            password: '', // Reset password field
+            reason: ''
         });
         setIsEditingCity(false); // Reset edit city toggle
     };
 
     const handleSaveUser = async () => {
         if (!selectedUser) return;
+
+        // Regra de validação de motivo
+        const restrictedStatuses = ['banned', 'pending', 'blocked', 'suspended'];
+        const isRestricted = restrictedStatuses.includes(editForm.status);
+        const wasRestricted = restrictedStatuses.includes(selectedUser.status);
+        const isReactivation = wasRestricted && editForm.status === 'active';
+
+        const requiresReason = isRestricted || isReactivation;
+
+        if (requiresReason && !editForm.reason.trim()) {
+            setToast({ type: 'error', message: 'O motivo da alteração é obrigatório para este status ou reativação.' });
+            return;
+        }
+
         setIsSaving(true);
         try {
             const rawPhone = (editForm.phone || '').replace(/\D/g, '');
@@ -238,6 +257,11 @@ const UserManagement: React.FC = () => {
 
             if (editForm.password && editForm.password.length >= 6) {
                 await adminUpdateUserPassword(selectedUser.id, editForm.password);
+            }
+
+            // Log de Status
+            if (requiresReason && selectedUser.status !== editForm.status) {
+                await adminLogStatusChange(selectedUser.id, selectedUser.status, editForm.status, editForm.reason);
             }
 
             setToast({ type: 'success', message: "Dados do usuário atualizados com sucesso!" });
@@ -480,6 +504,27 @@ const UserManagement: React.FC = () => {
                                             ]}
                                         />
                                     </div>
+                                    {(() => {
+                                        const restrictedStatuses = ['banned', 'pending', 'blocked', 'suspended'];
+                                        const isRestricted = restrictedStatuses.includes(editForm.status);
+                                        const wasRestricted = selectedUser && restrictedStatuses.includes(selectedUser.status);
+                                        const isReactivation = wasRestricted && editForm.status === 'active';
+
+                                        if (isRestricted || isReactivation) {
+                                            return (
+                                                <div className="md:col-span-2 animate-in fade-in slide-in-from-top-2">
+                                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Motivo da Alteração *</label>
+                                                    <textarea
+                                                        value={editForm.reason}
+                                                        onChange={e => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
+                                                        className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-red-200 dark:border-red-900/50 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-red-500 outline-none min-h-[80px]"
+                                                        placeholder="Descreva o motivo da alteração de status..."
+                                                    />
+                                                </div>
+                                            )
+                                        }
+                                        return null;
+                                    })()}
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Status Verificação</label>
                                         <CustomSelect
@@ -1132,6 +1177,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
         switch (activeSubTab) {
             case 'dashboard': return <AdminDashboard />;
             case 'users': return <UserManagement />;
+            case 'lojas': return <AdminStores />;
             case 'validation': return <PartnerVerification />;
             case 'notifications': return <AdminNotifications />;
             case 'shop': return <AdminShopManagement />;
@@ -1161,6 +1207,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'tips': return <AdminTips />;
             case 'score_config': return <AdminScoreConfig />;
             case 'payment_gateways': return <AdminPaymentGateways />;
+            case 'mercadopago': return <AdminMercadoPagoConfig />;
 
             default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
         }

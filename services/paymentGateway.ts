@@ -1,14 +1,7 @@
 import { getClient } from './cloud';
 import { infinitePayCreateCharge, infinitePayCheckStatus } from './infinitepay';
 import { mercadoPagoCreatePayment, mercadoPagoCheckStatus } from './mercadopago';
-
-export interface PaymentGatewayConfig {
-    id: string;
-    gateway_name: 'infinitepay' | 'mercadopago';
-    is_active: boolean;
-    is_primary: boolean;
-    credentials: Record<string, any>;
-}
+import type { PaymentGatewayConfig } from '../types';
 
 export interface PaymentQRCodeResult {
     qrCode: string;
@@ -146,11 +139,11 @@ export const generatePaymentQRCode = async (
         let txId: string;
 
         if (gateway.gateway_name === 'infinitepay') {
-            const result = await infinitePayCreateCharge(amount, metadata, gateway.credentials);
+            const result = await infinitePayCreateCharge(amount, metadata, gateway.credentials as any);
             qrCode = result.qrCode;
             txId = result.txId;
         } else if (gateway.gateway_name === 'mercadopago') {
-            const result = await mercadoPagoCreatePayment(amount, metadata, gateway.credentials);
+            const result = await mercadoPagoCreatePayment(amount, metadata, gateway.credentials as any);
             qrCode = result.qrCode;
             txId = result.txId;
         } else {
@@ -171,9 +164,9 @@ export const generatePaymentQRCode = async (
 export const checkPaymentStatus = async (txId: string): Promise<PaymentStatus> => {
     return attemptWithFallback(async (gateway) => {
         if (gateway.gateway_name === 'infinitepay') {
-            return await infinitePayCheckStatus(txId, gateway.credentials);
+            return await infinitePayCheckStatus(txId, gateway.credentials as any);
         } else if (gateway.gateway_name === 'mercadopago') {
-            return await mercadoPagoCheckStatus(txId, gateway.credentials);
+            return await mercadoPagoCheckStatus(txId, gateway.credentials as any);
         } else {
             throw new Error(`Gateway ${gateway.gateway_name} não suportado.`);
         }

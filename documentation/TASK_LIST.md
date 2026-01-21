@@ -1,6 +1,6 @@
-# Lista de Tarefas - Migração Gemini
+# Tarefas - Correção de Redirecionamento no Recarregamento (Reload)
 
-- [x] Remover importações e códigos relacionados à OpenAI no `zeAssistantAIService.ts`
-- [x] Implementar cliente do Google Gemini usando a chave da configuração da loja
-- [x] Atualizar lógica de formatação de produtos para incluir TODOS os produtos (remover slice)
-- [x] Atualizar `checklist.txt` com as mudanças
+- [x] Importar `getTabFromUrl` em `AuthWrapper.tsx`
+- [x] Ajustar lógica de `redirectToRoleHome` em `AuthWrapper.tsx` para respeitar URL atual
+- [x] Validar comportamento em diferentes rotas e cargos
+- [x] Atualizar `checklist.txt`

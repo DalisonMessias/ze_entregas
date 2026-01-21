@@ -42,6 +42,7 @@ const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => 
 const StoreProductImport = React.lazy(() => import('./ProductImportExport').then(module => ({ default: module.ProductImportExport })));
 const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => ({ default: module.ZePayStore })));
 const StoreApiDocs = React.lazy(() => import('./StoreApiDocs').then(module => ({ default: module.StoreApiDocs })));
+const AdminMercadoPagoConfig = React.lazy(() => import('./AdminMercadoPagoConfig').then(module => ({ default: module.AdminMercadoPagoConfig })));
 
 const DriverMarketing = React.lazy(() => import('./DriverMarketing').then(module => ({ default: module.DriverMarketing })));
 const Reports = React.lazy(() => import('./Reports').then(module => ({ default: module.Reports })));
@@ -83,11 +84,11 @@ import { getTabFromUrl, syncUrlWithTab } from '../utils/routeMap';
 
 // Expanded type to include specific admin routes
 export type ActiveTab =
-    | 'admin_dashboard' | 'admin_users' | 'admin_validation' | 'admin_notifications' | 'admin_shop' | 'admin_support'
+    | 'admin_dashboard' | 'admin_users' | 'admin_lojas' | 'admin_validation' | 'admin_notifications' | 'admin_shop' | 'admin_support'
     | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp'
+    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago'
     | 'profile'
     | 'support'
     | 'shop'
@@ -661,11 +662,11 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     const allowedTabs: Record<UserRole, Set<ActiveTab>> = {
         admin: new Set<ActiveTab>([...generalTabs,
-            'admin_dashboard', 'admin_users', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
+            'admin_dashboard', 'admin_users', 'admin_lojas', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
             'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
             'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
-            'admin_investments', 'admin_whatsapp'
+            'admin_investments', 'admin_whatsapp', 'admin_payment_gateways', 'admin_mercadopago'
         ]),
         store_partner: new Set<ActiveTab>([
             'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans'
@@ -955,6 +956,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                             <MenuSection title="Gestão de Usuários" />
                             <MenuButton icon={Users} label="Todos os Usuários" tab="admin_users" />
+                            <MenuButton icon={Store} label="Gerenciar Lojas" tab="admin_lojas" />
                             <MenuButton icon={FileCheck} label="Validação de Parceiros" tab="admin_validation" />
                             <MenuButton icon={Wallet} label="Controle de Saldos" tab="admin_wallet_control" />
                             <MenuButton icon={ShieldAlert} label="Segurança & Fraude" tab="admin_security" />
@@ -979,6 +981,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
                             <MenuButton icon={CreditCard} label="Config. Empréstimos" tab="admin_loan_config" />
                             <MenuButton icon={DollarSign} label="Financeiro das Lojas" tab="admin_store_finance" />
+                            <MenuButton icon={CreditCard} label="Gateways de Pagamento" tab="admin_payment_gateways" />
+                            <MenuButton icon={Link2} label="Mercado Pago" tab="admin_mercadopago" />
                             <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
 
                             <MenuSection title="Marketing & Conteúdo" />

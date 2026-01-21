@@ -237,6 +237,7 @@ export interface ManagedUser {
     preparation_time_min?: number;
     preparation_time_max?: number;
     super_store_expiration?: string;
+    store_document?: string;
 }
 
 export interface CompanyInfo {
@@ -312,6 +313,7 @@ export interface StoreProduct {
     availability?: any;
     observations?: string;
     origin_prefix?: string;
+    stock_quantity?: number | null;
 }
 
 
@@ -790,7 +792,41 @@ export interface CofrinhoAccount {
     lock_until?: string | null;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'validation' | 'notifications' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp' | 'score_config';
+// Payment Gateway Types
+export interface PaymentGatewayConfig {
+    id: string;
+    gateway_name: 'infinitepay' | 'mercadopago';
+    is_active: boolean;
+    is_primary: boolean;
+    credentials: Record<string, string>;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface PaymentGatewayLog {
+    id: string;
+    gateway_name: string;
+    operation_type: string;
+    success: boolean;
+    request_data?: any;
+    response_data?: any;
+    error_message?: string;
+    created_at: string;
+}
+
+export interface FinancialTransaction {
+    id: string;
+    user_id: string | null;
+    user_name: string | null;
+    amount: number;
+    type: string;
+    status: string;
+    source: 'ZEBANK' | 'ZEPAY_STORE' | 'TERMINAL' | 'GATEWAY_LOG';
+    description: string;
+    created_at: string;
+}
+
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp' | 'score_config' | 'mercadopago';
 
 export interface AppNotification {
     id: string;
@@ -967,7 +1003,17 @@ export interface BlitzAlert {
 
 export interface AdminDashboardStats {
     orders: { today: number, week: number, month: number, total: number, graphData: { date: string, count: number }[], trend?: number };
-    finance: { gmv: number, platformRevenue: number, averageTicket: number, gmvTrend?: number, revenueTrend?: number };
+    finance: {
+        gmv: number;
+        platformRevenue: number;
+        averageTicket: number;
+        gmvTrend?: number;
+        revenueTrend?: number;
+        recharges?: number;      // Recargas de Lojas
+        fees?: number;           // Taxas de Lojas
+        subscriptions?: number;  // Assinaturas de Lojas
+        driverFees?: number;     // Taxas de Motoristas
+    };
     users: { stores: { active: number, total: number }, drivers: { online: number, total: number } };
 }
 

@@ -68,7 +68,7 @@ export const AdminDashboard = () => {
     const loadStats = async () => {
         try {
             const data = await cloud.getAdminDashboardStats();
-            setStats(data);
+            setStats(data || {} as AdminDashboardStats);
             setErrorMsg(null);
         } catch (e: any) {
             console.error("Dashboard error:", e);
@@ -143,28 +143,59 @@ export const AdminDashboard = () => {
                     trendValue={stats.orders?.trend}
                 />
                 <KPICard
-                    title="GMV Mensal"
+                    title="GMV (Vendas)"
                     value={formatCurrency(stats.finance?.gmv ?? 0)}
-                    subtext="Volume Bruto de Mercadorias"
+                    subtext="Volume Bruto Transacionado"
                     icon={<DollarSign className="w-8 h-8" />}
                     colorClass="bg-green-500"
                     trendValue={stats.finance?.gmvTrend}
                 />
                 <KPICard
-                    title="Receita Plataforma"
+                    title="Receita (Taxas)"
                     value={formatCurrency(stats.finance?.platformRevenue ?? 0)}
-                    subtext="Taxas e Mensalidades"
+                    subtext="Assinaturas e Comissões"
                     icon={<TrendingUp className="w-8 h-8" />}
                     colorClass="bg-purple-500"
                     trendValue={stats.finance?.revenueTrend}
                 />
                 <KPICard
-                    title="Ticket Médio"
-                    value={formatCurrency(stats.finance?.averageTicket ?? 0)}
-                    subtext="Por Pedido"
-                    icon={<BarChart3 className="w-8 h-8" />}
+                    title="Recargas (Caixa)"
+                    value={formatCurrency(stats.finance?.recharges ?? 0)}
+                    subtext="Depósitos de Lojas"
+                    icon={<Wallet className="w-8 h-8" />}
                     colorClass="bg-orange-500"
                 />
+            </div>
+
+            {/* Breakdown Financeiro Extra (Novo Bloco) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600">
+                            <Store className="w-4 h-4" />
+                        </div>
+                        <span className="text-sm font-bold text-gray-500">Taxas de Lojas</span>
+                    </div>
+                    <p className="text-xl font-black text-gray-900 dark:text-white">{formatCurrency(stats.finance?.fees ?? 0)}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-lg text-pink-600">
+                            <Bike className="w-4 h-4" />
+                        </div>
+                        <span className="text-sm font-bold text-gray-500">Taxas de Entregadores</span>
+                    </div>
+                    <p className="text-xl font-black text-gray-900 dark:text-white">{formatCurrency(stats.finance?.driverFees ?? 0)}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-lg text-teal-600">
+                            <Award className="w-4 h-4" />
+                        </div>
+                        <span className="text-sm font-bold text-gray-500">Associações/Planos</span>
+                    </div>
+                    <p className="text-xl font-black text-gray-900 dark:text-white">{formatCurrency(stats.finance?.subscriptions ?? 0)}</p>
+                </div>
             </div>
 
             {/* Quick Access Grid */}
@@ -360,6 +391,20 @@ export const AdminDashboard = () => {
                             <Star className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Config Score</span>
+                    </Button>
+
+                    <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_payment_gateways' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-full text-emerald-600 dark:text-emerald-400">
+                            <CreditCard className="w-5 h-5" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Gateways</span>
+                    </Button>
+
+                    <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_payment_gateways' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-500 dark:text-blue-400">
+                            <Link2 className="w-5 h-5" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Mercado Pago</span>
                     </Button>
                 </div>
             </div>

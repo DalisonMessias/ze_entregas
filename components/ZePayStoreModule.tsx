@@ -210,10 +210,13 @@ export const ZePayStore: React.FC = () => {
                 return;
             }
 
+            const profile = await cloud.getMyPartnerProfile();
+            if (!profile?.id) throw new Error('Perfil não encontrado');
+
             // Chamar serviço de payment gateway
             const result = await generatePaymentQRCode(amount, {
                 description: 'Recarga ZéPay',
-                userId: data?.user_id || '',
+                userId: profile.id,
                 type: 'zepay_recharge'
             });
 

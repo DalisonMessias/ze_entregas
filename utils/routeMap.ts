@@ -6,6 +6,7 @@ const routeMap: Record<string, ActiveTab> = {
     // Admin Routes
     '/admin/dashboard': 'admin_dashboard',
     '/admin/usuarios': 'admin_users',
+    '/admin/lojas': 'admin_lojas',
     '/admin/validacao': 'admin_validation',
     '/admin/notificacoes': 'admin_notifications',
     '/admin/loja': 'admin_shop',
@@ -34,6 +35,8 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/slides': 'admin_slides',
     '/admin/dicas': 'admin_tips',
     '/admin/whatsapp': 'admin_whatsapp',
+    '/admin/gateways': 'admin_payment_gateways',
+    '/admin/mercadopago': 'admin_mercadopago',
 
     // Shared / Core Routes
     '/perfil': 'profile',
@@ -92,7 +95,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/ruas': 'streets_list',
     '/carteira': 'zebank',
     // Authentication Routes
-    '/login': 'login', 
+    '/login': 'login',
     '/cadastro': 'signup',
     '/recuperar-senha': 'forgot_password'
 };

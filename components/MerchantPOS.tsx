@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
 import { UserTerminal, UserTerminalHistoryItem, PartnerFeeSettings, FinancialStatementItem, ShopSettings, ShopCoupon, SalesSimulation, UserRole, AssociatedStore, Order } from '../types';
+import { generatePaymentQRCode, checkPaymentStatus } from '../services/paymentGateway';
 import { Logo } from './Logo';
 import { ReceiptModal } from './ReceiptModal';
 import html2canvas from 'html2canvas';
@@ -484,6 +485,8 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     // New state for payment modals
     const [activePayment, setActivePayment] = useState<{ id: string, method: 'PIX' | 'SCAN' | 'USER_CODE', amount: number } | null>(null);
     const [pixCodeData, setPixCodeData] = useState<string | null>(null);
+    const [pixTxId, setPixTxId] = useState<string | null>(null);
+    const [isPolling, setIsPolling] = useState(false);
     const [userCodeInput, setUserCodeInput] = useState('');
     const [lockoutCountdown, setLockoutCountdown] = useState<number>(0); // New state for lockout countdown
 
@@ -669,20 +672,128 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         };
     }, []);
 
-    useEffect(() => {
-        if (activePayment?.method === 'SCAN' && typeof Html5QrcodeScanner !== 'undefined') {
-            const scanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 200 });
-            const onSuccess = (decodedText: string) => {
-                confirmPayment(activePayment.id, 'ZE_QR', decodedText);
-                scanner.clear();
-            };
-            const onFailure = () => { };
-            scanner.render(onSuccess, onFailure);
-            return () => {
-                try { scanner.clear(); } catch { }
-            };
+    const requestCameraPermission = async (): Promise<boolean> => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            stream.getTracks().forEach(track => track.stop());
+            return true;
+        } catch (error: any) {
+            console.error('Erro ao solicitar câmera:', error);
+            let message = 'Permissão de câmera negada.';
+            if (error.name === 'NotAllowedError') message = 'Permissão negada. Habilite a câmera no navegador.';
+            else if (error.name === 'NotFoundError') message = 'Nenhuma câmera encontrada.';
+            else if (error.name === 'NotReadableError') message = 'Câmera em uso por outro app.';
+
+            setToast({ type: 'error', message });
+            return false;
         }
+    };
+
+    const confirmPayment = async (paymentId: string, method: 'PIX' | 'ZE_QR' | 'USER_CODE', payload: string) => {
+        if (!terminal) {
+            setToast({ type: 'error', message: 'Terminal não inicializado.' });
+            return;
+        }
+
+        try {
+            if (method === 'PIX') {
+                const result = await generatePaymentQRCode(activePayment?.amount || 0, {
+                    terminal_id: terminal.id,
+                    type: 'pos_sale'
+                });
+                setPixCodeData(result.qrCode);
+                setPixTxId(result.txId);
+                setIsPolling(true);
+            } else if (method === 'ZE_QR' || method === 'USER_CODE') {
+                // Restaurando lógica original simplificada ou adaptando para processPosPayment
+                // Como processPosPayment pede cardId, e payload aqui seria o decodedText (cardId ou userCode)
+
+                await cloud.processPosPayment(
+                    payload, // cardId ou userCode
+                    activePayment?.amount || 0,
+                    userRole,
+                    terminal.user_id,
+                    undefined, // splitGroupId
+                    couponCode || undefined,
+                    couponDiscount || 0,
+                    selectedStore?.id
+                );
+
+                setToast({ type: 'success', message: 'Pagamento confirmado!' });
+                setStep('success');
+            }
+        } catch (e: any) {
+            setToast({ type: 'error', message: e.message || 'Falha ao confirmar pagamento.' });
+            await cloud.logClientError('pos_confirm_payment', e?.message, {});
+        }
+    };
+
+    const verifyStatus = async (transactionId: string) => {
+        return await checkPaymentStatus(transactionId);
+    };
+
+    useEffect(() => {
+        let scanner: any = null;
+
+        const initScanner = async () => {
+            if (activePayment?.method === 'SCAN' && typeof Html5QrcodeScanner !== 'undefined') {
+                const hasPermission = await requestCameraPermission();
+                if (!hasPermission) {
+                    setActivePayment(null); // Fecha o modal/estado se não tiver permissão
+                    return;
+                }
+
+                scanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 200 });
+                const onSuccess = (decodedText: string) => {
+                    confirmPayment(activePayment.id, 'ZE_QR', decodedText);
+                    scanner.clear();
+                };
+                const onFailure = () => { };
+                scanner.render(onSuccess, onFailure);
+            }
+        };
+
+        if (activePayment?.method === 'SCAN') {
+            initScanner();
+        }
+
+        return () => {
+            if (scanner) {
+                try { scanner.clear(); } catch { }
+            }
+        };
     }, [activePayment]);
+
+    // Polling do PIX
+    useEffect(() => {
+        let interval: NodeJS.Timeout | undefined;
+        if (isPolling && pixTxId && activePayment?.method === 'PIX') {
+            interval = setInterval(async () => {
+                try {
+                    const status = await checkPaymentStatus(pixTxId); // Usando a importada direto
+                    if (status.status === 'paid') {
+                        setIsPolling(false);
+                        setPixCodeData(null);
+                        setPixTxId(null);
+                        setToast({ type: 'success', message: 'Pagamento recebido!' });
+                        // Como confirmPayment agora gera novo QR code se method=PIX, e aqui queremos finalizar...
+                        // Mas espere, confirmPayment com 'PIX' GERA o QR code.
+                        // Aqui o pagamento JÁ FOI confirmado externamente.
+                        // Precisamos apenas ir para sucesso.
+                        setStep('success');
+                    } else if (status.status === 'failed' || status.status === 'expired') {
+                        setIsPolling(false);
+                        setToast({ type: 'error', message: 'Pagamento expirou.' });
+                    }
+                } catch (e) {
+                    console.error('Polling error', e);
+                }
+            }, 5000);
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isPolling, pixTxId, activePayment]);
 
 
     // Load data
@@ -1067,6 +1178,8 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const closePaymentOverlay = () => {
         setActivePayment(null);
         setPixCodeData(null);
+        setPixTxId(null);
+        setIsPolling(false);
         setUserCodeInput('');
     };
 
@@ -1075,69 +1188,31 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         setActivePayment({ id: paymentId, method, amount });
         if (method === 'PIX') {
             try {
-                const code = await cloud.createPosPixCharge(amount);
-                setPixCodeData(code);
+                // Call real payment gateway
+                const result = await generatePaymentQRCode(amount, {
+                    description: `Pagamento ZéPoint - Terminal ${terminal?.terminal_id}`,
+                    terminal_id: terminal?.id,
+                    type: 'pos_sale'
+                });
+                setPixCodeData(result.qrCode);
+                setPixTxId(result.txId);
+                setIsPolling(true);
             } catch (e: any) {
                 const msg = e?.message || '';
                 let type: 'timeout' | 'auth' | 'validation' | 'unknown' = 'unknown';
                 if (msg.toLowerCase().includes('timeout')) type = 'timeout';
                 else if (msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('token')) type = 'auth';
                 else if (msg.toLowerCase().includes('invalid')) type = 'validation';
-                setErrorMsg('Falha ao gerar PIX');
+                setErrorMsg('Falha ao gerar PIX: ' + msg);
                 setErrorType(type);
-                setStep('error');
-                await cloud.logClientError('pos_pix', msg, { amount });
+                // Dont go to error step immediately, allow retry
+                setToast({ type: 'error', message: 'Falha ao gerar PIX: ' + msg });
+                // closePaymentOverlay();
             }
         }
     };
 
-    // Confirm Payment
-    const confirmPayment = async (paymentId: string, method: PaymentMethod, cardId?: string) => {
-        const payment = partialAmounts.find(p => p.id === paymentId);
-        if (!payment) return;
-        setProcessing(true);
-        try {
-            if (method === 'ZE_QR' || method === 'ZE_CODE') {
-                if (!cardId) throw new Error('Cartão inválido');
-                if (!terminal?.user_id) throw new Error('Terminal não identificado.');
-                const splitGroupId = partialAmounts.length > 1 ? crypto.randomUUID() : undefined;
-                const discount = couponDiscount || 0;
-                const promo = couponCode || undefined;
 
-                // Demo Mode Bypass
-                let transactionId = 'demo-tx-id';
-                if (!isDemoMode) {
-                    const res = await cloud.processPosPayment(
-                        cardId,
-                        payment.amount,
-                        userRole,
-                        terminal.user_id,
-                        splitGroupId,
-                        promo,
-                        discount,
-                        selectedStore?.id,
-                        selectedOrder?.id
-                    );
-                    transactionId = res.transactionId;
-
-                    // Log QR Scan
-                    if (method === 'ZE_QR') {
-                        await cloud.logQrCodeScan(cardId, 'SUCCESS', { amount: payment.amount, txId: transactionId });
-                    }
-                }
-
-                setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid', method, paidAt: new Date().toISOString(), txId: transactionId } : p));
-            } else if (method === 'PIX') {
-                setToast({ type: 'success', message: 'PIX gerado. Aguarde confirmação.' });
-            }
-            closePaymentOverlay();
-        } catch (e: any) {
-            setToast({ type: 'error', message: e.message || 'Falha no pagamento' });
-            await cloud.logClientError('pos_payment', e?.message || 'unknown', { paymentId, method });
-        } finally {
-            setProcessing(false);
-        }
-    };
 
     const loadHistory = async (reset?: boolean) => {
         if (loadingHistory) return;
@@ -1319,7 +1394,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                                 autoFocus
                             />
                             <Button
-                                onClick={() => confirmPayment(activePayment.id, 'ZE_CODE', userCodeInput)}
+                                onClick={() => confirmPayment(activePayment.id, 'USER_CODE', userCodeInput)}
                                 disabled={userCodeInput.length < 3}
                                 className="w-full py-4"
                             >

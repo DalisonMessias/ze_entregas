@@ -1,5 +1,11 @@
+
 import { Router } from 'express';
-import { supabaseAdmin } from '../db';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 import { generatePaymentQRCode, checkPaymentStatus, logTransaction } from '../../services/paymentGateway';
 
 const router = Router();
@@ -123,13 +129,13 @@ router.post('/webhook/mercadopago', async (req, res) => {
  */
 async function processPaymentConfirmation(txId: string, gateway: string) {
     try {
-        console.log(`[Payment] Processando confirmação ${txId} via ${gateway}`);
+        console.log(`[Payment] Processando confirmação ${txId} via ${gateway} `);
 
         // 1. Verificar status real na API
         const status = await checkPaymentStatus(txId);
 
         if (status.status !== 'paid') {
-            console.log(`[Payment] Status não é 'paid': ${status.status}`);
+            console.log(`[Payment] Status não é 'paid': ${status.status} `);
             return;
         }
 

@@ -3318,6 +3318,62 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Funﾃｧﾃ｣o: record_payment_gateway_log
+CREATE OR REPLACE FUNCTION public.record_payment_gateway_log(
+    p_request_data JSONB,
+    p_response_data JSONB,
+    p_error_message TEXT
+)
+RETURNS VOID AS $$
+BEGIN
+  INSERT INTO public.payment_gateway_logs (request_data, response_data, error_message)
+  VALUES (p_request_data, p_response_data, p_error_message);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 
+-- TABELA DE ASSOCIAÇÃO LOJA-ENTREGADOR (Correção Bug Entregador Fixo)
+--
+CREATE TABLE IF NOT EXISTS public.store_delivery_partners (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES auth.users(id), -- Assume que store_id é o ID do usuário lojista
+    partner_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    status TEXT NOT NULL DEFAULT 'ACTIVE', -- ACTIVE, PENDING, BLOCKED
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT unique_store_partner UNIQUE (store_id, partner_id)
+);
+
+-- Índices
+CREATE INDEX IF NOT EXISTS idx_store_partners_store ON public.store_delivery_partners(store_id);
+CREATE INDEX IF NOT EXISTS idx_store_partners_partner ON public.store_delivery_partners(partner_id);
+
+-- RLS
+-- RLS
+ALTER TABLE public.store_delivery_partners ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas vêm e gerenciam seus parceiros' AND tablename = 'store_delivery_partners') THEN
+        CREATE POLICY "Lojistas vêm e gerenciam seus parceiros" ON public.store_delivery_partners
+            FOR ALL
+            USING (auth.uid() = store_id);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Entregadores vêm suas associações' AND tablename = 'store_delivery_partners') THEN
+        CREATE POLICY "Entregadores vêm suas associações" ON public.store_delivery_partners
+            FOR SELECT
+            USING (auth.uid() = partner_id);
+    END IF;
+END $$;
+
+-- Grants
+GRANT ALL ON public.store_delivery_partners TO authenticated;
+GRANT ALL ON public.store_delivery_partners TO service_role;
+
 -- Funﾃｧﾃ｣o: record_store_loan
 CREATE OR REPLACE FUNCTION public.record_store_loan(p_amount NUMERIC)
 RETURNS VOID AS $$
@@ -8491,6 +8547,15 @@ BEGIN
         created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Garantir colunas (Migração Aditiva para tabela existente)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'user_id') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'terminal_id') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN terminal_id UUID REFERENCES public.user_terminals(id) ON DELETE CASCADE;
+    END IF;
+
     -- Índices
     CREATE INDEX IF NOT EXISTS user_terminal_transactions_terminal_id_idx ON public.user_terminal_transactions(terminal_id);
     CREATE INDEX IF NOT EXISTS user_terminal_transactions_user_id_idx ON public.user_terminal_transactions(user_id);
@@ -8530,6 +8595,51 @@ BEGIN
     );
 
     -- Índices
+    -- ==================================================================
+    -- GARANTIR COLUNAS DE TRANSAÇÃO (Fix para View Unificada)
+    -- ==================================================================
+    
+    -- 1. store_wallet_transactions
+    -- ==================================================================
+    -- GARANTIR COLUNAS DE TRANSAÇÃO (Fix para View Unificada)
+    -- ==================================================================
+    
+    -- 1. store_wallet_transactions
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_wallet_transactions' AND column_name = 'type') THEN
+        ALTER TABLE public.store_wallet_transactions ADD COLUMN type TEXT DEFAULT 'PAYMENT';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_wallet_transactions' AND column_name = 'status') THEN
+        ALTER TABLE public.store_wallet_transactions ADD COLUMN status TEXT DEFAULT 'COMPLETED';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_wallet_transactions' AND column_name = 'description') THEN
+        ALTER TABLE public.store_wallet_transactions ADD COLUMN description TEXT;
+    END IF;
+
+    -- 2. driver_wallet_transactions
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'driver_wallet_transactions' AND column_name = 'type') THEN
+        ALTER TABLE public.driver_wallet_transactions ADD COLUMN type TEXT DEFAULT 'PAYMENT';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'driver_wallet_transactions' AND column_name = 'status') THEN
+        ALTER TABLE public.driver_wallet_transactions ADD COLUMN status TEXT DEFAULT 'COMPLETED';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'driver_wallet_transactions' AND column_name = 'description') THEN
+        ALTER TABLE public.driver_wallet_transactions ADD COLUMN description TEXT;
+    END IF;
+
+    -- 3. user_terminal_transactions
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'type') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN type TEXT DEFAULT 'SALE';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'status') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN status TEXT DEFAULT 'pending';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'method') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN method TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'metadata') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN metadata JSONB DEFAULT '{}'::jsonb;
+    END IF;
+
     CREATE INDEX IF NOT EXISTS payment_gateway_settings_gateway_name_idx ON public.payment_gateway_settings(gateway_name);
     CREATE INDEX IF NOT EXISTS payment_gateway_settings_is_active_idx ON public.payment_gateway_settings(is_active);
     CREATE INDEX IF NOT EXISTS payment_gateway_settings_is_primary_idx ON public.payment_gateway_settings(is_primary);
@@ -8543,6 +8653,69 @@ BEGIN
     ALTER TABLE public.payment_gateway_settings ENABLE ROW LEVEL SECURITY;
 
     DROP POLICY IF EXISTS "Only admins can manage gateways" ON public.payment_gateway_settings;
+    -- ==================================================================
+    -- View Unificada de Logs Financeiros (21/01/2026)
+    -- ==================================================================
+    CREATE OR REPLACE VIEW public.admin_financial_transactions_view AS
+    SELECT
+        t.id,
+        t.driver_id as user_id,
+        up.name as user_name,
+        t.amount,
+        t.type::text,
+        t.status::text,
+        'ZEBANK' as source,
+        t.description,
+        t.created_at
+    FROM public.driver_wallet_transactions t
+    LEFT JOIN public.user_profiles up ON t.driver_id = up.id
+
+    UNION ALL
+
+    SELECT
+        t.id,
+        t.store_id as user_id,
+        up.name as user_name,
+        t.amount,
+        t.type::text,
+        t.status::text,
+        'ZEPAY_STORE' as source,
+        t.description,
+        t.created_at
+    FROM public.store_wallet_transactions t
+    LEFT JOIN public.user_profiles up ON t.store_id = up.id
+
+    UNION ALL
+
+    SELECT
+        t.id,
+        t.user_id,
+        up.name as user_name,
+        t.amount,
+        t.type,
+        t.status,
+        'TERMINAL' as source,
+        t.method || ' - ' || COALESCE(t.metadata->>'description', ''),
+        t.created_at
+    FROM public.user_terminal_transactions t
+    LEFT JOIN public.user_profiles up ON t.user_id = up.id
+
+    UNION ALL
+
+    SELECT
+        l.id,
+        NULL as user_id,
+        'Sistema' as user_name,
+        0 as amount,
+        l.operation_type as type,
+        CASE WHEN l.success THEN 'COMPLETED' ELSE 'FAILED' END as status,
+        'GATEWAY_LOG (' || l.gateway_name || ')' as source,
+        COALESCE(l.error_message, 'Operação registrada com sucesso'),
+        l.created_at
+    FROM public.payment_gateway_logs l;
+
+    -- Grant access to View
+    GRANT SELECT ON public.admin_financial_transactions_view TO authenticated;
     CREATE POLICY "Only admins can manage gateways" ON public.payment_gateway_settings
     FOR ALL USING (public.is_admin());
 
@@ -8590,5 +8763,162 @@ BEGIN
     GRANT SELECT ON public.payment_gateway_logs TO authenticated;
     GRANT INSERT ON public.payment_gateway_logs TO authenticated;
 
+    -- ==================================================================
+    -- Tabela de Histórico de Status de Usuário (21/01/2026)
+    -- ==================================================================
+    CREATE TABLE IF NOT EXISTS public.user_status_history (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        user_id UUID REFERENCES public.user_profiles(id) NOT NULL,
+        admin_id UUID REFERENCES public.user_profiles(id),
+        previous_status TEXT,
+        new_status TEXT NOT NULL,
+        reason TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
 
+    -- RLS
+    ALTER TABLE public.user_status_history ENABLE ROW LEVEL SECURITY;
+
+    DROP POLICY IF EXISTS "Admins podem ver todo historico" ON public.user_status_history;
+    CREATE POLICY "Admins podem ver todo historico" 
+    ON public.user_status_history FOR SELECT 
+    TO authenticated 
+    USING (
+         public.is_admin()
+    );
+
+    DROP POLICY IF EXISTS "Admins podem inserir historico" ON public.user_status_history;
+    CREATE POLICY "Admins podem inserir historico" 
+    ON public.user_status_history FOR INSERT 
+    TO authenticated 
+    WITH CHECK (
+         public.is_admin()
+    );
+
+    -- Grants
+    GRANT SELECT, INSERT ON public.user_status_history TO authenticated;
 END $$;
+
+-- ==================================================================
+-- TABELA DE LOCALIZAÇÃO DE USUÁRIOS (Corrigindo dependência da RPC)
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.user_locations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id)
+);
+
+-- RLS
+ALTER TABLE public.user_locations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can update own location" ON public.user_locations;
+CREATE POLICY "Users can update own location" ON public.user_locations
+    FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins/System read locations" ON public.user_locations;
+CREATE POLICY "Admins/System read locations" ON public.user_locations
+    FOR SELECT USING (true); -- Permitir leitura global por enquanto ou restringir a admin
+
+GRANT ALL ON public.user_locations TO authenticated;
+
+
+-- ==================================================================
+-- FUNÇÃO DASHBOARD ADMIN V3 (21/01/2026) - Correção Financeira
+-- ==================================================================
+CREATE OR REPLACE FUNCTION public.get_admin_dashboard_stats_v3()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_total_users INT;
+    v_total_stores INT;
+    v_active_stores INT;
+    v_total_drivers INT;
+    v_online_drivers INT;
+    v_total_orders INT;
+    v_orders_today INT;
+    v_orders_week INT;
+    v_orders_month INT;
+    v_gmv NUMERIC(10, 2);
+    
+    -- Novos contadores financeiros
+    v_total_recharges NUMERIC(10, 2); -- Recargas (Depósitos de Lojas)
+    v_platform_fees NUMERIC(10, 2);   -- Taxas diversas (Entregas, Comissões)
+    v_subscription_fees NUMERIC(10, 2); -- Associações
+    v_driver_fees NUMERIC(10, 2);     -- Taxas cobradas de motoristas
+    v_total_revenue NUMERIC(10, 2);   -- Soma das receitas reais da plataforma
+
+BEGIN
+    -- 1. Métricas de Usuários
+    SELECT COUNT(*) INTO v_total_users FROM public.user_profiles;
+    SELECT COUNT(*) INTO v_total_stores FROM public.user_profiles WHERE role = 'store_partner';
+    SELECT COUNT(*) INTO v_active_stores FROM public.user_profiles WHERE role = 'store_partner' AND status = 'active';
+    SELECT COUNT(*) INTO v_total_drivers FROM public.user_profiles WHERE role = 'delivery_partner';
+    
+    -- Motoristas online
+    SELECT COUNT(DISTINCT user_id) INTO v_online_drivers FROM public.user_locations WHERE updated_at > NOW() - INTERVAL '5 minutes';
+    
+    -- Se não houver tabela, assumir 0 (fallback seguro)
+    IF v_online_drivers IS NULL THEN v_online_drivers := 0; END IF;
+
+    -- 2. Métricas de Pedidos
+    SELECT COUNT(*) INTO v_total_orders FROM public.orders;
+    SELECT COUNT(*) INTO v_orders_today FROM public.orders WHERE created_at >= CURRENT_DATE;
+    SELECT COUNT(*) INTO v_orders_week FROM public.orders WHERE created_at >= date_trunc('week', CURRENT_DATE);
+    SELECT COUNT(*) INTO v_orders_month FROM public.orders WHERE created_at >= date_trunc('month', CURRENT_DATE);
+    
+    -- 3. GMV
+    SELECT COALESCE(SUM(total_price), 0) INTO v_gmv 
+    FROM public.orders 
+    WHERE status IN ('completed', 'delivered');
+
+    -- 4. Métricas Financeiras Detalhadas (Baseado na View Unificada)
+    -- Recargas de Lojas (Entrada de saldo)
+    SELECT COALESCE(SUM(amount), 0) INTO v_total_recharges
+    FROM public.store_wallet_transactions
+    WHERE type::text = 'DEPOSIT' AND status::text = 'COMPLETED';
+
+    -- Taxas de Lojas (Saídas da carteira da loja = Receita da Plataforma)
+    -- Assumindo valores negativos para saídas, usamos ABS.
+    SELECT COALESCE(SUM(ABS(amount)), 0) INTO v_platform_fees
+    FROM public.store_wallet_transactions
+    WHERE type::text IN ('FEE', 'COMMISSION') AND status::text = 'COMPLETED';
+
+    SELECT COALESCE(SUM(ABS(amount)), 0) INTO v_subscription_fees
+    FROM public.store_wallet_transactions
+    WHERE type::text = 'SUBSCRIPTION' AND status::text = 'COMPLETED';
+    
+    -- Taxas de Motoristas (Saídas da carteira do motorista = Receita da Plataforma)
+    SELECT COALESCE(SUM(ABS(amount)), 0) INTO v_driver_fees
+    FROM public.driver_wallet_transactions
+    WHERE type::text IN ('FEE', 'COMMISSION', 'SUBSCRIPTION') AND status::text = 'COMPLETED';
+    
+    v_total_revenue := v_platform_fees + v_subscription_fees + v_driver_fees;
+
+    RETURN jsonb_build_object(
+        'users', jsonb_build_object(
+            'total', v_total_users,
+            'stores', jsonb_build_object('total', v_total_stores, 'active', v_active_stores),
+            'drivers', jsonb_build_object('total', v_total_drivers, 'online', v_online_drivers)
+        ),
+        'orders', jsonb_build_object(
+            'total', v_total_orders,
+            'today', v_orders_today,
+            'week', v_orders_week,
+            'month', v_orders_month
+        ),
+        'finance', jsonb_build_object(
+            'gmv', v_gmv,
+            'platformRevenue', v_total_revenue,
+            'recharges', v_total_recharges,
+            'fees', v_platform_fees,
+            'subscriptions', v_subscription_fees,
+            'driverFees', v_driver_fees
+        )
+    );
+END;
+$$;

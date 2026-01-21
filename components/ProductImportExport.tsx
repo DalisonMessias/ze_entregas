@@ -27,7 +27,11 @@ const INTERNAL_FIELDS = [
     { label: 'Observações', value: 'observations', required: false },
 ];
 
-export const ProductImportExport: React.FC = () => {
+interface ProductImportExportProps {
+    targetStoreId?: string;
+}
+
+export const ProductImportExport: React.FC<ProductImportExportProps> = ({ targetStoreId }) => {
     const [file, setFile] = useState<File | null>(null);
     const [headers, setHeaders] = useState<string[]>([]);
     const [dataPreview, setDataPreview] = useState<any[]>([]);
@@ -44,6 +48,12 @@ export const ProductImportExport: React.FC = () => {
     const [missingFields, setMissingFields] = useState<string[]>([]);
 
     useEffect(() => {
+        // Se for admin (targetStoreId), ignorar validação de perfil pessoal
+        if (targetStoreId) {
+            setProfileValid(true);
+            return;
+        }
+
         // Validar perfil ao carregar
         const checkProfile = async () => {
             try {
@@ -57,7 +67,7 @@ export const ProductImportExport: React.FC = () => {
             }
         };
         checkProfile();
-    }, []);
+    }, [targetStoreId]);
 
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const selected = e.target.files?.[0];
@@ -138,7 +148,7 @@ export const ProductImportExport: React.FC = () => {
             // Get existing products for comparison if needed
             let existingProducts: StoreProduct[] = [];
             if (importMode !== 'create_new') {
-                existingProducts = await cloud.getStoreProducts();
+                existingProducts = await cloud.getStoreProducts(targetStoreId);
             }
 
             // Process batch (simulate batch mainly due to cloud interface limit)
@@ -146,7 +156,7 @@ export const ProductImportExport: React.FC = () => {
                 try {
                     const productData: any = {
                         is_active: true,
-                        store_id: '' // Will be filled by cloud function based on auth
+                        // store_id handled by cloud function logic (admin or user)
                     };
 
                     // Map fields
@@ -193,11 +203,11 @@ export const ProductImportExport: React.FC = () => {
                             skipped++;
                             continue;
                         } else if (importMode === 'update_existing') {
-                            await cloud.updateStoreProduct({ ...productData, id: existingId });
+                            await cloud.updateStoreProduct({ ...productData, id: existingId }, targetStoreId);
                             success++;
                         }
                     } else {
-                        await cloud.createStoreProduct(productData);
+                        await cloud.createStoreProduct(productData, targetStoreId);
                         success++;
                     }
 
@@ -221,7 +231,7 @@ export const ProductImportExport: React.FC = () => {
     const handleExport = async () => {
         setProcessing(true);
         try {
-            const products = await cloud.getStoreProducts();
+            const products = await cloud.getStoreProducts(targetStoreId);
             const exportData = products.map(p => ({
                 Nome: p.name,
                 Preço: p.price,

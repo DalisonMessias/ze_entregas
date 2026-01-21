@@ -1,26 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, Settings, Check, X, TestTube, Activity } from 'lucide-react';
 import { Button } from './Button';
-import { cloud } from '../services/cloud';
-import { useToast } from '../utils/toastService';
-import type { PaymentGatewayConfig } from '../services/paymentGateway';
+import * as cloud from '../services/cloud';
+import type { PaymentGatewayConfig, FinancialTransaction } from '../types';
+
+const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    return (
+        <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-5 fade-in duration-300 ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+            <span className="text-sm font-bold">{message}</span>
+            <button onClick={onClose} className="ml-2"><X className="w-4 h-4" /></button>
+        </div>
+    );
+};
 
 export const AdminPaymentGateways = () => {
     const [gateways, setGateways] = useState<PaymentGatewayConfig[]>([]);
+    const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
     const [loading, setLoading] = useState(true);
-    const [, setToast] = useToast();
+    const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
     const [editingGateway, setEditingGateway] = useState<string | null>(null);
     const [credentials, setCredentials] = useState<Record<string, string>>({});
 
     useEffect(() => {
-        loadGateways();
+        loadData();
     }, []);
 
-    const loadGateways = async () => {
+    const loadData = async () => {
         setLoading(true);
         try {
-            const data = await cloud.getPaymentGateways();
-            setGateways(data || []);
+            const [gatewaysData, txData] = await Promise.all([
+                cloud.getPaymentGateways(),
+                cloud.getAllFinancialTransactions()
+            ]);
+            setGateways(gatewaysData || []);
+            setTransactions(txData || []);
         } catch (error: any) {
             setToast({ type: 'error', message: error.message });
         } finally {
@@ -42,7 +61,7 @@ export const AdminPaymentGateways = () => {
         try {
             await cloud.updatePaymentGateway(gatewayName, { is_active: !currentState });
             setToast({ type: 'success', message: 'Gateway atualizado com sucesso!' });
-            loadGateways();
+            loadData();
         } catch (error: any) {
             setToast({ type: 'error', message: error.message });
         }
@@ -52,7 +71,7 @@ export const AdminPaymentGateways = () => {
         try {
             await cloud.setPaymentGatewayPrimary(gatewayName);
             setToast({ type: 'success', message: `${gatewayName} definido como principal!` });
-            loadGateways();
+            loadData();
         } catch (error: any) {
             setToast({ type: 'error', message: error.message });
         }
@@ -64,7 +83,7 @@ export const AdminPaymentGateways = () => {
             setToast({ type: 'success', message: 'Credenciais salvas com sucesso!' });
             setEditingGateway(null);
             setCredentials({});
-            loadGateways();
+            loadData();
         } catch (error: any) {
             setToast({ type: 'error', message: error.message });
         }
@@ -78,8 +97,22 @@ export const AdminPaymentGateways = () => {
             } else {
                 setToast({ type: 'error', message: `Teste falhou: ${result.error}` });
             }
+            // Recarregar logs para mostrar o resultado do teste
+            const txData = await cloud.getAllFinancialTransactions();
+            setTransactions(txData || []);
         } catch (error: any) {
             setToast({ type: 'error', message: error.message });
+        }
+    };
+
+    const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+    const getSourceLabel = (source: string) => {
+        switch (source) {
+            case 'ZEBANK': return <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold">ZéBank</span>;
+            case 'ZEPAY_STORE': return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">Lojista</span>;
+            case 'TERMINAL': return <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold">Maquininha</span>;
+            default: return <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-bold">Sistema</span>;
         }
     };
 
@@ -103,8 +136,8 @@ export const AdminPaymentGateways = () => {
                     <div
                         key={gateway.id}
                         className={`border-2 rounded-xl p-6 transition-all ${gateway.is_primary
-                                ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/20'
-                                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                            ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/20'
+                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
                             }`}
                     >
                         {/* Header */}
@@ -127,8 +160,8 @@ export const AdminPaymentGateways = () => {
                             <div className="flex items-center gap-2">
                                 <span className="text-sm text-gray-600 dark:text-gray-400">Status:</span>
                                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${gateway.is_active
-                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                                     }`}>
                                     {gateway.is_active ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                                     {gateway.is_active ? 'Ativo' : 'Inativo'}
@@ -136,72 +169,23 @@ export const AdminPaymentGateways = () => {
                             </div>
                         </div>
 
-                        {/* Credenciais */}
-                        {editingGateway === gateway.gateway_name ? (
-                            <div className="space-y-3 mb-4">
-                                {gateway.gateway_name === 'infinitepay' ? (
-                                    <>
-                                        <input
-                                            type="text"
-                                            placeholder="API Key"
-                                            className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                            value={credentials.apiKey || ''}
-                                            onChange={(e) => setCredentials({ ...credentials, apiKey: e.target.value })}
-                                        />
-                                        <input
-                                            type="text"
-                                            placeholder="API Secret (opcional)"
-                                            className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                            value={credentials.apiSecret || ''}
-                                            onChange={(e) => setCredentials({ ...credentials, apiSecret: e.target.value })}
-                                        />
-                                    </>
-                                ) : (
-                                    <input
-                                        type="text"
-                                        placeholder="Access Token"
-                                        className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        value={credentials.accessToken || ''}
-                                        onChange={(e) => setCredentials({ ...credentials, accessToken: e.target.value })}
-                                    />
-                                )}
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={() => handleSaveCredentials(gateway.gateway_name)}
-                                        size="sm"
-                                        fullWidth
-                                    >
-                                        Salvar
-                                    </Button>
-                                    <Button
-                                        onClick={() => {
-                                            setEditingGateway(null);
-                                            setCredentials({});
-                                        }}
-                                        variant="ghost"
-                                        size="sm"
-                                        fullWidth
-                                    >
-                                        Cancelar
-                                    </Button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="mb-4">
-                                <Button
-                                    onClick={() => {
-                                        setEditingGateway(gateway.gateway_name);
-                                        setCredentials(gateway.credentials || {});
-                                    }}
-                                    variant="ghost"
-                                    size="sm"
-                                >
-                                    Configurar Credenciais
-                                </Button>
-                            </div>
-                        )}
+                        {/* Ações de Configuração */}
+                        <div className="mb-4">
+                            <Button
+                                onClick={() => {
+                                    const tab = gateway.gateway_name === 'infinitepay' ? 'admin_infinitepay' : 'admin_mercadopago';
+                                    window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                fullWidth
+                                icon={<Settings className="w-4 h-4" />}
+                            >
+                                Configurar Credenciais
+                            </Button>
+                        </div>
 
-                        {/* Ações */}
+                        {/* Ações de Status */}
                         <div className="space-y-2">
                             <Button
                                 onClick={() => handleToggleActive(gateway.gateway_name, gateway.is_active)}
@@ -237,16 +221,73 @@ export const AdminPaymentGateways = () => {
                 ))}
             </div>
 
+
             {/* Seção de Logs */}
             <div className="mt-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
                 <div className="flex items-center gap-2 mb-4">
                     <Activity className="w-5 h-5 text-brand-600" />
-                    <h3 className="text-lg font-bold dark:text-white">Últimas Transações</h3>
+                    <h3 className="text-lg font-bold dark:text-white">Transações Financeiras (Unificadas)</h3>
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Log de tentativas de pagamento será exibido aqui (implementação futura)
-                </p>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                            <tr>
+                                <th className="px-4 py-3">Data</th>
+                                <th className="px-4 py-3">Origem</th>
+                                <th className="px-4 py-3">Usuário</th>
+                                <th className="px-4 py-3">Tipo</th>
+                                <th className="px-4 py-3">Valor</th>
+                                <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3">Detalhes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {transactions.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                        Nenhuma transação registrada.
+                                    </td>
+                                </tr>
+                            ) : (
+                                transactions.map((tx) => (
+                                    <tr key={tx.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                        <td className="px-4 py-3 text-xs w-[140px]">
+                                            {new Date(tx.created_at).toLocaleString('pt-BR')}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {getSourceLabel(tx.source)}
+                                        </td>
+                                        <td className="px-4 py-3 font-medium">
+                                            {tx.user_name || tx.user_id || '-'}
+                                        </td>
+                                        <td className="px-4 py-3 text-xs uppercase text-gray-500">
+                                            {tx.type}
+                                        </td>
+                                        <td className={`px-4 py-3 font-mono font-bold ${Number(tx.amount) > 0 ? 'text-green-600' : Number(tx.amount) < 0 ? 'text-red-600' : 'text-gray-600'
+                                            }`}>
+                                            {formatCurrency(Number(tx.amount))}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${['COMPLETED', 'PAID', 'SUCCESS', 'ACTIVE'].includes(tx.status?.toUpperCase())
+                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30'
+                                                    : 'bg-red-100 text-red-700 dark:bg-red-900/30'
+                                                }`}>
+                                                {tx.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-gray-500 truncate max-w-[200px]" title={tx.description || ''}>
+                                            {tx.description || '-'}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 };

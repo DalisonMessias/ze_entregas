@@ -64,3 +64,12 @@
 [20/01/2026] - Feature: Sistema completo de gateways de pagamento criado com InfinitePay e Mercado Pago, fallback automático, painel admin (AdminPaymentGateways) e 4 tabelas no banco (driver_wallets, user_terminal_transactions, payment_gateway_settings, payment_gateway_logs). Serviços: paymentGateway.ts, infinitepay.ts, mercadopago.ts.
 [20/01/2026] - Integration: ZePayStoreModule integrado com sistema de gateways. Recarga ZéPay agora funciona com QR Code PIX real via InfinitePay/Mercado Pago, polling automático de status e atualização de saldo após confirmação.
 [20/01/2026] - Backend: Criadas rotas backend completas (server/routes/payment.ts) com 4 endpoints: generate-qr, status/:txId e webhooks para InfinitePay e Mercado Pago. Sistema de confirmação automática via webhook implementado.
+[21/01/2026] - Bug Fix: Corrigido bug crítico de entregadores fixos não listados na comanda. Tabela `store_delivery_partners` estava faltando no schema e foi adicionada ao `supabase_global.sql`.
+[21/01/2026] - Enhancement: Adicionada solicitação de permissão de câmera explícita no MerchantPOS antes de ativar o scanner QR Code, prevenindo erros de inicialização.
+[21/01/2026] - Banco de Dados: Criada tabela user_status_history em supabase_global.sql para auditoria de status.
+[21/01/2026] - Novo: Implementado sistema de Gerenciamento de Lojas no painel administrativo (/admin/lojas).
+[21/01/2026] - Backend: Adicionadas funções `adminGetStores`, `adminUpdateStoreStatus` e `adminGetStatusHistory` no cloud.ts.
+[21/01/2026] - UI: Criado componente `AdminStores.tsx` com listagem em cards, busca, modal de detalhes e logs de auditoria.
+[21/01/2026] - Segurança: Logs de alteração de status agora incluem o motivo obrigatório e o administrador que realizou a ação.
+[FIX] Implementado gerenciamento de produtos (Importa��o/Exporta��o) via Admin para lojas espec�ficas
+[FEAT] Dashboard Admin: Adicionado painel financeiro detalhado com Recargas, Taxas de Lojistas e Taxas de Entregadores
