@@ -1,13 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
-
-// Inicializar cliente Supabase para validar chaves
-// NOTA: Em produção real, você usaria variáveis de ambiente process.env.SUPABASE_URL e KEY
-// Aqui estamos assumindo que essas variáveis já estão carregadas ou usando o cliente global se disponível
-// Tentar variáveis de backend padrão ou prefixadas com VITE_
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabaseAdmin as supabase } from '../services/supabaseClient.js';
 
 export const apiKeyAuth = async (req: Request, res: Response, next: NextFunction) => {
     const apiKey = req.header('x-api-key');

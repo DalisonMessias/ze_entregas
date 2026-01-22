@@ -6,7 +6,7 @@ import { CustomInput } from './CustomInput';
 import { PartnerDocumentation } from './PartnerDocumentation';
 import * as cloud from '../services/cloud';
 import { PartnerRequest, PayoutSummary, PartnerPayment, PartnerProfile, PartnerLevelBenefit, WorkShift, UserRole } from '../types';
-import { OrderHistory } from './OrderHistory';
+import OrderHistory from './OrderHistory';
 import { RatingModal } from './RatingModal';
 import { FinancialPanel } from './FinancialPanel';
 import { SecurityCheckModal } from './SecurityCheckModal';

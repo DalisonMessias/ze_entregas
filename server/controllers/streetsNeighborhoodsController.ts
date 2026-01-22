@@ -29,10 +29,10 @@ export class StreetsNeighborhoodsController {
   private overpassService: OverpassService;
   private cacheService: StreetsCacheService;
 
-  constructor(supabaseUrl: string, supabaseKey: string) {
+  constructor() {
     this.nominatimService = new NominatimService();
     this.overpassService = new OverpassService();
-    this.cacheService = new StreetsCacheService(supabaseUrl, supabaseKey);
+    this.cacheService = new StreetsCacheService();
   }
 
   async getStreetsAndNeighborhoods(req: Request, res: Response): Promise<void> {
@@ -56,7 +56,7 @@ export class StreetsNeighborhoodsController {
         return
       }
       const userCity = await this.nominatimService.searchCity(profileCity)
-      
+
       // userCity sempre definido aqui após searchCity
 
       // Verificar cache primeiro
@@ -123,7 +123,7 @@ export class StreetsNeighborhoodsController {
 
     } catch (error) {
       console.error('Erro em getStreetsAndNeighborhoods:', error);
-      
+
       res.status(500).json({
         cidade: '',
         bbox: { south: 0, west: 0, north: 0, east: 0 },

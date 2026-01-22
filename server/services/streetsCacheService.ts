@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabaseInstance } from './supabaseClient.js';
 import { StreetsAndNeighborhoods } from './overpassService.js';
 
 export interface StreetsCache {
@@ -23,10 +23,10 @@ export interface CacheMetadata {
 }
 
 export class StreetsCacheService {
-  private supabase;
+  private supabase = supabaseInstance;
 
-  constructor(supabaseUrl: string, supabaseKey: string) {
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+  constructor() {
+    // Agora usa a instância global
   }
 
   async getCachedData(cityDisplayName: string): Promise<StreetsCache | null> {
