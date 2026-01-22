@@ -474,7 +474,7 @@ export const loginCollaborator = async (email: string, password: string): Promis
 };
 
 
-export const createCollaborator = async (email: string, name: string, password: string): Promise<string | null> => {
+export const createCollaborator = async (email: string, name: string, password: string, func: string = 'waiter'): Promise<string | null> => {
     const sb = getClient();
     if (!sb) return null;
     const { data: { user } } = await sb.auth.getUser();
@@ -484,7 +484,8 @@ export const createCollaborator = async (email: string, name: string, password: 
         p_email: email,
         p_name: name,
         p_password: password,
-        p_store_id: user.id
+        p_store_id: user.id,
+        p_function: func
     });
 
     if (error) {
@@ -504,14 +505,15 @@ export const deleteCollaborator = async (collaboratorId: string) => {
     }
 };
 
-export const updateCollaborator = async (collaboratorId: string, name: string, email: string, password?: string) => {
+export const updateCollaborator = async (collaboratorId: string, name: string, email: string, password?: string, func?: string) => {
     const sb = getClient();
     if (!sb) return;
     const { error } = await sb.rpc('update_collaborator', {
         p_collaborator_id: collaboratorId,
         p_name: name,
         p_email: email,
-        p_password: password || null
+        p_password: password || null,
+        p_function: func || null
     });
     if (error) {
         console.error('Update Collaborator Failed', error);
@@ -657,7 +659,9 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         is_super_store: userData.is_super_store,
         store_name: userData.store_name,
         is_open: userData.is_open,
-        pix_key: userData.pix_key
+        pix_key: userData.pix_key,
+        city_slug: userData.city_slug,
+        store_slug: userData.store_slug
     };
 
     return profile;
@@ -4269,79 +4273,25 @@ export const processLoanInstallmentPayments = async (
 
 // --- STORE DELIVERY SETTINGS (CUSTOM) ---
 
-export const getStoreDeliverySettings = async (): Promise<StoreDeliverySettings | null> => {
-    const sb = getClient();
-    if (!sb) return null;
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return null;
 
-    const { data, error } = await sb
-        .from('store_delivery_settings')
-        .select('*')
-        .eq('store_id', user.id)
-        .single();
+// Duplicate removed
+;
 
-    if (error && error.code !== 'PGRST116') { // Ignore not found error
-        // console.error("Error fetching delivery settings:", error);
-    }
 
-    return data;
-};
+// Duplicate removed
+;
 
-export const updateStoreDeliverySettings = async (settings: Partial<StoreDeliverySettings>) => {
-    const sb = getClient();
-    if (!sb) return;
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return;
 
-    // First check if exists, if not create
-    const { data: existing } = await sb.from('store_delivery_settings').select('id').eq('store_id', user.id).single();
+// Duplicate removed
+;
 
-    if (existing) {
-        const { error } = await sb.from('store_delivery_settings').update(settings).eq('store_id', user.id);
-        if (error) throw error;
-    } else {
-        const { error } = await sb.from('store_delivery_settings').insert({ ...settings, store_id: user.id });
-        if (error) throw error;
-    }
-};
 
-export const getStoreNeighborhoodFees = async (): Promise<StoreNeighborhoodFee[]> => {
-    const sb = getClient();
-    if (!sb) return [];
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return [];
+// Duplicate removed
+;
 
-    const { data, error } = await sb
-        .from('store_neighborhood_fees')
-        .select('*')
-        .eq('store_id', user.id)
-        .order('neighborhood_name', { ascending: true });
 
-    if (error) {
-        // console.error("Error fetching neighborhood fees:", error);
-        return [];
-    }
-    return data || [];
-};
-
-export const upsertStoreNeighborhoodFee = async (fee: Partial<StoreNeighborhoodFee>) => {
-    const sb = getClient();
-    if (!sb) return;
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return;
-
-    const payload = { ...fee, store_id: user.id };
-    const { error } = await sb.from('store_neighborhood_fees').upsert(payload);
-    if (error) throw error;
-};
-
-export const deleteStoreNeighborhoodFee = async (id: string) => {
-    const sb = getClient();
-    if (!sb) return;
-    const { error } = await sb.from('store_neighborhood_fees').delete().eq('id', id);
-    if (error) throw error;
-};
+// Legacy removed
+;
 
 
 
@@ -5278,3 +5228,223 @@ export const generateAIContent = async (prompt: string, apiKey: string, systemIn
 
     throw lastError || new Error("Falha ao gerar conteúdo com todos os modelos disponíveis (REST).");
 };
+
+// --- DELIVERY SETTINGS (NEW 22/01/2026) ---
+
+export const getStoreDeliverySettings = async (): Promise<StoreDeliverySettings | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await sb
+        .from('store_delivery_settings')
+        .select('*')
+        .eq('store_id', user.id)
+        .single();
+
+    if (error) {
+        // Se não existir, retorna null (componente vai tratar criando default)
+        return null;
+    }
+    return data;
+};
+
+export const updateStoreDeliverySettings = async (settings: Partial<StoreDeliverySettings>) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Upsert baseando no store_id
+    const { error } = await sb
+        .from('store_delivery_settings')
+        .upsert({
+            store_id: user.id,
+            ...settings,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'store_id' });
+
+    if (error) throw error;
+};
+
+export const getStoreNeighborhoodFees = async (): Promise<StoreNeighborhoodFee[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await sb
+        .from('store_neighborhood_fees')
+        .select('*')
+        .eq('store_id', user.id)
+        .eq('is_active', true)
+        .order('neighborhood_name');
+
+    if (error) return [];
+    return data;
+};
+
+export const upsertStoreNeighborhoodFee = async (fee: Partial<StoreNeighborhoodFee>) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const payload: any = { ...fee, store_id: user.id };
+    if (!payload.id) delete payload.id; // Let DB generate ID if new
+
+    const { error } = await sb
+        .from('store_neighborhood_fees')
+        .upsert(payload);
+
+    if (error) throw error;
+};
+
+export const deleteStoreNeighborhoodFee = async (feeId: string) => {
+    const sb = getClient();
+    if (!sb) return;
+
+    const { error } = await sb
+        .from('store_neighborhood_fees')
+        .delete()
+        .eq('id', feeId);
+
+    if (error) throw error;
+};
+
+
+// --- PUBLIC MENU API (22/01/2026) ---
+
+export const getStoreBySlug = async (citySlug: string, storeSlug: string) => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb
+        .from('user_profiles')
+        .select('*')
+        .eq('city_slug', citySlug)
+        .eq('store_slug', storeSlug)
+        .eq('role', 'store_partner')
+        .single();
+
+    if (error || !data) return null;
+    return data;
+};
+
+export const getPublicStoreProducts = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('products')
+        .select('*')
+        .eq('store_id', storeId)
+        .eq('is_active', true)
+        .order('name');
+
+    if (error) return [];
+    return data;
+};
+
+export const getPublicDeliverySettings = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data } = await sb
+        .from('store_delivery_settings')
+        .select('*')
+        .eq('store_id', storeId)
+        .single();
+
+    return data;
+};
+
+export const getPublicNeighborhoodFees = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data } = await sb
+        .from('store_neighborhood_fees')
+        .select('*')
+        .eq('store_id', storeId)
+        .eq('is_active', true);
+
+    return data || [];
+};
+
+
+export const generateDailyStoreReport = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return;
+
+    const today = new Date();
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+
+    console.log('Gerando relatório para loja:', storeId, 'Período:', startOfDay, 'até', endOfDay);
+
+    const { data: orders, error } = await sb
+        .from('orders')
+        .select('*')
+        .eq('store_id', storeId)
+        .gte('created_at', startOfDay)
+        .lte('created_at', endOfDay)
+        .in('status', ['COMPLETED']);
+
+    if (error) {
+        console.error('Erro ao buscar pedidos:', error);
+        throw error;
+    }
+
+    const validOrders = orders || [];
+    const totalOrders = validOrders.length;
+    const totalRevenue = validOrders.reduce((acc, order) => acc + (Number(order.total_price) || 0), 0);
+    const totalDeliveryFees = validOrders.reduce((acc, order) => acc + (Number(order.shipping_cost) || 0), 0);
+
+    const ordersSummary = validOrders.map(o => ({
+        id: o.id,
+        total: o.total_price,
+        payment: o.payment_method
+    }));
+
+    const { error: reportError } = await sb
+        .from('store_daily_reports')
+        .insert({
+            store_id: storeId,
+            report_date: new Date().toISOString(),
+            total_orders: totalOrders,
+            total_revenue: totalRevenue,
+            total_delivery_fees: totalDeliveryFees,
+            orders_summary: ordersSummary
+        });
+
+    if (reportError) {
+        console.error('Erro ao inserir relatório:', reportError);
+        throw reportError;
+    }
+
+    return true;
+};
+
+export const getStreetsByCity = async (state: string, city: string, streetName: string): Promise<any[]> => {
+    if (!state || !city || !streetName || streetName.length < 3) return [];
+
+    try {
+        // ViaCEP Format: viacep.com.br/ws/UF/Cidade/Logradouro/json/
+        // Encode URI components to handle spaces and special chars
+        const url = `https://viacep.com.br/ws/${encodeURIComponent(state)}/${encodeURIComponent(city)}/${encodeURIComponent(streetName)}/json/`;
+        const res = await fetch(url);
+        if (!res.ok) return [];
+
+        const data = await res.json();
+        if (Array.isArray(data)) {
+            return data;
+        }
+        return [];
+    } catch (e) {
+        console.error('Error fetching streets:', e);
+        return [];
+    }
+};
+

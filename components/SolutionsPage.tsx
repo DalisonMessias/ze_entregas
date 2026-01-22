@@ -5,10 +5,9 @@ import { InstitutionalContent } from '../types';
 export const SolutionsPage: React.FC = () => {
   const [items, setItems] = useState<InstitutionalContent[]>([]);
   useEffect(() => {
-    const load = () => cloud.getInstitutionalPublic('solutions').then(setItems).catch(() => setItems([]));
-    load();
-    const ch = cloud.subscribeInstitutionalChanges('solutions', load);
-    return () => { try { ch?.unsubscribe(); } catch {} };
+    cloud.adminListInstitutionalContents({ pageKey: 'solutions', status: 'published' })
+      .then(setItems)
+      .catch(() => setItems([]));
   }, []);
   return (
     <div className="max-w-4xl mx-auto space-y-6">

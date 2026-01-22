@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingBag, X, ArrowLeft, Plus, Minus, CreditCard, Barcode, QrCode, Copy, Check, Loader2, AlertTriangle, Search, Wallet, MapPin, ChevronRight, Star, Clock, Tag, Truck, Ticket, Heart, Zap } from 'lucide-react';
+import { ShoppingBag, X, ArrowLeft, Plus, Minus, CreditCard, Barcode, QrCode, Copy, Check, Loader2, AlertTriangle, Search, Wallet, MapPin, ChevronRight, Star, Clock, Tag, Truck, Ticket, Heart, Zap, Shield } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { Product, ShopSettings, CartItem, PaymentMethod, Order, Category } from '../types';
 import { DataErrorDisplay } from './DataErrorDisplay';
@@ -57,7 +57,17 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
     const [productQuantity, setProductQuantity] = useState(1); // For the modal
 
     // Checkout State
-    const [shippingAddress, setShippingAddress] = useState({ name: '', address: '', cep: '' });
+    const [shippingAddress, setShippingAddress] = useState({
+        name: '',
+        cep: '',
+        street: '',
+        number: '',
+        neighborhood: '',
+        city: '',
+        state: '',
+        complement: '',
+        reference: ''
+    });
     // Remove paymentMethod state as InfinitePay handles it externally
 
     // Shipping Calculation
@@ -74,6 +84,9 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [finalOrder, setFinalOrder] = useState<Order | null>(null);
+
+    // UI State for Cart Drawer
+    const [isCartOpen, setIsCartOpen] = useState(false);
 
 
 
@@ -122,6 +135,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             return [...prevCart, { product: selectedProduct, quantity: productQuantity }];
         });
         setSelectedProduct(null);
+        setIsCartOpen(true); // Open cart automatically
     };
 
     const updateCartQuantity = (productId: string, delta: number) => {
@@ -182,7 +196,10 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             // Auto-fill address parts
             setShippingAddress(prev => ({
                 ...prev,
-                address: `${dataUser.street}, , ${dataUser.neighborhood}, ${dataUser.city} - ${dataUser.state}`
+                street: dataUser.street || '',
+                neighborhood: dataUser.neighborhood || '',
+                city: dataUser.city || '',
+                state: dataUser.state || ''
             }));
 
             // 2. Calculate Distance (Logic Simulation of Correios)
@@ -256,8 +273,8 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             await alert({ title: "Login Necessário", message: "Você precisa estar logado para finalizar a compra." });
             return;
         }
-        if (!shippingAddress.name.trim() || !shippingAddress.address.trim() || !shippingAddress.cep) {
-            await alert({ title: "Endereço Incompleto", message: "Por favor, preencha o endereço de entrega completo." });
+        if (!shippingAddress.name.trim() || !shippingAddress.street.trim() || !shippingAddress.number.trim() || !shippingAddress.neighborhood.trim() || !shippingAddress.cep) {
+            await alert({ title: "Endereço Incompleto", message: "Por favor, preencha todos os campos do endereço (Rua, Número, Bairro)." });
             return;
         }
         if (shippingCost === null) {
@@ -294,21 +311,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 cart.map(i => ({
                     description: i.product.name,
                     quantity: i.quantity,
-                    price: Math.round(i.product.price * 100) // Cents handled here? No, function handles it? 
-                    // Let's check function again. "amount" param is total. "items" param.
-                    // Implementation plan said function converts.
-                    // cloud.ts: createInfinitePayCheckout(id, amount, handle, items, redirect, webhook)
-                    // Edge function: receives body.amount (float?) -> converts to cents.
-                    // The ITEMS array in edge function... 
-                    // Let's assume the edge function expects items with price in float and converts, OR expects cents.
-                    // The Plan said: "Converte amount para centavos". 
-                    // I'll send Items as is (float) and let Edge Function handle? 
-                    // The Edge Function code I modified previously:
-                    // const amountCents = Math.round(amount * 100);
-                    // It does NOT map items to cents. InfinitePay API needs items price in cents.
-                    // So I SHOULD convert items price to cents here if I pass items.
-                    // But cloud.ts doesn't show me modifying items.
-                    // I will check if I can just pass items with price * 100.
+                    price: Math.round(i.product.price * 100)
                 })),
                 redirectUrl,
                 webhookUrl
@@ -398,23 +401,25 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 </div>
             )}
 
-            {/* Sticky Categories */}
-            <div className="sticky top-20 z-20 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm py-2 -mx-4 px-4 overflow-x-auto no-scrollbar flex gap-3 mb-6">
-                <button
-                    onClick={() => setActiveCategory('all')}
-                    className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 ${activeCategory === 'all' ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-700'}`}
-                >
-                    Tudo
-                </button>
-                {categories.map(cat => (
+            {/* Sticky Categories Carousel */}
+            <div className="sticky top-20 z-20 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm py-4 -mx-4 px-4 mb-6">
+                <div className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory px-2">
                     <button
-                        key={cat.id}
-                        onClick={() => setActiveCategory(cat.id)}
-                        className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 ${activeCategory === cat.id ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-700'}`}
+                        onClick={() => setActiveCategory('all')}
+                        className={`snap-start px-6 py-3 rounded-2xl text-sm font-black uppercase tracking-wide whitespace-nowrap transition-all duration-300 ${activeCategory === 'all' ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 scale-105' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                     >
-                        {cat.name}
+                        Tudo
                     </button>
-                ))}
+                    {categories.map(cat => (
+                        <button
+                            key={cat.id}
+                            onClick={() => setActiveCategory(cat.id)}
+                            className={`snap-start px-6 py-3 rounded-2xl text-sm font-black uppercase tracking-wide whitespace-nowrap transition-all duration-300 ${activeCategory === cat.id ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 scale-105' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                        >
+                            {cat.name}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Product Grid */}
@@ -559,155 +564,235 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                     </div>
                 </div>
             )}
+
+            {/* Cart Drawer - Novo Layout */}
+            {isCartOpen && (
+                <div className="fixed inset-0 z-[60] flex justify-end">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in cursor-pointer"
+                        onClick={() => setIsCartOpen(false)}
+                    />
+
+                    {/* Drawer Panel */}
+                    <div className="relative w-full max-w-lg bg-gray-50 dark:bg-gray-950 h-full shadow-2xl animate-in slide-in-from-right flex flex-col">
+
+                        {/* Header */}
+                        <div className="bg-white dark:bg-gray-900 px-6 py-5 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 flex-shrink-0 z-10">
+                            <h2 className="text-xl font-black text-gray-900 dark:text-white">Seu Pedido ({cartCount})</h2>
+                            <button
+                                onClick={() => setIsCartOpen(false)}
+                                className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                            >
+                                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                            </button>
+                        </div>
+
+                        {/* Scrollable Content */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+
+                            {/* Items List */}
+                            {cart.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
+                                    <ShoppingBag className="w-16 h-16 mb-4 text-gray-300" />
+                                    <p className="font-bold">Seu carrinho está vazio</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {cart.map(item => (
+                                        <div key={item.product.id} className="flex gap-4 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                            <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
+                                                <img src={item.product.images?.[0]} className="w-full h-full object-cover" />
+                                            </div>
+                                            <div className="flex-1 flex flex-col justify-between">
+                                                <div className="flex justify-between items-start">
+                                                    <p className="font-bold text-sm text-gray-900 dark:text-white line-clamp-2">{item.product.name}</p>
+                                                    <p className="font-bold text-gray-900 dark:text-white">{formatCurrency(item.product.price * item.quantity)}</p>
+                                                </div>
+                                                <div className="flex items-center justify-between mt-2">
+                                                    <p className="text-xs text-gray-400">{formatCurrency(item.product.price)} un</p>
+                                                    <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-1">
+                                                        <button onClick={() => updateCartQuantity(item.product.id, -1)} className="p-1 text-gray-500 hover:text-red-500"><Minus className="w-3 h-3" /></button>
+                                                        <span className="text-xs font-bold dark:text-white">{item.quantity}</span>
+                                                        <button onClick={() => updateCartQuantity(item.product.id, 1)} className="p-1 text-gray-500 hover:text-green-500"><Plus className="w-3 h-3" /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Delivery Form */}
+                            {cart.length > 0 && (
+                                <section>
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <MapPin className="w-4 h-4" /> Entrega
+                                    </h3>
+                                    <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 space-y-4">
+
+                                        {/* CEP Calculation Row */}
+                                        <div className="flex gap-3">
+                                            <div className="relative flex-1">
+                                                <label className="absolute left-4 top-2 text-[10px] font-bold text-gray-400 uppercase">CEP</label>
+                                                <input
+                                                    type="tel"
+                                                    value={shippingAddress.cep}
+                                                    onChange={e => handleCepChange(e.target.value)}
+                                                    className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                                                    placeholder="00000-000"
+                                                    maxLength={9}
+                                                />
+                                            </div>
+                                            <Button onClick={calculateShipping} disabled={calculatingShipping} className="rounded-2xl px-5 h-auto text-xs shrink-0">
+                                                {calculatingShipping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Buscar'}
+                                            </Button>
+                                        </div>
+                                        {shippingError && <p className="text-xs text-red-500 font-medium px-2">{shippingError}</p>}
+
+                                        {/* Address Fields Grid */}
+                                        <div className="space-y-3">
+                                            {/* Rua */}
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={shippingAddress.street}
+                                                    onChange={e => setShippingAddress({ ...shippingAddress, street: e.target.value })}
+                                                    className="w-full py-4 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-gray-400"
+                                                    placeholder="Rua / Avenida"
+                                                />
+                                            </div>
+
+                                            {/* Number & Neighborhood */}
+                                            <div className="flex gap-3">
+                                                <div className="relative flex-1">
+                                                    <input
+                                                        type="text"
+                                                        value={shippingAddress.number}
+                                                        onChange={e => setShippingAddress({ ...shippingAddress, number: e.target.value })}
+                                                        className="w-full py-4 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-gray-400"
+                                                        placeholder="Número"
+                                                    />
+                                                </div>
+                                                <div className="relative flex-[1.5]">
+                                                    <input
+                                                        type="text"
+                                                        value={shippingAddress.neighborhood}
+                                                        onChange={e => setShippingAddress({ ...shippingAddress, neighborhood: e.target.value })}
+                                                        className="w-full py-4 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-gray-400"
+                                                        placeholder="Bairro"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Complement & Reference */}
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={shippingAddress.complement}
+                                                    onChange={e => setShippingAddress({ ...shippingAddress, complement: e.target.value })}
+                                                    className="w-full py-4 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-gray-400"
+                                                    placeholder="Complemento (Apto, Bloco...)"
+                                                />
+                                            </div>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={shippingAddress.reference}
+                                                    onChange={e => setShippingAddress({ ...shippingAddress, reference: e.target.value })}
+                                                    className="w-full py-4 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-gray-400"
+                                                    placeholder="Ponto de Referência"
+                                                />
+                                            </div>
+
+                                            {/* Name */}
+                                            <div className="relative mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                                                <label className="absolute left-4 top-6 text-[10px] font-bold text-gray-400 uppercase">Destinatário</label>
+                                                <input
+                                                    type="text"
+                                                    value={shippingAddress.name}
+                                                    onChange={e => setShippingAddress({ ...shippingAddress, name: e.target.value })}
+                                                    className="w-full pt-8 pb-3 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                                                    placeholder="Nome de quem vai receber"
+                                                />
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* Coupon */}
+                            {cart.length > 0 && (
+                                <section>
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <Ticket className="w-4 h-4" /> Cupom
+                                    </h3>
+                                    <div className="flex items-center gap-3 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                        <Ticket className="w-5 h-5 text-purple-500" />
+                                        <input
+                                            type="text"
+                                            placeholder="ADICIONAR CUPOM"
+                                            value={couponCode}
+                                            onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                                            className="flex-1 bg-transparent text-sm font-bold outline-none uppercase placeholder:normal-case placeholder:font-medium text-gray-900 dark:text-white placeholder:text-gray-400"
+                                        />
+                                        <button onClick={applyCoupon} className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline px-2">
+                                            APLICAR
+                                        </button>
+                                    </div>
+                                    {couponMessage && <p className={`text-xs mt-2 px-4 font-bold ${appliedDiscount > 0 ? 'text-green-500' : 'text-red-500'}`}>{couponMessage}</p>}
+                                </section>
+                            )}
+                        </div>
+
+                        {/* Sticky Footer */}
+                        {cart.length > 0 && (
+                            <div className="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20 flex-shrink-0 safe-area-bottom">
+                                <div className="space-y-3 mb-4">
+                                    <div className="flex justify-between text-sm text-gray-500">
+                                        <span>Subtotal</span>
+                                        <span>{formatCurrency(subtotal)}</span>
+                                    </div>
+                                    {shippingCost !== null && (
+                                        <div className="flex justify-between text-sm text-gray-500">
+                                            <span>Frete</span>
+                                            <span className="text-gray-900 dark:text-white font-medium">{shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}</span>
+                                        </div>
+                                    )}
+                                    {discountAmount > 0 && (
+                                        <div className="flex justify-between text-sm text-green-500 font-bold">
+                                            <span>Desconto</span>
+                                            <span>- {formatCurrency(discountAmount)}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-800">
+                                        <span className="text-lg font-black text-gray-900 dark:text-white">Total</span>
+                                        <span className="text-2xl font-black text-brand-600 dark:text-brand-400">{formatCurrency(total)}</span>
+                                    </div>
+                                </div>
+                                <Button
+                                    fullWidth
+                                    onClick={handleFinalizeOrder}
+                                    disabled={isSubmitting}
+                                    className="py-4 rounded-2xl text-base shadow-xl shadow-brand-500/20"
+                                >
+                                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <div className="flex items-center gap-2"><CreditCard className="w-4 h-4" /> Finalizar Pedido</div>}
+                                </Button>
+                                <div className="mt-3 text-center">
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1">
+                                        <Shield className="w-3 h-3" /> Pagamento 100% Seguro
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 
-    // CHECKOUT VIEW
-    if (view === 'checkout') return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-32 animate-in slide-in-from-right-5">
-            {/* Minimal Header */}
-            <div className="sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-20 px-6 py-4 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
-                <button onClick={() => setView('list')} className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-                    <ArrowLeft className="w-6 h-6 text-gray-900 dark:text-white" />
-                </button>
-                <h1 className="text-lg font-black text-gray-900 dark:text-white">Checkout</h1>
-                <div className="w-10"></div> {/* Spacer */}
-            </div>
 
-            <div className="max-w-2xl mx-auto p-6 space-y-8">
-                {/* Items List */}
-                <section>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Seus Itens</h3>
-                    <div className="space-y-4">
-                        {cart.map(item => (
-                            <div key={item.product.id} className="flex gap-4 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
-                                <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
-                                    <img src={item.product.images?.[0]} className="w-full h-full object-cover" />
-                                </div>
-                                <div className="flex-1 flex flex-col justify-between">
-                                    <div className="flex justify-between items-start">
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white line-clamp-2">{item.product.name}</p>
-                                        <p className="font-bold text-gray-900 dark:text-white">{formatCurrency(item.product.price * item.quantity)}</p>
-                                    </div>
-                                    <div className="flex items-center justify-between mt-2">
-                                        <p className="text-xs text-gray-400">{formatCurrency(item.product.price)} un</p>
-                                        <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-1">
-                                            <button onClick={() => updateCartQuantity(item.product.id, -1)} className="p-1 text-gray-500 hover:text-red-500"><Minus className="w-3 h-3" /></button>
-                                            <span className="text-xs font-bold dark:text-white">{item.quantity}</span>
-                                            <button onClick={() => updateCartQuantity(item.product.id, 1)} className="p-1 text-gray-500 hover:text-green-500"><Plus className="w-3 h-3" /></button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
-                {/* Delivery */}
-                <section>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Entrega</h3>
-                    <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 space-y-4">
-                        <div className="flex gap-3">
-                            <div className="relative flex-1">
-                                <label className="absolute left-4 top-2 text-[10px] font-bold text-gray-400 uppercase">CEP</label>
-                                <input
-                                    type="tel"
-                                    value={shippingAddress.cep}
-                                    onChange={e => handleCepChange(e.target.value)}
-                                    className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all"
-                                    placeholder="00000-000"
-                                    maxLength={9}
-                                />
-                            </div>
-                            <Button onClick={calculateShipping} disabled={calculatingShipping} className="rounded-2xl px-6 h-auto text-xs">
-                                {calculatingShipping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Calcular'}
-                            </Button>
-                        </div>
-                        {shippingError && <p className="text-xs text-red-500 font-medium px-2">{shippingError}</p>}
-
-                        <div className="relative">
-                            <label className="absolute left-4 top-2 text-[10px] font-bold text-gray-400 uppercase">Destinatário</label>
-                            <input
-                                type="text"
-                                value={shippingAddress.name}
-                                onChange={e => setShippingAddress({ ...shippingAddress, name: e.target.value })}
-                                className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all"
-                                placeholder="Nome completo"
-                            />
-                        </div>
-                        <div className="relative">
-                            <label className="absolute left-4 top-2 text-[10px] font-bold text-gray-400 uppercase">Endereço</label>
-                            <textarea
-                                value={shippingAddress.address}
-                                onChange={e => setShippingAddress({ ...shippingAddress, address: e.target.value })}
-                                className="w-full pt-6 pb-2 px-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all resize-none h-24"
-                                placeholder="Rua, Número, Bairro..."
-                            />
-                        </div >
-                    </div >
-                </section >
-
-                {/* Coupon */}
-                <section>
-                    <div className="flex items-center gap-3 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
-                        <Ticket className="w-5 h-5 text-purple-500" />
-                        <input
-                            type="text"
-                            placeholder="Adicionar Cupom"
-                            value={couponCode}
-                            onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                            className="flex-1 bg-transparent text-sm font-bold outline-none uppercase placeholder:normal-case placeholder:font-medium text-gray-900 dark:text-white"
-                        />
-                        <button onClick={applyCoupon} className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline">
-                            Aplicar
-                        </button>
-                    </div >
-                    {couponMessage && <p className={`text-xs mt-2 px-4 font-bold ${appliedDiscount > 0 ? 'text-green-500' : 'text-red-500'}`}>{couponMessage}</p>}
-                </section >
-
-
-
-                {/* Secure Payment Notice */}
-                <div className="flex items-center justify-center gap-2 text-gray-400 text-xs mt-6">
-                    <span className="font-bold">Pagamento Seguro via InfinitePay</span>
-                </div>
-            </div >
-
-            {/* Total Footer */}
-            <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 p-6 rounded-t-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-30" >
-                <div className="max-w-2xl mx-auto space-y-4">
-                    <div className="flex justify-between text-sm text-gray-500">
-                        <span>Subtotal</span>
-                        <span>{formatCurrency(subtotal)}</span>
-                    </div>
-                    {shippingCost !== null && (
-                        <div className="flex justify-between text-sm text-gray-500">
-                            <span>Frete</span>
-                            <span className="text-gray-900 dark:text-white font-medium">{shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}</span>
-                        </div>
-                    )}
-                    {discountAmount > 0 && (
-                        <div className="flex justify-between text-sm text-green-500 font-bold">
-                            <span>Desconto</span>
-                            <span>- {formatCurrency(discountAmount)}</span>
-                        </div>
-                    )}
-                    <div className="flex justify-between items-center pt-2">
-                        <span className="text-lg font-black text-gray-900 dark:text-white">Total</span>
-                        <span className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(total)}</span>
-                    </div>
-                    <Button
-                        fullWidth
-                        onClick={handleFinalizeOrder}
-                        disabled={isSubmitting}
-                        className="py-5 rounded-2xl text-lg shadow-xl shadow-brand-500/20"
-                    >
-                        {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Compra'}
-                    </Button>
-                </div>
-            </div >
-        </div >
-    );
 
     // SUCCESS VIEW - (Handling Redirect Return)
     if (view === 'success' && finalOrder) return (

@@ -2,7 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Product, CartItem } from '../types';
 import * as cloud from '../services/cloud';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Loader2, Search, Plus, Minus, ShoppingBag, Send, LogOut, Coffee, LayoutGrid, ClipboardList, CheckCircle, User, Clock, TrendingUp, History, Home, X, ArrowLeft, Printer, Truck, MapPin, RotateCcw, Check, Scan, MessageCircle } from 'lucide-react';
+import {
+    ShoppingBag, Search, Plus, Coffee, Clock, X, Check, MapPin, Loader2,
+    Printer, LogOut, ChevronRight, History, BarChart3, Users, ChevronLeft,
+    Camera, Scan, Truck, Send, AlertTriangle, ChefHat, Utensils, Minus,
+    User, MessageCircle, ClipboardList, TrendingUp, ArrowLeft
+} from 'lucide-react';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
@@ -21,7 +26,7 @@ const parseCurrency = (val: string): number => {
     return Number(digits) / 100;
 };
 
-type View = 'dashboard' | 'menu' | 'tables' | 'history' | 'reports' | 'external_order' | 'orders' | 'whatsapp_chat';
+type View = 'dashboard' | 'menu' | 'tables' | 'history' | 'reports' | 'external_order' | 'orders' | 'whatsapp_chat' | 'kitchen';
 
 export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) => {
     const [view, setView] = useState<View>('dashboard');
@@ -29,6 +34,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     const [categories, setCategories] = useState<any[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [openOrders, setOpenOrders] = useState<any[]>([]);
+    const [kitchenTickets, setKitchenTickets] = useState<any[]>([]);
     const [closedOrders, setClosedOrders] = useState<any[]>([]);
     const [summary, setSummary] = useState({ total_sales: 0, total_orders: 0, avg_ticket: 0 });
     const [orders, setOrders] = useState<any[]>([]);
@@ -85,10 +91,58 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
 
 
     useEffect(() => {
-        loadData();
-    }, [collaborator.store_id]); // Changed to collaborator.store_id as storeId is not defined
+        if (collaborator.function === 'kitchen') {
+            setView('kitchen');
+            loadKitchenTickets();
+        }
+        load();
+    }, []);
 
-    const loadData = async () => {
+    const loadKitchenTickets = async () => {
+        try {
+            const sb = cloud.getClient();
+            if (!sb) return;
+            const { data, error } = await sb
+                .from('orders_tickets')
+                .select(`
+                    *,
+                    orders_collaborators!inner (
+                        table_identifier,
+                        customer_name
+                    )
+                `)
+                .eq('store_id', collaborator.store_id)
+                .neq('status', 'ready')
+                .order('created_at', { ascending: true });
+
+            if (!error) setKitchenTickets(data || []);
+        } catch (e) {
+            console.error('Error loading kitchen tickets:', e);
+        }
+    };
+
+    const updateTicketStatus = async (ticketId: string, newStatus: string) => {
+        try {
+            const sb = cloud.getClient();
+            if (!sb) return;
+            const { error } = await sb
+                .from('orders_tickets')
+                .update({ status: newStatus })
+                .eq('id', ticketId);
+
+            if (!error) {
+                if (newStatus === 'ready') {
+                    setKitchenTickets(prev => prev.filter(t => t.id !== ticketId));
+                } else {
+                    setKitchenTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus } : t));
+                }
+            }
+        } catch (e) {
+            console.error('Error updating ticket status:', e);
+        }
+    };
+
+    const load = async () => {
         setLoading(true);
         try {
             const [ordersData, storeProfileData, f, rules] = await Promise.all([
@@ -782,6 +836,86 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
         );
     };
 
+    const renderKitchen = () => (
+        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+            <div className="p-6 pb-2">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-2xl font-black text-gray-800 dark:text-white flex items-center gap-3">
+                        <ChefHat className="w-8 h-8 text-brand-600" />
+                        Cozinha / Produção
+                    </h2>
+                    <button onClick={loadKitchenTickets} className="p-3 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
+                        <Loader2 className={`w-5 h-5 text-gray-400 ${loading ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 space-y-4 pb-24 custom-scrollbar">
+                {kitchenTickets.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                        <div className="w-20 h-20 bg-white dark:bg-gray-800 rounded-full flex items-center justify-center shadow-sm">
+                            <Utensils className="w-10 h-10 text-gray-200" />
+                        </div>
+                        <p className="text-gray-400 font-bold italic uppercase tracking-widest text-xs">Aguardando novos pedidos...</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {kitchenTickets.map((ticket) => (
+                            <div key={ticket.id} className="bg-white dark:bg-gray-800 rounded-[32px] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                                <div className={`p-4 ${ticket.status === 'producing' ? 'bg-orange-500' : 'bg-brand-600'} text-white`}>
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-black text-lg uppercase">{ticket.orders_collaborators?.table_identifier || 'Balcão'}</span>
+                                            <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full">
+                                                {new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                        {ticket.status === 'producing' && (
+                                            <span className="text-[10px] font-black uppercase bg-white/30 px-2 py-1 rounded-lg animate-pulse">Produzindo</span>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] font-bold uppercase mt-1 opacity-90">{ticket.orders_collaborators?.customer_name || 'Cliente'}</p>
+                                </div>
+
+                                <div className="p-6 flex-1 space-y-4">
+                                    <div className="space-y-3">
+                                        {(Array.isArray(ticket.items) ? ticket.items : []).map((item: any, i: number) => (
+                                            <div key={i} className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <div className="flex gap-2 items-center">
+                                                        <span className="font-black text-brand-600">{item.quantity}x</span>
+                                                        <span className="font-bold text-gray-800 dark:text-white uppercase text-sm">{item.name}</span>
+                                                    </div>
+                                                    {item.observation && (
+                                                        <p className="text-[10px] text-orange-600 font-black mt-1 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-lg">
+                                                            🔍 {item.observation}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 flex gap-2">
+                                    {ticket.status === 'pending' ? (
+                                        <Button fullWidth onClick={() => updateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white border-none py-4 rounded-2xl shadow-lg shadow-orange-500/20">
+                                            Iniciar Produção
+                                        </Button>
+                                    ) : (
+                                        <Button fullWidth onClick={() => updateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white border-none py-4 rounded-2xl shadow-lg shadow-green-500/20">
+                                            Finalizar (Pronto)
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
     return (
         <div className="h-screen h-[100dvh] bg-gray-100 dark:bg-gray-900 flex flex-col font-sans select-none overflow-hidden">
             {/* Header com Navegação - Escondido no WhatsApp Chat mobile para ganhar espaço */}
@@ -811,6 +945,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                 {view === 'history' && renderHistory()}
                 {view === 'reports' && renderReports()}
                 {view === 'orders' && renderOrders()}
+                {view === 'kitchen' && renderKitchen()}
                 {view === 'whatsapp_chat' && (
                     <div className="flex-1 flex flex-col overflow-hidden md:items-center md:justify-center md:bg-gray-200/50 md:p-4">
                         <React.Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-brand-600" /></div>}>

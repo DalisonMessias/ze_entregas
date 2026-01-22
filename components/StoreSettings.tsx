@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer, Wallet, ChevronDown } from 'lucide-react';
+import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer, Wallet, ChevronDown, Share2, Copy, ExternalLink, Power } from 'lucide-react';
+import { Switch } from './Switch';
+import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { StoreShippingRules } from './StoreShippingRules';
@@ -71,105 +73,114 @@ export const StoreSettings: React.FC = () => {
         city: '',
         address_state: '',
         address_complement: '',
-        pix_key: ''
+        pix_key: '',
+        description: '',
+        is_open: true
     });
+
+    const [citySlug, setCitySlug] = useState('');
+    const [storeSlug, setStoreSlug] = useState('');
 
     const [pixKeyType, setPixKeyType] = useState<PixKeyType>('random');
 
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            try {
-                const [p, cities] = await Promise.all([
-                    cloud.getMyPartnerProfile(),
-                    cloud.getAvailableCities()
-                ]);
+    const loadProfileData = async () => {
+        setLoading(true);
+        try {
+            const [p, cities] = await Promise.all([
+                cloud.getMyPartnerProfile(),
+                cloud.getAvailableCities()
+            ]);
 
-                setProfile(p);
-                setAvailableCities(cities);
+            setProfile(p);
+            setAvailableCities(cities);
 
-                if (p) {
+            if (p) {
+                setCoverUrl(p.cover_url || null);
+                setLogoUrl(p.store_logo_url || null);
 
+                // Lógica de Fallback Inteligente: Se store_address_* estiver vazio, usa o address_* (migração suave) 
+                // Se store_address_* estiver preenchido, usa ele.
+                const useStoreAddr = !!p.store_address_zip || !!p.store_address_street;
 
-                    setCoverUrl(p.cover_url || null);
-                    setLogoUrl(p.store_logo_url || null);
+                setForm({
+                    name: p.store_name || p.name || '',
+                    phone_number: p.phone_number || '',
+                    contact_email: p.contact_email || p.email || '',
+                    opening_hours: p.opening_hours || '',
+                    preparation_time_min: String(p.preparation_time_min || 0),
+                    preparation_time_max: String(p.preparation_time_max || 0),
 
-                    // Lógica de Fallback Inteligente: Se store_address_* estiver vazio, usa o address_* (migração suave) 
-                    // Se store_address_* estiver preenchido, usa ele.
-                    const useStoreAddr = !!p.store_address_zip || !!p.store_address_street;
+                    address_zip: useStoreAddr ? (p.store_address_zip || '') : (p.address_zip || ''),
+                    address_street: useStoreAddr ? (p.store_address_street || '') : (p.address_street || ''),
+                    address_number: useStoreAddr ? (p.store_address_number || '') : (p.address_number || ''),
+                    address_district: useStoreAddr ? (p.store_address_district || '') : (p.address_district || ''),
 
-                    setForm({
-                        name: p.store_name || p.name || '',
-                        phone_number: p.phone_number || '',
-                        contact_email: p.contact_email || p.email || '',
-                        opening_hours: p.opening_hours || '',
-                        preparation_time_min: String(p.preparation_time_min || 0),
-                        preparation_time_max: String(p.preparation_time_max || 0),
+                    // Parse City/State
+                    city: useStoreAddr
+                        ? (p.store_address_city && p.store_address_state ? `${p.store_address_city} - ${p.store_address_state}` : (p.store_address_city || ''))
+                        : (p.city || ''),
 
-                        address_zip: useStoreAddr ? (p.store_address_zip || '') : (p.address_zip || ''),
-                        address_street: useStoreAddr ? (p.store_address_street || '') : (p.address_street || ''),
-                        address_number: useStoreAddr ? (p.store_address_number || '') : (p.address_number || ''),
-                        address_district: useStoreAddr ? (p.store_address_district || '') : (p.address_district || ''),
+                    address_state: useStoreAddr ? (p.store_address_state || '') : (p.address_state || p.city?.split(' - ')[1] || ''),
+                    address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || ''),
+                    pix_key: p.pix_key || '',
+                    description: p.description || '',
+                    is_open: p.is_open ?? true
+                });
 
-                        // Parse City/State
-                        city: useStoreAddr
-                            ? (p.store_address_city && p.store_address_state ? `${p.store_address_city} - ${p.store_address_state}` : (p.store_address_city || ''))
-                            : (p.city || ''),
+                setCitySlug(p.city_slug || '');
+                setStoreSlug(p.store_slug || '');
 
-                        address_state: useStoreAddr ? (p.store_address_state || '') : (p.address_state || p.city?.split(' - ')[1] || ''),
-                        address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || ''),
-                        pix_key: p.pix_key || ''
+                // Infer PIX Type
+                const key = p.pix_key || '';
+                if (key.includes('@')) {
+                    setPixKeyType('email');
+                } else if (key.length > 14) {
+                    setPixKeyType('cnpj');
+                } else if (key.length === 11 || (key.length === 14 && key.includes('.'))) { // CPF formatted is 14 chars but structure 3.3.3-2
+                    // Simple heuristic: if likely CPF
+                    if (key.length === 14 && key.charAt(3) === '.') setPixKeyType('cpf');
+                    else if (key.length === 11) setPixKeyType('cpf');
+                    else setPixKeyType('random');
+                } else {
+                    setPixKeyType('random');
+                }
+
+                // Load printer settings
+                const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', p.id).single() || {};
+                if (printerData) {
+                    setPrinterSettings({
+                        printer_width: String(printerData.printer_width || 80),
+                        paper_type: printerData.paper_type || 'thermal',
+                        margin_top: String(printerData.margin_top || 0),
+                        margin_bottom: String(printerData.margin_bottom || 0),
+                        margin_left: String(printerData.margin_left || 2),
+                        margin_right: String(printerData.margin_right || 2),
+                        font_size_base: String(printerData.font_size_base || 12),
+                        auto_cut: printerData.auto_cut !== false,
+                        use_printer: printerData.use_printer || false,
+                        printer_name: printerData.printer_name || ''
                     });
-
-                    // Infer PIX Type
-                    const key = p.pix_key || '';
-                    if (key.includes('@')) {
-                        setPixKeyType('email');
-                    } else if (key.length > 14) {
-                        setPixKeyType('cnpj');
-                    } else if (key.length === 11 || (key.length === 14 && key.includes('.'))) { // CPF formatted is 14 chars but structure 3.3.3-2
-                        // Simple heuristic: if likely CPF
-                        if (key.length === 14 && key.charAt(3) === '.') setPixKeyType('cpf');
-                        else if (key.length === 11) setPixKeyType('cpf');
-                        else setPixKeyType('random'); // Could be phone but let's default random or cpf
-                    } else if (key.length > 0) {
-                        setPixKeyType('random');
-                    }
-
-                    // Load printer settings
-                    const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', p.id).single() || {};
-                    if (printerData) {
-                        setPrinterSettings({
-                            printer_width: String(printerData.printer_width || 80),
-                            paper_type: printerData.paper_type || 'thermal',
-                            margin_top: String(printerData.margin_top || 0),
-                            margin_bottom: String(printerData.margin_bottom || 0),
-                            margin_left: String(printerData.margin_left || 2),
-                            margin_right: String(printerData.margin_right || 2),
-                            font_size_base: String(printerData.font_size_base || 12),
-                            auto_cut: printerData.auto_cut !== false,
-                            use_printer: printerData.use_printer || false,
-                            printer_name: printerData.printer_name || ''
-                        });
-                    }
                 }
-
-                // Check super store status
-                const user = await cloud.getClient()?.auth.getUser();
-                if (user?.data.user) {
-                    const data = await cloud.getClient()?.from('user_profiles').select('is_super_store, super_store_expiration').eq('id', user.data.user.id).single();
-                    if (data?.data) {
-                        setIsSuperStore(data.data.is_super_store);
-                        setExpirationDate(data.data.super_store_expiration);
-                    }
-                }
-            } catch (e) {
-                // console.error(e);
-            } finally {
-                setLoading(false);
             }
-        };
-        load();
+
+            // Check super store status
+            const user = await cloud.getClient()?.auth.getUser();
+            if (user?.data.user) {
+                const data = await cloud.getClient()?.from('user_profiles').select('is_super_store, super_store_expiration').eq('id', user.data.user.id).single();
+                if (data?.data) {
+                    setIsSuperStore(data.data.is_super_store);
+                    setExpirationDate(data.data.super_store_expiration);
+                }
+            }
+        } catch (e) {
+            // console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadProfileData();
     }, []);
 
     const handleChange = (field: string, value: string) => {
@@ -234,6 +245,8 @@ export const StoreSettings: React.FC = () => {
                 store_address_state: cityState,
                 store_address_complement: form.address_complement,
                 pix_key: form.pix_key,
+                description: form.description,
+                is_open: form.is_open,
 
                 // Also update legacy/display 'city' field for compatibility if needed, 
                 // but usually 'city' on profile is for search. Let's keep them synced for now or just update store fields.
@@ -242,12 +255,53 @@ export const StoreSettings: React.FC = () => {
                 // We only save to store_address_*.
             });
 
+            // Se a loja estava aberta e agora está fechada, gera o relatório
+            if (profile && profile.is_open && !form.is_open) {
+                try {
+                    await cloud.generateDailyStoreReport(profile.id);
+                    // Opcional: Avisar que o relatório foi gerado?
+                    await alert({ title: 'Relatório Gerado', message: 'O relatório de fechamento de caixa foi gerado com sucesso.' });
+                } catch (reportError) {
+                    console.error("Erro ao gerar relatório no salvamento de configurações:", reportError);
+                }
+            }
+
             await alert({ title: 'Sucesso', message: "Dados da loja atualizados com sucesso!" });
+
+            // Reload profile to get updated slugs/data
+            await loadProfileData();
         } catch (e: any) {
             await alert({ title: 'Erro ao Salvar', message: "Erro ao salvar: " + e.message });
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleCopyLink = () => {
+        const link = `${window.location.origin}/${citySlug}/${storeSlug}/produtos`;
+        navigator.clipboard.writeText(link);
+        alert({ title: 'Link Copiado', message: 'O link do seu catálogo foi copiado para a área de transferência.' });
+    };
+
+    const handleShareLink = async () => {
+        const link = `${window.location.origin}/${citySlug}/${storeSlug}/produtos`;
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: form.name,
+                    text: `Veja nosso cardápio digital: ${form.name}`,
+                    url: link
+                });
+            } catch (err) {
+                console.error('Error sharing:', err);
+            }
+        } else {
+            handleCopyLink();
+        }
+    };
+
+    const handleToggleOpen = () => {
+        setForm(prev => ({ ...prev, is_open: !prev.is_open }));
     };
 
     const handleDetectPrinter = async () => {
@@ -427,6 +481,57 @@ export const StoreSettings: React.FC = () => {
 
                     {/* Store Info */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl space-y-8">
+
+                        {/* Catalog Link & Status Section */}
+                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Store className="w-5 h-5 text-brand-600" /> Catálogo Digital
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-sm font-bold ${form.is_open ? 'text-green-600' : 'text-red-600'}`}>
+                                        {form.is_open ? 'LOJA ABERTA' : 'LOJA FECHADA'}
+                                    </span>
+                                    <Switch
+                                        checked={form.is_open}
+                                        onChange={handleToggleOpen}
+                                    />
+                                </div>
+                            </div>
+
+                            {citySlug && storeSlug ? (
+                                <div className="flex flex-col md:flex-row gap-3 items-center">
+                                    <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-gray-300 w-full truncate font-mono">
+                                        {window.location.origin}/{citySlug}/{storeSlug}/produtos
+                                    </div>
+                                    <div className="flex gap-2 w-full md:w-auto">
+                                        <Button type="button" variant="outline" onClick={handleCopyLink} className="flex-1 md:flex-none">
+                                            <Copy className="w-4 h-4 mr-2" /> Copiar
+                                        </Button>
+                                        <Button type="button" variant="outline" onClick={handleShareLink} className="flex-1 md:flex-none">
+                                            <Share2 className="w-4 h-4 mr-2" /> Compartilhar
+                                        </Button>
+                                        <a
+                                            href={`/${citySlug}/${storeSlug}/produtos`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
+                                        >
+                                            <ExternalLink className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                                        </a>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
+                                    Salve as configurações de endereço (Cidade) e Nome para gerar o link do catálogo.
+                                </div>
+                            )}
+
+                            <p className="text-xs text-gray-500">
+                                Definir a loja como <strong>Fechada</strong> impedirá que clientes finalizem novos pedidos, mas o catálogo permanecerá visível.
+                            </p>
+                        </div>
+
                         <div>
                             <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
                                 <Store className="w-5 h-5 text-gray-500" /> Informações Básicas
@@ -442,6 +547,16 @@ export const StoreSettings: React.FC = () => {
                                         placeholder="Ex: Pizzaria do Zé"
                                         icon={Store}
                                     />
+                                    <div className="md:col-span-2">
+                                        <CustomInput
+                                            label="Descrição da Loja"
+                                            type="text"
+                                            value={form.description}
+                                            onChange={e => handleChange('description', e.target.value)}
+                                            placeholder="Descreva sua loja, especialidades..."
+                                            icon={Info}
+                                        />
+                                    </div>
                                     <CustomInput
                                         label="Horário de Funcionamento"
                                         type="text"
@@ -589,13 +704,15 @@ export const StoreSettings: React.FC = () => {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <CustomInput
-                                        label="Rua"
-                                        type="text"
-                                        value={form.address_street}
-                                        onChange={e => handleChange('address_street', e.target.value)}
-                                        placeholder="Av. Principal"
-                                    />
+                                    <div className="relative">
+                                        <StreetAutocomplete
+                                            label="Rua"
+                                            value={form.address_street}
+                                            onChange={val => handleChange('address_street', val)}
+                                            city={form.city ? form.city.split(' - ')[0] : ''}
+                                            placeholder="Av. Principal"
+                                        />
+                                    </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <CustomInput
                                             label="Número"

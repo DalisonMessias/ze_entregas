@@ -150,27 +150,40 @@ export const StoreTeam: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-6 border-b border-gray-100 dark:border-gray-800 pb-1 mb-6">
-                <button
-                    onClick={() => setTab('partners')}
-                    className={`pb-3 text-lg font-bold transition-colors border-b-2 ${tab === 'partners' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                >
-                    Entregadores da Loja
-                </button>
-                <button
-                    onClick={() => setTab('collaborators')}
-                    className={`pb-3 text-lg font-bold transition-colors border-b-2 ${tab === 'collaborators' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                >
-                    Colaboradores de Mesa
-                </button>
+            <div className="mb-8">
+                <div className="flex gap-8 border-b border-gray-100 dark:border-gray-800 mb-6">
+                    <button
+                        onClick={() => setTab('partners')}
+                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all relative ${tab === 'partners' ? 'text-brand-600' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Entregadores
+                        {tab === 'partners' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 animate-in fade-in zoom-in-x" />}
+                    </button>
+                    <button
+                        onClick={() => setTab('collaborators')}
+                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all relative ${tab === 'collaborators' ? 'text-brand-600' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Colaboradores
+                        {tab === 'collaborators' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 animate-in fade-in zoom-in-x" />}
+                    </button>
+                </div>
+
+                <div className="space-y-1">
+                    <h2 className="text-2xl font-black text-gray-800 dark:text-white tracking-tight">
+                        {tab === 'partners' ? 'Logística e Entregas' : 'Equipe de Atendimento'}
+                    </h2>
+                    <p className="text-sm font-medium text-gray-400">
+                        {tab === 'partners'
+                            ? 'Gestão de entregadores associados para operações de delivery.'
+                            : 'Gestão de garçons e equipe de produção para pedidos de mesa.'}
+                    </p>
+                </div>
             </div>
 
             {tab === 'partners' ? (
                 <>
                     <div className="flex justify-between items-center">
-                        <h1 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                            <Users className="w-6 h-6 text-brand-600" /> Meus Entregadores
-                        </h1>
+                        <div />
                         <Button onClick={() => setShowAddModal(true)}>
                             <UserPlus className="w-4 h-4 mr-2" /> Associar Novo
                         </Button>

@@ -348,6 +348,107 @@ DROP TRIGGER IF EXISTS handle_user_profiles_updated_at ON public.user_profiles;
 CREATE TRIGGER handle_user_profiles_updated_at BEFORE UPDATE ON public.user_profiles
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+-- Adicao de colunas especificas de endereco da loja e slugs
+DO $$
+BEGIN
+    -- Store Address Fields
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_zip') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_zip TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_street') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_street TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_number') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_number TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_district') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_district TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_city') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_city TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_state') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_state TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_address_complement') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_address_complement TEXT;
+    END IF;
+
+    -- Slugs
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'city_slug') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN city_slug TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_slug') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_slug TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_logo_url') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_logo_url TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'cover_url') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN cover_url TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'description') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN description TEXT;
+    END IF;
+     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_min') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN preparation_time_min INTEGER DEFAULT 0;
+    END IF;
+     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_max') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN preparation_time_max INTEGER DEFAULT 0;
+    END IF;
+     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'is_open') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN is_open BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
+
+-- Função auxiliar para slugify (simples)
+CREATE OR REPLACE FUNCTION public.slugify(value TEXT)
+RETURNS TEXT AS $$
+BEGIN
+  RETURN lower(
+    regexp_replace(
+      regexp_replace(
+        translate(value, 'áàâãäåāăąÁÀÂÃÄÅĀĂĄèééêëēĕėęěÈÉÊËĒĔĖĘĚìíîïìĩīĭÌÍÎÏÌĨĪĬóòôõöōŏőÓÒÔÕÖŌŎŐùúûüũūŭůÙÚÛÜŨŪŬŮñÑçÇ', 'aaaaaaaaaaaaaaaaQmeeeeeeeeeeeeeeeiiiiiiiióoooooooooooooooouuuuuuuuuuuuuuuuunncC'),
+        '[^a-z0-9\-_]+', '-', 'gi'
+      ),
+      '(^-+|-+$)', '', 'g'
+    )
+  );
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Trigger para atualizar slugs automaticamente
+CREATE OR REPLACE FUNCTION public.update_store_slugs()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Atualiza store_slug se store_name mudar
+    IF NEW.store_name IS DISTINCT FROM OLD.store_name OR NEW.store_slug IS NULL THEN
+        NEW.store_slug := public.slugify(NEW.store_name);
+    END IF;
+
+    -- Atualiza city_slug se store_address_city mudar (ou fallback para city)
+    IF NEW.store_address_city IS NOT NULL THEN
+        IF NEW.store_address_city IS DISTINCT FROM OLD.store_address_city OR NEW.city_slug IS NULL THEN
+             NEW.city_slug := public.slugify(NEW.store_address_city);
+        END IF;
+    ELSIF NEW.city IS NOT NULL THEN
+        -- Fallback para cidade pessoal se a da loja não estiver definida
+         IF NEW.city IS DISTINCT FROM OLD.city OR NEW.city_slug IS NULL THEN
+             -- City geralmente vem "Nome - UF", pegamos só o nome
+             NEW.city_slug := public.slugify(split_part(NEW.city, ' - ', 1));
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_update_store_slugs ON public.user_profiles;
+CREATE TRIGGER tr_update_store_slugs
+BEFORE INSERT OR UPDATE ON public.user_profiles
+FOR EACH ROW
+EXECUTE FUNCTION public.update_store_slugs();
+
 -- Função para verificar se o usuário é administrador (Com SECURITY DEFINER para evitar recursão)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $body$
@@ -4405,6 +4506,7 @@ CREATE TABLE IF NOT EXISTS public.collaborators (
     email VARCHAR(255),
     password_hash TEXT NOT NULL,
     active BOOLEAN DEFAULT TRUE,
+    function VARCHAR(50) DEFAULT 'waiter', -- waiter, kitchen
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT unique_store_email UNIQUE (store_id, email)
@@ -4421,6 +4523,10 @@ BEGIN
         ALTER TABLE public.collaborators ADD COLUMN email VARCHAR(255);
     END IF;
     
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'collaborators' AND column_name = 'function') THEN
+        ALTER TABLE public.collaborators ADD COLUMN function VARCHAR(50) DEFAULT 'waiter';
+    END IF;
+
     -- Ajustar restrio de unicidade se necessrio
     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_store_username') THEN
         ALTER TABLE public.collaborators DROP CONSTRAINT unique_store_username;
@@ -4586,6 +4692,7 @@ BEGIN
             'store_id', v_user.store_id,
             'name', v_user.name,
             'email', v_user.email,
+            'function', v_user.function,
             'role', 'collaborator'
         );
     ELSE
@@ -4593,26 +4700,25 @@ BEGIN
     END IF;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP FUNCTION IF EXISTS public.create_collaborator(TEXT, TEXT, UUID);
-DROP FUNCTION IF EXISTS public.create_collaborator(TEXT, TEXT, TEXT, UUID);
-CREATE OR REPLACE FUNCTION public.create_collaborator(p_email TEXT, p_name TEXT, p_password TEXT, p_store_id UUID)
+DROP FUNCTION IF EXISTS public.create_collaborator(TEXT, TEXT, TEXT, UUID, TEXT);
+CREATE OR REPLACE FUNCTION public.create_collaborator(p_email TEXT, p_name TEXT, p_password TEXT, p_store_id UUID, p_function TEXT DEFAULT 'waiter')
 RETURNS UUID AS $$
 DECLARE
     v_id UUID;
 BEGIN
-    INSERT INTO public.collaborators (store_id, email, name, password_hash)
-    VALUES (p_store_id, p_email, p_name, crypt(p_password, gen_salt('bf')))
+    INSERT INTO public.collaborators (store_id, email, name, password_hash, function)
+    VALUES (p_store_id, p_email, p_name, crypt(p_password, gen_salt('bf')), p_function)
     RETURNING id INTO v_id;
     RETURN v_id;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- RPC para atualizar colaborador
-DROP FUNCTION IF EXISTS public.update_collaborator(UUID, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.update_collaborator(UUID, TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.update_collaborator(
     p_collaborator_id UUID,
     p_name TEXT,
     p_email TEXT,
-    p_password TEXT DEFAULT NULL
+    p_password TEXT DEFAULT NULL,
+    p_function TEXT DEFAULT NULL
 )
 RETURNS VOID AS $$
 BEGIN
@@ -4621,12 +4727,14 @@ BEGIN
         SET name = p_name, 
             email = p_email, 
             password_hash = crypt(p_password, gen_salt('bf')),
+            function = COALESCE(p_function, function),
             updated_at = now()
         WHERE id = p_collaborator_id;
     ELSE
         UPDATE public.collaborators 
         SET name = p_name, 
             email = p_email,
+            function = COALESCE(p_function, function),
             updated_at = now()
         WHERE id = p_collaborator_id;
     END IF;
@@ -9028,3 +9136,89 @@ GRANT ALL ON public.institutional_categories TO authenticated;
 -- Permissões
 GRANT SELECT ON public.catalog_base_products TO anon, authenticated;
 GRANT ALL ON public.catalog_base_products TO authenticated;
+
+-- ==================================================================
+-- CONFIGURAÇÕES DE ENTREGA DA LOJA (22/01/2026)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.store_delivery_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    is_pickup_enabled BOOLEAN DEFAULT TRUE,
+    is_own_delivery_enabled BOOLEAN DEFAULT FALSE,
+    own_delivery_mode TEXT DEFAULT 'FIXED' CHECK (own_delivery_mode IN ('FIXED', 'NEIGHBORHOOD', 'RADIUS')),
+    fixed_fee NUMERIC(10, 2) DEFAULT 0.00,
+    is_partner_delivery_enabled BOOLEAN DEFAULT FALSE,
+    radius_km NUMERIC(10, 2) DEFAULT 0.00,
+    delivery_time_min INT DEFAULT 30,
+    delivery_time_max INT DEFAULT 60,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(store_id)
+);
+
+-- Trigger updated_at
+DROP TRIGGER IF EXISTS handle_store_delivery_settings_updated_at ON public.store_delivery_settings;
+CREATE TRIGGER handle_store_delivery_settings_updated_at BEFORE UPDATE ON public.store_delivery_settings
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS
+ALTER TABLE public.store_delivery_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read store_delivery_settings" ON public.store_delivery_settings;
+CREATE POLICY "Public read store_delivery_settings" ON public.store_delivery_settings
+FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Store owners manage delivery settings" ON public.store_delivery_settings;
+CREATE POLICY "Store owners manage delivery settings" ON public.store_delivery_settings
+FOR ALL USING (auth.uid() = store_id);
+
+GRANT ALL ON public.store_delivery_settings TO authenticated;
+GRANT SELECT ON public.store_delivery_settings TO anon;
+
+-- ==================================================================
+-- TAXAS POR BAIRRO (ENTREGA PRÓPRIA)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.store_neighborhood_fees (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    neighborhood_name TEXT NOT NULL,
+    fee NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trigger updated_at
+DROP TRIGGER IF EXISTS handle_store_neighborhood_fees_updated_at ON public.store_neighborhood_fees;
+CREATE TRIGGER handle_store_neighborhood_fees_updated_at BEFORE UPDATE ON public.store_neighborhood_fees
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Índices
+CREATE INDEX IF NOT EXISTS store_neighborhood_fees_store_id_idx ON public.store_neighborhood_fees(store_id);
+
+-- RLS
+ALTER TABLE public.store_neighborhood_fees ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read neighborhood fees" ON public.store_neighborhood_fees;
+CREATE POLICY "Public read neighborhood fees" ON public.store_neighborhood_fees
+FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Store owners manage neighborhood fees" ON public.store_neighborhood_fees;
+CREATE POLICY "Store owners manage neighborhood fees" ON public.store_neighborhood_fees
+FOR ALL USING (auth.uid() = store_id);
+
+GRANT ALL ON public.store_neighborhood_fees TO authenticated;
+GRANT SELECT ON public.store_neighborhood_fees TO anon;
+
+
+-- ==================================================================
+-- UPDATES (22/01/2026) - Description for Store Profile
+-- ==================================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'description') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN description TEXT;
+    END IF;
+END $$;

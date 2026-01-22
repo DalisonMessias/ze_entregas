@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Loader2, Trash2, StopCircle, PlayCircle, Edit2, X } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
+import { CustomSelect } from './CustomSelect';
 import * as cloud from '../services/cloud';
 import { Collaborator } from '../types';
 import { useDialog } from '../utils/dialogService';
@@ -16,6 +17,7 @@ export const StoreCollaborators = () => {
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
     const [password, setPassword] = useState('');
+    const [func, setFunc] = useState<'waiter' | 'kitchen'>('waiter');
     const [processing, setProcessing] = useState(false);
 
     const { alert, confirm } = useDialog();
@@ -34,6 +36,7 @@ export const StoreCollaborators = () => {
         setEmail('');
         setName('');
         setPassword('');
+        setFunc('waiter');
         setEditingId(null);
         setShowAdd(false);
     };
@@ -47,10 +50,10 @@ export const StoreCollaborators = () => {
         setProcessing(true);
         try {
             if (editingId) {
-                await cloud.updateCollaborator(editingId, name, email, password || undefined);
+                await cloud.updateCollaborator(editingId, name, email, password || undefined, func);
                 await alert({ title: 'Sucesso', message: 'Colaborador atualizado com sucesso!' });
             } else {
-                await cloud.createCollaborator(email, name, password);
+                await cloud.createCollaborator(email, name, password, func);
                 await alert({ title: 'Sucesso', message: 'Colaborador criado com sucesso!' });
             }
             resetForm();
@@ -72,6 +75,7 @@ export const StoreCollaborators = () => {
         setName(collaborator.name || '');
         setEmail(collaborator.email || '');
         setPassword(''); // Always reset password on edit
+        setFunc(collaborator.function || 'waiter');
         setEditingId(collaborator.id);
         setShowAdd(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -108,14 +112,7 @@ export const StoreCollaborators = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                <div>
-                    <h2 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                        <Users className="w-5 h-5 text-brand-500" />
-                        Colaboradores / Garçons
-                    </h2>
-                    <p className="text-xs text-gray-500">Gerencie o acesso e permissões da sua equipe.</p>
-                </div>
+            <div className="flex justify-end items-center mb-4">
                 {!showAdd && (
                     <Button onClick={() => setShowAdd(true)} className="flex items-center gap-2">
                         <UserPlus className="w-4 h-4" />
@@ -149,6 +146,17 @@ export const StoreCollaborators = () => {
                                 {editingId ? 'SENHA (DEIXE EM BRANCO PARA MANTER)' : 'SENHA DE ACESSO'}
                             </label>
                             <CustomInput placeholder="******" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                            <CustomSelect
+                                label="FUNÇÃO / CARGO"
+                                value={func}
+                                onChange={(val) => setFunc(val as 'waiter' | 'kitchen')}
+                                options={[
+                                    { label: 'Mesa / Garçom', value: 'waiter' },
+                                    { label: 'Cozinha / Produção', value: 'kitchen' }
+                                ]}
+                            />
                         </div>
                     </div>
 
@@ -186,8 +194,13 @@ export const StoreCollaborators = () => {
                                     </div>
                                     <div className="text-xs text-gray-500 truncate max-w-[150px]">{c.email}</div>
 
-                                    <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${c.active ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'}`}>
-                                        {c.active ? 'Ativo' : 'Inativo'}
+                                    <div className="flex gap-2">
+                                        <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${c.active ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'}`}>
+                                            {c.active ? 'Ativo' : 'Inativo'}
+                                        </div>
+                                        <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${c.function === 'kitchen' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'}`}>
+                                            {c.function === 'kitchen' ? 'Cozinha' : 'Garçom'}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

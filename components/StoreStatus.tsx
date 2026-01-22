@@ -96,63 +96,11 @@ export const StoreStatus: React.FC = () => {
     };
 
     const generateDailyReport = async () => {
-        if (!profile?.id) return; // Alterar aqui também para usar variavel de estado, mas como é async state talvez usar ref ou confiar no closure
-        // Melhor passar profile como arg pra garantir ou usar state. State ok.
-
-        const today = new Date();
-        const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-        const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
-
+        if (!profile?.id) return;
         try {
-            // Buscar pedidos do dia
-            // IMPORTANTE: Ajuste a tabela de pedidos conforme seu schema real (orders ou similar)
-            // Assumindo 'orders' e que tenha 'store_id' ou 'user_id' (lojista) e 'created_at'
-
-            // FIXME: Ajustar query caso a tabela de orders tenha nome diferente ou relação diferente
-            const { data: orders, error } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('store_id', profile.id) // ou user_id se for tabela unificada
-                .gte('created_at', startOfDay)
-                .lte('created_at', endOfDay)
-                .in('status', ['COMPLETED']); // Filtrar apenas concluídos?
-
-            if (error) {
-                // console.error("Erro ao buscar pedidos para relatório:", error);
-                return; // Não impede o fechamento, mas loga erro
-            }
-
-            const validOrders = orders || [];
-            const totalOrders = validOrders.length;
-            const totalRevenue = validOrders.reduce((acc, order) => acc + (Number(order.total_price) || 0), 0);
-
-            // Assumindo que shipping_cost é a taxa de entrega
-            const totalDeliveryFees = validOrders.reduce((acc, order) => acc + (Number(order.shipping_cost) || 0), 0);
-
-            // Resumo simplificado
-            const ordersSummary = validOrders.map(o => ({
-                id: o.id,
-                total: o.total_price,
-                payment: o.payment_method
-            }));
-
-            // Salvar relatório
-            const { error: reportError } = await supabase
-                .from('store_daily_reports')
-                .insert({
-                    store_id: profile.id,
-                    report_date: new Date().toISOString(),
-                    total_orders: totalOrders,
-                    total_revenue: totalRevenue,
-                    total_delivery_fees: totalDeliveryFees,
-                    orders_summary: ordersSummary
-                });
-
-            if (reportError) throw reportError;
-
+            await cloud.generateDailyStoreReport(profile.id);
             // Recarregar histórico se estiver aberto
             if (showHistory) fetchHistory();
-
         } catch (err) {
             // console.error("Erro ao gerar relatório:", err);
             showError("Erro ao salvar relatório diário.");

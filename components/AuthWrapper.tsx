@@ -20,6 +20,8 @@ import { getTabFromUrl } from '../utils/routeMap';
 type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_password' | 'signup_type_selection';
 
 // Helper simples para navegar e atualizar URL sem reload (apenas auth flows que não estão no App.tsx router principal)
+import { DigitalMenu } from './DigitalMenu/DigitalMenu';
+
 const updateAuthUrl = (view: AuthView) => {
   // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
   const isAppRoute = getTabFromUrl(window.location.pathname) !== null;
@@ -570,6 +572,14 @@ export const AuthWrapper: React.FC = () => {
 
   if (collaboratorSession) {
     return <CollaboratorModule collaborator={collaboratorSession} onLogout={() => setCollaboratorSession(null)} />;
+  }
+
+  // PUBLIC ROUTE CHECK (CARDÁPIO DIGITAL)
+  const publicRouteMatch = typeof window !== 'undefined' ? window.location.pathname.match(/^\/([^\/]+)\/([^\/]+)\/produtos$/) : null;
+  const isPublicRoute = !!publicRouteMatch;
+
+  if (isPublicRoute && publicRouteMatch) {
+    return <DigitalMenu citySlug={publicRouteMatch[1]} storeSlug={publicRouteMatch[2]} />;
   }
 
   if (session && userId) {

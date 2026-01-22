@@ -163,4 +163,37 @@
  f a l h a s  
  d e  
  c a r r e g a m e n t o .  
- 
+ [ 2 2 / 0 1 / 2 0 2 6 ]  
+ -  
+ C o r r e ç ã o  
+ D e f i n i t i v a  
+ B u i l d  
+ V e r c e l :  
+ P r o t e g i d a s  
+ A P I s  
+ d e  
+ b r o w s e r  
+ e  
+ c o r r i g i d a s  
+ f u n ç õ e s  
+ i n e x i s t e n t e s  
+ n o  
+ C M S .  
+ [x] Melhorias Cardápio Digital: Link na Loja, Header Rico, Status Aberto/Fechado, Persistência Carrinho, Rota /produtos.
+[x] StoreSettings: Implementação de StreetAutocomplete e Atualização dinâmica do link do catálogo.
+[x] Sincronização de Status: Geração automática de relatório diário ao fechar loja via StoreSettings (unificado com StoreStatus).
+[x] Correção de sintaxe e aninhamento incorreto de useEffect em StoreSettings.tsx.
+[x] SQL: Adição de colunas store_address_*, slugs e triggers para independência do perfil da loja.
+[x] Backend: Correção no mapeamento de PartnerProfile em cloud.ts para incluir city_slug e store_slug.
+[x] Frontend: Melhoria no fluxo de compra (Modal -> Drawer de Carrinho).
+[x] Frontend: Refatoração do Carrinho para Drawer Lateral (Sidebar) corrigindo scroll.
+[x] Frontend: Separação de campos de endereço (Rua, Número, Bairro, etc.) no checkout.
+[x] Frontend: Estilização do carrossel de categorias.
+[x] Frontend: Busca de CEP no Catálogo Digital (BrasilAPI).
+[x] Frontend: Seleção de Cidade com CitySearchSelect.
+[x] Frontend: Botões de Pagamento no Checkout (PIX/Cartão/Dinheiro).
+[x] Frontend: Modal de Preview do Produto e Botão Rápido de Adição.
+[x] Frontend: Ajustes visuais no Catálogo (Contraste título, Fundo branco).
+[x] Frontend: Implementado busca de ruas (ViaCEP) no Catálogo Digital.
+[x] Frontend: Fixado campo Cidade no Checkout para a cidade da Loja.
+[x] Backend: Adicionado getStreetsByCity no cloud.ts.

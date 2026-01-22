@@ -627,6 +627,9 @@ export interface PartnerProfile {
     preparation_time_max?: number;
     super_store_expiration?: string;
     pix_key?: string;
+    city_slug?: string;
+    store_slug?: string;
+    description?: string;
 }
 
 export interface StoreDailyReport {
@@ -1136,6 +1139,7 @@ export interface Collaborator {
     email: string;
     name: string;
     active: boolean;
+    function: 'waiter' | 'kitchen';
     created_at: string;
     avatar_url?: string;
 }
@@ -1431,15 +1435,19 @@ export interface LoanConfig {
 export interface StoreDeliverySettings {
     id: string;
     store_id: string;
-    delivery_mode: 'FIXED' | 'NEIGHBORHOOD';
+    is_pickup_enabled: boolean;
+    is_own_delivery_enabled: boolean;
+    own_delivery_mode: 'FIXED' | 'NEIGHBORHOOD' | 'RADIUS';
     fixed_fee: number;
-    allow_outside_city: boolean;
-    support_hours_start?: string;
-    support_hours_end?: string;
+    is_partner_delivery_enabled: boolean;
+    radius_km: number;
+    delivery_time_min: number;
+    delivery_time_max: number;
     created_at: string;
     updated_at: string;
+    // Legado suportado via mapping se necessário, mas ideal usar novos
+    allow_outside_city?: boolean;
 }
-
 export interface StoreNeighborhoodFee {
     id: string;
     store_id: string;
