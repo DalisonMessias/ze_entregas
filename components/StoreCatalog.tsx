@@ -276,22 +276,12 @@ export const StoreCatalog: React.FC = () => {
                                     />
                                 </div>
                                 <div className="flex gap-2 w-full md:w-auto">
-                                    {isSuperStore && (
-                                        <Button
-                                            variant="secondary"
-                                            onClick={() => showMessage({ title: 'Em breve', message: 'Análise de catálogo completa em breve.' })}
-                                            className="flex-1 md:flex-none"
-                                            title="Analisar Catálogo com IA"
-                                        >
-                                            <Sparkles className="w-5 h-5 text-amber-500" />
-                                        </Button>
-                                    )}
                                     <Button
                                         onClick={() => {
                                             setEditingProduct({});
                                             setIsProductModalOpen(true);
                                         }}
-                                        className="flex-1 md:flex-none rounded-2xl shadow-xl shadow-brand-500/20"
+                                        className="flex-1 md:flex-none rounded-2xl"
                                     >
                                         <Plus className="w-5 h-5 mr-2" />
                                         Novo Produto

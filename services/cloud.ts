@@ -1242,8 +1242,9 @@ export const createStoreProduct = async (product: Partial<StoreProduct>, targetS
 
     // 2. Remover campos que não existem na tabela products
     delete dbPayload.image_url;
-    delete dbPayload.category; // O banco usa apenas category_id
-    delete dbPayload.id; // Deixar o banco gerar o ID
+    delete dbPayload.category;
+    delete dbPayload.category_name;
+    delete dbPayload.id;
 
     const { error } = await sb.from('products').insert({
         ...dbPayload,
@@ -5009,9 +5010,13 @@ export const adminCreateBaseProduct = async (product: Partial<CatalogBaseProduct
     const sb = getClient();
     if (!sb) throw new Error("Client not initialized");
 
+    const dbPayload = { ...product };
+    delete (dbPayload as any).category_name;
+    // Se houver outros campos virtuais, remova aqui
+
     const { data, error } = await sb
         .from('catalog_base_products')
-        .insert(product)
+        .insert(dbPayload)
         .select()
         .single();
 
@@ -5023,9 +5028,13 @@ export const adminUpdateBaseProduct = async (id: string, product: Partial<Catalo
     const sb = getClient();
     if (!sb) throw new Error("Client not initialized");
 
+    const dbPayload = { ...product };
+    delete (dbPayload as any).category_name;
+    delete (dbPayload as any).id;
+
     const { data, error } = await sb
         .from('catalog_base_products')
-        .update(product)
+        .update(dbPayload)
         .eq('id', id)
         .select()
         .single();
