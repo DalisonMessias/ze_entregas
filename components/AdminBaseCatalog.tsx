@@ -1,10 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Search, Plus, Loader2, Sparkles, Send, Trash2, Edit2, Check, X, Package, MessageSquare, BarChart3 } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Sparkles, Send, Trash2, Edit2, Check, X, Package, MessageSquare, BarChart3, AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { CatalogBaseProduct } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { GoogleGenAI } from '@google/genai';
+
+interface AnalysisReport {
+    score: number;
+    metrics: {
+        descriptionQuality: number;
+        mixCompleteness: number;
+        pricingConsistency: number;
+    };
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+}
 
 interface AnalysisSuggestion {
     id: string;
@@ -30,6 +42,7 @@ export const AdminBaseCatalog: React.FC = () => {
     const [batchInput, setBatchInput] = useState('');
     const [pendingReviewProducts, setPendingReviewProducts] = useState<Partial<CatalogBaseProduct & { id_temp: string }>[]>([]);
     const [analysisSuggestions, setAnalysisSuggestions] = useState<AnalysisSuggestion[]>([]);
+    const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
     const [isBatchLoading, setIsBatchLoading] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -256,29 +269,48 @@ export const AdminBaseCatalog: React.FC = () => {
         setIsAnalyzing(true);
         try {
             const ai = new GoogleGenAI({ apiKey: apiKey });
-            const catalogSummary = products.slice(0, 100).map(p => `${p.name} (R$${p.valor_sugerido}) - ${p.category}`).join('\n');
+            // Amostra rica para análise
+            const catalogSummary = products.slice(0, 100).map(p => `- ${p.name} (R$${p.valor_sugerido}) | Cat: ${p.category} | Desc: ${p.description || 'Vazia'}`).join('\n');
             const catNames = existingCategories.join(', ');
 
-            const prompt = `Atue como um Consultor de Catálogo de Delivery.
-            Analise este catálogo base (amostra):
+            const prompt = `Atue como um Especialista em Gestão de Catálogo de Delivery e Analista de BI. 
+            Analise este Catálogo Base (Plataforma):
             ${catalogSummary}
 
             Categorias existentes: ${catNames}.
 
-            Sugira melhorias pontuais ou novos produtos essenciais para um catálogo base completo.
-            Retorne APENAS um JSON array com sugestões:
+            Sua tarefa é gerar um DIAGNÓSTICO ESTRATÉGICO para o Administrador.
             
-            [
-                {
-                    "type": "improvement",
-                    "target_product_name": "Nome exato",
-                    "suggestion": "Título da Sugestão",
-                    "reason": "Motivo",
-                    "new_data": { "name": "...", "valor_sugerido": 25.00, "category": "..." }
-                }
-            ]
+            Retorne APENAS um JSON rigoroso:
+            {
+                "report": {
+                    "score": 0-100,
+                    "metrics": {
+                        "descriptionQuality": 0-100,
+                        "mixCompleteness": 0-100,
+                        "pricingConsistency": 0-100
+                    },
+                    "summary": "Resumo executivo",
+                    "strengths": ["Ponto 1", "..."],
+                    "weaknesses": ["Ponto 1", "..."]
+                },
+                "suggestions": [
+                    {
+                        "type": "improvement" | "new_product",
+                        "target_product_name": "Nome exato se improvement",
+                        "suggestion": "Título",
+                        "reason": "Motivo",
+                        "new_data": { "name": "...", "description": "...", "category": "...", "valor_sugerido": 0 }
+                    }
+                ]
+            }
+
+            Critérios Admin:
+            1. O catálogo base deve ter descrições impecáveis para os lojistas importarem.
+            2. Deve haver variedade de marcas e categorias.
+            3. Identifique produtos populares que faltam no mercado.
             
-            Limite a 5 sugestões de alto impacto.`;
+            Limite a 5 sugestões. Idioma: Português do Brasil.`;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
@@ -286,11 +318,13 @@ export const AdminBaseCatalog: React.FC = () => {
             });
 
             if (response.text) {
-                const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-                const items = JSON.parse(jsonMatch ? jsonMatch[0] : '[]');
-
-                if (Array.isArray(items)) {
-                    setAnalysisSuggestions(items.map((it: any) => ({ ...it, id: crypto.randomUUID() })));
+                const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    const data = JSON.parse(jsonMatch[0]);
+                    if (data.report) setAnalysisReport(data.report);
+                    if (Array.isArray(data.suggestions)) {
+                        setAnalysisSuggestions(data.suggestions.map((it: any) => ({ ...it, id: crypto.randomUUID() })));
+                    }
                 }
             }
 
@@ -658,41 +692,112 @@ export const AdminBaseCatalog: React.FC = () => {
                     )}
 
                     {generatorMode === 'analyze' && (
-                        <div className="flex flex-col h-full animate-in fade-in">
-                            {analysisSuggestions.length === 0 ? (
-                                <div className="text-center py-6 flex flex-col items-center justify-center h-full">
-                                    <BarChart3 className="w-12 h-12 text-amber-500 mb-3" />
-                                    <h3 className="font-bold text-sm dark:text-white">Análise de Catálogo</h3>
-                                    <p className="text-xs text-gray-500 mb-4 px-4 text-center max-w-[200px]">
-                                        Use a IA para detectar oportunidades de melhoria e produtos essenciais faltantes no catálogo base.
+                        <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4 duration-500">
+                            {!analysisReport && !isAnalyzing ? (
+                                <div className="text-center py-10 flex flex-col items-center justify-center h-full">
+                                    <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/20 rounded-full flex items-center justify-center mb-4">
+                                        <BarChart3 className="w-8 h-8 text-amber-500" />
+                                    </div>
+                                    <h3 className="font-bold text-lg dark:text-white mb-2">Diagnóstico de Catálogo</h3>
+                                    <p className="text-xs text-gray-500 mb-6 px-8 text-center leading-relaxed">
+                                        Analise a base de dados em busca de produtos faltantes e oportunidades de melhoria técnica para os lojistas.
                                     </p>
                                     <Button size="sm" onClick={handleAnalyzeCatalog} disabled={isAnalyzing}>
                                         <Sparkles className="w-4 h-4 mr-2" />
-                                        {isAnalyzing ? 'Analisando...' : 'Iniciar Análise'}
+                                        {isAnalyzing ? 'Processando Dados...' : 'Iniciar Auditoria'}
                                     </Button>
                                 </div>
                             ) : (
-                                <div className="space-y-3 h-full flex flex-col">
-                                    <div className="flex justify-between items-center mb-2 flex-shrink-0">
-                                        <h4 className="font-bold text-xs uppercase text-gray-400">Sugestões ({analysisSuggestions.length})</h4>
-                                        <button onClick={() => setAnalysisSuggestions([])} className="text-[10px] text-gray-400 underline">Limpar</button>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
-                                        {analysisSuggestions.map(sug => (
-                                            <div key={sug.id} className="bg-amber-50 dark:bg-amber-900/10 p-3 rounded-2xl border border-amber-100 dark:border-amber-900/20">
-                                                <div className="flex gap-2 mb-2">
-                                                    <div className="mt-0.5"><Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0" /></div>
-                                                    <div>
-                                                        <h5 className="font-bold text-xs text-gray-800 dark:text-white">{sug.suggestion}</h5>
-                                                        <p className="text-[10px] text-gray-500 leading-tight mt-1">{sug.reason}</p>
+                                <div className="space-y-6 h-full flex flex-col custom-scrollbar overflow-y-auto pr-1">
+                                    {isAnalyzing && (
+                                        <div className="flex flex-col items-center justify-center py-20">
+                                            <Loader2 className="w-10 h-10 animate-spin text-amber-500 mb-4" />
+                                            <span className="text-xs font-black text-amber-600 animate-pulse tracking-tighter uppercase">Analisando Base de Produtos...</span>
+                                        </div>
+                                    )}
+
+                                    {analysisReport && !isAnalyzing && (
+                                        <>
+                                            {/* Report Card */}
+                                            <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden shrink-0">
+                                                <div className="relative z-10">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div>
+                                                            <div className="text-[10px] font-black uppercase tracking-widest opacity-70">Qualidade Global</div>
+                                                            <div className="text-5xl font-black mt-1 flex items-baseline">
+                                                                {analysisReport.score}
+                                                                <span className="text-xs font-normal opacity-50 ml-1">/100</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-2 bg-white/20 rounded-2xl backdrop-blur-md">
+                                                            <AlertCircle className="w-6 h-6 text-white" />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div className="bg-white/10 rounded-2xl p-2.5 text-center">
+                                                            <div className="text-[8px] uppercase font-black opacity-60 mb-0.5">Conteúdo</div>
+                                                            <div className="text-xs font-black">{analysisReport.metrics.descriptionQuality}%</div>
+                                                        </div>
+                                                        <div className="bg-white/10 rounded-2xl p-2.5 text-center">
+                                                            <div className="text-[8px] uppercase font-black opacity-60 mb-0.5">Mix</div>
+                                                            <div className="text-xs font-black">{analysisReport.metrics.mixCompleteness}%</div>
+                                                        </div>
+                                                        <div className="bg-white/10 rounded-2xl p-2.5 text-center">
+                                                            <div className="text-[8px] uppercase font-black opacity-60 mb-0.5">Preços</div>
+                                                            <div className="text-xs font-black">{analysisReport.metrics.pricingConsistency}%</div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <Button size="sm" fullWidth variant="secondary" onClick={() => handleApplySuggestion(sug)} disabled={isSavingManual}>
-                                                    Aplicar Sugestão
-                                                </Button>
+                                                <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
                                             </div>
-                                        ))}
-                                    </div>
+
+                                            {/* Summary */}
+                                            <div className="bg-gray-50 dark:bg-gray-900/40 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shrink-0">
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 italic leading-relaxed">
+                                                    "{analysisReport.summary}"
+                                                </p>
+                                            </div>
+
+                                            {/* Suggestions List */}
+                                            <div className="flex-1 space-y-3 pb-4">
+                                                <div className="flex justify-between items-center px-1">
+                                                    <h4 className="font-black text-[10px] uppercase tracking-wider text-gray-400">Ações Sugeridas ({analysisSuggestions.length})</h4>
+                                                    <button onClick={() => { setAnalysisReport(null); setAnalysisSuggestions([]); }} className="text-[10px] font-bold text-indigo-600 hover:underline hover:opacity-80">REFRESCAR</button>
+                                                </div>
+
+                                                {analysisSuggestions.map(sug => (
+                                                    <div key={sug.id} className="bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 p-4 rounded-3xl shadow-sm hover:border-indigo-200 dark:hover:border-indigo-900/30 transition-all group">
+                                                        <div className="flex gap-3 mb-3">
+                                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${sug.type === 'improvement' ? 'bg-amber-100 dark:bg-amber-900/20 text-amber-600' : 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600'}`}>
+                                                                {sug.type === 'improvement' ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                                            </div>
+                                                            <div>
+                                                                <h5 className="font-bold text-xs text-gray-800 dark:text-white group-hover:text-indigo-600 transition-colors uppercase tracking-tight leading-none">{sug.suggestion}</h5>
+                                                                <p className="text-[10px] text-gray-500 leading-tight mt-1.5">{sug.reason}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {sug.new_data && (
+                                                            <div className="bg-gray-50 dark:bg-gray-900/60 rounded-2xl p-3 mb-4 border border-dashed border-gray-200 dark:border-gray-700">
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Preview de Dados</span>
+                                                                    {sug.new_data.valor_sugerido && <span className="text-[10px] font-black text-indigo-600">R$ {sug.new_data.valor_sugerido.toFixed(2)}</span>}
+                                                                </div>
+                                                                <div className="text-[11px] font-bold dark:text-gray-200 line-clamp-1">{sug.new_data.name}</div>
+                                                                <div className="text-[9px] text-gray-400 line-clamp-2 leading-none mt-1">{sug.new_data.description || 'Sem descrição'}</div>
+                                                            </div>
+                                                        )}
+
+                                                        <Button size="sm" fullWidth variant={sug.type === 'improvement' ? 'secondary' : 'primary'} onClick={() => handleApplySuggestion(sug)} disabled={isSavingManual}>
+                                                            <Sparkles className="w-3 h-3 mr-2" />
+                                                            {sug.type === 'improvement' ? 'Otimizar Produto' : 'Adicionar à Base'}
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>

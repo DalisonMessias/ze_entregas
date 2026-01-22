@@ -372,7 +372,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
         }
     };
 
-    const copyPixKey = () => {
+    const copyPixKey = async () => {
         if (bankDetails.pixKey) {
             navigator.clipboard.writeText(bankDetails.pixKey);
             await alert({ title: 'Sucesso', message: "Chave PIX copiada!" });
