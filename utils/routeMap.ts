@@ -47,7 +47,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/shop': 'shop',
     '/assistente': 'assistant',
 
-    '/historico': 'history',
+    
     '/mapa-calor': 'heatmap',
     '/status': 'status',
     '/privacidade': 'privacy',
@@ -76,6 +76,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/whatsapp': 'whatsapp_chat',
     '/loja/nova-entrega': 'new_request',
     '/loja/pedidos': 'associate_orders',
+    '/loja/historico': 'history',
 
     // Delivery Partner/Person Routes
     '/entregador/inicio': 'daily_panel',

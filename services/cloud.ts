@@ -5096,28 +5096,41 @@ export const generateAIContent = async (prompt: string, apiKey: string, systemIn
     const { GoogleGenAI } = await import('@google/genai');
     const genAI = new GoogleGenAI({ apiKey });
 
-    // Lista de modelos ordenados por prioridade
-    const modelOrder = [
-        'gemini-2.0-flash',
-        'gemini-1.5-pro',
-        'gemini-1.5-flash'
-    ];
+    // Lista de modelos ordenados por prioridade (Janeiro 2026)
+const modelOrder = [
+    // --- GERAÇÃO 3 (O Estado da Arte) ---
+    'gemini-3-pro-preview',          // Melhor raciocínio, multimodal e tarefas complexas (agentes)
+    'gemini-3-flash-preview',        // Inteligência nível 3 com velocidade/custo otimizados
+    'gemini-3-deep-think',           // Especialista em raciocínio profundo (Lógica/Matemática)
+    
+    // --- GERAÇÃO 2.5 (Estáveis e Robustos) ---
+    'gemini-2.5-pro',                // Versão aprimorada do 2.0 Pro, muito estável
+    'gemini-2.5-flash',              // O novo padrão "workhorse" para alta performance
+    
+    // --- GERAÇÃO 2.0 (Legado/Compatibilidade) ---
+    'gemini-2.0-flash',              
+    'gemini-2.0-flash-thinking-exp', 
+    
+    // --- GERAÇÃO 1.5 (Legado/Baixo Custo) ---
+    'gemini-1.5-pro',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b'
+];
 
     let lastError: any = null;
 
     for (const modelName of modelOrder) {
         try {
-            const model = genAI.getGenerativeModel({
+            // @google/genai utiliza ai.models.generateContent e o sistema de config
+            const response = await (genAI as any).models.generateContent({
                 model: modelName,
-                systemInstruction: systemInstruction
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                config: systemInstruction ? { systemInstruction } : undefined
             });
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            const text = response.text();
 
-            if (text) {
+            if (response.text) {
                 return {
-                    text: text,
+                    text: response.text,
                     model: modelName
                 };
             }
@@ -5125,16 +5138,17 @@ export const generateAIContent = async (prompt: string, apiKey: string, systemIn
             lastError = error;
             const errorMsg = error.message?.toLowerCase() || "";
 
-            // Se for erro de rede ou cota (429), tenta o próximo modelo
-            if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('limit')) {
+            // Se for erro de rede ou cota (429/503), tenta o próximo modelo
+            if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('limit') || errorMsg.includes('503')) {
+                console.warn(`[AI Fallback] Modelo ${modelName} falhou (cota/limite). Tentando próximo...`);
                 continue;
             }
 
-            // Se for outro erro crítico, interrompe
+            // Se for outro erro crítico (configuração, auth, etc), interrompe
             throw error;
         }
     }
 
-    // Se chegou aqui, todos os modelos falharam por cota
+    // Se chegou aqui, todos os modelos falharam
     throw lastError;
 };

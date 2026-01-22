@@ -127,11 +127,9 @@ export const AdminBaseCatalog: React.FC = () => {
         setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
         setIsAILoading(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: apiKey });
-
-            const prompt = `Atue como um especialista em catálogo de produtos para deliverys. 
+            const prompt = `Atue como um especialista em catálogo de produtos para deliverys.
             Categorias existentes no catálogo base da loja: ${existingCategories.join(', ') || 'Geral, Bebidas, Lanches, Pizzas'}.
-            
+
             Analise a solicitação do usuário: "${userMsg}".
 
             Sua tarefa é identificar se o usuário:

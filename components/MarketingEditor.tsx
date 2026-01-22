@@ -4,6 +4,7 @@ import { X, Save, Download, Type, Palette, Image as ImageIcon, Plus, Trash2, Lay
 import { Button } from './Button';
 import { MarketingTemplate, MarketingDesign, MarketingCanvasConfig, MarketingElement } from '../types';
 import * as cloud from '../services/cloud';
+import { useDialog } from '../utils/dialogService';
 import * as uploader from '../services/upload';
 import html2canvas from 'html2canvas';
 
@@ -109,6 +110,7 @@ export const MarketingEditor: React.FC<MarketingEditorProps> = ({ template, desi
     const [aiPrompt, setAiPrompt] = useState('');
     const [isGeneratingAi, setIsGeneratingAi] = useState(false);
     const [apiKey, setApiKey] = useState<string | null>(null);
+    const { alert: showMessage } = useDialog();
 
     useEffect(() => {
         cloud.getShopSettings().then(settings => {
@@ -120,13 +122,42 @@ export const MarketingEditor: React.FC<MarketingEditorProps> = ({ template, desi
 
     const handleGenerateDesign = async () => {
         if (!apiKey) {
-            alert('Erro: Chave API do Zé Assistente não configurada nas Configurações da Loja.');
+            showMessage({ title: 'Configuração', message: 'Chave API do Zé Assistente não configurada nas Configurações da Loja.' });
             return;
         }
         if (!aiPrompt.trim()) return;
         setIsGeneratingAi(true);
         try {
-            const response = await cloud.generateAIContent(prompt, apiKey);
+            const instructionPrompt = `
+                Você é um designer gráfico expert. Crie um design de marketing baseado neste pedido: "${aiPrompt}".
+                Retorne APENAS um JSON válido (sem markdown) seguindo esta interface:
+                interface MarketingCanvasConfig {
+                    backgroundColor: string;
+                    backgroundImageUrl?: string;
+                    textColor: string;
+                    elements: {
+                        id: string; // use um placeholder
+                        type: 'text' | 'image';
+                        text?: string; 
+                        x: number;
+                        y: number;
+                        width: number;
+                        height: number;
+                        fontSize?: number;
+                        fontWeight?: string;
+                        fontFamily?: string;
+                        color?: string;
+                        rotation?: number;
+                        zIndex: number;
+                        imageUrl?: string;
+                        shape?: 'square' | 'circle';
+                    }[];
+                }
+                Use placeholders "https://placehold.co/600x400" para imagens se necessário.
+                O canvas tem 1080x1080. Apenas JSON puro.
+            `;
+
+            const response = await cloud.generateAIContent(instructionPrompt, apiKey);
 
             // FIXED: Access text directly from our helper
             const responseText = response.text;

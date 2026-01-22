@@ -240,7 +240,9 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
     }, [userRole]);
 
     useEffect(() => {
-        storage.saveAssistantHistory(messages);
+        if (messages.length > 0) {
+            storage.saveAssistantHistory(messages);
+        }
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 

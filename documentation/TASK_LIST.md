@@ -24,6 +24,8 @@
 - [x] Corrigir erro de build em `ProfileData.tsx` (await em função síncrona).
 - [x] Corrigir erro de coluna inexistente (`category_name`) ao aplicar análise da IA.
 - [x] Melhorar tratamento de erro 429 para exibir mensagens amigáveis de "Manutenção Momentânea".
+- [x] Implementar Sistema de Fallback Automático (2.0 Flash -> 1.5 Pro -> 1.5 Flash).
+- [x] Unificar chamadas de IA em todo o sistema (Chat, Catálogos e Marketing).
 
 ---
 *Status: 100% Concluído*
