@@ -153,14 +153,46 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             setProductQuantity(1);
             setProductObservation('');
         }
-        setIsCartOpen(true);
+        // Reform: Don't open cart automatically
+        // setIsCartOpen(true); 
     };
 
     const removeFromCart = (id: string) => {
         setCart(prev => prev.filter(item => item.id !== id));
     };
 
+    const clearCart = () => {
+        if (confirm('Tem certeza que deseja limpar o carrinho?')) {
+            setCart([]);
+            setIsCartOpen(false);
+        }
+    };
+
     const updateQuantity = (id: string, delta: number) => {
+        /* ... */
+        // Render Section Changes (in next chunk or multi if possible, but let's try to fit)
+
+        // Header fix: The user said background is white on mobile.
+        // The current code has:
+        // <div className="flex-1 text-center md:text-left text-white md:text-gray-900 md:dark:text-white mb-2">
+        // <h1 ... text-white drop-shadow ... md:text-gray-900 ...>
+        // Since the cover is h-40 and profile info is -mt-12, the text is appearing OVER the cover image on mobile usually.
+        // However, if the cover is missing or user scrolls, or layout shifts...
+        // User audio: "on mobile version, the background becomes white, so the name looks weird".
+        // This implies the text is WHITE but background is WHITE.
+        // I will change the text color logic to be Gray-900 on mobile unless it's explicitly over an image, but the overlap is tricky.
+        // Better approach: Make the Store Name Container have a safe background or text color that works.
+        // I'll ensure the text is dark on mobile if it's below the cover (which it is, loosely).
+        // Actually, in the current DOM structure:
+        // Container -mt-12. The avatar is -mt-12. The text is below/beside it.
+        // On mobile (flex-col), the text is BELOW the avatar, which is overlapping the cover bottom.
+        // So the text is likely explicitly on the white background part on mobile.
+        // I will let the text be Gray-900 on mobile and White/Gray-900 on desktop as appropriate.
+
+        // Changing only logic here might be invisible without full file view context for render.
+        // I'll stick to logic updates first in this block if possible, but I need to touch JSX.
+        // I will replace the logic functions and add clearCart first.
+
         setCart(prev => prev.map(item => {
             if (item.id === id) {
                 const newQ = Math.max(1, item.quantity + delta);
@@ -340,9 +372,9 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         )}
                     </div>
 
-                    <div className="flex-1 text-center md:text-left text-white md:text-gray-900 md:dark:text-white mb-2">
+                    <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white md:dark:text-white mb-2 z-10">
                         <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-                            <h1 className="text-2xl md:text-3xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] md:text-gray-900 md:drop-shadow-none dark:text-white">
+                            <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white md:text-white md:drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
                                 {store.store_name || store.name}
                             </h1>
                             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm ${isStoreOpen ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
@@ -351,25 +383,27 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         </div>
 
                         {store.description && (
-                            <p className="hidden md:block text-gray-200 md:text-gray-600 dark:text-gray-400 mb-3 max-w-2xl text-sm leading-relaxed">
+                            <p className="hidden md:block text-gray-200 md:text-gray-100 dark:text-gray-400 mb-3 max-w-2xl text-sm leading-relaxed md:drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
                                 {store.description}
                             </p>
                         )}
 
-                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm font-medium text-gray-200 md:text-gray-600 md:dark:text-gray-400">
+                        {/* Mobile Description on White Background (Already handled below) */}
+
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm font-medium text-gray-600 dark:text-gray-400 md:text-gray-100">
                             {store.opening_hours && (
-                                <div className="flex items-center gap-1.5 backdrop-blur-md bg-black/30 md:bg-gray-100 dark:md:bg-gray-800 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-200 dark:md:border-gray-700">
-                                    <Clock className="w-4 h-4 text-brand-400 md:text-brand-600" /> {store.opening_hours}
+                                <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 md:backdrop-blur-md md:bg-black/30 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-500/30">
+                                    <Clock className="w-4 h-4 text-brand-500 md:text-brand-300" /> {store.opening_hours}
                                 </div>
                             )}
                             {deliverySettings && (
-                                <div className="flex items-center gap-1.5 backdrop-blur-md bg-black/30 md:bg-gray-100 dark:md:bg-gray-800 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-200 dark:md:border-gray-700">
-                                    <Bike className="w-4 h-4 text-brand-400 md:text-brand-600" />
+                                <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 md:backdrop-blur-md md:bg-black/30 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-500/30">
+                                    <Bike className="w-4 h-4 text-brand-500 md:text-brand-300" />
                                     {deliverySettings.delivery_time_min}-{deliverySettings.delivery_time_max} min
                                 </div>
                             )}
-                            <div className="flex items-center gap-1.5 backdrop-blur-md bg-black/30 md:bg-gray-100 dark:md:bg-gray-800 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-200 dark:md:border-gray-700">
-                                <StoreIcon className="w-4 h-4 text-brand-400 md:text-brand-600" /> {products.length} itens
+                            <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 md:backdrop-blur-md md:bg-black/30 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-500/30">
+                                <StoreIcon className="w-4 h-4 text-brand-500 md:text-brand-300" /> {products.length} itens
                             </div>
                         </div>
 
@@ -456,8 +490,13 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 {/* --- DESKTOP CART (Sidebar) --- */}
                 <div className="hidden lg:block lg:col-span-1">
                     <div className="sticky top-24 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-lg p-6">
-                        <h3 className="font-black text-xl mb-6 flex items-center gap-2">
-                            <ShoppingBag className="w-5 h-5 text-brand-600" /> Seu Pedido
+                        <h3 className="font-black text-xl mb-6 flex items-center justify-between">
+                            <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5 text-brand-600" /> Seu Pedido</span>
+                            {cart.length > 0 && (
+                                <button onClick={clearCart} className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors">
+                                    Limpar
+                                </button>
+                            )}
                         </h3>
                         {cart.length === 0 ? (
                             <div className="text-center py-10 text-gray-400">
@@ -472,7 +511,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                             <div>
                                                 <div className="font-bold text-gray-900 dark:text-white">{item.quantity}x {item.product.name}</div>
                                                 {item.observation && <div className="text-xs text-gray-500 italic">{item.observation}</div>}
-                                                <div className="text-gray-500 text-xs mt-1 cursor-pointer hover:text-red-500" onClick={() => removeFromCart(item.id)}>Remover</div>
+                                                <button
+                                                    onClick={() => removeFromCart(item.id)}
+                                                    className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors"
+                                                >
+                                                    <Trash2 className="w-3 h-3" /> Remover
+                                                </button>
                                             </div>
                                             <div className="font-medium">R$ {(item.product.price * item.quantity).toFixed(2).replace('.', ',')}</div>
                                         </div>
@@ -625,11 +669,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                 </div>
                                                 <div className="flex items-center justify-between mt-2">
                                                     <span className="text-xs text-gray-500">{item.quantity} un</span>
-                                                    <button onClick={() => removeFromCart(item.id)} className="text-xs text-red-500 font-bold hover:underline">Remover</button>
+                                                    <button onClick={() => removeFromCart(item.id)} className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors">
+                                                        <Trash2 className="w-3 h-3" /> Remover
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
                                     ))}
+                                    {cart.length > 0 && (
+                                        <button onClick={clearCart} className="w-full py-2 text-sm font-bold text-gray-400 hover:text-red-500 border border-dashed border-gray-300 rounded-xl hover:border-red-300 hover:bg-red-50 transition-all">
+                                            Limpar Carrinho
+                                        </button>
+                                    )}
                                 </div>
                             </section>
 

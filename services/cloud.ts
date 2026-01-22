@@ -5338,13 +5338,18 @@ export const getPublicStoreProducts = async (storeId: string) => {
 
     const { data, error } = await sb
         .from('products')
-        .select('*')
+        .select('*, categories(name)')
         .eq('store_id', storeId)
         .eq('is_active', true)
         .order('name');
 
     if (error) return [];
-    return data;
+
+    // Map category name to legacy field if present
+    return data.map((p: any) => ({
+        ...p,
+        category: p.categories?.name || p.category || 'Outros'
+    }));
 };
 
 export const getPublicDeliverySettings = async (storeId: string) => {

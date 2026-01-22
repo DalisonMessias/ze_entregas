@@ -197,3 +197,11 @@
 [x] Frontend: Implementado busca de ruas (ViaCEP) no Catálogo Digital.
 [x] Frontend: Fixado campo Cidade no Checkout para a cidade da Loja.
 [x] Backend: Adicionado getStreetsByCity no cloud.ts.
+[ ] Frontend: Corrigir cor do nome da loja no mobile (Menu Digital).
+[ ] Frontend: Estilizar botão de remover item e adicionar botão 'Limpar Carrinho'.
+[ ] Frontend: Impedir abertura automática do carrinho ao adicionar item.
+[ ] Backend/Frontend: Corrigir exibição de Categorias no Menu (Join category_id).
+[x] Frontend: Corrigir cor do nome da loja no mobile (Dark text).
+[x] Frontend: Estilizar botão de remover item e adicionar botão 'Limpar Carrinho'.
+[x] Frontend: Impedir abertura automática do carrinho ao adicionar item.
+[x] Backend/Frontend: Corrigir exibição de Categorias no Menu (Join category_id).
