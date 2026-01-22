@@ -269,7 +269,7 @@ const BatteryIcon = ({ level, charging }: { level: number, charging: boolean }) 
 const StatusBar = () => {
     const [time, setTime] = useState(new Date());
     const [battery, setBattery] = useState<{ level: number; charging: boolean } | null>(null);
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000 * 30); // Update every 30s

@@ -44,7 +44,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const [apiError, setApiError] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   // Estados para Exclusão
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);

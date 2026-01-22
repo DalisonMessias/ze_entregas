@@ -314,6 +314,7 @@ const UpgradeToPartnerPage: React.FC = () => {
 
 export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 'active' }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+        if (typeof window === 'undefined') return 'profile';
         const tabFromUrl = getTabFromUrl(window.location.pathname);
         const authTabs = ['login', 'signup', 'forgot_password'];
 
