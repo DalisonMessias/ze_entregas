@@ -1,4 +1,4 @@
--- ==================================================================
+﻿-- ==================================================================
 -- 0.x EXTENSIONS E CONFIGURAﾃ�髭S GERAIS
 -- ==================================================================
 
@@ -1283,6 +1283,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
     coupon_code TEXT,
     order_type TEXT, -- 'LOCAL' | 'PICKUP' | 'DELIVERY'
     delivery_mode TEXT, -- 'OWN' | 'PLATFORM' | 'ASSOCIATE'
+    delivery_location_reference TEXT, -- Referência ou Local da Entrega (Obrigatório para Entregar por Localização)
     driver_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Entregador atribuído (fixo)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -3239,78 +3240,76 @@ DECLARE
     v_delivery_code TEXT;
     v_new_request_id UUID;
     v_expires_at TIMESTAMPTZ;
+    v_is_super_store BOOLEAN := FALSE;
+    v_final_total_charged NUMERIC;
+    v_final_fee_fixed NUMERIC;
+    v_final_fee_percent NUMERIC;
 BEGIN
-    -- Gerar cﾃｳdigo de entrega ﾃｺnico
+    -- Gerar código de entrega único
     v_delivery_code := '#' || LPAD(FLOOR(random() * 10000)::int::text, 4, '0');
 
-    -- Definir tempo de expiraﾃｧﾃ｣o se for para a plataforma
+    -- Verificar se o lojista é Super Lojista
+    SELECT COALESCE(is_super_store, FALSE) INTO v_is_super_store 
+    FROM public.user_profiles 
+    WHERE id = v_store_id;
+
+    -- Definir tempo de expiração se for para a plataforma
     IF p_request_type = 'PLATFORM' THEN
         v_expires_at := now() + interval '5 minutes';
     ELSE
         v_expires_at := NULL;
     END IF;
 
-    -- Lﾃｳgica de taxas: Se for ASSOCIATE, taxas da plataforma sﾃ｣o ZERO.
-    -- Se for PLATFORM, usa as taxas configuradas.
+    -- Lógica de taxas: 
+    -- 1. Se for ASSOCIATE, taxas da plataforma são ZERO.
+    -- 2. Se for PLATFORM e Super Lojista, taxas da plataforma são ZERO (apenas valor da entrega).
+    -- 3. Se for PLATFORM e lojista comum, usa as taxas configuradas.
     IF p_request_type = 'ASSOCIATE' THEN
-         INSERT INTO public.partner_requests (
-            store_id,
-            pickup_address,
-            delivery_address,
-            distance_km,
-            total_charged_store,
-            net_value_partner,
-            fee_fixed,
-            fee_percent_value,
-            partner_id,
-            status,
-            delivery_code,
-            expires_at
-        )
-        VALUES (
-            v_store_id,
-            p_pickup_address,
-            p_delivery_address,
-            p_distance_km,
-            p_total_charged_store,
-            p_net_value_partner,
-            0, -- Taxa fixa ZERO para entregador prﾃｳprio
-            0, -- Taxa percentual ZERO para entregador prﾃｳprio
-            p_target_partner_id,
-            'PENDING'::public.partner_request_status,
-            v_delivery_code,
-            v_expires_at
-        ) RETURNING id INTO v_new_request_id;
+        -- Entregador próprio: sem taxas
+        v_final_total_charged := p_total_charged_store;
+        v_final_fee_fixed := 0;
+        v_final_fee_percent := 0;
+    ELSIF p_request_type = 'PLATFORM' AND v_is_super_store = TRUE THEN
+        -- Super Lojista: sem taxas da plataforma, paga apenas o valor da entrega
+        v_final_total_charged := p_net_value_partner;
+        v_final_fee_fixed := 0;
+        v_final_fee_percent := 0;
     ELSE
-        INSERT INTO public.partner_requests (
-            store_id,
-            pickup_address,
-            delivery_address,
-            distance_km,
-            total_charged_store,
-            net_value_partner,
-            fee_fixed,
-            fee_percent_value,
-            partner_id,
-            status,
-            delivery_code,
-            expires_at
-        )
-        VALUES (
-            v_store_id,
-            p_pickup_address,
-            p_delivery_address,
-            p_distance_km,
-            p_total_charged_store,
-            p_net_value_partner,
-            (p_fees->>'global_tax_fixed')::NUMERIC,
-            (p_fees->>'global_tax_percent')::NUMERIC * p_net_value_partner,
-            p_target_partner_id,
-            'PENDING'::public.partner_request_status,
-            v_delivery_code,
-            v_expires_at
-        ) RETURNING id INTO v_new_request_id;
+        -- Lojista comum: com taxas da plataforma
+        v_final_total_charged := p_total_charged_store;
+        v_final_fee_fixed := (p_fees->>'global_tax_fixed')::NUMERIC;
+        v_final_fee_percent := (p_fees->>'global_tax_percent')::NUMERIC * p_net_value_partner;
     END IF;
+
+    -- Inserir o pedido com os valores calculados
+    INSERT INTO public.partner_requests (
+        store_id,
+        pickup_address,
+        delivery_address,
+        distance_km,
+        total_charged_store,
+        net_value_partner,
+        fee_fixed,
+        fee_percent_value,
+        partner_id,
+        status,
+        delivery_code,
+        expires_at
+    )
+    VALUES (
+        v_store_id,
+        p_pickup_address,
+        p_delivery_address,
+        p_distance_km,
+        v_final_total_charged,
+        p_net_value_partner,
+        v_final_fee_fixed,
+        v_final_fee_percent,
+        p_target_partner_id,
+        'PENDING'::public.partner_request_status,
+        v_delivery_code,
+        v_expires_at
+    ) RETURNING id INTO v_new_request_id;
 
     RETURN jsonb_build_object(
         'requestId', v_new_request_id,

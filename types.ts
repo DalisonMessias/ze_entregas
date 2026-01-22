@@ -393,6 +393,7 @@ export interface Order {
     custom_payment_label?: string;
     store_id?: string;
     delivery_mode?: 'OWN' | 'PLATFORM' | 'ASSOCIATE';
+    delivery_location_reference?: string;
     driver_id?: string;
 
     store?: any;
@@ -1447,6 +1448,26 @@ export interface StoreNeighborhoodFee {
     is_active: boolean;
     created_at: string;
     updated_at: string;
+}
+
+export interface AnalysisReport {
+    score: number;
+    summary: string;
+    metrics: {
+        descriptionQuality: number;
+        mixCompleteness: number;
+        pricingConsistency: number;
+    };
+    strengths: string[];
+    weaknesses: string[];
+}
+
+export interface AnalysisSuggestion {
+    id: string;
+    type: 'improvement' | 'new_product';
+    suggestion: string;
+    reason: string;
+    new_data?: Partial<StoreProduct & { category_name: string }>;
 }
 
 

@@ -1,5 +1,5 @@
 
-file_path = r"c:\Users\Dalison Messias\Documents\GitHub\ze_entregas\supabase\migrations\supabase_global.sql"
+file_path = r"supabase\migrations\supabase_global.sql"
 try:
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()

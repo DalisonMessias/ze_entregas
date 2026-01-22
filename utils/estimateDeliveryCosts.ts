@@ -15,21 +15,35 @@ export const estimateDeliveryCosts = (
   stops: number,
   f: PartnerFeeSettings
 ) => {
-  let totalKm = 0;
+  // Calcular distância total da rota completa (A→B→C→D) para EXIBIÇÃO
+  let totalKmForDisplay = 0;
   for (let i = 0; i < points.length - 1; i++) {
-    totalKm += haversineTop(points[i].lat, points[i].lng, points[i + 1].lat, points[i + 1].lng);
+    totalKmForDisplay += haversineTop(points[i].lat, points[i].lng, points[i + 1].lat, points[i + 1].lng);
   }
+
+  // Calcular distância COBRADA: apenas da coleta (A) até primeira entrega (B)
+  // Paradas adicionais (C, D, E...) cobram apenas taxa fixa
+  let chargedKm = 0;
+  if (points.length >= 2) {
+    // Apenas A → B (coleta até primeira entrega)
+    chargedKm = haversineTop(points[0].lat, points[0].lng, points[1].lat, points[1].lng);
+  }
+
   const baseKm = Number(f.base_delivery_km || 0);
   const baseValue = Number(f.base_delivery_value || 0);
   const extraPerKm = Number(f.extra_km_value || 0);
   const stopFeeTotal = Number(f.additional_stop_fee || 0) * Math.max(0, stops);
-  const extraKm = Math.max(0, totalKm - baseKm);
+
+  // Cobrar KM extra APENAS com base na distância até a primeira entrega
+  const extraKm = Math.max(0, chargedKm - baseKm);
   const partnerNetCalc = baseValue + (extraKm * extraPerKm) + stopFeeTotal;
+
   const feeFixed = Number(f.global_tax_fixed || 0);
   const feePercentValue = Number(f.global_tax_percent || 0) * partnerNetCalc;
   const storeTotal = partnerNetCalc + feeFixed + feePercentValue;
+
   return {
-    distanceKm: Number(totalKm.toFixed(2)),
+    distanceKm: Number(totalKmForDisplay.toFixed(2)), // Mostra KM total da rota
     partnerNet: Number(partnerNetCalc.toFixed(2)),
     total: Number(storeTotal.toFixed(2))
   };

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StoreProduct, Category } from '../types';
 import { StoreAIGenerator } from './StoreAIGenerator';
 import { SuperStoreModal } from './SuperStoreModal';
-import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera } from 'lucide-react';
+import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera, Eye } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
@@ -58,6 +58,10 @@ export const StoreCatalog: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [isSuperStore, setIsSuperStore] = useState(false);
     const [showSuperModal, setShowSuperModal] = useState(false);
+
+    // Preview State
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
+    const [previewProduct, setPreviewProduct] = useState<StoreProduct | null>(null);
 
     const { confirm, alert: showMessage } = useDialog();
     const imageInputRef = useRef<HTMLInputElement>(null);
@@ -210,6 +214,10 @@ export const StoreCatalog: React.FC = () => {
         if (term.startsWith('id-')) {
             const idPart = term.replace('id-', '');
             matchesSearch = p.id.toLowerCase().includes(idPart);
+        } else if (term.length > 0 && /^[a-f0-9]+$/i.test(term)) {
+            // Se o termo parece ser um ID (apenas caracteres hexadecimais)
+            // Verifica se corresponde aos primeiros caracteres do ID
+            matchesSearch = p.id.toLowerCase().startsWith(term.toLowerCase());
         } else {
             matchesSearch = p.name.toLowerCase().includes(term) ||
                 p.category?.toLowerCase().includes(term);
@@ -262,9 +270,9 @@ export const StoreCatalog: React.FC = () => {
                 </div>
 
                 {/* Main Content Area - Full Height Scrollable */}
-                <div className="flex-1 bg-white dark:bg-gray-900/40 rounded-[2rem] p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-800 overflow-y-auto no-scrollbar">
+                <div className="flex-1 bg-white dark:bg-gray-900/40 rounded-[2rem] p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-800 overflow-y-auto">
                     {activeTab === 'products' && (
-                        <div className="animate-in fade-in duration-300 flex flex-col h-full">
+                        <div className="animate-in fade-in duration-300 flex flex-col">
                             <div className="flex flex-col md:flex-row gap-4 items-center mb-8">
                                 <div className="relative flex-1 group w-full">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-brand-500 transition-colors" />
@@ -342,7 +350,7 @@ export const StoreCatalog: React.FC = () => {
                                     </p>
                                 </div>
                             ) : (
-                                <div className={`grid grid-cols-1 ${isSuperStore ? 'md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'} gap-4`}>
+                                <div className={`grid grid-cols-1 ${isSuperStore ? 'md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'} gap-4 pb-24`}>
                                     {filteredProducts.map(product => (
                                         <div
                                             key={product.id}
@@ -383,6 +391,16 @@ export const StoreCatalog: React.FC = () => {
                                                             {product.category || 'Geral'}
                                                         </span>
                                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setPreviewProduct(product);
+                                                                    setShowPreviewModal(true);
+                                                                }}
+                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:text-brand-600 transition-colors"
+                                                                title="Preview"
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </button>
                                                             <button
                                                                 onClick={() => {
                                                                     setEditingProduct(product);
@@ -532,6 +550,119 @@ export const StoreCatalog: React.FC = () => {
                         setShowSuperModal(false);
                     }}
                 />
+            )}
+
+            {/* Preview Modal */}
+            {showPreviewModal && previewProduct && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 text-left animate-in fade-in duration-200" onClick={() => setShowPreviewModal(false)}>
+                    <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl shadow-black/20 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                        {/* Header com Gradiente */}
+                        <div className="relative bg-gradient-to-br from-brand-600 to-purple-700 p-6 text-white overflow-hidden">
+                            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjA1IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+                            <div className="relative z-10">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+                                            <Eye className="w-5 h-5 text-white" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-sm uppercase tracking-tight">Preview do Produto</h4>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Catálogo da Loja</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowPreviewModal(false)}
+                                        className="p-2 hover:bg-white/20 rounded-xl transition-all"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="p-6 space-y-5">
+                            {/* Imagem do Produto */}
+                            {previewProduct.image_url && (
+                                <div className="w-full h-48 rounded-2xl overflow-hidden bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-800">
+                                    <img
+                                        src={previewProduct.image_url}
+                                        alt={previewProduct.name}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Categoria e Preço */}
+                            <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-800">
+                                <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.15em] py-2 px-3 bg-brand-50 dark:bg-brand-900/20 rounded-full border border-brand-100 dark:border-brand-900/30">
+                                    <Package className="w-3 h-3" />
+                                    {previewProduct.category || 'Sem categoria'}
+                                </span>
+                                <div className="text-right">
+                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Preço</p>
+                                    <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                                        {previewProduct.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Nome e Marca */}
+                            <div>
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Nome do Produto</label>
+                                <p className="text-xl font-black dark:text-white leading-tight">
+                                    {previewProduct.brand ? `${previewProduct.brand} - ` : ''}{previewProduct.name}
+                                </p>
+                            </div>
+
+                            {/* Descrição */}
+                            <div>
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Descrição</label>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                                    {previewProduct.description || 'Nenhuma descrição disponível para este produto.'}
+                                </p>
+                            </div>
+
+                            {/* Status */}
+                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Status do Produto</span>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${previewProduct.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                    {previewProduct.is_active ? 'Ativo' : 'Pausado'}
+                                </span>
+                            </div>
+
+                            {/* ID do Produto */}
+                            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">ID do Produto</span>
+                                <span className="text-xs font-mono text-gray-600 dark:text-gray-400">ID-{previewProduct.id?.slice(0, 6).toUpperCase()}</span>
+                            </div>
+                        </div>
+
+                        {/* Footer com Ações */}
+                        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-800 flex gap-3">
+                            <Button
+                                fullWidth
+                                variant="secondary"
+                                onClick={() => setShowPreviewModal(false)}
+                                className="rounded-xl"
+                            >
+                                Fechar
+                            </Button>
+                            <Button
+                                fullWidth
+                                onClick={() => {
+                                    setEditingProduct(previewProduct);
+                                    setIsProductModalOpen(true);
+                                    setShowPreviewModal(false);
+                                }}
+                                className="rounded-xl"
+                            >
+                                <Edit2 className="w-4 h-4 mr-2" />
+                                Editar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Hidden Input for Quick Image Change */}

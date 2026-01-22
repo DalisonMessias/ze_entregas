@@ -1,0 +1,28 @@
+[22/01/2026 14:42] Implementada isenção de taxas de plataforma para Super Lojista
+
+ALTERAÇÕES REALIZADAS:
+- Modificada função create_partner_request em supabase/migrations/supabase_global.sql (linhas 3226-3321)
+  * Adicionada verificação do campo is_super_store da tabela user_profiles
+  * Implementada lógica condicional: se Super Lojista, fee_fixed = 0 e fee_percent_value = 0
+  * total_charged_store = net_value_partner para Super Lojistas (sem taxas adicionais)
+
+- Ajustada lógica de cálculo em components/StoreRequest.tsx (linhas 257-345)
+  * Função calculateValues verifica isSuperStore e ajusta cálculo de cost
+  * Se Super Lojista: cost = partnerNet (sem adicionar taxas)
+  * Se lojista comum: mantém cálculo original com taxas
+
+- Implementado feedback visual em components/StoreRequest.tsx (linhas 837-863)
+  * Banner verde informativo para Super Lojistas
+  * Exibição de taxas zeradas em verde: "R$ 0,00 (Isento)" e "0,0% (Isento)"
+  * Mensagem clara: "Você paga apenas o valor da entrega, sem taxas da plataforma"
+
+RESULTADO:
+✅ Super Lojistas pagam apenas valor da entrega (íntegro para o entregador)
+✅ Lojistas comuns continuam pagando taxas normais (não afetados)
+✅ Entregador recebe 100% do valor da entrega de Super Lojistas
+✅ Interface mostra claramente a isenção de taxas
+
+PRÓXIMOS PASSOS:
+- Executar testes manuais conforme walkthrough.md
+- Validar no banco de dados após criação de pedidos
+- Monitorar impacto no faturamento da plataforma

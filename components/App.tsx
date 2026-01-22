@@ -33,7 +33,7 @@ const StoreCatalog = React.lazy(() => import('./StoreCatalog').then(module => ({
 const WhatsappContainer = React.lazy(() => import('./Whatsapp/WhatsappContainer'));
 
 const StoreRequest = React.lazy(() => import('./StoreRequest').then(module => ({ default: module.StoreRequest })));
-const OrderHistory = React.lazy(() => import('./OrderHistory').then(module => ({ default: module.OrderHistory })));
+const OrderHistory = React.lazy(() => import('./OrderHistory'));
 const StoreTeam = React.lazy(() => import('./StoreTeam').then(module => ({ default: module.StoreTeam })));
 const StoreReports = React.lazy(() => import('./StoreReports').then(module => ({ default: module.StoreReports })));
 const StoreMarketing = React.lazy(() => import('./StoreMarketing').then(module => ({ default: module.StoreMarketing })));

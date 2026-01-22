@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle } from 'lucide-react';
+import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle, Eye } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { StoreProduct, Category } from '../types';
@@ -46,9 +46,12 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'model', content: string }[]>([]);
     const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [pendingReviewProducts, setPendingReviewProducts] = useState<Partial<StoreProduct & { id_temp: string, category_name: string }>[]>([]);
+    const [pendingChatProducts, setPendingChatProducts] = useState<Partial<StoreProduct & { id_temp: string, category_name: string }>[]>([]);
+    const [pendingBatchProducts, setPendingBatchProducts] = useState<Partial<StoreProduct & { id_temp: string, category_name: string }>[]>([]);
     const [analysisSuggestions, setAnalysisSuggestions] = useState<AnalysisSuggestion[]>([]);
     const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
+    const [previewItem, setPreviewItem] = useState<any>(null);
     const [isAILoading, setIsAILoading] = useState(false);
     const [isBatchLoading, setIsBatchLoading] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -59,7 +62,6 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
 
     // Editing State
     const [editingItem, setEditingItem] = useState<string | null>(null); // id_temp being edited
-    const [previewItem, setPreviewItem] = useState<any>(null); // item for preview modal
     const [editForm, setEditForm] = useState<Partial<StoreProduct & { category_name: string }>>({});
 
     const { confirm, alert: showMessage } = useDialog();
@@ -122,12 +124,20 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             }
         }
 
-        const savedPending = localStorage.getItem('ze_store_pending_products');
-        if (savedPending) {
+        const savedPendingChat = localStorage.getItem('ze_store_pending_chat');
+        const savedPendingBatch = localStorage.getItem('ze_store_pending_batch');
+        if (savedPendingChat) {
             try {
-                setPendingReviewProducts(JSON.parse(savedPending));
+                setPendingChatProducts(JSON.parse(savedPendingChat));
             } catch (e) {
-                console.error("Erro ao carregar produtos pendentes:", e);
+                console.error("Erro ao carregar produtos pendentes do chat:", e);
+            }
+        }
+        if (savedPendingBatch) {
+            try {
+                setPendingBatchProducts(JSON.parse(savedPendingBatch));
+            } catch (e) {
+                console.error("Erro ao carregar produtos pendentes da lista:", e);
             }
         }
     }, []);
@@ -145,8 +155,12 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     }, [analysisReport, analysisSuggestions]);
 
     useEffect(() => {
-        localStorage.setItem('ze_store_pending_products', JSON.stringify(pendingReviewProducts));
-    }, [pendingReviewProducts]);
+        localStorage.setItem('ze_store_pending_chat', JSON.stringify(pendingChatProducts));
+    }, [pendingChatProducts]);
+
+    useEffect(() => {
+        localStorage.setItem('ze_store_pending_batch', JSON.stringify(pendingBatchProducts));
+    }, [pendingBatchProducts]);
 
     const loadSettings = async () => {
         try {
@@ -216,30 +230,35 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         try {
             const catNames = categories.map(c => c.name).join(', ');
 
-            const prompt = `Atue como um especialista em cadastro de produtos para delivery.
-            Categorias disponíveis na loja: ${catNames || 'Geral'}.
+            const prompt = `Atue como um EXPERT COPYWRITER e CONSULTOR DE VENDAS para delivery.
+            Categorias na loja: ${catNames || 'Geral'}.
 
-            Analise: "${userMsg}" ${currentImage ? 'e a imagem enviada (cardápio/produto).' : '.'}
+            ENTRADA: "${userMsg}" ${currentImage ? 'e IMAGEM (analise detalhes visuais).' : '.'}
 
-            Se for DÚVIDA / CONVERSA: Responda amigavelmente em HTML(use<b>, <br>, <i>).
-            Se for CRIAÇÃO DE PRODUTO ${currentImage ? 'ou ANÁLISE DE IMAGEM' : ''}: Gere um JSON.
+            DIRETRIZES DE OURO:
+            1. PERSONA: Você é um mestre em vendas. Suas descrições devem ser IRRESISTÍVEIS, usando gatilhos de apetite, frescor e conveniência.
+            2. PROATIVIDADE MÁXIMA: Se detectar itens vendíveis, SEMPRE gere "PRODUCT_CREATION". Se falta preço, sugira um valor "premium" de mercado.
+            3. EXTRAÇÃO DE IMAGEM: Se for um cardápio, ignore ruídos e extraia TODOS os itens com precisão cirúrgica.
+            4. COPYWRITING:
+               - Artesanal: "Pão brioche selado na manteiga, blend suculento de 180g, queijo cheddar derretido..." (Liste ingredientes de forma poética).
+               - Industrial: "Coca-Cola trincando de gelada, o acompanhamento perfeito para sua refeição." (Foco no momento de consumo).
 
-            Formato JSON esperado:
+            JSON ESPERADO:
             {
                 "type": "PRODUCT_CREATION",
-                "content": "Pequeno texto confirmando a ação",
+                "content": "Texto vendedor confirmando a ação e justificando preços sugeridos",
                 "products": [
                     {
-                        "name": "Nome Produto",
-                        "description": "Descrição vendedora",
-                        "price": 25.00,
-                        "category_name": "Escolha uma das categorias disponíveis ou sugira uma nova se não houver match"
+                        "name": "Nome Impactante",
+                        "description": "Copy irresistível seguindo as regras",
+                        "price": 0.00,
+                        "category_name": "Categoria mais adequada"
                     }
                 ]
             }
 
-            Se não for criação, retorne apenas o texto HTML (ou JSON com type INFORMATION).
-            Responda no idioma Português do Brasil.`;
+            Se for apenas conversa teórica, use "INFORMATION" com formatação HTML rica.
+            IDOMA: Português do Brasil.`;
 
             const response = await cloud.generateAIContent(
                 prompt,
@@ -261,7 +280,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                                 id_temp: crypto.randomUUID(),
                                 is_active: true
                             }));
-                            setPendingReviewProducts(prev => [...prev, ...newProducts]);
+                            setPendingChatProducts(prev => [...prev, ...newProducts]);
 
                             setChatHistory(prev => [...prev, {
                                 role: 'model',
@@ -302,19 +321,23 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         try {
             const catNames = categories.map(c => c.name).join(', ');
 
-            const prompt = `Transforme esta lista em produtos de delivery:
-    "${batchInput}"
+            const prompt = `Atue como um ALGORITMO DE EXTRAÇÃO E COPYWRITING EM MASSA.
+    LISTA BRUTA: "${batchInput}"
+    Categorias: ${catNames}.
 
-    Categorias da loja: ${catNames}.
+    TAREFA: Transformar cada linha em um produto de alta conversão.
+    - Se a linha estiver bagunçada, use inteligência para deduzir Nome, Preço e Categoria.
+    - Se não houver preço, aplique um valor médio de mercado.
+    - Gere descrições RICAS e CRIATIVAS para cada item (Artesanal = Ingredientes, Industrial = Comercial).
 
-    Retorne APENAS um JSON array:
+    RETORNE APENAS JSON ARRAY:
     [
-    {
-        "name": "Nome",
-    "description": "Descrição",
-    "price": 0.00,
-    "category_name": "Categoria"
-                }
+      {
+        "name": "Nome do Produto",
+        "description": "Copy persuasiva e detalhada",
+        "price": 0.00,
+        "category_name": "Categoria"
+      }
     ]`;
 
             const response = await cloud.generateAIContent(prompt, apiKey);
@@ -329,7 +352,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                         id_temp: crypto.randomUUID(),
                         is_active: true
                     }));
-                    setPendingReviewProducts(newProducts);
+                    setPendingBatchProducts(newProducts);
                 }
             }
         } catch (error: any) {
@@ -355,44 +378,45 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             const catalogSummary = products.map(p => `- ${p.name} (R$${p.price}) | Categoria: ${p.category} | Descrição: ${p.description || 'SEM DESCRIÇÃO'}`).join('\n');
             const catNames = categories.map(c => c.name).join(', ');
 
-            const prompt = `Atue como um Consultor de Menu de Delivery Expert e Analista de Dados.
-    Analise este catálogo atual da loja:
+            const prompt = `Atue como um MENTOR DE NEGÓCIOS Estratégico e Especialista em Engenharia de Cardápio.
+    DADOS DO CATÁLOGO:
     ${catalogSummary}
 
-    Categorias da loja: ${catNames}.
+    Categorias: ${catNames}.
 
-    Sua tarefa é gerar um DIAGNÓSTICO COMPLETO do catálogo.
+    OBJETIVO: Diagnosticar falhas e sugerir ações que AUMENTEM O TICKET MÉDIO E A CONVERSÃO.
+    
+    DIRETRIZES DE ANÁLISE:
+    1. PSICOLOGIA DE PREÇOS: Identifique se há falta de combos ou ancoragem de preços.
+    2. GATILHOS MENTAIS: Sugira descrições que usem Escassez, Urgência ou Prova Social.
+    3. MIX DE PRODUTOS: Sugira itens que faltam para complementar a experiência (cross-sell).
+    4. HIGIENE VISUAL: Avalie se os nomes são curtos e impactantes.
 
-    Retorne APENAS um JSON rigoroso com:
+    RETORNE APENAS JSON:
     {
         "report": {
-        "score": 0 a 100 (nota geral de qualidade comercial),
-    "metrics": {
-        "descriptionQuality": 0 a 100 (baseado em quão vendedora é a descrição),
-    "mixCompleteness": 0 a 100 (se faltam produtos óbvios para o nicho),
-    "pricingConsistency": 0 a 100 (se os preços estão coerentes)
-                    },
-    "summary": "Resumo executivo curto",
-    "strengths": ["Ponto forte 1", "..."],
-    "weaknesses": ["Ponto fraco 1", "..."]
-                },
-    "suggestions": [
-    {
-        "type": "improvement" | "new_product",
-    "target_product_name": "Nome exato se for improvement",
-    "suggestion": "Título curto",
-    "reason": "Explicação curta",
-    "new_data": {"name": "...", "price": 0, "description": "...", "category_name": "..." }
-                    }
-    ]
+            "score": 0-100,
+            "metrics": {
+                "descriptionQuality": 0-100,
+                "mixCompleteness": 0-100,
+                "pricingConsistency": 0-100
+            },
+            "summary": "Texto direto e provocativo sobre o estado do catálogo",
+            "strengths": ["Ponto forte real e estratégico"],
+            "weaknesses": ["Ponto fraco crítico que impede vendas"]
+        },
+        "suggestions": [
+            {
+                "type": "improvement" | "new_product",
+                "target_product_name": "Nome exato",
+                "suggestion": "Título da Melhoria",
+                "reason": "Explicação baseada em psicologia de vendas",
+                "new_data": { "name": "...", "price": 0, "description": "Copy Mestre", "category_name": "..." }
             }
+        ]
+    }
 
-    Critérios:
-    1. Se o produto tem descrição vazia ou muito curta, sugira 'improvement' com uma descrição 'vendedora' no 'new_data'.
-    2. Se faltam acompanhamentos ou bebidas óbvias, sugira 'new_product'.
-    3. Analise se os nomes são atraentes.
-
-    Limite a 4-5 sugestões de alto impacto. Idioma: Português do Brasil.`;
+    IDOMA: Português do Brasil.`;
 
             const response = await cloud.generateAIContent(prompt, apiKey);
 
@@ -419,7 +443,9 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     };
 
     const handleApproveProduct = async (tempId: string) => {
-        const prod = pendingReviewProducts.find(p => p.id_temp === tempId);
+        const isChat = pendingChatProducts.some(p => p.id_temp === tempId);
+        const list = isChat ? pendingChatProducts : pendingBatchProducts;
+        const prod = list.find(p => p.id_temp === tempId);
         if (!prod) return;
 
         setIsSaving(true);
@@ -434,7 +460,11 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                 is_active: true
             });
 
-            setPendingReviewProducts(prev => prev.filter(p => p.id_temp !== tempId));
+            if (isChat) {
+                setPendingChatProducts(prev => prev.filter(p => p.id_temp !== tempId));
+            } else {
+                setPendingBatchProducts(prev => prev.filter(p => p.id_temp !== tempId));
+            }
             onProductCreated(); // Atualiza lista pai
             showMessage({ title: 'Sucesso', message: 'Produto adicionado ao catálogo!' });
         } catch (error: any) {
@@ -483,15 +513,18 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
 
 
     const handleApproveAll = async () => {
+        const list = generatorMode === 'chat' ? pendingChatProducts : pendingBatchProducts;
+        if (list.length === 0) return;
+
         const ok = await confirm({
             title: 'Salvar Tudo',
-            message: `Deseja adicionar estes ${pendingReviewProducts.length} produtos à sua loja?`
+            message: `Deseja adicionar estes ${list.length} produtos à sua loja?`
         });
         if (!ok) return;
 
         setIsSaving(true);
         try {
-            for (const prod of pendingReviewProducts) {
+            for (const prod of list) {
                 const catId = await ensureCategoryExists(prod.category_name || '');
                 await cloud.createStoreProduct({
                     name: prod.name,
@@ -501,8 +534,12 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                     is_active: true
                 });
             }
-            setPendingReviewProducts([]);
-            setBatchInput('');
+            if (generatorMode === 'chat') {
+                setPendingChatProducts([]);
+            } else {
+                setPendingBatchProducts([]);
+                setBatchInput('');
+            }
             onProductCreated();
             showMessage({ title: 'Sucesso', message: 'Todos os produtos foram adicionados!' });
         } catch (error) {
@@ -513,7 +550,8 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     };
 
     const handleDiscard = (tempId: string) => {
-        setPendingReviewProducts(prev => prev.filter(p => p.id_temp !== tempId));
+        setPendingChatProducts(prev => prev.filter(p => p.id_temp !== tempId));
+        setPendingBatchProducts(prev => prev.filter(p => p.id_temp !== tempId));
     };
 
     const startEdit = (prod: any) => {
@@ -522,7 +560,10 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     };
 
     const saveEdit = () => {
-        setPendingReviewProducts(prev => prev.map(p =>
+        setPendingChatProducts(prev => prev.map(p =>
+            p.id_temp === editingItem ? { ...p, ...editForm } : p
+        ));
+        setPendingBatchProducts(prev => prev.map(p =>
             p.id_temp === editingItem ? { ...p, ...editForm } : p
         ));
         setEditingItem(null);
@@ -608,6 +649,147 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                                 </div>
                             </div>
                         ))}
+
+                        {pendingChatProducts.length > 0 && (
+                            <div className="pt-6 mt-6 border-t border-gray-100 dark:border-gray-700">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                            <Sparkles className="w-4 h-4 text-white" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-sm dark:text-white uppercase tracking-tight">Produtos Sugeridos</h4>
+                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Gerados pela IA • {pendingChatProducts.length} {pendingChatProducts.length === 1 ? 'item' : 'itens'}</p>
+                                        </div>
+                                    </div>
+                                    {pendingChatProducts.length > 1 && (
+                                        <Button size="sm" onClick={handleApproveAll} disabled={isSaving} className="rounded-xl">
+                                            <Check className="w-3.5 h-3.5 mr-1.5" />
+                                            Aprovar Tudo
+                                        </Button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-3">
+                                    {pendingChatProducts.map((prod) => (
+                                        <div
+                                            key={prod.id_temp}
+                                            className="group relative bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-brand-200 dark:hover:border-brand-900/30 transition-all duration-300 hover:shadow-xl hover:shadow-brand-500/5 animate-in fade-in slide-in-from-bottom-2"
+                                        >
+                                            {/* Badge IA */}
+                                            <div className="absolute -top-2 -right-2 px-2 py-1 bg-gradient-to-r from-brand-500 to-purple-600 rounded-full shadow-lg">
+                                                <span className="text-[8px] font-black text-white uppercase tracking-widest flex items-center gap-1">
+                                                    <Sparkles className="w-2 h-2" />
+                                                    IA
+                                                </span>
+                                            </div>
+
+                                            {editingItem === prod.id_temp ? (
+                                                <div className="space-y-3">
+                                                    <input
+                                                        value={editForm.name}
+                                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                                        className="w-full text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
+                                                        placeholder="Nome do produto"
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="number"
+                                                            value={editForm.price}
+                                                            onChange={e => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
+                                                            className="w-24 text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
+                                                            placeholder="Preço"
+                                                        />
+                                                        <select
+                                                            value={editForm.category_name}
+                                                            onChange={e => setEditForm({ ...editForm, category_name: e.target.value })}
+                                                            className="flex-1 text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
+                                                        >
+                                                            {categories.map(c => (
+                                                                <option key={c.id} value={c.name}>{c.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <textarea
+                                                        value={editForm.description}
+                                                        onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                                                        className="w-full text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white h-20 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all resize-none"
+                                                        placeholder="Descrição do produto"
+                                                    />
+                                                    <div className="flex justify-end gap-2 pt-2">
+                                                        <Button size="sm" variant="secondary" onClick={() => setEditingItem(null)} className="rounded-xl">
+                                                            <X className="w-3.5 h-3.5 mr-1.5" />
+                                                            Cancelar
+                                                        </Button>
+                                                        <Button size="sm" onClick={saveEdit} className="rounded-xl">
+                                                            <Check className="w-3.5 h-3.5 mr-1.5" />
+                                                            Salvar
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.15em] py-1.5 px-2.5 bg-brand-50 dark:bg-brand-900/20 rounded-full border border-brand-100 dark:border-brand-900/30">
+                                                            <Package className="w-2.5 h-2.5" />
+                                                            {prod.category_name}
+                                                        </span>
+                                                        <span className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
+                                                            {prod.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                        </span>
+                                                    </div>
+                                                    <h5 className="font-black text-base dark:text-white mb-2 leading-tight group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                                                        {prod.name}
+                                                    </h5>
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
+                                                        {prod.description || 'Sem descrição'}
+                                                    </p>
+                                                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                                                        <div className="flex gap-1.5">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setPreviewItem(prod);
+                                                                    setShowPreviewModal(true);
+                                                                }}
+                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all hover:scale-105"
+                                                                title="Visualizar"
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDiscard(prod.id_temp!)}
+                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-rose-500 hover:text-rose-500 transition-all hover:scale-105"
+                                                                disabled={isSaving}
+                                                                title="Descartar"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => startEdit(prod)}
+                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-amber-500 hover:text-amber-600 transition-all hover:scale-105"
+                                                                disabled={isSaving}
+                                                                title="Editar"
+                                                            >
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleApproveProduct(prod.id_temp!)}
+                                                            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-brand-500/25 hover:shadow-xl hover:shadow-brand-500/40 hover:scale-105 active:scale-95"
+                                                            disabled={isSaving}
+                                                        >
+                                                            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                                                            Adicionar
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div ref={chatEndRef} />
                     </>
                 )}
 
@@ -623,6 +805,147 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                         <Button fullWidth size="sm" onClick={handleBatchGenerate} disabled={isBatchLoading || !batchInput.trim()}>
                             <Sparkles className="w-4 h-4 mr-2" /> Gerar Produtos
                         </Button>
+
+                        {/* Produtos pendentes específicos do modo Lista aparecem aqui agora */}
+                        {pendingBatchProducts.length > 0 && (
+                            <div className="pt-6 mt-6 border-t border-gray-100 dark:border-gray-700">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
+                                            <Package className="w-4 h-4 text-white" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-sm dark:text-white uppercase tracking-tight">Revisão de Lote</h4>
+                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Importados • {pendingBatchProducts.length} {pendingBatchProducts.length === 1 ? 'item' : 'itens'}</p>
+                                        </div>
+                                    </div>
+                                    {pendingBatchProducts.length > 1 && (
+                                        <Button size="sm" onClick={handleApproveAll} disabled={isSaving} className="rounded-xl">
+                                            <Check className="w-3.5 h-3.5 mr-1.5" />
+                                            Aprovar Tudo
+                                        </Button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-3">
+                                    {pendingBatchProducts.map((prod) => (
+                                        <div
+                                            key={prod.id_temp}
+                                            className="group relative bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 animate-in fade-in slide-in-from-bottom-2"
+                                        >
+                                            {/* Badge Lote */}
+                                            <div className="absolute -top-2 -right-2 px-2 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full shadow-lg">
+                                                <span className="text-[8px] font-black text-white uppercase tracking-widest flex items-center gap-1">
+                                                    <Package className="w-2 h-2" />
+                                                    LOTE
+                                                </span>
+                                            </div>
+
+                                            {editingItem === prod.id_temp ? (
+                                                <div className="space-y-3">
+                                                    <input
+                                                        value={editForm.name}
+                                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                                        className="w-full text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                                                        placeholder="Nome do produto"
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="number"
+                                                            value={editForm.price}
+                                                            onChange={e => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
+                                                            className="w-24 text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                                                            placeholder="Preço"
+                                                        />
+                                                        <select
+                                                            value={editForm.category_name}
+                                                            onChange={e => setEditForm({ ...editForm, category_name: e.target.value })}
+                                                            className="flex-1 text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                                                        >
+                                                            {categories.map(c => (
+                                                                <option key={c.id} value={c.name}>{c.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <textarea
+                                                        value={editForm.description}
+                                                        onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                                                        className="w-full text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white h-20 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all resize-none"
+                                                        placeholder="Descrição do produto"
+                                                    />
+                                                    <div className="flex justify-end gap-2 pt-2">
+                                                        <Button size="sm" variant="secondary" onClick={() => setEditingItem(null)} className="rounded-xl">
+                                                            <X className="w-3.5 h-3.5 mr-1.5" />
+                                                            Cancelar
+                                                        </Button>
+                                                        <Button size="sm" onClick={saveEdit} className="rounded-xl">
+                                                            <Check className="w-3.5 h-3.5 mr-1.5" />
+                                                            Salvar
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.15em] py-1.5 px-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-full border border-emerald-100 dark:border-emerald-900/30">
+                                                            <Package className="w-2.5 h-2.5" />
+                                                            {prod.category_name}
+                                                        </span>
+                                                        <span className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
+                                                            {prod.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                        </span>
+                                                    </div>
+                                                    <h5 className="font-black text-base dark:text-white mb-2 leading-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                                                        {prod.name}
+                                                    </h5>
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
+                                                        {prod.description || 'Sem descrição'}
+                                                    </p>
+                                                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                                                        <div className="flex gap-1.5">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setPreviewItem(prod);
+                                                                    setShowPreviewModal(true);
+                                                                }}
+                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all hover:scale-105"
+                                                                title="Visualizar"
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDiscard(prod.id_temp!)}
+                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-rose-500 hover:text-rose-500 transition-all hover:scale-105"
+                                                                disabled={isSaving}
+                                                                title="Descartar"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => startEdit(prod)}
+                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-amber-500 hover:text-amber-600 transition-all hover:scale-105"
+                                                                disabled={isSaving}
+                                                                title="Editar"
+                                                            >
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleApproveProduct(prod.id_temp!)}
+                                                            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/40 hover:scale-105 active:scale-95"
+                                                            disabled={isSaving}
+                                                        >
+                                                            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                                                            Adicionar
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -769,76 +1092,6 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                     </div>
                 )}
 
-                {/* Pendings Review Area (Common for Chat/Batch) */}
-                {pendingReviewProducts.length > 0 && generatorMode !== 'analyze' && (
-                    <div className="pt-4 mt-2 border-t dark:border-gray-700">
-                        <div className="flex justify-between items-center mb-2">
-                            <h4 className="font-bold text-xs uppercase text-gray-400">Revisão ({pendingReviewProducts.length})</h4>
-                            {pendingReviewProducts.length > 1 && (
-                                <Button size="sm" onClick={handleApproveAll} disabled={isSaving}>
-                                    Aprovar Tudo
-                                </Button>
-                            )}
-                        </div>
-
-                        <div className="space-y-3">
-                            {pendingReviewProducts.map((prod) => (
-                                <div key={prod.id_temp} className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/20 p-3 rounded-2xl">
-                                    {editingItem === prod.id_temp ? (
-                                        <div className="space-y-2">
-                                            <input
-                                                value={editForm.name}
-                                                onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                                                className="w-full text-xs p-1 rounded border"
-                                                placeholder="Nome"
-                                            />
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="number"
-                                                    value={editForm.price}
-                                                    onChange={e => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
-                                                    className="w-20 text-xs p-1 rounded border"
-                                                    placeholder="Preço"
-                                                />
-                                                <select // Forçar re-render se necessário
-                                                    value={editForm.category_name}
-                                                    onChange={e => setEditForm({ ...editForm, category_name: e.target.value })}
-                                                    className="flex-1 text-xs p-1 rounded border"
-                                                >
-                                                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="flex justify-end gap-2">
-                                                <button onClick={() => setEditingItem(null)} className="text-xs text-gray-500">Cancelar</button>
-                                                <button onClick={saveEdit} className="text-xs font-bold text-brand-600">Salvar</button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <h5 className="font-bold text-sm dark:text-white">{prod.name}</h5>
-                                                    <p className="text-[10px] text-gray-500">
-                                                        {prod.category_name} • R$ {prod.price?.toFixed(2)}
-                                                    </p>
-                                                    <p className="text-[10px] text-gray-400 line-clamp-1">{prod.description}</p>
-                                                </div>
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => setPreviewItem(prod)} className="p-1 hover:bg-white rounded" title="Ver Detalhes"><AlertCircle className="w-3 h-3 text-brand-500" /></button>
-                                                    <button onClick={() => startEdit(prod)} className="p-1 hover:bg-white rounded"><Edit2 className="w-3 h-3 text-gray-400" /></button>
-                                                    <button onClick={() => handleDiscard(prod.id_temp!)} className="p-1 hover:bg-red-50 rounded"><X className="w-3 h-3 text-red-400" /></button>
-                                                </div>
-                                            </div>
-                                            <Button size="sm" fullWidth variant="success" onClick={() => handleApproveProduct(prod.id_temp!)} disabled={isSaving}>
-                                                <Check className="w-3 h-3 mr-1" /> Aprovar
-                                            </Button>
-                                        </>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
                 <div ref={chatEndRef} />
             </div>
 
@@ -888,34 +1141,97 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             )}
 
             {/* Preview Modal */}
-            {previewItem && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 text-left">
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="p-6">
-                            <h4 className="font-black text-lg dark:text-white mb-2 uppercase tracking-tight">Preview do Produto</h4>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Nome</label>
-                                    <p className="text-sm font-bold dark:text-gray-200">{previewItem.name}</p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Preço</label>
-                                        <p className="text-sm font-bold text-brand-600">R$ {previewItem.price?.toFixed(2)}</p>
+            {showPreviewModal && previewItem && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 text-left animate-in fade-in duration-200" onClick={() => setShowPreviewModal(false)}>
+                    <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl shadow-black/20 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                        {/* Header com Gradiente */}
+                        <div className="relative bg-gradient-to-br from-brand-600 to-purple-700 p-6 text-white overflow-hidden">
+                            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjA1IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+                            <div className="relative z-10">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+                                            <Eye className="w-5 h-5 text-white" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-sm uppercase tracking-tight">Preview do Produto</h4>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Visualização Detalhada</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Categoria</label>
-                                        <p className="text-sm font-bold dark:text-gray-200">{previewItem.category_name}</p>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Descrição</label>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed italic">"{previewItem.description}"</p>
+                                    <button
+                                        onClick={() => setShowPreviewModal(false)}
+                                        className="p-2 hover:bg-white/20 rounded-xl transition-all"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
                                 </div>
                             </div>
-                            <Button fullWidth className="mt-8 rounded-2xl" onClick={() => setPreviewItem(null)}>
-                                Fechar Preview
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="p-6 space-y-5">
+                            {/* Categoria e Preço */}
+                            <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-800">
+                                <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.15em] py-2 px-3 bg-brand-50 dark:bg-brand-900/20 rounded-full border border-brand-100 dark:border-brand-900/30">
+                                    <Package className="w-3 h-3" />
+                                    {previewItem.category_name || previewItem.category || 'Sem categoria'}
+                                </span>
+                                <div className="text-right">
+                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Preço</p>
+                                    <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                                        {previewItem.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Nome */}
+                            <div>
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Nome do Produto</label>
+                                <p className="text-xl font-black dark:text-white leading-tight">{previewItem.name}</p>
+                            </div>
+
+                            {/* Descrição */}
+                            <div>
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Descrição</label>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                                    {previewItem.description || 'Nenhuma descrição disponível para este produto.'}
+                                </p>
+                            </div>
+
+                            {/* Status (se disponível) */}
+                            {previewItem.is_active !== undefined && (
+                                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Status do Produto</span>
+                                    <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${previewItem.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                        {previewItem.is_active ? 'Ativo' : 'Pausado'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer com Ações */}
+                        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-800 flex gap-3">
+                            <Button
+                                fullWidth
+                                variant="secondary"
+                                onClick={() => setShowPreviewModal(false)}
+                                className="rounded-xl"
+                            >
+                                Fechar
                             </Button>
+                            {previewItem.id_temp && (
+                                <Button
+                                    fullWidth
+                                    onClick={() => {
+                                        startEdit(previewItem);
+                                        setShowPreviewModal(false);
+                                    }}
+                                    className="rounded-xl"
+                                >
+                                    <Edit2 className="w-4 h-4 mr-2" />
+                                    Editar
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>

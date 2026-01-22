@@ -254,6 +254,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
 
 
 
+
     const calculateValues = async () => {
         setCalculating(true);
         setNotification(null);
@@ -315,26 +316,63 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
             const stops = Math.max(0, deliveries.length - 1);
             const calc = estimateDeliveryCosts(points.map(p => ({ lat: p.lat!, lng: p.lng! })), stops, (fees || {}) as PartnerFeeSettings);
 
+
             if (realRouteFound) {
                 // Recalculate cost with real distance
-                // We need to apply the logic from estimateDeliveryCosts manually or update the struct
+                // IMPORTANTE: Cobrar KM apenas até primeira entrega (modelo iFood/99Food)
+
+                // Calcular distância cobrada: apenas coleta → primeira entrega
+                let chargedOrsDistance = 0;
+                if (points.length >= 2) {
+                    try {
+                        const start = points[0];
+                        const end = points[1];
+                        const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${orsKey}&start=${start.lng},${start.lat}&end=${end.lng},${end.lat}`;
+                        const resp = await fetch(url);
+                        const data = await resp.json();
+                        if (data.features && data.features[0]) {
+                            chargedOrsDistance = data.features[0].properties.summary.distance / 1000;
+                        } else {
+                            chargedOrsDistance = orsDistance; // Fallback para total
+                        }
+                    } catch {
+                        chargedOrsDistance = orsDistance; // Fallback para total
+                    }
+                } else {
+                    chargedOrsDistance = orsDistance;
+                }
+
                 const baseKm = Number(fees?.base_delivery_km || 0);
                 const baseValue = Number(fees?.base_delivery_value || 0);
                 const extraPerKm = Number(fees?.extra_km_value || 0);
                 const stopFeeTotal = Number(fees?.additional_stop_fee || 0) * Math.max(0, stops);
-                const extraKm = Math.max(0, orsDistance - baseKm);
-                const partnerNetCalc = baseValue + (extraKm * extraPerKm) + stopFeeTotal;
-                const feeFixed = Number(fees?.global_tax_fixed || 0);
-                const feePercentValue = Number(fees?.global_tax_percent || 0) * partnerNetCalc;
-                const storeTotal = partnerNetCalc + feeFixed + feePercentValue;
 
-                setDistanceKm(orsDistance);
+                // Cobrar KM extra APENAS com base na distância até primeira entrega
+                const extraKm = Math.max(0, chargedOrsDistance - baseKm);
+                const partnerNetCalc = baseValue + (extraKm * extraPerKm) + stopFeeTotal;
+
+                // Super Lojista: sem taxas da plataforma
+                let storeTotal: number;
+                if (isSuperStore) {
+                    storeTotal = partnerNetCalc; // Paga apenas o valor da entrega
+                } else {
+                    const feeFixed = Number(fees?.global_tax_fixed || 0);
+                    const feePercentValue = Number(fees?.global_tax_percent || 0) * partnerNetCalc;
+                    storeTotal = partnerNetCalc + feeFixed + feePercentValue;
+                }
+
+                setDistanceKm(orsDistance); // Mostra distância TOTAL (para exibição)
                 setPartnerNet(Number(partnerNetCalc.toFixed(2)));
                 setCost(Number(storeTotal.toFixed(2)));
             } else {
                 setDistanceKm(calc.distanceKm);
                 setPartnerNet(calc.partnerNet);
-                setCost(calc.total);
+                // Super Lojista: sem taxas da plataforma
+                if (isSuperStore) {
+                    setCost(calc.partnerNet); // Paga apenas o valor da entrega
+                } else {
+                    setCost(calc.total); // Paga com taxas normais
+                }
             }
 
         } catch (e: any) {
@@ -343,6 +381,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
             setCalculating(false);
         }
     };
+
 
     // Recalcular valores quando mudar para ASSOCIATE
     useEffect(() => {
@@ -820,6 +859,14 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                                 <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2"><Calculator className="w-4 h-4" /> Cálculo de Valores</h3>
                                 <Button size="sm" onClick={calculateValues} disabled={calculating} className="rounded-lg">{calculating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Calcular'}</Button>
                             </div>
+                            {isSuperStore && (
+                                <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-center gap-2">
+                                    <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                    <p className="text-xs font-bold text-green-700 dark:text-green-300">
+                                        Benefício Super Lojista: Você paga apenas o valor da entrega, sem taxas da plataforma!
+                                    </p>
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                                     <p className="text-xs font-bold text-gray-500">Distância Total {isRealRoute ? '(Real)' : '(Reta)'}</p>
@@ -837,8 +884,17 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                             <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
                                     <p className="text-xs font-bold text-gray-500">Taxas da Plataforma</p>
-                                    <p className="text-sm">Fixa: {formatCurrency(Number(fees?.global_tax_fixed || 0))}</p>
-                                    <p className="text-sm">Percentual: {((Number(fees?.global_tax_percent || 0)) * 100).toFixed(1)}%</p>
+                                    {isSuperStore ? (
+                                        <>
+                                            <p className="text-sm text-green-600 dark:text-green-400 font-bold">Fixa: R$ 0,00 (Isento)</p>
+                                            <p className="text-sm text-green-600 dark:text-green-400 font-bold">Percentual: 0,0% (Isento)</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-sm">Fixa: {formatCurrency(Number(fees?.global_tax_fixed || 0))}</p>
+                                            <p className="text-sm">Percentual: {((Number(fees?.global_tax_percent || 0)) * 100).toFixed(1)}%</p>
+                                        </>
+                                    )}
                                 </div>
                                 <div>
                                     <p className="text-xs font-bold text-gray-500">Resumo</p>

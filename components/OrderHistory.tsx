@@ -71,7 +71,7 @@ const OrderHistorySkeleton: React.FC<OrderHistorySkeletonProps> = ({ showStats =
     </div>
 );
 
-export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
+const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
     const [requests, setRequests] = useState<PartnerRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState<HistoryFilters>({
@@ -102,29 +102,108 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
         setLoading(true);
         try {
             const currentPage = isRefresh ? 0 : page;
-            const res = await cloud.fetchPartnerRequestHistory(userRole, filters, currentPage);
-            const data = Array.isArray(res?.data) ? res.data : [];
-            const statsRes = res?.stats ?? null;
 
-            if (isRefresh) {
-                setRequests(data);
-                setPage(1); // Next page
+            if (userRole === 'store_partner') {
+                // Lojistas veem histórico unificado (POS + Delivery)
+                const unifiedOrders = await cloud.getUnifiedOrderHistory(
+                    (await cloud.getClient()?.auth.getUser())?.data.user?.id || ''
+                );
+
+                // Mapear Order[] -> PartnerRequest[] para manter compatibilidade UI
+                const mappedRequests: PartnerRequest[] = unifiedOrders.map((o: any) => {
+                    let status: PartnerRequestStatus = 'PENDING';
+                    if (o.status === 'DELIVERED' || o.status === 'COMPLETED') status = 'COMPLETED';
+                    if (o.status === 'IN_DELIVERY' || o.status === 'IN_TRANSIT') status = 'IN_TRANSIT';
+                    if (o.status === 'CANCELLED') status = 'CANCELLED';
+
+                    // Parse addresses safely
+                    const pickupAddr = 'Minha Loja';
+                    let deliveryAddr = 'Balcão/Mesa';
+
+                    if (o.order_type === 'DELIVERY' && o.shipping_address) {
+                        const addr = o.shipping_address;
+                        deliveryAddr = `${addr.street || ''}, ${addr.number || ''} - ${addr.district || ''}`;
+                    } else if (o.order_type === 'PICKUP') {
+                        deliveryAddr = 'Retirada no Balcão';
+                    } else if (o.order_type === 'LOCAL') {
+                        deliveryAddr = `Mesa ${o.table_identifier || ''}`;
+                    }
+
+                    return {
+                        id: o.id,
+                        created_at: o.created_at,
+                        status: status,
+                        store_id: o.store_id || '',
+                        pickup_address: pickupAddr,
+                        delivery_address: deliveryAddr,
+                        distance_km: o.distance_km || 0,
+                        total_charged_store: o.total_price, // Para loja, total é o valor do pedido
+                        net_value_partner: 0, // Irrelevante para view de loja neste contexto
+                        fee_fixed: 0,
+                        fee_percent_value: 0,
+                        partner: o.driver_id ? { name: 'Entregador' } : undefined, // Placeholder se tiver driver
+                        // ... outros campos obrigatórios do tipo se houver
+                    } as PartnerRequest;
+                });
+
+                // Client-side filtering
+                let filtered = mappedRequests;
+                if (filters.status && filters.status !== 'ALL') {
+                    filtered = filtered.filter(r => r.status === filters.status);
+                }
+                // Date filtering
+                if (filters.startDate) {
+                    filtered = filtered.filter(r => new Date(r.created_at) >= new Date(filters.startDate!));
+                }
+                if (filters.endDate) {
+                    // Ajuste para final do dia
+                    const end = new Date(filters.endDate);
+                    end.setHours(23, 59, 59);
+                    filtered = filtered.filter(r => new Date(r.created_at) <= end);
+                }
+
+                setRequests(filtered);
+                setHasMore(false); // Unified endpoint currently returns all/limit, no pagination cursor implemented yet in this adapter
+
+                // Calcular stats locais
+                const totalVal = filtered.filter(r => r.status !== 'CANCELLED').reduce((acc, curr) => acc + curr.total_charged_store, 0);
+                const completedCount = filtered.filter(r => r.status === 'COMPLETED').length;
+                const cancelledCount = filtered.filter(r => r.status === 'CANCELLED').length;
+
+                setStats({
+                    counts: {
+                        completed: completedCount,
+                        cancelled: cancelledCount,
+                        failed: 0
+                    },
+                    financial: {
+                        total_spent: totalVal, // Reutilizando campo visualmente
+                        total_earnings: 0
+                    }
+                });
+
             } else {
-                setRequests(prev => [...prev, ...data]);
-                setPage(prev => prev + 1);
+                // Entregadores continuam usando endpoint original
+                const res = await cloud.fetchPartnerRequestHistory(userRole, filters, currentPage);
+                const data = Array.isArray(res?.data) ? res.data : [];
+                const statsRes = res?.stats ?? null;
+
+                if (isRefresh) {
+                    setRequests(data);
+                    setPage(1);
+                } else {
+                    setRequests(prev => [...prev, ...data]);
+                    setPage(prev => prev + 1);
+                }
+
+                if (res.data.length < 20) setHasMore(false);
+                else setHasMore(true);
+
+                if (statsRes) setStats(statsRes);
             }
 
-            if (res.data.length < 20) setHasMore(false);
-            else setHasMore(true);
-
-            if (res.stats) setStats(res.stats);
-
-            setHasMore(data.length >= 20);
-
-            if (statsRes) setStats(statsRes);
-
         } catch (e) {
-            // console.error(e);
+            console.error(e);
         } finally {
             setLoading(false);
         }
@@ -448,3 +527,5 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
         </div>
     );
 };
+
+export default OrderHistory;

@@ -2889,15 +2889,18 @@ export const adminGetReferrals = async () => {
 };
 
 export const getStoreReportsData = async (): Promise<StoreReportData | null> => {
-    return {
-        totalRequests: 0,
-        totalValue: 0,
-        completedCount: 0,
-        cancelledCount: 0,
-        failedCount: 0,
-        peakHours: [],
-        driverPerformance: []
-    };
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb.rpc('get_store_dashboard_stats');
+
+    if (error) {
+        console.error('Error fetching store reports:', error);
+        return null;
+    }
+
+    // O retorno do RPC já deve estar no formato JSONB compatível, mas garantimos a tipagem
+    return data as StoreReportData;
 };
 
 export const getStoreShippingRules = async (): Promise<StoreShippingRule[]> => {
@@ -5183,136 +5186,95 @@ export const importBaseProductToStore = async (baseProduct: CatalogBaseProduct) 
  * Tenta múltiplos modelos antes de falhar.
  */
 export const generateAIContent = async (prompt: string, apiKey: string, systemInstruction?: string, images?: { data: string, mimeType: string }[]) => {
-    // Validação de API Key vazia antes de tentar carregar o SDK
+    // Validação de API Key
     if (!apiKey || apiKey.trim() === '') {
         throw new Error("Chave da API não configurada. Configure em Ajustes > Configurações da Loja.");
     }
 
-    // Importação dinâmica para evitar carregar o SDK se não houver chave
-    // Importação dinâmica resiliente
-    const genAIModule = await import('@google/genai');
-    const GoogleGenAIClass = (genAIModule.GoogleGenAI || (genAIModule as any).default) as any;
-
-    if (!GoogleGenAIClass) {
-        throw new Error("SDK do Gemini não pôde ser carregado corretamente.");
-    }
-
-    // Algumas versões exigem objeto, outras string. 
-    // Tentativa robusta de inicialização
-    let genAI;
-    try {
-        // Tenta formato de objeto (Padrão novo @google/genai)
-        genAI = new GoogleGenAIClass({ apiKey: apiKey });
-    } catch (e) {
-        // Fallback para string (Legado ou @google/generative-ai)
-        console.warn("Retrying GenAI init with string...", e);
-        try {
-            genAI = new GoogleGenAIClass(apiKey);
-        } catch (e2) {
-            throw new Error("Falha ao inicializar SDK do Gemini. Verifique a compatibilidade da chave.");
-        }
-    }
-
-    if (!genAI) throw new Error("SDK do Gemini não inicializado.");
-
-    // Ordem de preferência de modelos (Otimizado para Texto + Imagem)
-    // 1.5-flash: Mais rápido e barato, ótimo para visão.
-    // 1.5-pro: Mais inteligente, fallback natural.
+    // Ordem de preferência de modelos (REST API v1)
+    // Usando versões específicas que funcionam na API v1
     const modelOrder = [
-        'gemini-1.5-flash',
-        'gemini-1.5-pro',
-        'gemini-2.0-flash-exp'
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash'
     ];
 
     let lastError: any = null;
 
-    // Padrão 1: @google/generative-ai (Legacy/Current Stable)
-    if (typeof genAI.getGenerativeModel === 'function') {
-        for (const modelName of modelOrder) {
-            try {
-                console.log(`[AI] Tentando modelo (Standard): ${modelName}`);
-                const model = genAI.getGenerativeModel({
-                    model: modelName,
-                    systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined
-                });
+    for (const modelName of modelOrder) {
+        try {
+            console.log(`[AI] Tentando modelo (REST): ${modelName}`);
 
-                const parts: any[] = [{ text: prompt }];
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-                if (images && images.length > 0) {
-                    images.forEach(img => {
-                        parts.push({
-                            inlineData: {
-                                data: img.data,
-                                mimeType: img.mimeType
-                            }
-                        });
+            const parts: any[] = [{ text: prompt }];
+
+            if (images && images.length > 0) {
+                images.forEach(img => {
+                    parts.push({
+                        inline_data: {
+                            mime_type: img.mimeType,
+                            data: img.data
+                        }
                     });
-                }
-
-                const result = await model.generateContent(parts);
-                const response = await result.response;
-                return { text: response.text(), model: modelName };
-            } catch (e: any) {
-                console.warn(`[AI] Falha no modelo ${modelName}:`, e.message);
-                lastError = e;
-                if (e.message?.includes('404') || e.message?.includes('not found')) continue;
+                });
             }
-        }
-    }
-    // Padrão 2: @google/genai (New Node SDK)
-    else if (genAI.models && typeof genAI.models.generateContent === 'function') {
-        for (const modelName of modelOrder) {
-            try {
-                console.log(`[AI] Tentando modelo (New SDK): ${modelName}`);
 
-                const contents = [
-                    {
-                        role: 'user',
-                        parts: [
-                            { text: prompt },
-                            ...(images || []).map(img => ({
-                                inlineData: {
-                                    mimeType: img.mimeType,
-                                    data: img.data
-                                }
-                            }))
-                        ]
-                    }
-                ];
+            const bodyPayload: any = {
+                contents: [{
+                    role: 'user',
+                    parts: parts
+                }]
+            };
 
-                const config: any = {
-                    model: modelName,
-                    contents: contents
+            if (systemInstruction) {
+                bodyPayload.system_instruction = {
+                    parts: [{ text: systemInstruction }]
                 };
-
-                if (systemInstruction) {
-                    config.config = { systemInstruction: { parts: [{ text: systemInstruction }] } };
-                }
-
-                const response = await genAI.models.generateContent(config);
-
-                // Extração resiliente de texto
-                let aiText = "";
-                if (response && response.candidates && response.candidates[0] && response.candidates[0].content) {
-                    aiText = response.candidates[0].content.parts[0].text || "";
-                } else if (response && typeof response.text === 'function') {
-                    aiText = response.text();
-                } else if (response && typeof response.text === 'string') {
-                    aiText = response.text;
-                }
-
-                if (!aiText && response && response.text) aiText = String(response.text);
-
-                return { text: aiText, model: modelName };
-            } catch (e: any) {
-                console.warn(`[AI] Falha no modelo ${modelName} (New SDK):`, e.message);
-                lastError = e;
             }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(bodyPayload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                let errorJson;
+                try { errorJson = JSON.parse(errorText); } catch { }
+
+                const errorMessage = errorJson?.error?.message || errorText || response.statusText;
+                console.warn(`[AI] Falha no modelo ${modelName} (HTTP ${response.status}):`, errorMessage);
+
+                // Se for 404 (Modelo não encontrado) ou 429 (Quota), lançamos erro para tentar o próximo
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+
+            // Extração resiliente de texto
+            let aiText = "";
+            if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+                aiText = data.candidates[0].content.parts[0].text || "";
+            }
+
+            if (!aiText) {
+                console.warn(`[AI] Resposta vazia do modelo ${modelName}`, data);
+                // Se a resposta foi 200 OK mas veio vazia, talvez tentar outro modelo?
+                // Por hora, consideramos falha para rodar o próximo.
+                throw new Error("Resposta Vazia da IA");
+            }
+
+            return { text: aiText, model: modelName };
+
+        } catch (e: any) {
+            console.warn(`[AI] Erro ao processar modelo ${modelName}:`, e.message);
+            lastError = e;
+            // Loop continua para o próximo modelo
         }
-    } else {
-        console.error("SDK Structure Unknown:", Object.keys(genAI));
-        throw new Error("Não foi possível identificar o método de geração no SDK carregado.");
     }
 
-    throw lastError || new Error("Falha ao gerar conteúdo com todos os modelos.");
+    throw lastError || new Error("Falha ao gerar conteúdo com todos os modelos disponíveis (REST).");
 };

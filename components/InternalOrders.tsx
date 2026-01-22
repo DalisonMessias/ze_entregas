@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StoreProduct, Order, CartItem, Product, PaymentMethod, StoreDeliverySettings, StoreNeighborhoodFee } from '../types';
 import * as cloud from '../services/cloud';
-import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator, Truck, ShoppingCart, Utensils, ClipboardList, Settings } from 'lucide-react';
+import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator, Truck, ShoppingCart, Utensils, ClipboardList, Settings, Eye } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { useDialog } from '../utils/dialogService';
@@ -127,8 +127,10 @@ export const InternalOrders: React.FC = () => {
         margin_bottom: 0,
         margin_left: 2,
         margin_right: 2,
-        font_size_base: 12
+        font_size_base: 12,
+        use_printer: false
     });
+    const [deliveryLocationReference, setDeliveryLocationReference] = useState('');
 
     useEffect(() => {
         const initializeData = async () => {
@@ -169,7 +171,8 @@ export const InternalOrders: React.FC = () => {
                     margin_bottom: data.margin_bottom || 0,
                     margin_left: data.margin_left || 2,
                     margin_right: data.margin_right || 2,
-                    font_size_base: data.font_size_base || 12
+                    font_size_base: data.font_size_base || 12,
+                    use_printer: data.use_printer || false
                 });
             }
         } catch (error) {
@@ -481,6 +484,12 @@ export const InternalOrders: React.FC = () => {
         }
     }, [view]);
 
+    useEffect(() => {
+        if (productionTab === 'HISTORY') {
+            loadHistory();
+        }
+    }, [productionTab]);
+
     const loadProducts = async () => {
         setLoading(true);
         try {
@@ -774,8 +783,8 @@ export const InternalOrders: React.FC = () => {
 
     const handleCheckout = async () => {
         if (cart.length === 0) return;
-        if (!paymentMethod) {
-            showAlert({ title: 'Atenção', message: 'Selecione a forma de pagamento.' });
+        if (orderType === 'DELIVERY' && isLocationOnly && !deliveryLocationReference.trim()) {
+            showAlert({ title: 'Atenção', message: 'O campo "Local da entrega" é obrigatório para entregas por localização.' });
             return;
         }
 
@@ -796,7 +805,7 @@ export const InternalOrders: React.FC = () => {
                     price: i.product.price
                 })),
                 total_price: total,
-                payment_method: paymentMethod,
+                payment_method: (paymentMethod || 'PENDING') as PaymentMethod,
                 shipping_address: orderType === 'DELIVERY' ? {
                     street: addressStreet,
                     number: addressNumber,
@@ -819,6 +828,7 @@ export const InternalOrders: React.FC = () => {
                 custom_payment_label: paymentMethod === 'OTHER' ? customPaymentLabel : undefined,
                 order_type: orderType,
                 delivery_mode: orderType === 'DELIVERY' ? (deliveryMode || undefined) : undefined,
+                delivery_location_reference: (orderType === 'DELIVERY' && isLocationOnly) ? deliveryLocationReference : undefined,
                 driver_id: deliveryMode === 'ASSOCIATE' ? selectedAssociateId : undefined,
                 status: paymentTiming === 'ONLINE' ? 'CONFIRMED' : 'PENDING'
             });
@@ -847,6 +857,7 @@ export const InternalOrders: React.FC = () => {
             setPaymentMethod('');
             setAmountPaidStr('');
             setCustomPaymentLabel('');
+            setDeliveryLocationReference('');
 
         } catch (error) {
             // console.error('Checkout error:', error);
@@ -1320,6 +1331,15 @@ export const InternalOrders: React.FC = () => {
                                                             placeholder="Cole aqui o link ou coordenada..."
                                                             autoComplete="off"
                                                         />
+                                                        <div className="mt-3">
+                                                            <CustomInput
+                                                                label="Local da entrega (Obrigatório)*"
+                                                                value={deliveryLocationReference}
+                                                                onChange={(e) => setDeliveryLocationReference(e.target.value)}
+                                                                placeholder="Ex: Apartamento, Bloco, Quadra ou Referência"
+                                                                required
+                                                            />
+                                                        </div>
                                                         <button
                                                             onClick={() => setIsHelpModalOpen(true)}
                                                             className="text-[10px] text-blue-500 hover:text-blue-700 underline mt-1 flex items-center gap-1"
@@ -1666,8 +1686,10 @@ export const InternalOrders: React.FC = () => {
                             >
                                 {processing ? (
                                     <Loader2 className="w-6 h-6 animate-spin mr-3" />
-                                ) : (
+                                ) : printerSettings.use_printer ? (
                                     <Printer className="w-6 h-6 mr-3" />
+                                ) : (
+                                    <CheckCircle className="w-6 h-6 mr-3" />
                                 )}
                                 FINALIZAR PEDIDO
                             </Button>
@@ -1873,10 +1895,22 @@ export const InternalOrders: React.FC = () => {
                                     // Local: producing ou ready + tipo LOCAL
                                     filteredTickets = tickets.filter(t => (t.status === 'producing' || t.status === 'ready') && (t.orders?.order_type === 'LOCAL' || !t.orders?.order_type));
                                 } else if (productionTab === 'HISTORY') {
-                                    // Histórico: completed ou delivered + filtro de data
-                                    filteredTickets = tickets.filter(t => {
-                                        if (t.status !== 'completed' && t.status !== 'delivered') return false;
-
+                                    // Histórico: Usa historyOrders (do DB) mapeado para estrutura de ticket
+                                    // Garantindo persistência mesmo após refresh
+                                    filteredTickets = historyOrders.map((o: any) => ({
+                                        id: o.id,
+                                        status: o.status === 'COMPLETED' || o.status === 'DELIVERED' ? 'delivered' : o.status.toLowerCase(),
+                                        created_at: o.created_at,
+                                        items: o.items || [],
+                                        orders: {
+                                            order_type: o.order_type,
+                                            customer_name: o.customer_name
+                                        },
+                                        orders_collaborators: {
+                                            table_identifier: o.table_identifier,
+                                            customer_name: o.customer_name
+                                        }
+                                    }) as any).filter(t => {
                                         // Filtro de data
                                         const ticketDateStr = new Date(t.created_at).toISOString().split('T')[0];
                                         const isSameDay = ticketDateStr === historyDateFilter;
@@ -1903,8 +1937,11 @@ export const InternalOrders: React.FC = () => {
                                                 <div className="flex justify-between items-start mb-4 pb-4 border-b border-gray-200/50 dark:border-gray-700/50">
                                                     <div>
                                                         <div className="flex items-center gap-2 mb-2">
-                                                            <span className={`${ticket.general_order_id ? 'bg-blue-600' : 'bg-orange-500'} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase`}>
-                                                                {ticket.orders_collaborators?.table_identifier || 'Balcão / Entrega'}
+                                                            <span className={`${ticket.orders?.order_type === 'DELIVERY' ? 'bg-blue-600' : ticket.orders?.order_type === 'PICKUP' ? 'bg-purple-600' : 'bg-orange-500'} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase`}>
+                                                                {ticket.orders?.order_type === 'DELIVERY' ? 'ENTREGA' :
+                                                                    ticket.orders?.order_type === 'PICKUP' ? 'RETIRADA' :
+                                                                        ticket.orders?.order_type === 'LOCAL' ? (ticket.orders_collaborators?.table_identifier || 'CONSUMO LOCAL') :
+                                                                            (ticket.orders_collaborators?.table_identifier || 'BALCÃO')}
                                                             </span>
                                                             <span className="text-[10px] text-gray-400 font-bold">
                                                                 {new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1921,7 +1958,7 @@ export const InternalOrders: React.FC = () => {
                                                             )}
                                                         </div>
                                                         <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">
-                                                            {ticket.orders_collaborators?.customer_name || ticket.orders?.customer_name || 'Pedido Cozinha'}
+                                                            {ticket.orders?.customer_name || ticket.orders_collaborators?.customer_name || (ticket.orders?.order_type === 'DELIVERY' ? 'Entrega' : ticket.orders?.order_type === 'PICKUP' ? 'Retirada' : 'Pedido Cozinha')}
                                                         </h3>
                                                     </div>
                                                     <Button size="sm" onClick={() => {
@@ -1939,7 +1976,11 @@ export const InternalOrders: React.FC = () => {
                                                         setLastOrder(order);
                                                         setShowPrintPreview(true);
                                                     }} className="w-10 h-10 p-0 rounded-xl shadow-lg shadow-brand-500/20">
-                                                        <Printer className="w-4 h-4 text-white" />
+                                                        {printerSettings.use_printer ? (
+                                                            <Printer className="w-4 h-4 text-white" />
+                                                        ) : (
+                                                            <Eye className="w-4 h-4 text-white" />
+                                                        )}
                                                     </Button>
                                                 </div>
 
@@ -1969,9 +2010,14 @@ export const InternalOrders: React.FC = () => {
                                                                 Finalizar Produção
                                                             </Button>
                                                         ) : ticket.status === 'ready' ? (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'in_transit')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                                <Truck className="w-4 h-4" /> Marcar Em Trânsito
-                                                            </Button>
+                                                            <div className="flex gap-2 w-full">
+                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'in_transit')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                    <Truck className="w-4 h-4" /> Despachar
+                                                                </Button>
+                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                    <CheckCircle className="w-4 h-4" /> Entregue
+                                                                </Button>
+                                                            </div>
                                                         ) : ticket.status === 'in_transit' ? (
                                                             <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
                                                                 <CheckCircle className="w-4 h-4" /> Confirmar Entrega
@@ -1984,8 +2030,8 @@ export const InternalOrders: React.FC = () => {
                                                                 Finalizar Produção
                                                             </Button>
                                                         ) : (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'completed')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                                <ShoppingCart className="w-4 h-4" /> Cliente Retirou
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                <ShoppingCart className="w-4 h-4" /> Entregar ao Cliente
                                                             </Button>
                                                         )
                                                     ) : productionTab === 'LOCAL' ? (
@@ -1995,7 +2041,7 @@ export const InternalOrders: React.FC = () => {
                                                                 Finalizar Produção
                                                             </Button>
                                                         ) : (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'completed')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
                                                                 <Utensils className="w-4 h-4" /> Encerrar Pedido
                                                             </Button>
                                                         )
@@ -2227,6 +2273,11 @@ export const InternalOrders: React.FC = () => {
                                                         Complemento: {(lastOrder as any).shipping_address.complement}
                                                     </p>
                                                 )}
+                                                {(lastOrder as any).delivery_location_reference && (
+                                                    <p className="text-xs font-black text-orange-600 mt-2 bg-orange-50 p-2 rounded-lg border border-orange-100">
+                                                        📍 Local: {(lastOrder as any).delivery_location_reference}
+                                                    </p>
+                                                )}
                                             </div>
                                         )}
                                     </>
@@ -2323,9 +2374,11 @@ export const InternalOrders: React.FC = () => {
                         {/* Action Buttons - Hidden on Print */}
                         <div className="flex gap-3 mt-8 no-print pt-6 border-t border-gray-100">
                             <Button fullWidth variant="secondary" onClick={() => setShowPrintPreview(false)} className="rounded-2xl h-14 font-bold">Voltar</Button>
-                            <Button fullWidth onClick={() => window.print()} className="rounded-2xl h-14 font-black flex items-center justify-center gap-2">
-                                <Printer className="w-5 h-5" /> Imprimir
-                            </Button>
+                            {printerSettings.use_printer && (
+                                <Button fullWidth onClick={() => window.print()} className="rounded-2xl h-14 font-black flex items-center justify-center gap-2">
+                                    <Printer className="w-5 h-5" /> Imprimir
+                                </Button>
+                            )}
                             <Button fullWidth onClick={handleShare} variant="outline" className="rounded-2xl h-14 border-2 border-green-200 text-green-600 hover:bg-green-50 font-bold p-0 w-14 min-w-[56px]">
                                 <Share2 className="w-5 h-5 mx-auto" />
                             </Button>
