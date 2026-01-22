@@ -4,7 +4,7 @@ import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { CatalogBaseProduct } from '../types';
 import { useDialog } from '../utils/dialogService';
-import { GoogleGenAI } from '@google/genai';
+// GoogleGenAI import removido - Gerenciado pelo cloud.generateAIContent
 
 interface AnalysisReport {
     score: number;
@@ -160,13 +160,11 @@ export const AdminBaseCatalog: React.FC = () => {
             - Mantenha o tom profissional e amigável em Português do Brasil.
             - Responda APENAS o JSON.`;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [{ text: prompt }] }]
-            });
+            const response = await cloud.generateAIContent(prompt, apiKey);
 
             if (response.text) {
                 const text = response.text;
+                // console.log(`[AI Admin] Gerado via: ${response.model}`);
 
                 try {
                     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -214,7 +212,6 @@ export const AdminBaseCatalog: React.FC = () => {
 
         setIsBatchLoading(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: apiKey });
             const prompt = `Analise a seguinte lista de produtos/itens e gere sugestões completas para um catálogo de delivery:
             LISTA: "${batchInput}"
 
@@ -232,10 +229,7 @@ export const AdminBaseCatalog: React.FC = () => {
             ]
             Se o item for vago, tente deduzir o melhor nome, marca e preço para um delivery padrão.`;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [{ text: prompt }] }]
-            });
+            const response = await cloud.generateAIContent(prompt, apiKey);
 
             if (response.text) {
                 const jsonMatch = response.text.match(/\[[\s\S]*\]/);
@@ -276,7 +270,6 @@ export const AdminBaseCatalog: React.FC = () => {
 
         setIsAnalyzing(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: apiKey });
             // Amostra rica para análise
             const catalogSummary = products.slice(0, 100).map(p => `- ${p.name} (R$${p.valor_sugerido}) | Cat: ${p.category} | Desc: ${p.description || 'Vazia'}`).join('\n');
             const catNames = existingCategories.join(', ');
@@ -320,10 +313,7 @@ export const AdminBaseCatalog: React.FC = () => {
             
             Limite a 5 sugestões. Idioma: Português do Brasil.`;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [{ text: prompt }] }]
-            });
+            const response = await cloud.generateAIContent(prompt, apiKey);
 
             if (response.text) {
                 const jsonMatch = response.text.match(/\{[\s\S]*\}/);

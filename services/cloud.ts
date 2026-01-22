@@ -5091,7 +5091,7 @@ export const importBaseProductToStore = async (baseProduct: CatalogBaseProduct) 
  * Função utilitária para gerar conteúdo usando IA com sistema de fallback automático.
  * Tenta múltiplos modelos antes de falhar.
  */
-export const generateAIContent = async (prompt: string, apiKey: string) => {
+export const generateAIContent = async (prompt: string, apiKey: string, systemInstruction?: string) => {
     // Importação dinâmica para evitar carregar o SDK se não houver chave
     const { GoogleGenAI } = await import('@google/genai');
     const genAI = new GoogleGenAI({ apiKey });
@@ -5107,7 +5107,10 @@ export const generateAIContent = async (prompt: string, apiKey: string) => {
 
     for (const modelName of modelOrder) {
         try {
-            const model = genAI.getGenerativeModel({ model: modelName });
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                systemInstruction: systemInstruction
+            });
             const result = await model.generateContent(prompt);
             const response = await result.response;
             const text = response.text();

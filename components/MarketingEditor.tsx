@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Save, Download, Type, Palette, Image as ImageIcon, Plus, Trash2, Layers, Square, Smartphone, ZoomIn, ZoomOut, MoveVertical, Move, ChevronLeft, RotateCw, Upload, Layout, Sparkles, Wand2 } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
+// GoogleGenAI import removido - Gerenciado pelo cloud.generateAIContent
 import { Button } from './Button';
 import { MarketingTemplate, MarketingDesign, MarketingCanvasConfig, MarketingElement } from '../types';
 import * as cloud from '../services/cloud';
@@ -126,45 +126,10 @@ export const MarketingEditor: React.FC<MarketingEditorProps> = ({ template, desi
         if (!aiPrompt.trim()) return;
         setIsGeneratingAi(true);
         try {
-            const ai = new GoogleGenAI({ apiKey });
-            // FIXED: Use ai.models.generateContent instead of getGenerativeModel
+            const response = await cloud.generateAIContent(prompt, apiKey);
 
-            const prompt = `
-                Você é um designer gráfico expert. Crie um design de marketing baseado neste pedido: "${aiPrompt}".
-                Retorne APENAS um JSON válido (sem markdown) seguindo esta interface:
-                interface MarketingCanvasConfig {
-                    backgroundColor: string;
-                    backgroundImageUrl?: string;
-                    textColor: string;
-                    elements: {
-                        id: string; // use um placeholder
-                        type: 'text' | 'image';
-                        text?: string; 
-                        x: number;
-                        y: number;
-                        width: number;
-                        height: number;
-                        fontSize?: number;
-                        fontWeight?: string;
-                        fontFamily?: string;
-                        color?: string;
-                        rotation?: number;
-                        zIndex: number;
-                        imageUrl?: string;
-                        shape?: 'square' | 'circle';
-                    }[];
-                }
-                Use placeholders "https://placehold.co/600x400" para imagens se necessário.
-                O canvas tem 1080x1080. Apenas JSON puro.
-            `;
-
-            const result = await ai.models.generateContent({
-                model: 'gemini-1.5-flash',
-                contents: [{ role: 'user', parts: [{ text: prompt }] }]
-            });
-
-            // FIXED: Access text directly from the result (GenerateContentResponse)
-            const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            // FIXED: Access text directly from our helper
+            const responseText = response.text;
 
             if (!responseText) throw new Error("Sem resposta do gerador");
 

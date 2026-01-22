@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI } from '@google/genai';
+// GoogleGenAI import removido - Gerenciado pelo cloud.generateAIContent
 import { Send, Eraser, Loader2, Mic, AlertTriangle, ArrowLeft, ChevronLeft, Lock } from 'lucide-react';
 import { ChatMessage, DailySummary, DailyTransaction, UserRole, StoreWallet } from '../types';
 import * as storage from '../services/storage';
@@ -11,14 +11,14 @@ import { useDialog } from '../utils/dialogService';
 // Helper para verificar horário comercial (Mantido do original)
 const getBusinessStatus = () => {
     const now = new Date();
-    const day = now.getDay(); 
+    const day = now.getDay();
     const hour = now.getHours();
-    
+
     const isWeekDay = day >= 1 && day <= 5;
     const isWorkingHours = hour >= 9 && hour < 18;
-    
+
     const isOpen = isWeekDay && isWorkingHours;
-    
+
     return {
         isOpen,
         currentTime: now.toLocaleString('pt-BR', { weekday: 'long', hour: '2-digit', minute: '2-digit' }),
@@ -75,8 +75,8 @@ const getSystemInstruction = (
             - Foco em ajudar o entregador a ganhar mais, encontrar corridas e gerenciar sua rotina.
             `;
             break;
-        default: 
-             roleSpecificInstructions = `
+        default:
+            roleSpecificInstructions = `
             ESPECIALIZAÇÃO - ENTREGADOR (USO PESSOAL):
             - Aja como um assistente pessoal para controle de entregas diárias.
             - Foco em ajudar o usuário a registrar suas entregas manuais, ver histórico e usar as ferramentas do app.
@@ -140,7 +140,7 @@ const renderFormattedText = (text: string, isUser: boolean) => {
 
     const lines = text.split('\n');
     const elements: React.ReactNode[] = [];
-    
+
     lines.forEach((line, index) => {
         const trimmedLine = line.trim();
         if (!trimmedLine) return;
@@ -157,8 +157,8 @@ const renderFormattedText = (text: string, isUser: boolean) => {
         }
 
         const olMatch = trimmedLine.match(/^(\d+)\.\s+(.*)/);
-        if (olMatch && trimmedLine.length < 100) { 
-             elements.push(
+        if (olMatch && trimmedLine.length < 100) {
+            elements.push(
                 <div key={index} className="flex items-start my-2 ml-1">
                     <strong className={`mr-2 font-bold ${numberColor}`}>{olMatch[1]}.</strong>
                     <span className={`flex-1 leading-relaxed ${textColor}`}>{processBold(olMatch[2])}</span>
@@ -166,7 +166,7 @@ const renderFormattedText = (text: string, isUser: boolean) => {
             );
             return;
         }
-        
+
         const headingMatch = trimmedLine.match(/^(#+)\s+(.*)/);
         if (headingMatch) {
             const level = headingMatch[1].length;
@@ -191,7 +191,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
     const [isFocused, setIsFocused] = useState(false);
 
     const { alert, confirm } = useDialog();
-    
+
     // Config State
     const [apiKey, setApiKey] = useState<string | null>(null);
     const [isConfigLoading, setIsConfigLoading] = useState(true);
@@ -243,7 +243,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
         storage.saveAssistantHistory(messages);
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-    
+
     useEffect(() => {
         if (inputRef.current) {
             inputRef.current.style.height = 'auto';
@@ -253,24 +253,19 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
 
     const handleSend = async () => {
         if (!input.trim() || isLoading) return;
-        
+
         if (!apiKey) {
             setError("O assistente está indisponível no momento (Chave de API não configurada).");
             return;
         }
-        
+
         const userMessage: ChatMessage = { role: 'user', parts: [{ text: input }] };
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setIsLoading(true);
         setError(null);
 
-        // Ajusta a rolagem imediatamente após o usuário enviar
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-
         try {
-            const ai = new GoogleGenAI({ apiKey: apiKey });
-
             const fullContext = `
                 DADOS DO DIA ATUAL:
                 - Lucro: R$ ${dailySummary.profit.toFixed(2)}
@@ -279,9 +274,9 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                 - Meta Diária: ${dailySummary.goal ? `R$ ${dailySummary.goal.toFixed(2)}` : 'Não definida'}
                 - Últimas Transações: ${JSON.stringify(transactions.slice(-5))}
             `;
-            
+
             const systemInstruction = getSystemInstruction(
-                userRole, 
+                userRole,
                 userProfile.name,
                 userProfile.email,
                 wallet?.balance_decimal || 0,
@@ -291,11 +286,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
 
             const promptWithContext = `${fullContext}\n\nPERGUNTA DO USUÁRIO: ${input}`;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [{ text: promptWithContext }] }],
-                config: { systemInstruction },
-            });
+            const response = await cloud.generateAIContent(promptWithContext, apiKey, systemInstruction);
 
             if (response.text) {
                 const modelMessage: ChatMessage = { role: 'model', parts: [{ text: response.text }] };
@@ -326,7 +317,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
         setMessages([]);
         storage.clearAssistantHistory();
     };
-    
+
     const handleVoiceInput = async () => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -399,13 +390,13 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
         <div className="fixed inset-0 z-[100] bg-gray-50 dark:bg-gray-900 flex flex-col h-[100dvh]">
             {/* Header Flutuante / Fixo */}
             <div className="flex-shrink-0 px-4 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 flex justify-between items-center shadow-sm z-10">
-                <button 
-                    onClick={onClose} 
+                <button
+                    onClick={onClose}
                     className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
                 >
                     <ArrowLeft className="w-6 h-6" />
                 </button>
-                
+
                 <div className="flex flex-col items-center">
                     <div className="flex items-center gap-2">
                         <SparklesIcon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
@@ -417,20 +408,20 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                         </span>
                     ) : (
                         <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
-                            <Lock className="w-3 h-3"/> Configuração Pendente
+                            <Lock className="w-3 h-3" /> Configuração Pendente
                         </span>
                     )}
                 </div>
 
-                <button 
-                    onClick={handleClearHistory} 
+                <button
+                    onClick={handleClearHistory}
                     className="p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors"
                     title="Limpar Histórico"
                 >
                     <Eraser className="w-5 h-5" />
                 </button>
             </div>
-            
+
             {/* Área de Mensagens */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50 dark:bg-gray-900 scroll-smooth">
                 {!apiKey && (
@@ -446,7 +437,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                 {messages.length === 0 && apiKey ? (
                     <div className="flex flex-col items-center justify-center h-full text-center px-6 opacity-60 mt-10">
                         <div className="w-20 h-20 bg-gradient-to-tr from-brand-100 to-purple-100 dark:from-brand-900/30 dark:to-purple-900/30 rounded-full flex items-center justify-center mb-6 animate-subtle-bounce-in">
-                            <SparklesIcon className="w-10 h-10 text-brand-600 dark:text-brand-400"/>
+                            <SparklesIcon className="w-10 h-10 text-brand-600 dark:text-brand-400" />
                         </div>
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Olá, Parceiro!</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
@@ -454,9 +445,9 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                         </p>
                         <div className="grid grid-cols-1 gap-2 mt-8 w-full max-w-xs">
                             {suggestions.map((s, idx) => (
-                                <button 
+                                <button
                                     key={idx}
-                                    onClick={() => setInput(s.text)} 
+                                    onClick={() => setInput(s.text)}
                                     className="p-3 bg-white dark:bg-gray-800 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 shadow-sm border border-gray-100 dark:border-gray-700 hover:border-brand-300 transition-colors text-left"
                                 >
                                     {s.label}
@@ -470,23 +461,21 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                             <div key={index} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`flex items-end gap-2 max-w-[85%] sm:max-w-[75%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                                     {/* Avatar */}
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
-                                        msg.role === 'user' 
-                                        ? 'bg-gray-200 dark:bg-gray-700' 
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${msg.role === 'user'
+                                        ? 'bg-gray-200 dark:bg-gray-700'
                                         : 'bg-gradient-to-br from-brand-500 to-purple-600'
-                                    }`}>
-                                        {msg.role === 'user' 
-                                            ? <div className="w-4 h-4 bg-gray-400 rounded-full" /> 
+                                        }`}>
+                                        {msg.role === 'user'
+                                            ? <div className="w-4 h-4 bg-gray-400 rounded-full" />
                                             : <SparklesIcon className="w-5 h-5 text-white" />
                                         }
                                     </div>
 
                                     {/* Bubble */}
-                                    <div className={`px-4 py-3 rounded-2xl text-sm shadow-sm leading-relaxed ${
-                                        msg.role === 'user' 
-                                        ? 'bg-brand-600 text-white rounded-br-none' 
+                                    <div className={`px-4 py-3 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.role === 'user'
+                                        ? 'bg-brand-600 text-white rounded-br-none'
                                         : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-none border border-gray-100 dark:border-gray-700'
-                                    }`}>
+                                        }`}>
                                         {renderFormattedText(msg.parts[0].text, msg.role === 'user')}
                                     </div>
                                 </div>
@@ -494,7 +483,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                         ))}
                     </>
                 )}
-                
+
                 {isLoading && (
                     <div className="flex w-full justify-start animate-pulse">
                         <div className="flex items-end gap-2 max-w-[85%]">
@@ -513,7 +502,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                 {error && (
                     <div className="flex justify-center">
                         <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border border-red-100 dark:border-red-800">
-                            <AlertTriangle className="w-4 h-4"/> {error}
+                            <AlertTriangle className="w-4 h-4" /> {error}
                         </div>
                     </div>
                 )}
@@ -525,11 +514,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                 <div className="relative flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-[24px] p-2 transition-all ring-offset-2 focus-within:ring-2 focus-within:ring-brand-500">
                     <button
                         onClick={handleVoiceInput}
-                        className={`p-3 rounded-full flex-shrink-0 flex items-center justify-center transition-all ${
-                            isListening 
-                            ? 'bg-red-100 text-red-500 animate-pulse' 
+                        className={`p-3 rounded-full flex-shrink-0 flex items-center justify-center transition-all ${isListening
+                            ? 'bg-red-100 text-red-500 animate-pulse'
                             : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                        }`}
+                            }`}
                         disabled={!apiKey}
                     >
                         <Mic className="w-5 h-5" />
@@ -551,11 +539,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, tran
                     <button
                         onClick={handleSend}
                         disabled={isLoading || !input.trim() || !apiKey}
-                        className={`p-3 rounded-full flex-shrink-0 flex items-center justify-center transition-all ${
-                            input.trim() && apiKey
-                            ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 transform hover:scale-105 active:scale-95' 
+                        className={`p-3 rounded-full flex-shrink-0 flex items-center justify-center transition-all ${input.trim() && apiKey
+                            ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 transform hover:scale-105 active:scale-95'
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                        }`}
+                            }`}
                     >
                         {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
                     </button>
