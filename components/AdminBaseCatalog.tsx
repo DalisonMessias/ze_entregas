@@ -196,7 +196,11 @@ export const AdminBaseCatalog: React.FC = () => {
                 }
             }
         } catch (error: any) {
-            setChatHistory(prev => [...prev, { role: 'model', content: "Erro ao consultar IA: " + error.message }]);
+            let msg = error.message;
+            if (msg.includes('429') || msg.includes('quota')) {
+                msg = "<strong>Sistema em Manutenção</strong><br>O motor de inteligência artificial está sendo otimizado. Tente novamente daqui a pouco.";
+            }
+            setChatHistory(prev => [...prev, { role: 'model', content: msg }]);
         } finally {
             setIsAILoading(false);
         }
@@ -254,7 +258,11 @@ export const AdminBaseCatalog: React.FC = () => {
                 }
             }
         } catch (error: any) {
-            showMessage({ title: 'Erro na Geração', message: 'Não foi possível gerar a lista: ' + error.message });
+            let msg = error.message;
+            if (msg.includes('429') || msg.includes('quota')) {
+                msg = "O sistema de geração automática está em manutenção para melhorias de performance. Tente novamente em instantes.";
+            }
+            showMessage({ title: 'IA Ocupada', message: msg });
         } finally {
             setIsBatchLoading(false);
         }
@@ -329,7 +337,11 @@ export const AdminBaseCatalog: React.FC = () => {
             }
 
         } catch (error: any) {
-            showMessage({ title: 'Erro', message: 'Falha na análise: ' + error.message });
+            let msg = error.message;
+            if (msg.includes('429') || msg.includes('quota')) {
+                msg = "O módulo de auditoria estratégica está passando por uma manutenção programada. Tente novamente em breve.";
+            }
+            showMessage({ title: 'IA Temporariamente Indisponível', message: msg });
         } finally {
             setIsAnalyzing(false);
         }

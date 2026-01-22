@@ -22,6 +22,8 @@
 - [x] Corrigir prop `size="xs"` inválida nos botões.
 - [x] Restaurar estado `isAILoading` removido acidentalmente.
 - [x] Corrigir erro de build em `ProfileData.tsx` (await em função síncrona).
+- [x] Corrigir erro de coluna inexistente (`category_name`) ao aplicar análise da IA.
+- [x] Melhorar tratamento de erro 429 para exibir mensagens amigáveis de "Manutenção Momentânea".
 
 ---
 *Status: 100% Concluído*

@@ -1282,6 +1282,7 @@ export const updateStoreProduct = async (product: Partial<StoreProduct>, targetS
     // 2. Remove non-db fields and immutable fields
     delete dbPayload.image_url;
     delete dbPayload.category;
+    delete dbPayload.category_name;
     delete dbPayload.id; // ID vai no WHERE
     delete dbPayload.store_id; // Não alterar dono
     delete dbPayload.created_at; // Não alterar data de criação
@@ -5084,4 +5085,53 @@ export const importBaseProductToStore = async (baseProduct: CatalogBaseProduct) 
 
     if (error) throw error;
     return data;
+};
+
+/**
+ * Função utilitária para gerar conteúdo usando IA com sistema de fallback automático.
+ * Tenta múltiplos modelos antes de falhar.
+ */
+export const generateAIContent = async (prompt: string, apiKey: string) => {
+    // Importação dinâmica para evitar carregar o SDK se não houver chave
+    const { GoogleGenAI } = await import('@google/genai');
+    const genAI = new GoogleGenAI({ apiKey });
+
+    // Lista de modelos ordenados por prioridade
+    const modelOrder = [
+        'gemini-2.0-flash',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash'
+    ];
+
+    let lastError: any = null;
+
+    for (const modelName of modelOrder) {
+        try {
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const text = response.text();
+
+            if (text) {
+                return {
+                    text: text,
+                    model: modelName
+                };
+            }
+        } catch (error: any) {
+            lastError = error;
+            const errorMsg = error.message?.toLowerCase() || "";
+
+            // Se for erro de rede ou cota (429), tenta o próximo modelo
+            if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('limit')) {
+                continue;
+            }
+
+            // Se for outro erro crítico, interrompe
+            throw error;
+        }
+    }
+
+    // Se chegou aqui, todos os modelos falharam por cota
+    throw lastError;
 };
