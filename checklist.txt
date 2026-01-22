@@ -205,3 +205,7 @@
 [x] Frontend: Estilizar botão de remover item e adicionar botão 'Limpar Carrinho'.
 [x] Frontend: Impedir abertura automática do carrinho ao adicionar item.
 [x] Backend/Frontend: Corrigir exibição de Categorias no Menu (Join category_id).
+[ ] Frontend: Criar Menu Superior Fixo (Logo, Busca, Carrinho).
+[ ] Frontend: Implementar Barra de Pesquisa de Produtos.
+[ ] Frontend: Remover sidebar estática 'Seu Pedido' no Desktop.
+[ ] Frontend: Mover Filtros de Categoria para o topo (abaixo do header ou integrado).

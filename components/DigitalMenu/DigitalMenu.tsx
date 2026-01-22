@@ -56,6 +56,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [selectedNeighborhoodId, setSelectedNeighborhoodId] = useState(''); // For fees
     const [selectedCity, setSelectedCity] = useState<any>(null); // from CitySearchSelect
 
+    // Search & Filter State
+    const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('Todos');
+    const [searchTerm, setSearchTerm] = useState('');
+
     const [paymentMethod, setPaymentMethod] = useState('PIX');
     const [changeFor, setChangeFor] = useState('');
 
@@ -323,6 +327,42 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     const isStoreOpen = store?.is_open ?? true;
 
+    // --- COMPUTED DATA ---
+
+    // 1. All Categories
+    const categories = useMemo(() => {
+        const cats = Array.from(new Set(products.map(p => p.category || 'Outros'))).sort();
+        return ['Todos', ...cats];
+    }, [products]);
+
+    // 2. Filtered Products
+    const filteredProducts = useMemo(() => {
+        let filtered = products;
+
+        // By Category
+        if (selectedCategoryFilter !== 'Todos') {
+            filtered = filtered.filter(p => (p.category || 'Outros') === selectedCategoryFilter);
+        }
+
+        // By Search Term
+        if (searchTerm.trim()) {
+            const lowerInfo = searchTerm.toLowerCase();
+            filtered = filtered.filter(p =>
+                p.name.toLowerCase().includes(lowerInfo) ||
+                (p.description && p.description.toLowerCase().includes(lowerInfo))
+            );
+        }
+
+        return filtered;
+    }, [products, selectedCategoryFilter, searchTerm]);
+
+    // 3. Active Sections (Categories present in filtered view)
+    const activeSections = useMemo(() => {
+        if (selectedCategoryFilter !== 'Todos') return [selectedCategoryFilter];
+        const presentCats = Array.from(new Set(filteredProducts.map(p => p.category || 'Outros'))).sort();
+        return presentCats;
+    }, [filteredProducts, selectedCategoryFilter]);
+
     // --- RENDER ---
 
     if (loading) {
@@ -343,8 +383,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         );
     }
 
-    // Groupping Products
-    const categories = Array.from(new Set(products.map(p => p.category || 'Outros'))).sort();
+    // Groupping Products - REMOVED (Handled by useMemo above)
+    // const categories = Array.from(new Set(products.map(p => p.category || 'Outros'))).sort();
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24 md:pb-0">
