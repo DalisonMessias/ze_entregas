@@ -159,21 +159,33 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         }
     };
 
+    // Função auxiliar local removida em favor de cloud.ensureStoreCategory
+    // Mantemos um wrapper simples se necessário ou chamamos direto.
+    // Para minimizar mudanças no código abaixo, vamos fazer um wrapper que chama a cloud.
     const ensureCategoryExists = async (name: string): Promise<string> => {
         if (!name) return categories[0]?.id || '';
 
-        const lowerName = name.toLowerCase().trim();
-        const found = categories.find(c => c.name.toLowerCase().trim() === lowerName);
-        if (found) return found.id;
-
-        // Se não encontrar, cria a categoria dinamicamente
         try {
-            const newCat = await cloud.createStoreCategory(name);
-            // Atualiza a lista local de categorias no componente pai para futuros produtos no mesmo lote
-            if (onProductCreated) onProductCreated();
-            return newCat.id;
-        } catch (error) {
-            console.error("Erro ao criar categoria dinâmica:", error);
+            const settings = await cloud.getShopSettings(); // Ou pegar user id de outra forma se settings não tiver
+            // Melhor: usar getUserWithCache que já temos ou chamar cloud direto que pega user interno
+            // Como cloud.ensureStoreCategory pega user internamente se passar ID, mas aqui precisamos do ID do user logado.
+            // O componente não tem o user.id fácil, mas o cloud.ensureStoreCategory requer userId.
+            // Vamos obter o usuário atual via cloud helper se não tivermos no state.
+
+            // Ajuste: cloud.ensureStoreCategory precisa de userId. 
+            // Vamos fazer o cloud function pegar o user se não passado? Não, ele pede userId.
+            // Vamos pegar o user aqui.
+            const { user } = await cloud.getUserWithCache();
+            if (!user) return '';
+
+            const catId = await cloud.ensureStoreCategory(user.id, name);
+            if (catId) {
+                if (onProductCreated) onProductCreated(); // Atualiza lista
+                return catId;
+            }
+            return categories[0]?.id || '';
+        } catch (e) {
+            console.error("Erro wrapper ensureCategory:", e);
             return categories[0]?.id || '';
         }
     };

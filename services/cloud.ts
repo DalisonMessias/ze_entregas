@@ -1152,10 +1152,18 @@ export const getStoreProducts = async (targetStoreId?: string): Promise<StorePro
 
     const { data, error } = await sb
         .from('products')
-        .select('*')
+        .select('*, category:categories(name)')
         .eq('store_id', userId)
         .order('created_at', { ascending: false })
         .limit(100);
+
+    // Mapear o resultado para incluir category_name flat no objeto, compatível com o frontend
+    const mappedData = data?.map((p: any) => ({
+        ...p,
+        category: p.category?.name || 'Geral' // Nome da categoria para exibição
+    }));
+
+    return mappedData || [];
 
     if (error) {
         console.error("Error fetching products:", error);
@@ -1188,18 +1196,9 @@ export const getStoreCategories = async (): Promise<any[]> => {
         return [];
     }
 
-    // Se não houver categorias, cria a categoria padrão 'Geral'
+    // Se não houver categorias, retorna vazio (sem criar Geral automaticamente)
     if (!data || data.length === 0) {
-        const { data: newData, error: createError } = await sb
-            .from('categories')
-            .insert({ name: 'Geral', store_id: user.id })
-            .select();
-
-        if (createError) {
-            console.error("Error creating default category:", createError);
-            return [];
-        }
-        return newData || [];
+        return [];
     }
 
     return data || [];
@@ -5074,12 +5073,89 @@ export const adminDeleteBaseProduct = async (id: string) => {
 /**
  * Loja: Importa um produto do catálogo base para a loja atual.
  */
+/**
+ * Helper para garantir que uma categoria exista (Busca case-insensitive ou Cria)
+ */
+export const ensureStoreCategory = async (userId: string, categoryName: string): Promise<string | null> => {
+    if (!categoryName || !categoryName.trim()) return null;
+    const sb = getClient();
+    if (!sb) return null;
+
+    const name = categoryName.trim();
+    // Normaliza para comparação (opcional, mas bom pra evitar 'Bebidas' vs 'bebidas')
+    // O ILIKE já resolve case insensitive, mas espaços extras podem atrapalhar.
+
+    // 1. Tentar encontrar (Case Insensitive)
+    const { data: existing, error: searchError } = await sb
+        .from('categories')
+        .select('id')
+        .eq('store_id', userId)
+        .ilike('name', name)
+        .maybeSingle();
+
+    if (searchError) console.error("Erro ao buscar categoria:", searchError);
+    if (existing) return existing.id;
+
+    // 2. Criar se não existir
+    try {
+        console.log(`[Import] Criando nova categoria: ${name}`);
+        const { data: newCat, error: insertError } = await sb
+            .from('categories')
+            .insert({
+                store_id: userId,
+                name: name
+            })
+            .select('id')
+            .single();
+
+        if (insertError) {
+            console.error(`Erro ao criar categoria '${name}':`, insertError);
+            // Se erro for duplicidade (race condition), tenta buscar de novo
+            if (insertError.code === '23505') {
+                const { data: retry } = await sb
+                    .from('categories')
+                    .select('id')
+                    .eq('store_id', userId)
+                    .ilike('name', name)
+                    .maybeSingle();
+                return retry?.id || null;
+            }
+            return null;
+        }
+
+        return newCat?.id || null;
+    } catch (e) {
+        console.error(`Exceção ao criar categoria '${name}':`, e);
+        return null;
+    }
+};
+
 export const importBaseProductToStore = async (baseProduct: CatalogBaseProduct) => {
     const sb = getClient();
     if (!sb) throw new Error("Client not initialized");
 
     const { data: { user } } = await sb.auth.getUser();
     if (!user) throw new Error("Unauthorized");
+
+    // 1. Resolver Categoria
+    // Tenta usar a categoria do produto base, ou fallback para 'Geral'
+    let targetCategoryId = await ensureStoreCategory(user.id, baseProduct.category || '');
+
+    if (!targetCategoryId) {
+        // Se falhar ou estiver vazio, tenta garantir 'Geral' APENAS se já existir, não cria mais forçado
+        // O usuário pediu explicitamente para remover "Geral" forçado.
+        const { data: geralCat } = await sb
+            .from('categories')
+            .select('id')
+            .eq('store_id', user.id)
+            .ilike('name', 'Geral')
+            .maybeSingle();
+
+        if (geralCat) {
+            targetCategoryId = geralCat.id;
+        }
+        // Se não tiver geral e não tiver categoria, vai nulo.
+    }
 
     const newProduct = {
         store_id: user.id,
@@ -5088,8 +5164,8 @@ export const importBaseProductToStore = async (baseProduct: CatalogBaseProduct) 
         price: baseProduct.valor_sugerido,
         is_active: true,
         base_product_id: baseProduct.id,
-        observations: baseProduct.observations
-        // Note: category_id needs to be handled separately or store will need to select one
+        observations: baseProduct.observations,
+        category_id: targetCategoryId
     };
 
     const { data, error } = await sb
@@ -5107,6 +5183,11 @@ export const importBaseProductToStore = async (baseProduct: CatalogBaseProduct) 
  * Tenta múltiplos modelos antes de falhar.
  */
 export const generateAIContent = async (prompt: string, apiKey: string, systemInstruction?: string, images?: { data: string, mimeType: string }[]) => {
+    // Validação de API Key vazia antes de tentar carregar o SDK
+    if (!apiKey || apiKey.trim() === '') {
+        throw new Error("Chave da API não configurada. Configure em Ajustes > Configurações da Loja.");
+    }
+
     // Importação dinâmica para evitar carregar o SDK se não houver chave
     // Importação dinâmica resiliente
     const genAIModule = await import('@google/genai');
@@ -5117,86 +5198,121 @@ export const generateAIContent = async (prompt: string, apiKey: string, systemIn
     }
 
     // Algumas versões exigem objeto, outras string. 
-    // O linter do projeto atual exige objeto, mas o runtime (v1.30.0) exige string.
-    const genAI = new GoogleGenAIClass(apiKey);
-
-    // Verificação de segurança para o método
-    if (typeof genAI.getGenerativeModel !== 'function') {
-        throw new Error("O método getGenerativeModel não foi encontrado no SDK.");
+    // Tentativa robusta de inicialização
+    let genAI;
+    try {
+        // Tenta formato de objeto (Padrão novo @google/genai)
+        genAI = new GoogleGenAIClass({ apiKey: apiKey });
+    } catch (e) {
+        // Fallback para string (Legado ou @google/generative-ai)
+        console.warn("Retrying GenAI init with string...", e);
+        try {
+            genAI = new GoogleGenAIClass(apiKey);
+        } catch (e2) {
+            throw new Error("Falha ao inicializar SDK do Gemini. Verifique a compatibilidade da chave.");
+        }
     }
 
-    // Ordem de preferência de modelos
-    // Priorizamos o 1.5-flash por ser extremamente rápido, barato e estável para multimodal.
+    if (!genAI) throw new Error("SDK do Gemini não inicializado.");
+
+    // Ordem de preferência de modelos (Otimizado para Texto + Imagem)
+    // 1.5-flash: Mais rápido e barato, ótimo para visão.
+    // 1.5-pro: Mais inteligente, fallback natural.
     const modelOrder = [
         'gemini-1.5-flash',
         'gemini-1.5-pro',
-        'gemini-2.0-flash',
-        'gemini-2.5-flash'
+        'gemini-2.0-flash-exp'
     ];
 
     let lastError: any = null;
 
-    for (const modelName of modelOrder) {
-        try {
-            console.log(`[AI] Tentando modelo: ${modelName}`);
-
-            // Usar o método padrão do SDK (cast para any para evitar erros de tipagem do linter)
-            const model = (genAI as any).getGenerativeModel({
-                model: modelName,
-                systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined
-            });
-
-            const parts: any[] = [{ text: prompt }];
-
-            if (images && images.length > 0) {
-                images.forEach(img => {
-                    parts.push({
-                        inlineData: {
-                            data: img.data, // base64 string (deve estar sem o prefixo data:image/...)
-                            mimeType: img.mimeType
-                        }
-                    });
+    // Padrão 1: @google/generative-ai (Legacy/Current Stable)
+    if (typeof genAI.getGenerativeModel === 'function') {
+        for (const modelName of modelOrder) {
+            try {
+                console.log(`[AI] Tentando modelo (Standard): ${modelName}`);
+                const model = genAI.getGenerativeModel({
+                    model: modelName,
+                    systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined
                 });
+
+                const parts: any[] = [{ text: prompt }];
+
+                if (images && images.length > 0) {
+                    images.forEach(img => {
+                        parts.push({
+                            inlineData: {
+                                data: img.data,
+                                mimeType: img.mimeType
+                            }
+                        });
+                    });
+                }
+
+                const result = await model.generateContent(parts);
+                const response = await result.response;
+                return { text: response.text(), model: modelName };
+            } catch (e: any) {
+                console.warn(`[AI] Falha no modelo ${modelName}:`, e.message);
+                lastError = e;
+                if (e.message?.includes('404') || e.message?.includes('not found')) continue;
             }
-
-            const result = await model.generateContent(parts);
-            const response = await result.response;
-            const text = response.text();
-
-            if (text) {
-                console.log(`[AI] Sucesso com modelo: ${modelName}`);
-                return {
-                    text: text,
-                    model: modelName
-                };
-            }
-        } catch (error: any) {
-            lastError = error;
-            const errorMsg = error.message?.toLowerCase() || "";
-            const errorCode = error.status || error.code || 0;
-
-            console.warn(`[AI Fallback] Modelo ${modelName} falhou. Erro: ${errorMsg} (${errorCode})`);
-
-            // Se for erro de cota (429), modelo não existe (404), modelo indisponível (503) 
-            // ou erro de requisição (400 - ex: multimodal não suportado), TENTAMOS O PRÓXIMO.
-            if (
-                errorCode === 429 ||
-                errorCode === 404 ||
-                errorCode === 503 ||
-                errorCode === 400 ||
-                errorMsg.includes('quota') ||
-                errorMsg.includes('limit') ||
-                errorMsg.includes('not found') ||
-                errorMsg.includes('not supported')
-            ) {
-                continue;
-            }
-
-            // Se for outro erro crítico (ex: API Key inválida), lançamos para o usuário
-            throw error;
         }
     }
+    // Padrão 2: @google/genai (New Node SDK)
+    else if (genAI.models && typeof genAI.models.generateContent === 'function') {
+        for (const modelName of modelOrder) {
+            try {
+                console.log(`[AI] Tentando modelo (New SDK): ${modelName}`);
 
-    // Se nenhum modelo funcionou, lança o último erro
-    throw lastError;
+                const contents = [
+                    {
+                        role: 'user',
+                        parts: [
+                            { text: prompt },
+                            ...(images || []).map(img => ({
+                                inlineData: {
+                                    mimeType: img.mimeType,
+                                    data: img.data
+                                }
+                            }))
+                        ]
+                    }
+                ];
+
+                const config: any = {
+                    model: modelName,
+                    contents: contents
+                };
+
+                if (systemInstruction) {
+                    config.config = { systemInstruction: { parts: [{ text: systemInstruction }] } };
+                }
+
+                const response = await genAI.models.generateContent(config);
+
+                // Extração resiliente de texto
+                let aiText = "";
+                if (response && response.candidates && response.candidates[0] && response.candidates[0].content) {
+                    aiText = response.candidates[0].content.parts[0].text || "";
+                } else if (response && typeof response.text === 'function') {
+                    aiText = response.text();
+                } else if (response && typeof response.text === 'string') {
+                    aiText = response.text;
+                }
+
+                if (!aiText && response && response.text) aiText = String(response.text);
+
+                return { text: aiText, model: modelName };
+            } catch (e: any) {
+                console.warn(`[AI] Falha no modelo ${modelName} (New SDK):`, e.message);
+                lastError = e;
+            }
+        }
+    } else {
+        console.error("SDK Structure Unknown:", Object.keys(genAI));
+        throw new Error("Não foi possível identificar o método de geração no SDK carregado.");
+    }
+
+    throw lastError || new Error("Falha ao gerar conteúdo com todos os modelos.");
 };

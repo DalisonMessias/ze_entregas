@@ -296,7 +296,7 @@ export const StoreCatalog: React.FC = () => {
                                     onClick={() => setSelectedCategory('all')}
                                     className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm border ${selectedCategory === 'all' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`}
                                 >
-                                    TODOS
+                                    Todos
                                 </button>
                                 {categories.map(cat => (
                                     <button

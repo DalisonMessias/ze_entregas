@@ -644,11 +644,7 @@ BEGIN
       ON CONFLICT (store_id) DO NOTHING;
   END IF;
 
-  -- Se for lojista, criar categoria padrão 'Geral'
-  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') = 'store_partner' THEN
-      INSERT INTO public.categories (name, store_id)
-      VALUES ('Geral', NEW.id);
-  END IF;
+  -- Categoria Geral removida conforme solicitação. O lojista cria suas próprias categorias ou importa.
 
   RETURN NEW;
 END;
