@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StoreProduct, Category } from '../types';
 import { StoreAIGenerator } from './StoreAIGenerator';
 import { SuperStoreModal } from './SuperStoreModal';
-import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown } from 'lucide-react';
+import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
@@ -60,6 +60,8 @@ export const StoreCatalog: React.FC = () => {
     const [showSuperModal, setShowSuperModal] = useState(false);
 
     const { confirm, alert: showMessage } = useDialog();
+    const imageInputRef = useRef<HTMLInputElement>(null);
+    const [updatingImageProdId, setUpdatingImageProdId] = useState<string | null>(null);
 
     useEffect(() => {
         loadData();
@@ -178,9 +180,41 @@ export const StoreCatalog: React.FC = () => {
         }
     };
 
+    const handleQuickImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !updatingImageProdId) return;
+
+        setIsSaving(true);
+        try {
+            const publicUrl = await cloud.uploadProductImage(file);
+            await cloud.updateStoreProduct({
+                id: updatingImageProdId,
+                image_url: publicUrl
+            });
+            loadData();
+            showMessage({ title: 'Sucesso', message: 'Imagem atualizada com sucesso!' });
+        } catch (error) {
+            console.error("Erro ao trocar imagem:", error);
+            alert("Erro ao enviar imagem.");
+        } finally {
+            setIsSaving(false);
+            setUpdatingImageProdId(null);
+            if (imageInputRef.current) imageInputRef.current.value = '';
+        }
+    };
+
     const filteredProducts = products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.category?.toLowerCase().includes(searchTerm.toLowerCase());
+        const term = searchTerm.toLowerCase().trim();
+        let matchesSearch = false;
+
+        if (term.startsWith('id-')) {
+            const idPart = term.replace('id-', '');
+            matchesSearch = p.id.toLowerCase().includes(idPart);
+        } else {
+            matchesSearch = p.name.toLowerCase().includes(term) ||
+                p.category?.toLowerCase().includes(term);
+        }
+
         const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
         return matchesSearch && matchesCategory;
     });
@@ -315,11 +349,32 @@ export const StoreCatalog: React.FC = () => {
                                             className="group bg-white dark:bg-gray-900/50 rounded-[1.5rem] p-4 border border-gray-100 dark:border-gray-800 hover:border-brand-500/30 hover:shadow-xl hover:shadow-brand-500/5 transition-all duration-500 relative flex flex-col"
                                         >
                                             <div className="flex gap-3 items-start mb-3">
-                                                <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gray-50 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-100 dark:border-gray-700 overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-500">
+                                                <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gray-50 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-100 dark:border-gray-700 overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-500 relative group/img">
                                                     {product.image_url ? (
-                                                        <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                                                        <img src={product.image_url} alt={product.name} className={`w-full h-full object-cover ${(isSaving && updatingImageProdId === product.id) ? 'opacity-30 blur-[2px]' : ''}`} />
                                                     ) : (
-                                                        <Package className="w-8 h-8 text-gray-300 group-hover:text-brand-300 transition-colors" />
+                                                        <Package className={`w-8 h-8 text-gray-300 group-hover:text-brand-300 transition-colors ${(isSaving && updatingImageProdId === product.id) ? 'opacity-30' : ''}`} />
+                                                    )}
+
+                                                    {/* Loading Overlay */}
+                                                    {(isSaving && updatingImageProdId === product.id) ? (
+                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[1px]">
+                                                            <Loader2 className="w-6 h-6 text-brand-500 animate-spin" />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setUpdatingImageProdId(product.id!);
+                                                                    imageInputRef.current?.click();
+                                                                }}
+                                                                className="p-1.5 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/40 transition-all"
+                                                                title="Trocar Imagem"
+                                                            >
+                                                                <Camera className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
@@ -469,17 +524,24 @@ export const StoreCatalog: React.FC = () => {
                 isSaving={isSaving}
             />
 
-            {
-                showSuperModal && (
-                    <SuperStoreModal
-                        onClose={() => setShowSuperModal(false)}
-                        onSuccess={() => {
-                            loadData(); // Reload profile to update permissions
-                            setShowSuperModal(false);
-                        }}
-                    />
-                )
-            }
-        </div >
+            {showSuperModal && (
+                <SuperStoreModal
+                    onClose={() => setShowSuperModal(false)}
+                    onSuccess={() => {
+                        loadData(); // Reload profile to update permissions
+                        setShowSuperModal(false);
+                    }}
+                />
+            )}
+
+            {/* Hidden Input for Quick Image Change */}
+            <input
+                type="file"
+                ref={imageInputRef}
+                onChange={handleQuickImageChange}
+                accept="image/*"
+                className="hidden"
+            />
+        </div>
     );
 };

@@ -45,6 +45,10 @@ export const AdminBaseCatalog: React.FC = () => {
     const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
     const [isBatchLoading, setIsBatchLoading] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [previewItem, setPreviewItem] = useState<any>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Manual Creation State
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -89,6 +93,39 @@ export const AdminBaseCatalog: React.FC = () => {
         }
     };
 
+    const handleClearChat = async () => {
+        const confirmed = await confirm({
+            title: 'Limpar Conversa?',
+            message: 'Deseja realmente apagar todo o histórico desta conversa?',
+            confirmButtonText: 'Limpar'
+        });
+
+        if (confirmed) {
+            setChatHistory([]);
+        }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 4 * 1024 * 1024) {
+            showMessage({ title: 'Arquivo muito grande', message: 'Por favor, selecione uma imagem com menos de 4MB.' });
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64Content = (event.target?.result as string).split(',')[1];
+            setSelectedImage({
+                data: base64Content,
+                mimeType: file.type
+            });
+            setImagePreview(event.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
     const checkForDuplicates = (newProduct: Partial<CatalogBaseProduct>) => {
         if (!newProduct.name) return { isDuplicate: false };
 
@@ -117,24 +154,34 @@ export const AdminBaseCatalog: React.FC = () => {
     };
 
     const handleSendMessage = async () => {
-        if (!aiMessage.trim() || !apiKey) {
+        if (!aiMessage.trim() && !selectedImage) {
             if (!apiKey) showMessage({ title: 'Configuração Necessária', message: 'Configure a chave da API do Gemini em IA Config.' });
             return;
         }
 
         const userMsg = aiMessage;
+        const currentImage = selectedImage;
+        const currentPreview = imagePreview;
+
         setAiMessage('');
-        setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
+        setSelectedImage(null);
+        setImagePreview(null);
+
+        setChatHistory(prev => [...prev, {
+            role: 'user',
+            content: userMsg,
+            image: currentPreview || undefined
+        }]);
         setIsAILoading(true);
         try {
             const prompt = `Atue como um especialista em catálogo de produtos para deliverys.
             Categorias existentes no catálogo base da loja: ${existingCategories.join(', ') || 'Geral, Bebidas, Lanches, Pizzas'}.
 
-            Analise a solicitação do usuário: "${userMsg}".
+            Analise a solicitação do usuário: "${userMsg}" ${currentImage ? 'e a imagem enviada.' : '.'}
 
             Sua tarefa é identificar se o usuário:
             1. Está com uma DÚVIDA ou quer apenas INFORMAÇÃO.
-            2. Quer CRIAR um ou mais produtos (mesmo que seja uma lista).
+            2. Quer CRIAR um ou mais produtos (mesmo que seja uma lista ${currentImage ? 'extraída da imagem' : ''}).
 
             Responda em JSON rigoroso com a seguinte estrutura:
             {
@@ -158,7 +205,12 @@ export const AdminBaseCatalog: React.FC = () => {
             - Mantenha o tom profissional e amigável em Português do Brasil.
             - Responda APENAS o JSON.`;
 
-            const response = await cloud.generateAIContent(prompt, apiKey);
+            const response = await cloud.generateAIContent(
+                prompt,
+                apiKey,
+                undefined,
+                currentImage ? [currentImage] : undefined
+            );
 
             if (response.text) {
                 const text = response.text;
@@ -549,7 +601,18 @@ export const AdminBaseCatalog: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    {(isAILoading || isBatchLoading) && <Loader2 className="w-4 h-4 animate-spin text-brand-600" />}
+                    <div className="flex items-center gap-2 ml-auto">
+                        {(isAILoading || isBatchLoading) && <Loader2 className="w-4 h-4 animate-spin text-brand-600" />}
+                        {chatHistory.length > 0 && (
+                            <button
+                                onClick={handleClearChat}
+                                className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-xl transition-colors"
+                                title="Limpar conversa"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
@@ -562,14 +625,24 @@ export const AdminBaseCatalog: React.FC = () => {
                                 </div>
                             )}
 
-                            {chatHistory.map((chat, idx) => (
+                            {chatHistory.map((chat: any, idx) => (
                                 <div key={idx} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${chat.role === 'user'
                                         ? 'bg-brand-600 text-white rounded-tr-none'
                                         : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-tl-none prose prose-sm dark:prose-invert max-w-none'
                                         }`}
-                                        {...(chat.role === 'model' ? { dangerouslySetInnerHTML: { __html: chat.content } } : { children: chat.content })}
-                                    />
+                                    >
+                                        {chat.image && (
+                                            <div className="mb-2 overflow-hidden rounded-xl border border-white/20 shadow-sm">
+                                                <img src={chat.image} alt="Enviada" className="w-full max-h-48 object-cover" />
+                                            </div>
+                                        )}
+                                        {chat.role === 'model' ? (
+                                            <div dangerouslySetInnerHTML={{ __html: chat.content }} />
+                                        ) : (
+                                            <div>{chat.content}</div>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
 
@@ -605,6 +678,9 @@ export const AdminBaseCatalog: React.FC = () => {
                                                 >
                                                     <Check className="w-3 h-3 mr-1" /> {prod.isDuplicate ? 'Atualizar' : 'Aprovar'}
                                                 </Button>
+                                                <button onClick={() => setPreviewItem(prod)} title="Ver Detalhes" className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors">
+                                                    <AlertCircle className="w-4 h-4" />
+                                                </button>
                                                 <button onClick={() => handleEdit(prod)} className="p-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors" title="Editar">
                                                     <Edit2 className="w-4 h-4 text-gray-500" />
                                                 </button>
@@ -808,26 +884,82 @@ export const AdminBaseCatalog: React.FC = () => {
 
                 {generatorMode === 'chat' && (
                     <div className="p-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={aiMessage}
-                                onChange={(e) => setAiMessage(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                                placeholder="Descreva o produto..."
-                                className="flex-1 bg-white dark:bg-gray-800 border-none rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500 dark:text-white shadow-sm"
-                            />
+                        {imagePreview && (
+                            <div className="mb-2 relative w-fit">
+                                <img src={imagePreview} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-brand-500" />
+                                <button
+                                    onClick={() => { setSelectedImage(null); setImagePreview(null); }}
+                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-sm"
+                                >
+                                    <X className="w-2 h-2" />
+                                </button>
+                            </div>
+                        )}
+                        <div className="flex gap-2 relative">
+                            <div className="relative flex-1">
+                                <input
+                                    type="text"
+                                    value={aiMessage}
+                                    onChange={(e) => setAiMessage(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                                    placeholder="Diga ou envie foto do cardápio..."
+                                    className="w-full bg-white dark:bg-gray-800 border-none rounded-xl pl-9 pr-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                    disabled={isAILoading}
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-500 transition-colors"
+                                    title="Anexar imagem"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                                <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
+                            </div>
                             <button
                                 onClick={handleSendMessage}
-                                disabled={isAILoading || !aiMessage.trim()}
-                                className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition-colors disabled:opacity-50"
+                                disabled={isAILoading || (!aiMessage.trim() && !selectedImage)}
+                                className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:bg-gray-300 transition-all font-bold text-xs"
                             >
-                                <Send className="w-5 h-5" />
+                                {isAILoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             </button>
                         </div>
                     </div>
                 )}
             </div>
+
+            {/* Preview Modal */}
+            {previewItem && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 text-left">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <h4 className="font-black text-lg dark:text-white mb-2 uppercase tracking-tight">Preview do Produto</h4>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Nome</label>
+                                    <p className="text-sm font-bold dark:text-gray-200">{previewItem.name}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Preço Sugerido</label>
+                                        <p className="text-sm font-bold text-brand-600">R$ {previewItem.valor_sugerido?.toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Categoria</label>
+                                        <p className="text-sm font-bold dark:text-gray-200">{previewItem.category}</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Descrição</label>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed italic">"{previewItem.description}"</p>
+                                </div>
+                            </div>
+                            <Button fullWidth className="mt-8 rounded-2xl" onClick={() => setPreviewItem(null)}>
+                                Fechar Preview
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Right Column: Base Catalog List */}
             <div className="flex-1 flex flex-col h-full">

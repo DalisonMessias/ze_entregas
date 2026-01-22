@@ -5106,64 +5106,97 @@ export const importBaseProductToStore = async (baseProduct: CatalogBaseProduct) 
  * Função utilitária para gerar conteúdo usando IA com sistema de fallback automático.
  * Tenta múltiplos modelos antes de falhar.
  */
-export const generateAIContent = async (prompt: string, apiKey: string, systemInstruction?: string) => {
+export const generateAIContent = async (prompt: string, apiKey: string, systemInstruction?: string, images?: { data: string, mimeType: string }[]) => {
     // Importação dinâmica para evitar carregar o SDK se não houver chave
-    const { GoogleGenAI } = await import('@google/genai');
-    const genAI = new GoogleGenAI({ apiKey });
+    // Importação dinâmica resiliente
+    const genAIModule = await import('@google/genai');
+    const GoogleGenAIClass = (genAIModule.GoogleGenAI || (genAIModule as any).default) as any;
 
-    // Lista de modelos ordenados por prioridade (Janeiro 2026)
+    if (!GoogleGenAIClass) {
+        throw new Error("SDK do Gemini não pôde ser carregado corretamente.");
+    }
+
+    // Algumas versões exigem objeto, outras string. 
+    // O linter do projeto atual exige objeto, mas o runtime (v1.30.0) exige string.
+    const genAI = new GoogleGenAIClass(apiKey);
+
+    // Verificação de segurança para o método
+    if (typeof genAI.getGenerativeModel !== 'function') {
+        throw new Error("O método getGenerativeModel não foi encontrado no SDK.");
+    }
+
+    // Ordem de preferência de modelos
+    // Priorizamos o 1.5-flash por ser extremamente rápido, barato e estável para multimodal.
     const modelOrder = [
-        // --- GERAÇÃO 3 (O Estado da Arte) ---
-        'gemini-3-pro-preview',          // Melhor raciocínio, multimodal e tarefas complexas (agentes)
-        'gemini-3-flash-preview',        // Inteligência nível 3 com velocidade/custo otimizados
-        'gemini-3-deep-think',           // Especialista em raciocínio profundo (Lógica/Matemática)
-
-        // --- GERAÇÃO 2.5 (Estáveis e Robustos) ---
-        'gemini-2.5-pro',                // Versão aprimorada do 2.0 Pro, muito estável
-        'gemini-2.5-flash',              // O novo padrão "workhorse" para alta performance
-
-        // --- GERAÇÃO 2.0 (Legado/Compatibilidade) ---
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-thinking-exp',
-
-        // --- GERAÇÃO 1.5 (Legado/Baixo Custo) ---
-        'gemini-1.5-pro',
         'gemini-1.5-flash',
-        'gemini-1.5-flash-8b'
+        'gemini-1.5-pro',
+        'gemini-2.0-flash',
+        'gemini-2.5-flash'
     ];
 
     let lastError: any = null;
 
     for (const modelName of modelOrder) {
         try {
-            // @google/genai utiliza ai.models.generateContent e o sistema de config
-            const response = await (genAI as any).models.generateContent({
+            console.log(`[AI] Tentando modelo: ${modelName}`);
+
+            // Usar o método padrão do SDK (cast para any para evitar erros de tipagem do linter)
+            const model = (genAI as any).getGenerativeModel({
                 model: modelName,
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                config: systemInstruction ? { systemInstruction } : undefined
+                systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined
             });
 
-            if (response.text) {
+            const parts: any[] = [{ text: prompt }];
+
+            if (images && images.length > 0) {
+                images.forEach(img => {
+                    parts.push({
+                        inlineData: {
+                            data: img.data, // base64 string (deve estar sem o prefixo data:image/...)
+                            mimeType: img.mimeType
+                        }
+                    });
+                });
+            }
+
+            const result = await model.generateContent(parts);
+            const response = await result.response;
+            const text = response.text();
+
+            if (text) {
+                console.log(`[AI] Sucesso com modelo: ${modelName}`);
                 return {
-                    text: response.text,
+                    text: text,
                     model: modelName
                 };
             }
         } catch (error: any) {
             lastError = error;
             const errorMsg = error.message?.toLowerCase() || "";
+            const errorCode = error.status || error.code || 0;
 
-            // Se for erro de rede ou cota (429/503), tenta o próximo modelo
-            if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('limit') || errorMsg.includes('503')) {
-                console.warn(`[AI Fallback] Modelo ${modelName} falhou (cota/limite). Tentando próximo...`);
+            console.warn(`[AI Fallback] Modelo ${modelName} falhou. Erro: ${errorMsg} (${errorCode})`);
+
+            // Se for erro de cota (429), modelo não existe (404), modelo indisponível (503) 
+            // ou erro de requisição (400 - ex: multimodal não suportado), TENTAMOS O PRÓXIMO.
+            if (
+                errorCode === 429 ||
+                errorCode === 404 ||
+                errorCode === 503 ||
+                errorCode === 400 ||
+                errorMsg.includes('quota') ||
+                errorMsg.includes('limit') ||
+                errorMsg.includes('not found') ||
+                errorMsg.includes('not supported')
+            ) {
                 continue;
             }
 
-            // Se for outro erro crítico (configuração, auth, etc), interrompe
+            // Se for outro erro crítico (ex: API Key inválida), lançamos para o usuário
             throw error;
         }
     }
 
-    // Se chegou aqui, todos os modelos falharam
+    // Se nenhum modelo funcionou, lança o último erro
     throw lastError;
 };

@@ -44,6 +44,8 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     const [aiMessage, setAiMessage] = useState('');
     const [batchInput, setBatchInput] = useState('');
     const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'model', content: string }[]>([]);
+    const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [pendingReviewProducts, setPendingReviewProducts] = useState<Partial<StoreProduct & { id_temp: string, category_name: string }>[]>([]);
     const [analysisSuggestions, setAnalysisSuggestions] = useState<AnalysisSuggestion[]>([]);
     const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
@@ -53,12 +55,49 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     const [isSaving, setIsSaving] = useState(false);
     const [initializing, setInitializing] = useState(true);
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     // Editing State
     const [editingItem, setEditingItem] = useState<string | null>(null); // id_temp being edited
+    const [previewItem, setPreviewItem] = useState<any>(null); // item for preview modal
     const [editForm, setEditForm] = useState<Partial<StoreProduct & { category_name: string }>>({});
 
     const { confirm, alert: showMessage } = useDialog();
     const chatEndRef = useRef<HTMLDivElement>(null);
+
+    const handleClearChat = async () => {
+        const confirmed = await confirm({
+            title: 'Limpar Conversa?',
+            message: 'Deseja realmente apagar todo o histórico desta conversa?',
+            confirmButtonText: 'Limpar'
+        });
+
+        if (confirmed) {
+            setChatHistory([]);
+            localStorage.removeItem('ze_store_chat_history');
+        }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 4 * 1024 * 1024) {
+            showMessage({ title: 'Arquivo muito grande', message: 'Por favor, selecione uma imagem com menos de 4MB.' });
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64Content = (event.target?.result as string).split(',')[1];
+            setSelectedImage({
+                data: base64Content,
+                mimeType: file.type
+            });
+            setImagePreview(event.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
 
     useEffect(() => {
         loadSettings();
@@ -140,7 +179,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     };
 
     const handleSendMessage = async () => {
-        if (!aiMessage.trim()) return;
+        if (!aiMessage.trim() && !selectedImage) return;
 
         if (!apiKey) {
             showMessage({ title: 'Configuração Necessária', message: 'Solicite ao administrador a configuração da API Key.' });
@@ -148,8 +187,18 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         }
 
         const userMsg = aiMessage;
+        const currentImage = selectedImage;
+        const currentPreview = imagePreview;
+
         setAiMessage('');
-        setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
+        setSelectedImage(null);
+        setImagePreview(null);
+
+        setChatHistory(prev => [...prev, {
+            role: 'user',
+            content: userMsg,
+            image: currentPreview || undefined
+        }]);
         setIsAILoading(true);
 
         try {
@@ -158,29 +207,34 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             const prompt = `Atue como um especialista em cadastro de produtos para delivery.
             Categorias disponíveis na loja: ${catNames || 'Geral'}.
 
-Analise: "${userMsg}".
+            Analise: "${userMsg}" ${currentImage ? 'e a imagem enviada (cardápio/produto).' : '.'}
 
             Se for DÚVIDA / CONVERSA: Responda amigavelmente em HTML(use<b>, <br>, <i>).
-    Se for CRIAÇÃO DE PRODUTO: Gere um JSON.
+            Se for CRIAÇÃO DE PRODUTO ${currentImage ? 'ou ANÁLISE DE IMAGEM' : ''}: Gere um JSON.
 
-    Formato JSON esperado:
-    {
-        "type": "PRODUCT_CREATION",
-    "content": "Pequeno texto confirmando a ação",
-    "products": [
-    {
-        "name": "Nome Produto",
-    "description": "Descrição vendedora",
-    "price": 25.00,
-    "category_name": "Escolha uma das categorias disponíveis ou sugira uma nova se não houver match"
+            Formato JSON esperado:
+            {
+                "type": "PRODUCT_CREATION",
+                "content": "Pequeno texto confirmando a ação",
+                "products": [
+                    {
+                        "name": "Nome Produto",
+                        "description": "Descrição vendedora",
+                        "price": 25.00,
+                        "category_name": "Escolha uma das categorias disponíveis ou sugira uma nova se não houver match"
                     }
-    ]
+                ]
             }
 
-    Se não for criação, retorne apenas o texto HTML (ou JSON com type INFORMATION).
-    Responda no idioma Português do Brasil.`;
+            Se não for criação, retorne apenas o texto HTML (ou JSON com type INFORMATION).
+            Responda no idioma Português do Brasil.`;
 
-            const response = await cloud.generateAIContent(prompt, apiKey);
+            const response = await cloud.generateAIContent(
+                prompt,
+                apiKey,
+                undefined,
+                currentImage ? [currentImage] : undefined
+            );
 
             if (response.text) {
                 const text = response.text;
@@ -479,7 +533,18 @@ Analise: "${userMsg}".
                             <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">IA Conectada</span>
                         </div>
                     </div>
-                    {(isAILoading || isBatchLoading || isAnalyzing) && <Loader2 className="w-4 h-4 animate-spin text-brand-600 ml-auto" />}
+                    <div className="flex items-center gap-2 ml-auto">
+                        {(isAILoading || isBatchLoading || isAnalyzing) && <Loader2 className="w-4 h-4 animate-spin text-brand-600" />}
+                        {chatHistory.length > 0 && (
+                            <button
+                                onClick={handleClearChat}
+                                className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-xl transition-colors"
+                                title="Limpar conversa"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex gap-2 bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl">
@@ -516,13 +581,19 @@ Analise: "${userMsg}".
                                 <p className="text-xs font-medium">"Criar X-Bacon com fritas por 25 reais"</p>
                             </div>
                         )}
-                        {chatHistory.map((chat, idx) => (
+                        {chatHistory.map((chat: any, idx) => (
                             <div key={idx} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[90%] p-3 rounded-2xl text-xs ${chat.role === 'user'
                                     ? 'bg-brand-600 text-white rounded-tr-none'
                                     : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-tl-none'}`}
-                                    dangerouslySetInnerHTML={{ __html: chat.content }}
-                                />
+                                >
+                                    {chat.image && (
+                                        <div className="mb-2 overflow-hidden rounded-xl border border-white/20 shadow-sm">
+                                            <img src={chat.image} alt="Enviada" className="w-full max-h-48 object-cover" />
+                                        </div>
+                                    )}
+                                    <div dangerouslySetInnerHTML={{ __html: chat.content }} />
+                                </div>
                             </div>
                         ))}
                     </>
@@ -741,6 +812,7 @@ Analise: "${userMsg}".
                                                     <p className="text-[10px] text-gray-400 line-clamp-1">{prod.description}</p>
                                                 </div>
                                                 <div className="flex gap-1">
+                                                    <button onClick={() => setPreviewItem(prod)} className="p-1 hover:bg-white rounded" title="Ver Detalhes"><AlertCircle className="w-3 h-3 text-brand-500" /></button>
                                                     <button onClick={() => startEdit(prod)} className="p-1 hover:bg-white rounded"><Edit2 className="w-3 h-3 text-gray-400" /></button>
                                                     <button onClick={() => handleDiscard(prod.id_temp!)} className="p-1 hover:bg-red-50 rounded"><X className="w-3 h-3 text-red-400" /></button>
                                                 </div>
@@ -761,22 +833,78 @@ Analise: "${userMsg}".
             {/* Input Chat */}
             {generatorMode === 'chat' && (
                 <div className="p-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={aiMessage}
-                            onChange={(e) => setAiMessage(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                            placeholder="Descreva o produto..."
-                            className="flex-1 bg-white dark:bg-gray-800 border-none rounded-xl px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
-                        />
+                    {imagePreview && (
+                        <div className="mb-2 relative w-fit">
+                            <img src={imagePreview} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-brand-500" />
+                            <button
+                                onClick={() => { setSelectedImage(null); setImagePreview(null); }}
+                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-sm"
+                            >
+                                <X className="w-2 h-2" />
+                            </button>
+                        </div>
+                    )}
+                    <div className="flex gap-2 relative">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                value={aiMessage}
+                                onChange={(e) => setAiMessage(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                                placeholder="Diga ou envie foto do cardápio..."
+                                className="w-full bg-white dark:bg-gray-800 border-none rounded-xl pl-9 pr-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                disabled={isAILoading}
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-500 transition-colors"
+                                title="Anexar imagem"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
+                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
+                        </div>
                         <button
                             onClick={handleSendMessage}
-                            disabled={isAILoading || !aiMessage.trim()}
-                            className="p-2 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50"
+                            disabled={isAILoading || (!aiMessage.trim() && !selectedImage)}
+                            className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:bg-gray-300 transition-all font-bold text-xs"
                         >
-                            <Send className="w-4 h-4" />
+                            {isAILoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Preview Modal */}
+            {previewItem && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 text-left">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <h4 className="font-black text-lg dark:text-white mb-2 uppercase tracking-tight">Preview do Produto</h4>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Nome</label>
+                                    <p className="text-sm font-bold dark:text-gray-200">{previewItem.name}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Preço</label>
+                                        <p className="text-sm font-bold text-brand-600">R$ {previewItem.price?.toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Categoria</label>
+                                        <p className="text-sm font-bold dark:text-gray-200">{previewItem.category_name}</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Descrição</label>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed italic">"{previewItem.description}"</p>
+                                </div>
+                            </div>
+                            <Button fullWidth className="mt-8 rounded-2xl" onClick={() => setPreviewItem(null)}>
+                                Fechar Preview
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}

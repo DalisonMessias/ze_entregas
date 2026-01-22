@@ -197,15 +197,21 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         />
                     </div>
 
-                    <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-                        <input
-                            type="checkbox"
-                            id="is_active_modal"
-                            checked={editingProduct.is_active !== false}
-                            onChange={(e) => setEditingProduct({ ...editingProduct, is_active: e.target.checked })}
-                            className="w-5 h-5 accent-brand-500"
-                        />
-                        <label htmlFor="is_active_modal" className="text-sm font-bold text-gray-700 dark:text-gray-300">Produto disponível para venda</label>
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                        <div className="flex items-center gap-3">
+                            <div
+                                onClick={() => setEditingProduct({ ...editingProduct, is_active: editingProduct.is_active === false ? true : false })}
+                                className={`w-10 h-5 rounded-full p-1 cursor-pointer transition-colors duration-300 flex items-center ${editingProduct.is_active !== false ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-700'}`}
+                            >
+                                <div className={`w-3 h-3 bg-white rounded-full transition-transform duration-300 ${editingProduct.is_active !== false ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </div>
+                            <label className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer" onClick={() => setEditingProduct({ ...editingProduct, is_active: editingProduct.is_active === false ? true : false })}>
+                                Produto disponível para venda
+                            </label>
+                        </div>
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${editingProduct.is_active !== false ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {editingProduct.is_active !== false ? 'Ativado' : 'Pausado'}
+                        </span>
                     </div>
                 </div>
 
