@@ -1,31 +1,20 @@
-# TASK LIST - Análise de Catálogo Avançada & Busca Inteligente
+# Lista de Tarefas: Refinamento de UX, Categorias e SQL Idempotente
 
-## [x] Melhoria da Busca de Importação
-- [x] Implementar função `normalizeText` para ignorar acentos e caracteres especiais.
-- [x] Implementar lógica de `isFuzzyMatch` (match parcial e tolerância a erros).
-- [x] Integrar busca otimizada na aba 'Importar' do Lojista.
-
-## [x] Análise de Catálogo Avançada 2.0 (Lojista)
-- [x] Refatorar Prompt do Gemini para diagnóstico estruturado.
-- [x] Implementar Interface de Dashboard com Score (0-100).
-- [x] Adicionar métricas de Qualidade, Mix e Preços.
-- [x] Implementar Preview de Dados nas sugestões da IA.
-- [x] Botão de aplicação automática de melhorias.
-
-## [x] Análise de Catálogo Avançada 2.0 (Admin)
-- [x] Refatorar Prompt do Gemini para auditoria estratégica do Admin.
-- [x] Replicar UI de Dashboard com Score e Métricas.
-- [x] Implementar Auditoria de Catálogo Base (Plataforma).
-
-- [x] Correções Técnicas
-- [x] Corrigir erro de tipagem `category_name` no state de revisão.
-- [x] Corrigir prop `size="xs"` inválida nos botões.
-- [x] Restaurar estado `isAILoading` removido acidentalmente.
-- [x] Corrigir erro de build em `ProfileData.tsx` (await em função síncrona).
-- [x] Corrigir erro de coluna inexistente (`category_name`) ao aplicar análise da IA.
-- [x] Melhorar tratamento de erro 429 para exibir mensagens amigáveis de "Manutenção Momentânea".
-- [x] Implementar Sistema de Fallback Automático (2.0 Flash -> 1.5 Pro -> 1.5 Flash).
-- [x] Unificar chamadas de IA em todo o sistema (Chat, Catálogos e Marketing).
-
----
-*Status: 100% Concluído*
+- [x] Implementar auto-criação de categoria "Geral" para novos lojistas em `supabase_global.sql`
+- [x] Implementar auto-correção de categorias em `cloud.ts` para lojistas existentes
+- [x] Impedir exclusão da categoria "Geral" no `CategoryManager.tsx`
+- [x] Refatorar resiliência de categorias no `StoreAIGenerator.tsx` para eliminar erros de salvamento
+- [x] **[NOVO]** Revisar `supabase_global.sql` para garantir que todos os `INSERT` sejam idempotentes (`ON CONFLICT`)
+- [x] **[NOVO]** Adicionar switch de ativação rápida no card do produto em `StoreCatalog.tsx`
+- [x] **[NOVO]** Criar categorias dinamicamente ao salvar produtos (IA/Importação)
+- [x] **[NOVO]** Corrigir visualização cortada do seletor de categorias
+- [x] **[NOVO]** Reduzir tamanho dos cards de produtos para visualização densa
+- [x] **[NOVO]** Corrigir persistência do estado do chat da IA ao trocar de abas
+- [x] **[NOVO]** Chat da IA aumentado para 400px e layout lateral estabilizado
+- [x] Validar integridade do fluxo de importação e criação por IA
+- [ ] **[NOVO]** Suporte a imagens no chat de IA para análise de cardápios
+- [ ] **[NOVO]** Botão de preview de produtos pendentes no chat de IA
+- [ ] **[NOVO]** Botão para limpar histórico de conversa no chat
+- [ ] **[NOVO]** Busca de produtos por ID ("ID-xxxx")
+- [ ] **[NOVO]** Botão de troca rápida de imagem nos cards de produtos
+- [ ] **[NOVO]** Verificação de persistência no banco de dados

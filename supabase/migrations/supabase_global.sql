@@ -644,6 +644,12 @@ BEGIN
       ON CONFLICT (store_id) DO NOTHING;
   END IF;
 
+  -- Se for lojista, criar categoria padrão 'Geral'
+  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') = 'store_partner' THEN
+      INSERT INTO public.categories (name, store_id)
+      VALUES ('Geral', NEW.id);
+  END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -9006,7 +9012,7 @@ VALUES
     ('Restaurante', 'restaurante'),
     ('Japonês', 'japones'),
     ('Sorveteria', 'sorveteria')
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name;
 
 -- Habilitar RLS em institutional_categories
 ALTER TABLE public.institutional_categories ENABLE ROW LEVEL SECURITY;

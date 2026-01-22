@@ -120,27 +120,23 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         }
     };
 
-    const getCategoryIdByName = (name: string): string => {
+    const ensureCategoryExists = async (name: string): Promise<string> => {
         if (!name) return categories[0]?.id || '';
+
         const lowerName = name.toLowerCase().trim();
         const found = categories.find(c => c.name.toLowerCase().trim() === lowerName);
         if (found) return found.id;
 
-        // Se não encontrar, tenta encontrar uma categoria 'Geral' ou similar
-        const defaultCat = categories.find(c =>
-            c.name.toLowerCase() === 'geral' ||
-            c.name.toLowerCase() === 'todos' ||
-            c.name.toLowerCase() === 'diversos'
-        );
-
-        const finalId = defaultCat?.id || categories[0]?.id;
-
-        // Se ainda for vazio/nulo (raro), lança erro para evitar quebra no Supabase
-        if (!finalId) {
-            throw new Error(`Categoria "${name}" não encontrada e nenhuma categoria padrão disponível.`);
+        // Se não encontrar, cria a categoria dinamicamente
+        try {
+            const newCat = await cloud.createStoreCategory(name);
+            // Atualiza a lista local de categorias no componente pai para futuros produtos no mesmo lote
+            if (onProductCreated) onProductCreated();
+            return newCat.id;
+        } catch (error) {
+            console.error("Erro ao criar categoria dinâmica:", error);
+            return categories[0]?.id || '';
         }
-
-        return finalId;
     };
 
     const handleSendMessage = async () => {
@@ -362,7 +358,7 @@ Analise: "${userMsg}".
 
         setIsSaving(true);
         try {
-            const catId = getCategoryIdByName(prod.category_name || '');
+            const catId = await ensureCategoryExists(prod.category_name || '');
 
             await cloud.createStoreProduct({
                 name: prod.name,
@@ -386,7 +382,7 @@ Analise: "${userMsg}".
         setIsSaving(true);
         try {
             if (suggestion.type === 'new_product' && suggestion.new_data) {
-                const catId = getCategoryIdByName(suggestion.new_data.category_name || suggestion.new_data.category || '');
+                const catId = await ensureCategoryExists(suggestion.new_data.category_name || suggestion.new_data.category || '');
                 await cloud.createStoreProduct({
                     ...suggestion.new_data,
                     category_id: catId,
@@ -430,7 +426,7 @@ Analise: "${userMsg}".
         setIsSaving(true);
         try {
             for (const prod of pendingReviewProducts) {
-                const catId = getCategoryIdByName(prod.category_name || '');
+                const catId = await ensureCategoryExists(prod.category_name || '');
                 await cloud.createStoreProduct({
                     name: prod.name,
                     description: prod.description,

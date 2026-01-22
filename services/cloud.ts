@@ -1187,6 +1187,21 @@ export const getStoreCategories = async (): Promise<any[]> => {
         console.error("Error fetching categories:", error);
         return [];
     }
+
+    // Se não houver categorias, cria a categoria padrão 'Geral'
+    if (!data || data.length === 0) {
+        const { data: newData, error: createError } = await sb
+            .from('categories')
+            .insert({ name: 'Geral', store_id: user.id })
+            .select();
+
+        if (createError) {
+            console.error("Error creating default category:", createError);
+            return [];
+        }
+        return newData || [];
+    }
+
     return data || [];
 };
 
@@ -5097,25 +5112,25 @@ export const generateAIContent = async (prompt: string, apiKey: string, systemIn
     const genAI = new GoogleGenAI({ apiKey });
 
     // Lista de modelos ordenados por prioridade (Janeiro 2026)
-const modelOrder = [
-    // --- GERAÇÃO 3 (O Estado da Arte) ---
-    'gemini-3-pro-preview',          // Melhor raciocínio, multimodal e tarefas complexas (agentes)
-    'gemini-3-flash-preview',        // Inteligência nível 3 com velocidade/custo otimizados
-    'gemini-3-deep-think',           // Especialista em raciocínio profundo (Lógica/Matemática)
-    
-    // --- GERAÇÃO 2.5 (Estáveis e Robustos) ---
-    'gemini-2.5-pro',                // Versão aprimorada do 2.0 Pro, muito estável
-    'gemini-2.5-flash',              // O novo padrão "workhorse" para alta performance
-    
-    // --- GERAÇÃO 2.0 (Legado/Compatibilidade) ---
-    'gemini-2.0-flash',              
-    'gemini-2.0-flash-thinking-exp', 
-    
-    // --- GERAÇÃO 1.5 (Legado/Baixo Custo) ---
-    'gemini-1.5-pro',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b'
-];
+    const modelOrder = [
+        // --- GERAÇÃO 3 (O Estado da Arte) ---
+        'gemini-3-pro-preview',          // Melhor raciocínio, multimodal e tarefas complexas (agentes)
+        'gemini-3-flash-preview',        // Inteligência nível 3 com velocidade/custo otimizados
+        'gemini-3-deep-think',           // Especialista em raciocínio profundo (Lógica/Matemática)
+
+        // --- GERAÇÃO 2.5 (Estáveis e Robustos) ---
+        'gemini-2.5-pro',                // Versão aprimorada do 2.0 Pro, muito estável
+        'gemini-2.5-flash',              // O novo padrão "workhorse" para alta performance
+
+        // --- GERAÇÃO 2.0 (Legado/Compatibilidade) ---
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-thinking-exp',
+
+        // --- GERAÇÃO 1.5 (Legado/Baixo Custo) ---
+        'gemini-1.5-pro',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-8b'
+    ];
 
     let lastError: any = null;
 

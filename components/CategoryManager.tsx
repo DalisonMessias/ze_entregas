@@ -123,8 +123,12 @@ export const CategoryManager: React.FC = () => {
                                 <span className="font-bold text-gray-700 dark:text-gray-300">{cat.name}</span>
                             </div>
                             <button
-                                onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                onClick={() => cat.name.toLowerCase() !== 'geral' && handleDeleteCategory(cat.id, cat.name)}
+                                className={`p-2 rounded-xl transition-all opacity-0 group-hover:opacity-100 ${cat.name.toLowerCase() === 'geral'
+                                    ? 'text-gray-200 dark:text-gray-700 cursor-not-allowed opacity-20'
+                                    : 'text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                    }`}
+                                title={cat.name.toLowerCase() === 'geral' ? 'Categoria padrão não pode ser excluída' : 'Excluir Categoria'}
                             >
                                 <Trash2 className="w-4 h-4" />
                             </button>

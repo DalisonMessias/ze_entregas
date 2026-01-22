@@ -942,16 +942,7 @@ export const AdminBaseCatalog: React.FC = () => {
                                 />
                             </div>
 
-                            <div>
-                                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Marca (Opcional)</label>
-                                <input
-                                    type="text"
-                                    value={manualProduct.brand}
-                                    onChange={e => setManualProduct({ ...manualProduct, brand: e.target.value })}
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 dark:text-white"
-                                    placeholder="Ex: Coca-Cola, Heinz"
-                                />
-                            </div>
+
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div>

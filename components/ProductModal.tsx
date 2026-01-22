@@ -143,6 +143,13 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         placeholder="Ex: Hambúrguer Artesanal"
                     />
 
+                    <CustomInput
+                        label="Marca (Opcional)"
+                        value={editingProduct.brand || ''}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, brand: e.target.value })}
+                        placeholder="Ex: Coca-Cola, Heinz, Caseiro"
+                    />
+
                     <div className="grid grid-cols-2 gap-4">
                         <CustomInput
                             label="Preço de Venda"

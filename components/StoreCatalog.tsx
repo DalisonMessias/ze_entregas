@@ -151,7 +151,7 @@ export const StoreCatalog: React.FC = () => {
     const handleDeleteProduct = async (id: string, name: string) => {
         const confirmed = await confirm({
             title: 'Excluir Produto?',
-            message: `Tem certeza que deseja excluir "${name}"? Esta ação não pode ser desfeita.`,
+            message: `Deseja realmente excluir "${name}"? Esta ação não pode ser desfeita.`,
             confirmButtonText: 'Excluir'
         });
 
@@ -159,9 +159,22 @@ export const StoreCatalog: React.FC = () => {
             try {
                 await cloud.deleteStoreProduct(id);
                 loadData();
+                showMessage({ title: 'Sucesso', message: 'Produto excluído.' });
             } catch (error) {
-                alert("Erro ao excluir produto.");
+                console.error("Erro ao excluir produto:", error);
             }
+        }
+    };
+
+    const handleToggleActive = async (id: string, currentStatus: boolean) => {
+        try {
+            await cloud.updateStoreProduct({
+                id,
+                is_active: !currentStatus
+            });
+            loadData();
+        } catch (error) {
+            console.error("Erro ao alterar status do produto:", error);
         }
     };
 
@@ -183,11 +196,10 @@ export const StoreCatalog: React.FC = () => {
     }
 
     return (
-    return (
         <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-140px)] animate-in fade-in duration-500 max-w-full overflow-hidden">
-            {/* Left Column: AI Assistant */}
-            {activeTab === 'products' && isSuperStore && (
-                <div className="w-full lg:w-96 flex-shrink-0 h-full">
+            {/* Left Column: AI Assistant - Peristent across tabs for SuperStore */}
+            {isSuperStore && (
+                <div className="w-full lg:w-[400px] flex-shrink-0 h-full">
                     <StoreAIGenerator
                         onProductCreated={loadData}
                         categories={categories}
@@ -196,7 +208,7 @@ export const StoreCatalog: React.FC = () => {
                 </div>
             )}
 
-            <div className="flex-1 flex flex-col h-full min-w-0">
+            <div className="flex-1 flex flex-col h-full min-w-0 lg:min-w-[500px]">
                 {/* Compact Control Bar */}
                 <div className="flex flex-col md:flex-row gap-4 mb-4 items-center">
                     <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl w-fit overflow-x-auto flex-shrink-0">
@@ -244,11 +256,11 @@ export const StoreCatalog: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Category Filter Pills */}
-                            <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar mb-6">
+                            {/* Category Filter Pills - Enhanced Scrolling */}
+                            <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar mb-6 scroll-smooth px-1">
                                 <button
                                     onClick={() => setSelectedCategory('all')}
-                                    className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm border ${selectedCategory === 'all' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`}
+                                    className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm border ${selectedCategory === 'all' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`}
                                 >
                                     TODOS
                                 </button>
@@ -256,7 +268,7 @@ export const StoreCatalog: React.FC = () => {
                                     <button
                                         key={cat.id}
                                         onClick={() => setSelectedCategory(cat.name)}
-                                        className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm border ${selectedCategory === cat.name ? 'bg-brand-600 text-white border-brand-600' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`}
+                                        className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm border ${selectedCategory === cat.name ? 'bg-brand-600 text-white border-brand-600' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`}
                                     >
                                         {cat.name}
                                     </button>
@@ -296,18 +308,18 @@ export const StoreCatalog: React.FC = () => {
                                     </p>
                                 </div>
                             ) : (
-                                <div className={`grid grid-cols-1 ${isSuperStore ? 'md:grid-cols-1 xl:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
+                                <div className={`grid grid-cols-1 ${isSuperStore ? 'md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'} gap-4`}>
                                     {filteredProducts.map(product => (
                                         <div
                                             key={product.id}
-                                            className="group bg-white dark:bg-gray-900/50 rounded-[2.5rem] p-5 border border-gray-100 dark:border-gray-800 hover:border-brand-500/30 hover:shadow-xl hover:shadow-brand-500/5 transition-all duration-500 relative flex flex-col"
+                                            className="group bg-white dark:bg-gray-900/50 rounded-[1.5rem] p-4 border border-gray-100 dark:border-gray-800 hover:border-brand-500/30 hover:shadow-xl hover:shadow-brand-500/5 transition-all duration-500 relative flex flex-col"
                                         >
-                                            <div className="flex gap-4 items-start mb-4">
-                                                <div className="w-24 h-24 rounded-3xl bg-gray-50 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-100 dark:border-gray-700 overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-500">
+                                            <div className="flex gap-3 items-start mb-3">
+                                                <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gray-50 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-100 dark:border-gray-700 overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-500">
                                                     {product.image_url ? (
                                                         <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                                                     ) : (
-                                                        <Package className="w-10 h-10 text-gray-300 group-hover:text-brand-300 transition-colors" />
+                                                        <Package className="w-8 h-8 text-gray-300 group-hover:text-brand-300 transition-colors" />
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
@@ -333,8 +345,10 @@ export const StoreCatalog: React.FC = () => {
                                                             </button>
                                                         </div>
                                                     </div>
-                                                    <h3 className="font-black text-gray-900 dark:text-white text-lg line-clamp-1 group-hover:text-brand-600 transition-colors">{product.name}</h3>
-                                                    <p className="text-2xl font-black text-gray-900 dark:text-white mt-0.5 tracking-tighter">
+                                                    <h3 className="font-black text-gray-900 dark:text-white text-sm line-clamp-1 group-hover:text-brand-600 transition-colors">
+                                                        {product.brand ? `${product.brand} - ` : ''}{product.name}
+                                                    </h3>
+                                                    <p className="text-xl font-black text-gray-900 dark:text-white mt-0.5 tracking-tighter">
                                                         {product.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                     </p>
                                                 </div>
@@ -345,10 +359,18 @@ export const StoreCatalog: React.FC = () => {
                                             </p>
 
                                             <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50 dark:border-gray-800/50">
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${product.is_active ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-rose-500'}`} />
+                                                <div className="flex items-center gap-3">
+                                                    <div
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleToggleActive(product.id!, product.is_active || false);
+                                                        }}
+                                                        className={`w-10 h-5 rounded-full p-1 cursor-pointer transition-colors duration-300 flex items-center ${product.is_active ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-700'}`}
+                                                    >
+                                                        <div className={`w-3 h-3 bg-white rounded-full transition-transform duration-300 ${product.is_active ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                    </div>
                                                     <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                                                        {product.is_active ? 'Disponível' : 'Indisponível'}
+                                                        {product.is_active ? 'Ativo' : 'Pausado'}
                                                     </span>
                                                 </div>
                                                 <span className="text-[9px] font-bold text-gray-300 dark:text-gray-600 font-mono">ID-{product.id?.slice(0, 6).toUpperCase()}</span>
