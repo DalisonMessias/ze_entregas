@@ -2005,9 +2005,9 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                                         onClick={async () => {
                                             try {
                                                 await backupService.createBackup(terminal?.user_id || 'unknown');
-                                                await alert({ title: 'Sucesso', message: 'Backup criado!' });
+                                                await dialog.alert({ title: 'Sucesso', message: 'Backup criado!' });
                                             } catch (e) {
-                                                await alert({ title: 'Erro', message: 'Erro no backup' });
+                                                await dialog.alert({ title: 'Erro', message: 'Erro no backup' });
                                             }
                                         }}
                                     >
