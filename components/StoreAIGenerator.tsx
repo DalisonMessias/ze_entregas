@@ -12,6 +12,18 @@ interface StoreAIGeneratorProps {
     products: StoreProduct[];
 }
 
+interface AnalysisReport {
+    score: number;
+    metrics: {
+        descriptionQuality: number;
+        mixCompleteness: number;
+        pricingConsistency: number;
+    };
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+}
+
 interface AnalysisSuggestion {
     id: string;
     type: 'improvement' | 'new_product';
@@ -19,7 +31,7 @@ interface AnalysisSuggestion {
     target_product_name?: string;
     suggestion: string;
     reason: string;
-    new_data?: Partial<StoreProduct> & { category_name?: string }; // Se for melhoria ou novo produto
+    new_data?: Partial<StoreProduct> & { category_name?: string };
 }
 
 export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCreated, categories, products }) => {
@@ -34,6 +46,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'model', content: string }[]>([]);
     const [pendingReviewProducts, setPendingReviewProducts] = useState<Partial<StoreProduct & { id_temp: string, category_name: string }>[]>([]);
     const [analysisSuggestions, setAnalysisSuggestions] = useState<AnalysisSuggestion[]>([]);
+    const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
     const [isAILoading, setIsAILoading] = useState(false);
     const [isBatchLoading, setIsBatchLoading] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -222,29 +235,48 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         setIsAnalyzing(true);
         try {
             const ai = new GoogleGenAI({ apiKey: apiKey });
-            const catalogSummary = products.map(p => `${p.name} (R$${p.price}) - ${p.category}`).join('\n');
+            // Fornecer dados mais detalhados para análise de qualidade
+            const catalogSummary = products.map(p => `- ${p.name} (R$${p.price}) | Categoria: ${p.category} | Descrição: ${p.description || 'SEM DESCRIÇÃO'}`).join('\n');
             const catNames = categories.map(c => c.name).join(', ');
 
-            const prompt = `Atue como um Consultor de Menu de Delivery Expert.
-            Analise este catálogo atual:
+            const prompt = `Atue como um Consultor de Menu de Delivery Expert e Analista de Dados.
+            Analise este catálogo atual da loja:
             ${catalogSummary}
 
             Categorias da loja: ${catNames}.
 
-            Sugira melhorias pontuais ou novos produtos para aumentar vendas.
-            Retorne APENAS um JSON array com sugestões:
+            Sua tarefa é gerar um DIAGNÓSTICO COMPLETO do catálogo.
             
-            [
-                {
-                    "type": "improvement", // ou "new_product"
-                    "target_product_name": "Nome exato do produto alvo se for improvement",
-                    "suggestion": "Título da Sugestão (ex: Alterar nome para X)",
-                    "reason": "Por que isso vai vender mais?",
-                    "new_data": { "name": "...", "price": 25.00, "category_name": "..." } // Dados sugeridos
-                }
-            ]
+            Retorne APENAS um JSON rigoroso com:
+            {
+                "report": {
+                    "score": 0 a 100 (nota geral de qualidade comercial),
+                    "metrics": {
+                        "descriptionQuality": 0 a 100 (baseado em quão vendedora é a descrição),
+                        "mixCompleteness": 0 a 100 (se faltam produtos óbvios para o nicho),
+                        "pricingConsistency": 0 a 100 (se os preços estão coerentes)
+                    },
+                    "summary": "Resumo executivo curto",
+                    "strengths": ["Ponto forte 1", "..."],
+                    "weaknesses": ["Ponto fraco 1", "..."]
+                },
+                "suggestions": [
+                    {
+                        "type": "improvement" | "new_product",
+                        "target_product_name": "Nome exato se for improvement",
+                        "suggestion": "Título curto",
+                        "reason": "Explicação curta",
+                        "new_data": { "name": "...", "price": 0, "description": "...", "category_name": "..." }
+                    }
+                ]
+            }
+
+            Critérios:
+            1. Se o produto tem descrição vazia ou muito curta, sugira 'improvement' com uma descrição 'vendedora' no 'new_data'.
+            2. Se faltam acompanhamentos ou bebidas óbvias, sugira 'new_product'.
+            3. Analise se os nomes são atraentes.
             
-            Limite a 5 sugestões de alto impacto.`;
+            Limite a 4-5 sugestões de alto impacto. Idioma: Português do Brasil.`;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
@@ -252,11 +284,13 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             });
 
             if (response.text) {
-                const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-                const items = JSON.parse(jsonMatch ? jsonMatch[0] : '[]');
-
-                if (Array.isArray(items)) {
-                    setAnalysisSuggestions(items.map((it: any) => ({ ...it, id: crypto.randomUUID() })));
+                const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    const data = JSON.parse(jsonMatch[0]);
+                    if (data.report) setAnalysisReport(data.report);
+                    if (Array.isArray(data.suggestions)) {
+                        setAnalysisSuggestions(data.suggestions.map((it: any) => ({ ...it, id: crypto.randomUUID() })));
+                    }
                 }
             }
 
@@ -458,7 +492,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                 {/* MODE: ANALYZE */}
                 {generatorMode === 'analyze' && (
                     <div className="flex flex-col h-full">
-                        {analysisSuggestions.length === 0 ? (
+                        {!analysisReport && !isAnalyzing ? (
                             <div className="text-center py-6">
                                 <BarChart3 className="w-12 h-12 text-amber-200 mx-auto mb-3" />
                                 <h3 className="font-bold text-sm dark:text-white">Análise de Catálogo</h3>
@@ -471,27 +505,128 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                                 </Button>
                             </div>
                         ) : (
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="font-bold text-xs uppercase text-gray-400">Sugestões ({analysisSuggestions.length})</h4>
-                                    <button onClick={() => setAnalysisSuggestions([])} className="text-[10px] text-gray-400 underline">Limpar</button>
-                                </div>
-                                {analysisSuggestions.map(sug => (
-                                    <div key={sug.id} className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 p-3 rounded-2xl border border-amber-100 dark:border-amber-900/20">
-                                        <div className="flex gap-2 mb-2">
-                                            <div className="mt-0.5"><Sparkles className="w-4 h-4 text-amber-500" /></div>
-                                            <div>
-                                                <h5 className="font-bold text-xs text-gray-800 dark:text-white">{sug.suggestion}</h5>
-                                                <p className="text-[10px] text-gray-500 leading-tight mt-1">{sug.reason}</p>
+                            <div className="space-y-6">
+                                {isAnalyzing && (
+                                    <div className="flex flex-col items-center justify-center py-10">
+                                        <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-2" />
+                                        <p className="text-[10px] font-bold text-amber-600 animate-pulse">RECALCULANDO MÉTRICAS...</p>
+                                    </div>
+                                )}
+
+                                {analysisReport && !isAnalyzing && (
+                                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        {/* Score Dashboard */}
+                                        <div className="bg-gradient-to-br from-brand-600 to-indigo-700 rounded-3xl p-5 text-white shadow-lg mb-4 relative overflow-hidden">
+                                            <div className="relative z-10">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div>
+                                                        <h4 className="text-[10px] font-black uppercase tracking-widest opacity-80">Catálogo Score</h4>
+                                                        <div className="text-4xl font-black mt-1 flex items-baseline">
+                                                            {analysisReport.score}
+                                                            <span className="text-xs font-normal opacity-60 ml-1">/100</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-2 bg-white/20 rounded-2xl backdrop-blur-md">
+                                                        <BarChart3 className="w-5 h-5 text-white" />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+                                                        <div className="text-[8px] uppercase font-bold opacity-70">Descrições</div>
+                                                        <div className="text-sm font-black">{analysisReport.metrics.descriptionQuality}%</div>
+                                                    </div>
+                                                    <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+                                                        <div className="text-[8px] uppercase font-bold opacity-70">Mix Produto</div>
+                                                        <div className="text-sm font-black">{analysisReport.metrics.mixCompleteness}%</div>
+                                                    </div>
+                                                    <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+                                                        <div className="text-[8px] uppercase font-bold opacity-70">Preços</div>
+                                                        <div className="text-sm font-black">{analysisReport.metrics.pricingConsistency}%</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {/* Design element */}
+                                            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+                                        </div>
+
+                                        {/* Summary & Points */}
+                                        <div className="space-y-4">
+                                            <div className="bg-gray-50 dark:bg-gray-900/40 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
+                                                <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed italic">
+                                                    "{analysisReport.summary}"
+                                                </p>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-2">
+                                                    <h5 className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase flex items-center gap-1">
+                                                        <Check className="w-3 h-3" /> Pontos Fortes
+                                                    </h5>
+                                                    <div className="space-y-1">
+                                                        {analysisReport.strengths.map((s, i) => (
+                                                            <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/10">
+                                                                {s}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <h5 className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1">
+                                                        <AlertCircle className="w-3 h-3" /> Melhorar
+                                                    </h5>
+                                                    <div className="space-y-1">
+                                                        {analysisReport.weaknesses.map((w, i) => (
+                                                            <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 bg-rose-500/5 p-2 rounded-lg border border-rose-500/10">
+                                                                {w}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2 mt-3">
-                                            <Button size="sm" fullWidth variant="secondary" onClick={() => handleApplySuggestion(sug)} disabled={isSaving}>
-                                                Aplicar
-                                            </Button>
+
+                                        {/* Suggestions Area */}
+                                        <div className="mt-8 pt-6 border-t dark:border-gray-700">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h4 className="font-black text-xs uppercase tracking-wider text-gray-400">Planos de Ação ({analysisSuggestions.length})</h4>
+                                                <button onClick={() => { setAnalysisReport(null); setAnalysisSuggestions([]); }} className="text-[10px] text-brand-600 font-bold hover:underline">Refazer Análise</button>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                {analysisSuggestions.map(sug => (
+                                                    <div key={sug.id} className="group bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-4 rounded-3xl hover:border-brand-200 dark:hover:border-brand-900/30 transition-all shadow-sm">
+                                                        <div className="flex gap-3 mb-3">
+                                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${sug.type === 'improvement' ? 'bg-amber-100 dark:bg-amber-900/20 text-amber-600' : 'bg-brand-100 dark:bg-brand-900/20 text-brand-600'}`}>
+                                                                {sug.type === 'improvement' ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                                            </div>
+                                                            <div>
+                                                                <h5 className="font-bold text-xs text-gray-800 dark:text-white group-hover:text-brand-600 transition-colors uppercase tracking-tight">{sug.suggestion}</h5>
+                                                                <p className="text-[10px] text-gray-500 leading-tight mt-1">{sug.reason}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {sug.new_data && (
+                                                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3 mb-4 border border-dashed border-gray-200 dark:border-gray-700">
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className="text-[9px] font-black text-gray-400 uppercase">Sugestão de Dados</span>
+                                                                    {sug.new_data.price && <span className="text-[10px] font-bold text-brand-600">R$ {sug.new_data.price.toFixed(2)}</span>}
+                                                                </div>
+                                                                <div className="text-[11px] font-bold dark:text-gray-200">{sug.new_data.name}</div>
+                                                                <div className="text-[10px] text-gray-500 line-clamp-2 mt-1">{sug.new_data.description}</div>
+                                                            </div>
+                                                        )}
+
+                                                        <Button size="sm" fullWidth variant={sug.type === 'improvement' ? 'secondary' : 'primary'} onClick={() => handleApplySuggestion(sug)} disabled={isSaving}>
+                                                            <Sparkles className="w-3 h-3 mr-2" />
+                                                            {sug.type === 'improvement' ? 'Aplicar Melhoria' : 'Criar Produto'}
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
-                                ))}
+                                )}
                             </div>
                         )}
                     </div>
