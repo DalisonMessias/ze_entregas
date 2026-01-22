@@ -457,139 +457,76 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 </div>
             </div>
 
-            <div className="container mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="container mx-auto px-4 py-8">
 
-                {/* --- PRODUCT LIST (Main Column) --- */}
-                <div className="lg:col-span-2 space-y-10">
-                    <div className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-sm py-4 -mx-4 px-4 flex gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory">
-                        {categories.map(cat => (
-                            <a
-                                key={cat}
-                                href={`#cat-${cat}`}
-                                className="snap-start px-6 py-3 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-sm font-black uppercase tracking-wide text-gray-700 dark:text-gray-300 hover:bg-brand-50 dark:hover:bg-brand-900/20 hover:border-brand-200 hover:text-brand-600 transition-all whitespace-nowrap shadow-sm"
-                            >
-                                {cat}
-                            </a>
-                        ))}
-                    </div>
-
-                    {categories.map(cat => (
-                        <div key={cat} id={`cat-${cat}`} className="scroll-mt-32">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                <span className="w-1 h-6 bg-brand-500 rounded-full" /> {cat}
-                            </h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {products.filter(p => (p.category || 'Outros') === cat).map(product => (
-                                    <div
-                                        key={product.id}
-                                        className="group relative bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 hover:border-brand-300 dark:hover:border-brand-700 transition-all flex gap-4 overflow-hidden"
-                                    >
-                                        {/* Card content - Opens Preview */}
-                                        <div
-                                            className="flex-1 flex gap-4 cursor-pointer"
-                                            onClick={() => {
-                                                setSelectedProduct(product);
-                                                setProductQuantity(1);
-                                                setProductObservation('');
-                                            }}
-                                        >
-                                            <div className="flex-1 py-1">
-                                                <h3 className="font-bold text-gray-900 dark:text-white mb-1 group-hover:text-brand-600 transition-colors">{product.name}</h3>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">{product.description}</p>
-                                                <span className="font-black text-lg text-brand-600">R$ {product.price.toFixed(2).replace('.', ',')}</span>
-                                            </div>
-
-                                            {product.image_url ? (
-                                                <div className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
-                                                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                                </div>
-                                            ) : (
-                                                <div className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                                                    <ShoppingBag className="w-8 h-8 text-gray-300" />
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Quick Add Button - Explicit '+' separate from card click */}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                addToCart(product);
-                                            }}
-                                            className="absolute bottom-4 right-4 w-10 h-10 bg-gray-100 dark:bg-gray-800 hover:bg-brand-600 hover:text-white rounded-full flex items-center justify-center transition-colors shadow-sm z-10"
-                                        >
-                                            <Plus className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
+                {/* --- PRODUCT LIST (Full Width) --- */}
+                <div className="space-y-10">
+                    {/* Active Sections Loop */}
+                    {activeSections.length === 0 ? (
+                        <div className="text-center py-20">
+                            <Search className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                            <h3 className="text-lg font-bold text-gray-500">Nenhum produto encontrado.</h3>
+                            <p className="text-gray-400 text-sm">Tente buscar por outro termo ou categoria.</p>
+                            <Button variant="outline" className="mt-4" onClick={() => { setSearchTerm(''); setSelectedCategoryFilter('Todos'); }}>
+                                Limpar Filtros
+                            </Button>
                         </div>
-                    ))}
-                </div>
+                    ) : (
+                        activeSections.map(cat => (
+                            <div key={cat} className="scroll-mt-32">
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                    <span className="w-1 h-6 bg-brand-500 rounded-full" /> {cat}
+                                </h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                    {filteredProducts.filter(p => (p.category || 'Outros') === cat).map(product => (
+                                        <div
+                                            key={product.id}
+                                            className="group relative bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 hover:border-brand-300 dark:hover:border-brand-700 transition-all flex gap-4 overflow-hidden shadow-sm hover:shadow-md"
+                                        >
+                                            {/* Card content - Opens Preview */}
+                                            <div
+                                                className="flex-1 flex gap-4 cursor-pointer"
+                                                onClick={() => {
+                                                    setSelectedProduct(product);
+                                                    setProductQuantity(1);
+                                                    setProductObservation('');
+                                                }}
+                                            >
+                                                <div className="flex-1 py-1">
+                                                    <h3 className="font-bold text-gray-900 dark:text-white mb-1 group-hover:text-brand-600 transition-colors line-clamp-2">{product.name}</h3>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">{product.description}</p>
+                                                    <span className="font-black text-lg text-brand-600">R$ {product.price.toFixed(2).replace('.', ',')}</span>
+                                                </div>
 
-                {/* --- DESKTOP CART (Sidebar) --- */}
-                <div className="hidden lg:block lg:col-span-1">
-                    <div className="sticky top-24 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-lg p-6">
-                        <h3 className="font-black text-xl mb-6 flex items-center justify-between">
-                            <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5 text-brand-600" /> Seu Pedido</span>
-                            {cart.length > 0 && (
-                                <button onClick={clearCart} className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors">
-                                    Limpar
-                                </button>
-                            )}
-                        </h3>
-                        {cart.length === 0 ? (
-                            <div className="text-center py-10 text-gray-400">
-                                <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                <p>Seu carrinho está vazio</p>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto custom-scrollbar">
-                                    {cart.map(item => (
-                                        <div key={item.id} className="flex justify-between items-start text-sm">
-                                            <div>
-                                                <div className="font-bold text-gray-900 dark:text-white">{item.quantity}x {item.product.name}</div>
-                                                {item.observation && <div className="text-xs text-gray-500 italic">{item.observation}</div>}
-                                                <button
-                                                    onClick={() => removeFromCart(item.id)}
-                                                    className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors"
-                                                >
-                                                    <Trash2 className="w-3 h-3" /> Remover
-                                                </button>
+                                                {product.image_url ? (
+                                                    <div className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
+                                                        <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                                        <ShoppingBag className="w-8 h-8 text-gray-300" />
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="font-medium">R$ {(item.product.price * item.quantity).toFixed(2).replace('.', ',')}</div>
+
+                                            {/* Quick Add Button - Explicit '+' separate from card click */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    addToCart(product);
+                                                }}
+                                                className="absolute bottom-4 right-4 w-10 h-10 bg-gray-100 dark:bg-gray-800 hover:bg-brand-600 hover:text-white rounded-full flex items-center justify-center transition-colors shadow-sm z-10"
+                                            >
+                                                <Plus className="w-5 h-5" />
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mb-6">
-                                    <div className="flex justify-between text-sm mb-2">
-                                        <span className="text-gray-500">Subtotal</span>
-                                        <span className="font-bold">R$ {cartSubtotal.toFixed(2).replace('.', ',')}</span>
-                                    </div>
-                                    {deliveryType === 'DELIVERY' && (
-                                        <div className="flex justify-between text-sm mb-2">
-                                            <span className="text-gray-500">Entrega</span>
-                                            <span className="font-bold">R$ {deliveryFee.toFixed(2).replace('.', ',')}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between text-lg font-black text-brand-600 mt-4">
-                                        <span>Total</span>
-                                        <span>R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
-                                    </div>
-                                </div>
-                                <Button
-                                    fullWidth
-                                    onClick={() => setIsCartOpen(true)}
-                                    className={!isStoreOpen ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed' : ''}
-                                    disabled={!isStoreOpen}
-                                >
-                                    {isStoreOpen ? 'Finalizar Pedido' : 'Loja Fechada'}
-                                </Button>
-                            </>
-                        )}
-                    </div>
+                            </div>
+                        )))}
                 </div>
+
+                {/* --- REMOVED DESKTOP SIDEBAR --- */}
 
             </div>
 
