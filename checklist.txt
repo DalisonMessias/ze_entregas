@@ -129,3 +129,18 @@
 [22/01/2026] - Fix: Atualizada get_unified_order_history para incluir pedidos IN_DELIVERY no histórico.
 
 [22/01/2026] - Banco: Adicionada coluna delivery_location_reference na tabela orders para refer??ncia de entrega por localiza???o.
+[ 2 2 / 0 1 / 2 0 2 6 ]  
+ -  
+ C o r r e ç ã o :  
+ C o r r i g i d o  
+ e r r o  
+ d e  
+ a w a i t  
+ f o r a  
+ d e  
+ f u n ç ã o  
+ a s y n c  
+ n o  
+ c o m p o n e n t e  
+ M e r c h a n t P O S . t s x .  
+ 

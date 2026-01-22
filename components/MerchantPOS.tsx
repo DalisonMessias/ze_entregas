@@ -906,7 +906,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
     const handleDownloadReceipt = async () => {
         if (!receiptRef.current) return;
-        html2canvas(receiptRef.current, { backgroundColor: '#ffffff' }).then(canvas => {
+        html2canvas(receiptRef.current, { backgroundColor: '#ffffff' }).then(async canvas => {
             const link = document.createElement('a');
             link.download = 'comprovante-ze-entregas.png';
             link.href = canvas.toDataURL('image/png');
