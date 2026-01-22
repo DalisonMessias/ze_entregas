@@ -347,6 +347,8 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const [totalToSplit, setTotalToSplit] = useState(0);
     const [partialAmounts, setPartialAmounts] = useState<PartialPayment[]>([]);
 
+    const { alert, confirm, prompt } = useDialog(); // Prover alert, confirm e prompt
+
     const [processing, setProcessing] = useState(false);
     const [pinEntry, setPinEntry] = useState('');
     const [newPin, setNewPin] = useState(''); // For creation
