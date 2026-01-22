@@ -276,39 +276,45 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         }
 
         // Build WhatsApp Message
-        let msg = `*Novo Pedido via Cardápio Digital* 🛍️\n\n`;
-        msg += `*Cliente:* ${customerName}\n`;
-        msg += `*Telefone:* ${customerPhone}\n\n`;
+        let msg = `🛍️ *NOVO PEDIDO* - ${store?.store_name || 'Zé Entregas'}\n`;
+        msg += `--------------------------------\n`;
+        msg += `👤 *Cliente:* ${customerName}\n`;
+        msg += `📱 *Telefone:* ${customerPhone}\n`;
+        msg += `--------------------------------\n\n`;
 
-        msg += `*Pedido:*\n`;
+        msg += `🛒 *RESUMO DO PEDIDO:*\n`;
         cart.forEach(item => {
-            msg += `${item.quantity}x ${item.product.name} (R$ ${item.product.price.toFixed(2)})\n`;
-            if (item.observation) msg += `   _Obs: ${item.observation}_\n`;
+            msg += `• ${item.quantity}x ${item.product.name}\n`;
+            msg += `  R$ ${(item.product.price * item.quantity).toFixed(2).replace('.', ',')}\n`;
+            if (item.observation) msg += `  ✍️ _Obs: ${item.observation}_\n`;
         });
 
-        msg += `\n*Subtotal:* R$ ${cartSubtotal.toFixed(2)}\n`;
+        msg += `\n--------------------------------\n`;
+        msg += `💰 *FINANCEIRO:*\n`;
+        msg += `Subtotal: R$ ${cartSubtotal.toFixed(2).replace('.', ',')}\n`;
 
         if (deliveryType === 'DELIVERY') {
-            msg += `*Entrega:* R$ ${deliveryFee.toFixed(2)}\n`;
-            msg += `*Total:* R$ ${cartTotal.toFixed(2)}\n\n`;
+            msg += `Entrega: R$ ${deliveryFee.toFixed(2).replace('.', ',')}\n`;
+            msg += `*TOTAL: R$ ${cartTotal.toFixed(2).replace('.', ',')}*\n`;
+            msg += `--------------------------------\n\n`;
 
-            msg += `*📍 Endereço de Entrega:*\n`;
-            msg += `CEP: ${cep}\n`;
-            msg += `Cidade: ${selectedCity.name} - ${selectedCity.state}\n`;
-            msg += `${addressStreet}, ${addressNumber}\n`;
-            if (addressComplement) msg += `${addressComplement}\n`;
-            if (addressReference) msg += `Ref: ${addressReference}\n`;
-
-            if (deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD') {
-                const neighborhoodName = fees.find(f => f.id === selectedNeighborhoodId)?.neighborhood_name;
-                if (neighborhoodName) msg += `Bairro: ${neighborhoodName}\n`;
-            } else if (addressNeighborhood) {
-                msg += `Bairro: ${addressNeighborhood}\n`;
+            msg += `📍 *DADOS DE ENTREGA:*\n`;
+            msg += `🚚 *Tipo:* Entrega em Domicílio\n`;
+            msg += `📍 *Endereço:* ${addressStreet}, ${addressNumber}\n`;
+            if (addressComplement) msg += `🏢 *Comp:* ${addressComplement}\n`;
+            if (addressNeighborhood) msg += `🏘️ *Bairro:* ${addressNeighborhood}\n`;
+            if (deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' && selectedNeighborhoodId) {
+                const nName = fees.find(f => f.id === selectedNeighborhoodId)?.neighborhood_name;
+                if (nName && !addressNeighborhood) msg += `🏘️ *Bairro:* ${nName}\n`;
             }
+            if (addressReference) msg += `🚩 *Ref:* ${addressReference}\n`;
+            msg += `🏙️ *Cidade:* ${selectedCity?.name || store?.city || ''} - ${selectedCity?.state || store?.address_state || ''}\n`;
 
         } else {
-            msg += `*Total:* R$ ${cartTotal.toFixed(2)}\n\n`;
-            msg += `*🛑 Retirada no Local*\n`;
+            msg += `*TOTAL: R$ ${cartTotal.toFixed(2).replace('.', ',')}*\n`;
+            msg += `--------------------------------\n\n`;
+            msg += `🏃 *DADOS DE ENTREGA:*\n`;
+            msg += `🏪 *Tipo:* Retirada na Loja\n`;
         }
 
         msg += `\n*Forma de Pagamento:* ${paymentMethod}\n`;
@@ -388,10 +394,38 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24 md:pb-0">
-            {/* --- HEADER --- */}
-            <div className="relative bg-white dark:bg-gray-900 shadow-sm z-10">
-                {/* Cover */}
-                <div className="h-40 md:h-56 bg-gray-200 dark:bg-gray-800 overflow-hidden relative">
+            {/* --- FIXED NAVBAR --- */}
+            <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800">
+                <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
+                    <div className="flex-shrink-0"><Logo className="h-8 w-auto" /></div>
+                    <div className="flex-1 max-w-lg mx-auto hidden md:block">
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-gray-400" /></div>
+                            <input type="text" className="block w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-500 focus:bg-white dark:focus:bg-gray-700 transition-all placeholder-gray-500 text-gray-900 dark:text-white" placeholder="Buscar no cardápio..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                        </div>
+                    </div>
+                    <button onClick={() => setIsCartOpen(true)} className="relative flex-shrink-0 bg-brand-50 text-brand-600 hover:bg-brand-100 p-2.5 rounded-xl transition-colors">
+                        <ShoppingBag className="w-5 h-5" />
+                        {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{cart.reduce((a, b) => a + b.quantity, 0)}</span>}
+                    </button>
+                </div>
+                <div className="md:hidden px-4 pb-3">
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-gray-400" /></div>
+                        <input type="text" className="block w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-500 focus:bg-white dark:focus:bg-gray-700 transition-all placeholder-gray-500 text-gray-900 dark:text-white" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    </div>
+                </div>
+                <div className="border-t border-gray-50 dark:border-gray-800 bg-white dark:bg-gray-900 py-3">
+                    <div className="container mx-auto px-4 flex gap-2 overflow-x-auto no-scrollbar scroll-smooth snap-x">
+                        {categories.map(cat => (<button key={cat} onClick={() => setSelectedCategoryFilter(cat)} className={`snap-start px-4 py-1.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all border ${selectedCategoryFilter === cat ? 'bg-brand-600 text-white border-brand-600 shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-brand-300'}`}>{cat}</button>))}
+                    </div>
+                </div>
+            </div>
+            <div className="pt-[140px] md:pt-[120px]" />
+
+            {/* --- STORE BANNER --- */}
+            <div className="relative z-0">
+                <div className="h-32 md:h-48 bg-gray-200 dark:bg-gray-800 overflow-hidden relative">
                     {store.cover_url ? (
                         <img src={store.cover_url} alt="Capa" className="w-full h-full object-cover" />
                     ) : (
@@ -400,9 +434,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 </div>
 
-                {/* Profile Info */}
-                <div className="container mx-auto px-4 -mt-12 relative flex flex-col md:flex-row items-center md:items-end gap-4 pb-6">
-                    <div className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-white dark:border-gray-900 bg-white dark:bg-gray-800 shadow-lg overflow-hidden flex-shrink-0">
+                <div className="container mx-auto px-4 -mt-10 relative flex flex-col md:flex-row items-center md:items-end gap-4 pb-6">
+                    <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl border-4 border-white dark:border-gray-900 bg-white dark:bg-gray-800 shadow-lg overflow-hidden flex-shrink-0">
                         {store.store_logo_url ? (
                             <img src={store.store_logo_url} alt="Logo" className="w-full h-full object-cover" />
                         ) : (
@@ -412,12 +445,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         )}
                     </div>
 
-                    <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white md:dark:text-white mb-2 z-10">
-                        <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-                            <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white md:text-white md:drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                    <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white mb-2 z-10">
+                        <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+                            <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white md:text-white md:drop-shadow-md">
                                 {store.store_name || store.name}
                             </h1>
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm ${isStoreOpen ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${isStoreOpen ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
                                 {isStoreOpen ? 'Aberto' : 'Fechado'}
                             </span>
                         </div>
@@ -447,12 +480,6 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             </div>
                         </div>
 
-                        {/* Mobile Description on White Background */}
-                        {store.description && (
-                            <div className="md:hidden mt-4 bg-white dark:bg-gray-900 -mx-4 px-8 py-4 text-gray-600 dark:text-gray-300 text-sm leading-relaxed border-t border-gray-100 dark:border-gray-800">
-                                {store.description}
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
