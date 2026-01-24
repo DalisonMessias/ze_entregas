@@ -1,7 +1,8 @@
 ﻿
 export type Theme = 'light' | 'dark';
-export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator';
+export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator' | 'user';
 export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found' | 'blocked' | 'suspended' | 'error';
+export interface PublicStoreProfile extends PartnerProfile { }
 export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION';
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER' | 'PENDING';
 export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
@@ -453,6 +454,7 @@ export interface PartnerRequest {
     failure_reason?: string;
     rated_by_store?: boolean;
     rated_by_partner?: boolean;
+    customer_name?: string;
 }
 
 export interface PartnerFeeSettings {
@@ -630,6 +632,11 @@ export interface PartnerProfile {
     city_slug?: string;
     store_slug?: string;
     description?: string;
+
+    // Order Configuration
+    receive_orders_via_platform?: boolean;
+    receive_orders_via_whatsapp?: boolean;
+    whatsapp_number?: string;
 }
 
 export interface StoreDailyReport {
@@ -821,7 +828,7 @@ export interface FinancialTransaction {
     created_at: string;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories';
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'whatsapp' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery';
 
 export interface AppNotification {
     id: string;

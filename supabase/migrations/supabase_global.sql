@@ -9222,3 +9222,499 @@ BEGIN
         ALTER TABLE public.user_profiles ADD COLUMN description TEXT;
     END IF;
 END $$;
+
+-- ==================================================================
+-- AVALIAÇÃO DE ENTREGADORES (Adicionado por Agente)
+-- ==================================================================
+
+-- Tabela de Avaliações
+CREATE TABLE IF NOT EXISTS public.delivery_ratings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    delivery_man_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT unique_rating_per_order UNIQUE (order_id)
+);
+
+-- Colunas de Score para Recalculo
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'ratings_count') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN ratings_count INT DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'ratings_sum') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN ratings_sum INT DEFAULT 0;
+    END IF;
+END $$;
+
+-- Policies delivery_ratings
+ALTER TABLE public.delivery_ratings ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can create ratings' AND tablename = 'delivery_ratings') THEN
+        CREATE POLICY "Users can create ratings" ON public.delivery_ratings FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can read own ratings' AND tablename = 'delivery_ratings') THEN
+        CREATE POLICY "Users can read own ratings" ON public.delivery_ratings FOR SELECT USING (auth.uid()::text = user_id::text);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Drivers can read own ratings' AND tablename = 'delivery_ratings') THEN
+        CREATE POLICY "Drivers can read own ratings" ON public.delivery_ratings FOR SELECT USING (auth.uid()::text = delivery_man_id::text);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage all ratings' AND tablename = 'delivery_ratings') THEN
+        CREATE POLICY "Admins can manage all ratings" ON public.delivery_ratings FOR ALL USING (public.is_admin());
+    END IF;
+END $$;
+
+-- Função de Calculo de Score
+CREATE OR REPLACE FUNCTION public.update_delivery_score()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_new_score INT;
+    v_total_ratings INT;
+    v_sum_ratings INT;
+BEGIN
+    -- Atualizar contadores
+    UPDATE public.user_profiles
+    SET 
+        ratings_count = COALESCE(ratings_count, 0) + 1,
+        ratings_sum = COALESCE(ratings_sum, 0) + NEW.rating
+    WHERE id = NEW.delivery_man_id
+    RETURNING ratings_count, ratings_sum INTO v_total_ratings, v_sum_ratings;
+
+    -- Calcular Score (Base 0-5 para 0-1000)
+    -- Score = (Média / 5) * 1000
+    IF v_total_ratings > 0 THEN
+        v_new_score := (v_sum_ratings::numeric / v_total_ratings::numeric / 5.0) * 1000;
+        
+        -- Atualizar Score na tabela
+        UPDATE public.user_profiles
+        SET score = v_new_score
+        WHERE id = NEW.delivery_man_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger Score
+DROP TRIGGER IF EXISTS tr_update_delivery_score ON public.delivery_ratings;
+CREATE TRIGGER tr_update_delivery_score
+AFTER INSERT ON public.delivery_ratings
+FOR EACH ROW EXECUTE FUNCTION public.update_delivery_score();
+
+
+-- ==================================================================
+-- CORRECAO DE VISIBILIDADE DE LOJAS E DADOS (24/01/2026)
+-- ==================================================================
+
+-- 1. Fix de Dados de Slugs (Para garantir que lojas antigas apareçam na busca)
+UPDATE public.user_profiles 
+SET city_slug = public.slugify(split_part(city, ' - ', 1))
+WHERE city_slug IS NULL AND city IS NOT NULL;
+
+UPDATE public.user_profiles
+SET store_slug = public.slugify(store_name)
+WHERE store_slug IS NULL AND store_name IS NOT NULL AND role = 'store_partner';
+
+-- 2. Permite que qualquer usuario (auth ou anon) visualize lojas ativas
+DROP POLICY IF EXISTS "Public can view active stores" ON public.user_profiles;
+CREATE POLICY "Public can view active stores" ON public.user_profiles
+    FOR SELECT USING (role = 'store_partner'::public.user_role AND is_active = true);
+
+-- 3. Garante permissao de SELECT para anonimos e logados
+GRANT SELECT ON public.user_profiles TO anon, authenticated;
+
+-- ==================================================================
+-- RPC PARA BUSCA PUBLICA DE LOJAS (Bypass RLS Seguro) - 24/01/2026
+-- ==================================================================
+CREATE OR REPLACE FUNCTION public.get_public_stores_by_city(p_city_slug TEXT)
+RETURNS TABLE (
+    id UUID,
+    name TEXT,
+    store_name TEXT,
+    city_slug TEXT,
+    store_slug TEXT,
+    cover_url TEXT,
+    store_logo_url TEXT,
+    description TEXT,
+    is_open BOOLEAN,
+    store_category_id UUID,
+    preparation_time_min INTEGER,
+    preparation_time_max INTEGER,
+    score INTEGER
+)
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        up.id,
+        up.name,
+        up.store_name,
+        up.city_slug,
+        up.store_slug,
+        up.cover_url,
+        up.store_logo_url,
+        up.description,
+        up.is_open,
+        up.store_category_id,
+        up.preparation_time_min,
+        up.preparation_time_max,
+        up.score
+    FROM public.user_profiles up
+    WHERE up.role = 'store_partner'
+      AND up.status = 'active'
+      AND (
+          up.city_slug = p_city_slug 
+          OR 
+          public.slugify(split_part(up.city, ' - ', 1)) = p_city_slug -- Fallback robusto
+      );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.get_public_stores_by_city(TEXT) TO anon, authenticated;
+
+
+-- ==================================================================
+-- CHAT INTERNO, REPORTES E CONFIGURACOES DE PEDIDO (24/01/2026)
+-- ==================================================================
+
+-- 1. Configuracoes da Loja (User Profiles)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'receive_orders_via_platform') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN receive_orders_via_platform BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'receive_orders_via_whatsapp') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN receive_orders_via_whatsapp BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'whatsapp_number') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN whatsapp_number TEXT;
+    END IF;
+END $$;
+
+-- 2. Tabela de Chats de Pedidos
+CREATE TABLE IF NOT EXISTS public.order_chats (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    status VARCHAR(50) DEFAULT 'active', -- 'active', 'closed'
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT order_chats_order_unique UNIQUE (order_id)
+);
+
+ALTER TABLE public.order_chats ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Participants can view order chats" ON public.order_chats;
+CREATE POLICY "Participants can view order chats" ON public.order_chats
+    FOR SELECT USING (auth.uid()::text = user_id::text OR auth.uid()::text = store_id::text OR public.is_admin());
+
+DROP POLICY IF EXISTS "Participants can update order chats" ON public.order_chats;
+CREATE POLICY "Participants can update order chats" ON public.order_chats
+    FOR UPDATE USING (auth.uid()::text = user_id::text OR auth.uid()::text = store_id::text OR public.is_admin());
+
+-- 3. Tabela de Mensagens do Chat
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    chat_id UUID, -- Referência garantida abaixo
+    sender_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    message TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'text', -- 'text', 'image', 'system'
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Garantir chat_id se tabela existir sem ela (ou com nome diferente)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_messages' AND column_name = 'chat_id') THEN
+        ALTER TABLE public.chat_messages ADD COLUMN chat_id UUID REFERENCES public.order_chats(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Participants can view messages" ON public.chat_messages;
+CREATE POLICY "Participants can view messages" ON public.chat_messages
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.order_chats oc
+            WHERE oc.id = chat_messages.chat_id
+            AND (oc.user_id::text = auth.uid()::text OR oc.store_id::text = auth.uid()::text)
+        )
+        OR public.is_admin()
+    );
+
+DROP POLICY IF EXISTS "Participants can send messages" ON public.chat_messages;
+CREATE POLICY "Participants can send messages" ON public.chat_messages
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.order_chats oc
+            WHERE oc.id = chat_messages.chat_id
+            AND (oc.user_id::text = auth.uid()::text OR oc.store_id::text = auth.uid()::text)
+        )
+        AND auth.uid()::text = sender_id::text
+    );
+
+-- 4. Tabela de Reportes de Pedidos
+CREATE TABLE IF NOT EXISTS public.order_reports (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id), -- Desnormalizado para facilitar queries da loja
+    type VARCHAR(50) NOT NULL, -- 'item_missing', 'wrong_item', 'general_problem'
+    description TEXT,
+    status VARCHAR(50) DEFAULT 'open', -- 'open', 'resolved'
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.order_reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Participants can view reports" ON public.order_reports;
+CREATE POLICY "Participants can view reports" ON public.order_reports
+    FOR SELECT USING (auth.uid()::text = user_id::text OR auth.uid()::text = store_id::text OR public.is_admin());
+
+DROP POLICY IF EXISTS "Users can create reports" ON public.order_reports;
+CREATE POLICY "Users can create reports" ON public.order_reports
+    FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
+
+DROP POLICY IF EXISTS "Loja and Admin can update reports" ON public.order_reports;
+CREATE POLICY "Loja and Admin can update reports" ON public.order_reports
+    FOR UPDATE USING (auth.uid()::text = store_id::text OR public.is_admin());
+
+-- Permissoes
+GRANT SELECT, INSERT, UPDATE ON public.order_chats TO authenticated;
+GRANT SELECT, INSERT ON public.chat_messages TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.order_reports TO authenticated;
+
+
+-- Trigger para criar chat automaticamente
+CREATE OR REPLACE FUNCTION public.handle_new_order_chat()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Se o user_id estiver presente (cliente cadastrado), cria o chat
+    IF NEW.user_id IS NOT NULL THEN
+        INSERT INTO public.order_chats (order_id, user_id, store_id, status)
+        VALUES (NEW.id, NEW.user_id, NEW.store_id, 'active')
+        ON CONFLICT (order_id) DO NOTHING;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS tr_create_order_chat ON public.orders;
+CREATE TRIGGER tr_create_order_chat
+AFTER INSERT ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_order_chat();
+
+
+-- ==================================================================
+-- COLUNAS DE CLIENTE E RPC DE PUBLIC ORDER (24/01/2026)
+-- ==================================================================
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'customer_name') THEN
+        ALTER TABLE public.orders ADD COLUMN customer_name TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'customer_phone') THEN
+        ALTER TABLE public.orders ADD COLUMN customer_phone TEXT;
+    END IF;
+END $$;
+
+
+-- RPC para criar pedido público (Checkout Digital Segura)
+CREATE OR REPLACE FUNCTION public.create_public_order(
+    p_store_id UUID,
+    p_items JSONB[],
+    p_total_price NUMERIC,
+    p_payment_method TEXT, -- Recebe texto e casta
+    p_shipping_address JSONB,
+    p_delivery_mode TEXT, -- 'DELIVERY' | 'PICKUP'
+    p_customer_name TEXT,
+    p_customer_phone TEXT
+)
+RETURNS UUID
+AS $$
+DECLARE
+    v_order_id UUID;
+    v_status public.order_status := 'pending';
+BEGIN
+    INSERT INTO public.orders (
+        store_id, 
+        user_id, 
+        status, 
+        items, 
+        total_price, 
+        payment_method, 
+        shipping_address, 
+        order_type, -- Usamos order_type para Delivery/Pickup
+        customer_name, 
+        customer_phone
+    )
+    VALUES (
+        p_store_id, 
+        auth.uid(), -- Link to user if authenticated, NULL otherwise (GUEST)
+        v_status, 
+        p_items, 
+        p_total_price, 
+        p_payment_method::public.payment_method, 
+        p_shipping_address, 
+        p_delivery_mode, 
+        p_customer_name, 
+        p_customer_phone
+    )
+    RETURNING id INTO v_order_id;
+
+    RETURN v_order_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB[], NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT) TO anon, authenticated;
+
+-- ==================================================================
+-- CHAT PÚBLICO (GUEST) - 24/01/2026
+-- ==================================================================
+
+-- 1. Permitir User ID nulo em chats (para convidados)
+ALTER TABLE public.order_chats ALTER COLUMN user_id DROP NOT NULL;
+
+-- 2. Permitir Sender ID nulo em mensagens e adicionar tipo
+ALTER TABLE public.chat_messages ALTER COLUMN sender_id DROP NOT NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_messages' AND column_name = 'sender_type') THEN
+        ALTER TABLE public.chat_messages ADD COLUMN sender_type VARCHAR(20) DEFAULT 'user'; -- 'user', 'store', 'guest', 'system'
+    END IF;
+END $$;
+
+-- 3. RPC para buscar mensagens (Público)
+CREATE OR REPLACE FUNCTION public.get_public_order_chat(p_order_id UUID)
+RETURNS TABLE (
+    chat_id UUID,
+    messages JSONB
+)
+AS $$
+DECLARE
+    v_chat_id UUID;
+BEGIN
+    -- Busca Chat ID
+    SELECT id INTO v_chat_id FROM public.order_chats WHERE order_id = p_order_id;
+    
+    IF v_chat_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY
+    SELECT 
+        v_chat_id,
+        jsonb_agg(
+            jsonb_build_object(
+                'id', m.id,
+                'message', m.message,
+                'sender_type', m.sender_type,
+                'created_at', m.created_at,
+                'is_read', m.is_read
+            ) ORDER BY m.created_at ASC
+        )
+    FROM public.chat_messages m
+    WHERE m.chat_id = v_chat_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION public.get_public_order_chat(UUID) TO anon, authenticated;
+
+
+-- 4. RPC para enviar mensagem (Público)
+CREATE OR REPLACE FUNCTION public.send_public_message(
+    p_order_id UUID,
+    p_message TEXT
+)
+RETURNS BOOLEAN
+AS $$
+DECLARE
+    v_chat_id UUID;
+    v_store_id UUID;
+BEGIN
+    -- Busca dados do pedido
+    SELECT store_id INTO v_store_id FROM public.orders WHERE id = p_order_id;
+    IF v_store_id IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Busca ou Cria Chat
+    SELECT id INTO v_chat_id FROM public.order_chats WHERE order_id = p_order_id;
+    
+    IF v_chat_id IS NULL THEN
+        INSERT INTO public.order_chats (order_id, store_id, user_id, status)
+        VALUES (p_order_id, v_store_id, NULL, 'active') -- User NULL for Guest
+        RETURNING id INTO v_chat_id;
+    END IF;
+
+    -- Insere Mensagem
+    INSERT INTO public.chat_messages (chat_id, sender_id, message, type, sender_type)
+    VALUES (v_chat_id, NULL, p_message, 'text', 'guest');
+
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION public.send_public_message(UUID, TEXT) TO anon, authenticated;
+
+-- ==================================================================
+-- GALERIA DE IMAGENS DE PRODUTOS (ADMIN)
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.product_images_gallery (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    image_url TEXT NOT NULL,
+    subtitle TEXT DEFAULT 'Imagem meramente ilustrativa',
+    is_ai_generated BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- RLS para Galeria de Imagens
+ALTER TABLE public.product_images_gallery ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view gallery images" ON public.product_images_gallery;
+CREATE POLICY "Public can view gallery images" ON public.product_images_gallery
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage gallery images" ON public.product_images_gallery;
+CREATE POLICY "Admins can manage gallery images" ON public.product_images_gallery
+    FOR ALL USING (public.is_admin());
+
+-- Trigger para updated_at
+DROP TRIGGER IF EXISTS handle_product_images_gallery_updated_at ON public.product_images_gallery;
+CREATE TRIGGER handle_product_images_gallery_updated_at BEFORE UPDATE ON public.product_images_gallery
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Permissões para Galeria de Imagens
+GRANT SELECT ON public.product_images_gallery TO anon, authenticated;
+GRANT ALL ON public.product_images_gallery TO authenticated;
+
+-- ==================================================================
+-- STORAGE CONFIGURATION (BUCKET: gallery)
+-- ==================================================================
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('gallery', 'gallery', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Políticas de Storage para o bucket 'gallery'
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'gallery');
+
+DROP POLICY IF EXISTS "Authenticated Upload" ON storage.objects;
+CREATE POLICY "Authenticated Upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'gallery' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated Delete" ON storage.objects;
+CREATE POLICY "Authenticated Delete" ON storage.objects FOR DELETE USING (bucket_id = 'gallery' AND auth.role() = 'authenticated');
+
+

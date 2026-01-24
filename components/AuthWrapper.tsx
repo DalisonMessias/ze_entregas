@@ -88,7 +88,7 @@ export const AuthWrapper: React.FC = () => {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
-  const [signupType, setSignupType] = useState<'STORE_PARTNER' | 'DELIVERY_PARTNER' | null>(null);
+  const [signupType, setSignupType] = useState<'STORE_PARTNER' | 'DELIVERY_PARTNER' | 'USER' | null>(null);
 
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -117,7 +117,8 @@ export const AuthWrapper: React.FC = () => {
     store_partner: 'wallet',
     delivery_partner: 'partner',
     delivery_person: 'daily_panel',
-    collaborator: 'shop'
+    collaborator: 'collaborator_area',
+    user: 'home'
   };
 
   const redirectToRoleHome = (role: UserRole) => {
@@ -170,11 +171,22 @@ export const AuthWrapper: React.FC = () => {
   useEffect(() => {
     let mounted = true;
     let authSubscriptionUnsubscribe: (() => void) | null = null;
+    let fallbackTimeout: NodeJS.Timeout;
+
+    // Safety Timeout: Força o fim do carregamento após 15 segundos se algo travar
+    fallbackTimeout = setTimeout(() => {
+      if (mounted && isCheckingSession) {
+        logger.warn('AUTH_TIMEOUT_FORCED_UNLOCK', { retryCount });
+        setIsCheckingSession(false);
+        setAuthMessage({ type: 'warning', text: 'O carregamento demorou mais que o esperado.' });
+      }
+    }, 15000);
 
     const initializeAuth = async () => {
       if (retryCount >= MAX_RETRIES) {
         logger.error('AUTH_MAX_RETRIES_REACHED', { retryCount });
         setIsCheckingSession(false);
+        if (fallbackTimeout) clearTimeout(fallbackTimeout);
         setAuthMessage({ type: 'error', text: 'Falha recorrente na autenticação. Tente recarregar a página.' });
         return;
       }
@@ -182,6 +194,7 @@ export const AuthWrapper: React.FC = () => {
       const supabase = cloud.initSupabase();
       if (!supabase) {
         if (mounted) setIsCheckingSession(false);
+        if (fallbackTimeout) clearTimeout(fallbackTimeout);
         return;
       }
 
@@ -248,12 +261,18 @@ export const AuthWrapper: React.FC = () => {
       } finally {
         if (mounted) {
           setIsCheckingSession(false);
+          if (fallbackTimeout) clearTimeout(fallbackTimeout);
         }
       }
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: any, currentSession: any) => {
         if (!mounted) return;
         if (retryCount >= MAX_RETRIES) return;
+
+        // Evitar loops: Se a sessão for idêntica à atual, ignorar
+        if (currentSession?.access_token === session?.access_token && event === 'SIGNED_IN') {
+          return;
+        }
 
         if (event === 'SIGNED_OUT') {
           setSession(null);
@@ -285,7 +304,8 @@ export const AuthWrapper: React.FC = () => {
               }
             } catch (e: any) {
               if (mounted) {
-                setRetryCount(prev => prev + 1);
+                // Não incrementar retryCount aqui para evitar loops infinitos em realtime
+                // setRetryCount(prev => prev + 1);
                 handleLogoutAndRedirect("Usuário não encontrado no sistema.");
               }
             }
@@ -302,6 +322,7 @@ export const AuthWrapper: React.FC = () => {
 
     return () => {
       mounted = false;
+      if (fallbackTimeout) clearTimeout(fallbackTimeout);
       if (authSubscriptionUnsubscribe) authSubscriptionUnsubscribe();
     };
   }, [retryCount]);
@@ -444,20 +465,19 @@ export const AuthWrapper: React.FC = () => {
     const trimmedCpf = cpf.trim();
 
     if (!signupType) {
-      setAuthMessage({ type: 'error', text: 'Selecione se é Lojista ou Entregador.' });
+      setAuthMessage({ type: 'error', text: 'Selecione um tipo de conta.' });
       return;
     }
 
-    // CPF agora é obrigatório para todos (exceto talvez se o lojista usar CNPJ no StoreDocument, mas o campo CPF pessoal do responsável continua lá)
-    // Vamos assumir obrigatório como pedido.
-    const commonFieldsMissing = !trimmedName || !trimmedEmail || !password || !trimmedPhone || !trimmedCpf;
+    const commonFieldsMissing = !trimmedName || !trimmedEmail || !password || !trimmedPhone || (signupType !== 'USER' && !trimmedCpf);
     const storeFieldsMissing = signupType === 'STORE_PARTNER' && (!storeName || !storeDocument || !addressStreet || !addressNumber || !addressNeighborhood);
+
     if (commonFieldsMissing || storeFieldsMissing) {
       setAuthMessage({ type: 'error', text: 'Preencha todos os campos obrigatórios.' });
       return;
     }
 
-    if (!selectedCity) {
+    if (signupType !== 'USER' && !selectedCity) {
       setAuthMessage({ type: 'error', text: 'Selecione a cidade de atuação.' });
       return;
     }
@@ -488,7 +508,8 @@ export const AuthWrapper: React.FC = () => {
     try {
       const [city, state] = selectedCity.split(' - ');
 
-      const roleToSend: UserRole = signupType === 'STORE_PARTNER' ? 'store_partner' : 'delivery_person';
+      const roleToSend: UserRole = signupType === 'STORE_PARTNER' ? 'store_partner' :
+        signupType === 'DELIVERY_PARTNER' ? 'delivery_person' : 'user';
 
       logger.info('AUTH_SIGNUP_SUBMIT', {
         type: signupType,
@@ -597,8 +618,9 @@ export const AuthWrapper: React.FC = () => {
   if (view === 'landing') {
     return (
       <LandingPage
+        isAuthenticated={false}
         onLoginClick={() => setView('login')}
-        onSignupClick={(type: 'STORE_PARTNER' | 'DELIVERY_PARTNER') => {
+        onSignupClick={(type) => {
           setSignupType(type);
           setView('signup_city');
         }}
@@ -608,7 +630,7 @@ export const AuthWrapper: React.FC = () => {
 
   const renderBack = () => (
     <button
-      onClick={() => setView(view === 'signup_form' ? 'signup_city' : 'landing')}
+      onClick={() => setView(view === 'signup_form' ? (signupType === 'USER' ? 'signup_type_selection' : 'signup_city') : (view === 'signup_city' ? 'signup_type_selection' : 'landing'))}
       className="absolute top-6 left-6 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500"
     >
       <ArrowLeft className="w-6 h-6" />
@@ -644,7 +666,9 @@ export const AuthWrapper: React.FC = () => {
               {view === 'signup_form' && (
                 signupType === 'STORE_PARTNER'
                   ? 'Preencha os dados da sua loja.'
-                  : 'Preencha seus dados pessoais.'
+                  : signupType === 'USER'
+                    ? 'Complete seu cadastro para começar a comprar.'
+                    : 'Preencha seus dados pessoais.'
               )}
             </p>
           </div>
@@ -759,6 +783,22 @@ export const AuthWrapper: React.FC = () => {
                   <div>
                     <h4 className="font-black text-brand-900 dark:text-brand-100">Sou Entregador</h4>
                     <p className="text-xs text-brand-600/70 font-bold">Quero realizar entregas</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSignupType('USER');
+                    setView('signup_city');
+                  }}
+                  className="group flex items-center gap-4 p-5 bg-green-50/50 dark:bg-green-900/10 border-2 border-green-100 dark:border-green-900/30 rounded-[32px] hover:border-green-500 dark:hover:border-green-500 transition-all text-left"
+                >
+                  <div className="p-3 bg-green-100 dark:bg-green-900/40 text-green-600 rounded-2xl group-hover:scale-110 transition-transform">
+                    <Home className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-green-900 dark:text-green-100">Apenas compra</h4>
+                    <p className="text-xs text-green-600/70 font-bold">Quero fazer compras nos estabelecimentos</p>
                   </div>
                 </button>
               </div>

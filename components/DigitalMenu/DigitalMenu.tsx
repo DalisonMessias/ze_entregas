@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingBag, ChevronLeft, Minus, Plus, X, MapPin, Clock, Phone, Search, Store as StoreIcon, AlertCircle, ShoppingCart, Bike, Trash2, ArrowRight, CheckCircle } from 'lucide-react';
+import { ShoppingBag, ChevronLeft, Minus, Plus, X, MapPin, Clock, Phone, Search, Store as StoreIcon, AlertCircle, ShoppingCart, Bike, Trash2, ArrowRight, CheckCircle, Star } from 'lucide-react';
 import * as cloud from '../../services/cloud';
 import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee } from '../../types';
 import { Logo } from '../Logo';
 import { Button } from '../Button';
 import { CustomInput } from '../CustomInput';
+import { StreetSearchSelect } from '../StreetSearchSelect';
 import { CitySearchSelect } from '../CitySearchSelect';
-import { CityStreetSelect } from '../CityStreetSelect';
+import { useDialog } from '../../utils/dialogService';
 import { Loader2, CreditCard, Banknote, QrCode } from 'lucide-react'; // Added icons for payment
+import { StoreRatingModal } from './StoreRatingModal';
 
 interface DigitalMenuProps {
     citySlug: string;
@@ -62,6 +64,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     const [paymentMethod, setPaymentMethod] = useState('PIX');
     const [changeFor, setChangeFor] = useState('');
+    const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const { alert, confirm } = useDialog();
 
     useEffect(() => {
         loadStoreData();
@@ -138,72 +144,81 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     }, [cart, store?.id, cartRestored]);
 
     // --- CART LOGIC ---
-    const addToCart = (productOverride?: StoreProduct) => {
+    const addToCart = (productOverride?: StoreProduct, quantityOverride?: number) => {
         const prod = productOverride || selectedProduct;
-        const qty = productOverride ? 1 : productQuantity;
+        if (!prod) return;
+
+        const qty = quantityOverride || productQuantity;
         const obs = productOverride ? '' : productObservation;
 
-        if (!prod) return;
-        const item: CartItem = {
-            id: crypto.randomUUID(),
-            product: prod,
-            quantity: qty,
-            observation: obs
-        };
-        setCart(prev => [...prev, item]);
+        setCart(prevCart => {
+            const existingItem = prevCart.find(item => item.product.id === prod.id && item.observation === obs);
+
+            if (existingItem) {
+                return prevCart.map(item =>
+                    item.id === existingItem.id
+                        ? { ...item, quantity: item.quantity + qty }
+                        : item
+                );
+            } else {
+                const newItem: CartItem = {
+                    id: crypto.randomUUID(),
+                    product: prod,
+                    quantity: qty,
+                    observation: obs,
+                };
+                return [...prevCart, newItem];
+            }
+        });
 
         if (!productOverride) {
             setSelectedProduct(null);
             setProductQuantity(1);
             setProductObservation('');
         }
-        // Reform: Don't open cart automatically
-        // setIsCartOpen(true); 
     };
 
     const removeFromCart = (id: string) => {
         setCart(prev => prev.filter(item => item.id !== id));
     };
 
-    const clearCart = () => {
-        if (confirm('Tem certeza que deseja limpar o carrinho?')) {
+    const clearCart = async () => {
+        const confirmed = await confirm({
+            title: 'Limpar Carrinho',
+            message: 'Tem certeza que deseja remover todos os itens do carrinho?',
+            confirmButtonText: 'Limpar',
+            cancelButtonText: 'Cancelar'
+        });
+        if (confirmed) {
             setCart([]);
             setIsCartOpen(false);
         }
     };
 
-    const updateQuantity = (id: string, delta: number) => {
-        /* ... */
-        // Render Section Changes (in next chunk or multi if possible, but let's try to fit)
+    const updateQuantity = async (id: string, delta: number) => {
+        let newCart = [...cart];
+        const itemIndex = newCart.findIndex(item => item.id === id);
 
-        // Header fix: The user said background is white on mobile.
-        // The current code has:
-        // <div className="flex-1 text-center md:text-left text-white md:text-gray-900 md:dark:text-white mb-2">
-        // <h1 ... text-white drop-shadow ... md:text-gray-900 ...>
-        // Since the cover is h-40 and profile info is -mt-12, the text is appearing OVER the cover image on mobile usually.
-        // However, if the cover is missing or user scrolls, or layout shifts...
-        // User audio: "on mobile version, the background becomes white, so the name looks weird".
-        // This implies the text is WHITE but background is WHITE.
-        // I will change the text color logic to be Gray-900 on mobile unless it's explicitly over an image, but the overlap is tricky.
-        // Better approach: Make the Store Name Container have a safe background or text color that works.
-        // I'll ensure the text is dark on mobile if it's below the cover (which it is, loosely).
-        // Actually, in the current DOM structure:
-        // Container -mt-12. The avatar is -mt-12. The text is below/beside it.
-        // On mobile (flex-col), the text is BELOW the avatar, which is overlapping the cover bottom.
-        // So the text is likely explicitly on the white background part on mobile.
-        // I will let the text be Gray-900 on mobile and White/Gray-900 on desktop as appropriate.
+        if (itemIndex === -1) return;
 
-        // Changing only logic here might be invisible without full file view context for render.
-        // I'll stick to logic updates first in this block if possible, but I need to touch JSX.
-        // I will replace the logic functions and add clearCart first.
+        const item = newCart[itemIndex];
+        const newQuantity = item.quantity + delta;
 
-        setCart(prev => prev.map(item => {
-            if (item.id === id) {
-                const newQ = Math.max(1, item.quantity + delta);
-                return { ...item, quantity: newQ };
+        if (newQuantity <= 0) {
+            const confirmed = await confirm({
+                title: 'Remover Item',
+                message: `Deseja remover "${item.product.name}" do carrinho?`,
+                confirmButtonText: 'Remover',
+                cancelButtonText: 'Cancelar'
+            });
+            if (confirmed) {
+                newCart.splice(itemIndex, 1);
             }
-            return item;
-        }));
+        } else {
+            newCart[itemIndex] = { ...item, quantity: newQuantity };
+        }
+
+        setCart(newCart);
     };
 
     const cartSubtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
@@ -241,6 +256,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 // NOT autofilling street as requested
                 // Autocomplete Neighborhood if text fallback is used
                 if (data.neighborhood) setAddressNeighborhood(data.neighborhood);
+                if (data.street) setAddressStreet(data.street);
 
                 // City autofill
                 if (data.city) {
@@ -255,79 +271,154 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         }
     };
 
-    const handleCheckout = () => {
+    const handleCheckout = async () => {
         if (!customerName || !customerPhone) {
-            alert('Por favor, informe seu nome e telefone.');
+            alert({ title: 'Atenção', message: 'Por favor, informe seu nome e telefone.' });
             return;
         }
 
         if (deliveryType === 'DELIVERY') {
-            // Validate city is set (should be auto-set by Effect or manually if needed, but here we assume Store City is the target)
-            // If we use locked city, we might not have 'selectedCity' state filled unless we init it.
-            // Let's init selectedCity with store city on load? see below.
-            if (!addressStreet || !addressNumber || !cep) {
-                alert('Informe o endereço de entrega completo (CEP, Rua e Número).');
+            if (!addressStreet || !addressNumber) {
+                alert({ title: 'Endereço Incompleto', message: 'Informe a Rua e o Número para entrega.' });
                 return;
             }
             if (deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' && !selectedNeighborhoodId) {
-                alert('Selecione seu bairro.');
+                alert({ title: 'Bairro não selecionado', message: 'Selecione seu bairro para calcular a taxa de entrega.' });
                 return;
             }
         }
 
-        // Build WhatsApp Message
-        let msg = `🛍️ *NOVO PEDIDO* - ${store?.store_name || 'Zé Entregas'}\n`;
-        msg += `--------------------------------\n`;
-        msg += `👤 *Cliente:* ${customerName}\n`;
-        msg += `📱 *Telefone:* ${customerPhone}\n`;
-        msg += `--------------------------------\n\n`;
+        const usePlatform = store?.receive_orders_via_platform;
+        // Se ambos estiverem desligados, fallback para WhatsApp
+        const useWhatsApp = store?.receive_orders_via_whatsapp || !usePlatform;
 
-        msg += `🛒 *RESUMO DO PEDIDO:*\n`;
-        cart.forEach(item => {
-            msg += `• ${item.quantity}x ${item.product.name}\n`;
-            msg += `  R$ ${(item.product.price * item.quantity).toFixed(2).replace('.', ',')}\n`;
-            if (item.observation) msg += `  ✍️ _Obs: ${item.observation}_\n`;
-        });
+        // PLATFORM CHECKOUT
+        if (usePlatform) {
+            setIsSubmitting(true);
+            try {
+                // Prepare Address
+                const shippingAddress = {
+                    street: addressStreet,
+                    number: addressNumber,
+                    complement: addressComplement,
+                    district: addressNeighborhood,
+                    city: selectedCity?.name || store?.city,
+                    state: selectedCity?.state || store?.address_state,
+                    reference: addressReference,
+                    zip: cep,
+                    neighborhood_id: selectedNeighborhoodId
+                };
 
-        msg += `\n--------------------------------\n`;
-        msg += `💰 *FINANCEIRO:*\n`;
-        msg += `Subtotal: R$ ${cartSubtotal.toFixed(2).replace('.', ',')}\n`;
+                // Prepare Items
+                const orderItems = cart.map(item => ({
+                    product_id: item.product.id,
+                    name: item.product.name,
+                    quantity: item.quantity,
+                    price: item.product.price,
+                    total_price: item.product.price * item.quantity,
+                    observation: item.observation,
+                    image_url: item.product.image_url
+                }));
 
-        if (deliveryType === 'DELIVERY') {
-            msg += `Entrega: R$ ${deliveryFee.toFixed(2).replace('.', ',')}\n`;
-            msg += `*TOTAL: R$ ${cartTotal.toFixed(2).replace('.', ',')}*\n`;
-            msg += `--------------------------------\n\n`;
+                const { success, orderId, error } = await cloud.createPublicOrder(
+                    store!.id,
+                    orderItems,
+                    cartTotal,
+                    paymentMethod,
+                    shippingAddress,
+                    deliveryType,
+                    customerName,
+                    customerPhone
+                );
 
-            msg += `📍 *DADOS DE ENTREGA:*\n`;
-            msg += `🚚 *Tipo:* Entrega em Domicílio\n`;
-            msg += `📍 *Endereço:* ${addressStreet}, ${addressNumber}\n`;
-            if (addressComplement) msg += `🏢 *Comp:* ${addressComplement}\n`;
-            if (addressNeighborhood) msg += `🏘️ *Bairro:* ${addressNeighborhood}\n`;
-            if (deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' && selectedNeighborhoodId) {
-                const nName = fees.find(f => f.id === selectedNeighborhoodId)?.neighborhood_name;
-                if (nName && !addressNeighborhood) msg += `🏘️ *Bairro:* ${nName}\n`;
+                if (success && orderId) {
+                    // Success!
+                    setCart([]);
+                    setIsCartOpen(false);
+                    await alert({
+                        title: 'Pedido Recebido com Sucesso! 🎉',
+                        message: `Seu pedido #${orderId.slice(0, 8).toUpperCase()} foi enviado para a loja.\n\nVocê será redirecionado para a tela de rastreamento.`
+                    });
+
+                    // Redirect to Tracking
+                    window.history.pushState({}, '', `/track/${orderId}`);
+                    window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                } else {
+                    throw error || new Error('Falha ao criar pedido');
+                }
+
+            } catch (err: any) {
+                console.error(err);
+                await alert({ title: 'Erro', message: 'Ocorreu um erro ao processar seu pedido pela plataforma. Tente novamente ou use o WhatsApp.' });
+            } finally {
+                setIsSubmitting(false);
             }
-            if (addressReference) msg += `🚩 *Ref:* ${addressReference}\n`;
-            msg += `🏙️ *Cidade:* ${selectedCity?.name || store?.city || ''} - ${selectedCity?.state || store?.address_state || ''}\n`;
+            return;
+        }
 
-        } else {
-            msg += `*TOTAL: R$ ${cartTotal.toFixed(2).replace('.', ',')}*\n`;
+        // WHATSAPP CHECKOUT (Fallback or Configured)
+        if (useWhatsApp) {
+            // Build WhatsApp Message - Clean Format
+            let msg = `*NOVO PEDIDO* - ${store?.store_name || 'Ze Entregas'}\n`;
+            msg += `--------------------------------\n`;
+            msg += `*Cliente:* ${customerName}\n`;
+            msg += `*Telefone:* ${customerPhone}\n`;
             msg += `--------------------------------\n\n`;
-            msg += `🏃 *DADOS DE ENTREGA:*\n`;
-            msg += `🏪 *Tipo:* Retirada na Loja\n`;
-        }
 
-        msg += `\n*Forma de Pagamento:* ${paymentMethod}\n`;
-        if (paymentMethod === 'DINHEIRO' && changeFor) {
-            msg += `Troco para: R$ ${changeFor}\n`;
-        }
+            msg += `*RESUMO DO PEDIDO:*\n`;
+            cart.forEach(item => {
+                msg += `• ${item.quantity}x ${item.product.name}\n`;
+                msg += `  R$ ${(item.product.price * item.quantity).toFixed(2).replace('.', ',')}\n`;
+                if (item.observation) msg += `  Obs: ${item.observation}\n`;
+            });
 
-        const phone = store?.phone_number?.replace(/\D/g, '');
-        if (phone) {
-            const url = `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`;
-            window.open(url, '_blank');
-        } else {
-            alert('Erro: Loja sem telefone configurado.');
+            msg += `\n--------------------------------\n`;
+            msg += `*FINANCEIRO:*\n`;
+            msg += `Subtotal: R$ ${cartSubtotal.toFixed(2).replace('.', ',')}\n`;
+
+            if (deliveryType === 'DELIVERY') {
+                const fee = typeof deliveryFee === 'number' ? deliveryFee : 0;
+                msg += `Entrega: R$ ${fee.toFixed(2).replace('.', ',')}\n`;
+                msg += `*TOTAL: R$ ${cartTotal.toFixed(2).replace('.', ',')}*\n`;
+                msg += `--------------------------------\n\n`;
+
+                msg += `*DADOS DE ENTREGA:*\n`;
+                msg += `*Tipo:* Entrega em Domicilio\n`;
+                msg += `*Ender:* ${addressStreet}, ${addressNumber}\n`;
+                if (addressComplement) msg += `*Comp:* ${addressComplement}\n`;
+
+                // Neighborhood Logic
+                let finalNeighborhood = addressNeighborhood;
+                if (deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' && selectedNeighborhoodId) {
+                    const nName = fees.find(f => f.id === selectedNeighborhoodId)?.neighborhood_name;
+                    if (nName) finalNeighborhood = nName;
+                }
+                if (finalNeighborhood) msg += `*Bairro:* ${finalNeighborhood}\n`;
+
+                if (addressReference) msg += `*Ref:* ${addressReference}\n`;
+                msg += `*Cidade:* ${selectedCity?.name || store?.city || ''} - ${selectedCity?.state || store?.address_state || ''}\n`;
+
+            } else {
+                msg += `*TOTAL: R$ ${cartTotal.toFixed(2).replace('.', ',')}*\n`;
+                msg += `--------------------------------\n\n`;
+                msg += `*DADOS DE ENTREGA:*\n`;
+                msg += `*Tipo:* Retirada na Loja\n`;
+                msg += `*Cidade:* ${selectedCity?.name || store?.city || ''}\n`;
+            }
+
+            msg += `\n*Forma de Pagamento:* ${paymentMethod}\n`;
+            if (paymentMethod === 'DINHEIRO' && changeFor) {
+                msg += `Troco para: ${changeFor}\n`;
+            }
+
+            // PRIORIDADE PARA NÚMERO DE WHATSAPP CONFIGURADO
+            const phone = (store?.whatsapp_number || store?.phone_number)?.replace(/\D/g, '');
+            if (phone) {
+                const url = `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`;
+                window.open(url, '_blank');
+            } else {
+                alert({ title: 'Erro na Loja', message: 'Não foi possível enviar o pedido pois a loja não configurou um número de telefone.' });
+            }
         }
     };
 
@@ -434,7 +525,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 </div>
 
-                <div className="container mx-auto px-4 -mt-10 relative flex flex-col md:flex-row items-center md:items-end gap-4 pb-6">
+                <div className="container mx-auto px-4 -mt-10 relative flex flex-col md:flex-row items-center md:items-start gap-4 pb-6">
                     <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl border-4 border-white dark:border-gray-900 bg-white dark:bg-gray-800 shadow-lg overflow-hidden flex-shrink-0">
                         {store.store_logo_url ? (
                             <img src={store.store_logo_url} alt="Logo" className="w-full h-full object-cover" />
@@ -445,12 +536,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         )}
                     </div>
 
-                    <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white mb-2 z-10">
-                        <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-                            <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white md:text-white md:drop-shadow-md">
+                    <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white mb-2 z-10 md:mt-2">
+                        <div className="flex flex-col md:flex-row md:items-center justify-center md:justify-start gap-2 mb-2">
+                            <h1 className="text-xl md:text-2xl font-black text-white md:drop-shadow-md">
                                 {store.store_name || store.name}
                             </h1>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${isStoreOpen ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider self-center md:self-auto ${isStoreOpen ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
                                 {isStoreOpen ? 'Aberto' : 'Fechado'}
                             </span>
                         </div>
@@ -461,22 +552,31 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             </p>
                         )}
 
-                        {/* Mobile Description on White Background (Already handled below) */}
-
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm font-medium text-gray-600 dark:text-gray-400 md:text-gray-100">
                             {store.opening_hours && (
-                                <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 md:backdrop-blur-md md:bg-black/30 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-500/30">
-                                    <Clock className="w-4 h-4 text-brand-500 md:text-brand-300" /> {store.opening_hours}
+                                <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
+                                    <Clock className="w-4 h-4 text-white" /> {store.opening_hours}
                                 </div>
                             )}
                             {deliverySettings && (
-                                <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 md:backdrop-blur-md md:bg-black/30 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-500/30">
-                                    <Bike className="w-4 h-4 text-brand-500 md:text-brand-300" />
+                                <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
+                                    <Bike className="w-4 h-4 text-white" />
                                     {deliverySettings.delivery_time_min}-{deliverySettings.delivery_time_max} min
                                 </div>
                             )}
-                            <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 md:backdrop-blur-md md:bg-black/30 px-2.5 py-1.5 rounded-lg border border-transparent md:border-gray-500/30">
-                                <StoreIcon className="w-4 h-4 text-brand-500 md:text-brand-300" /> {products.length} itens
+                            <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
+                                <StoreIcon className="w-4 h-4 text-white" /> {products.length} itens
+                            </div>
+
+                            {/* Botão de Avaliação - Sempre visível na barra de badges */}
+                            <div
+                                onClick={() => setIsRatingModalOpen(true)}
+                                className="flex items-center gap-1.5 bg-yellow-500/90 text-white px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-yellow-500 transition-colors shadow-sm"
+                            >
+                                <Star className="w-4 h-4 fill-white text-white" />
+                                <span className="font-bold">
+                                    {store.average_rating ? store.average_rating.toFixed(1) : 'Avaliar'}
+                                </span>
                             </div>
                         </div>
 
@@ -540,7 +640,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    addToCart(product);
+                                                    addToCart(product, 1);
                                                 }}
                                                 className="absolute bottom-4 right-4 w-10 h-10 bg-gray-100 dark:bg-gray-800 hover:bg-brand-600 hover:text-white rounded-full flex items-center justify-center transition-colors shadow-sm z-10"
                                             >
@@ -664,17 +764,23 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     {cart.map(item => (
                                         <div key={item.id} className="flex gap-4 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
                                             <div className="w-16 h-16 bg-gray-200 dark:bg-gray-800 rounded-xl overflow-hidden flex-shrink-0">
-                                                {item.product.image_url ? <img src={item.product.image_url} className="w-full h-full object-cover" /> : null}
+                                                {item.product.image_url ? <img src={item.product.image_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ShoppingBag className="w-6 h-6 text-gray-400" /></div>}
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex justify-between items-start">
-                                                    <h4 className="font-bold text-gray-900 dark:text-white text-sm line-clamp-1">{item.product.name}</h4>
-                                                    <span className="font-bold text-sm">R$ {(item.product.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+                                                    <h4 className="font-bold text-gray-900 dark:text-white text-sm line-clamp-2">{item.product.name}</h4>
+                                                    <span className="font-bold text-sm flex-shrink-0 ml-2">R$ {(item.product.price * item.quantity).toFixed(2).replace('.', ',')}</span>
                                                 </div>
+                                                {item.observation && <p className="text-xs text-gray-500 mt-1 italic">Obs: {item.observation}</p>}
+
                                                 <div className="flex items-center justify-between mt-2">
-                                                    <span className="text-xs text-gray-500">{item.quantity} un</span>
-                                                    <button onClick={() => removeFromCart(item.id)} className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-lg bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors">
-                                                        <Trash2 className="w-3 h-3" /> Remover
+                                                    <div className="flex items-center bg-white dark:bg-gray-700 rounded-lg p-0.5 shadow-inner">
+                                                        <button onClick={() => updateQuantity(item.id, -1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-all"><Minus className="w-4 h-4 text-gray-600 dark:text-gray-400" /></button>
+                                                        <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
+                                                        <button onClick={() => updateQuantity(item.id, 1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-all"><Plus className="w-4 h-4 text-gray-600 dark:text-gray-400" /></button>
+                                                    </div>
+                                                    <button onClick={() => removeFromCart(item.id)} className="p-2 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full transition-colors">
+                                                        <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                             </div>
@@ -701,104 +807,102 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                             {/* Delivery Options */}
                             <section className="space-y-4">
-                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Entrega</h3>
-
-                                <div className="grid grid-cols-2 gap-3 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl mb-4">
-                                    {deliverySettings?.is_pickup_enabled && (
-                                        <button
-                                            onClick={() => setDeliveryType('PICKUP')}
-                                            className={`p-3 rounded-xl text-sm font-bold transition-all ${deliveryType === 'PICKUP' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500'}`}
-                                        >
-                                            <div className="flex items-center justify-center gap-2"><StoreIcon className="w-4 h-4" /> Retirar</div>
-                                        </button>
-                                    )}
-                                    {(deliverySettings?.is_own_delivery_enabled || deliverySettings?.is_partner_delivery_enabled) && (
-                                        <button
-                                            onClick={() => setDeliveryType('DELIVERY')}
-                                            className={`p-3 rounded-xl text-sm font-bold transition-all ${deliveryType === 'DELIVERY' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500'}`}
-                                        >
-                                            <div className="flex items-center justify-center gap-2"><Bike className="w-4 h-4" /> Entrega</div>
-                                        </button>
-                                    )}
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Entrega ou Retirada</h3>
                                 </div>
+
+                                <div className="grid grid-cols-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl mb-4 relative">
+                                    {/* Tabs Indicator Background */}
+                                    <div
+                                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-xl shadow-sm transition-all duration-300 ease-in-out ${deliveryType === 'PICKUP' ? 'left-[calc(50%+2px)]' : 'left-1'
+                                            }`}
+                                    />
+
+                                    <button
+                                        onClick={() => setDeliveryType('DELIVERY')}
+                                        className={`relative z-10 p-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${deliveryType === 'DELIVERY' ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                            }`}
+                                    >
+                                        <Bike className="w-4 h-4" /> Entrega
+                                    </button>
+
+                                    <button
+                                        onClick={() => setDeliveryType('PICKUP')}
+                                        className={`relative z-10 p-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${deliveryType === 'PICKUP' ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                            }`}
+                                    >
+                                        <StoreIcon className="w-4 h-4" /> Retirada
+                                    </button>
+                                </div>
+
+                                {deliveryType === 'PICKUP' && (
+                                    <div className="space-y-2 animate-in fade-in p-6 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 text-center">
+                                        <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-2">
+                                            <MapPin className="w-6 h-6 text-gray-500" />
+                                        </div>
+                                        <h4 className="text-base font-bold text-gray-900 dark:text-white">Retirar na Loja</h4>
+                                        <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                                            {(store?.store_address_street || store?.address_street) && <p>{`${store.store_address_street || store.address_street}, ${store.store_address_number || store.address_number}`}</p>}
+                                            {(store?.store_address_district || store?.address_district) && <p>{store.store_address_district || store.address_district}</p>}
+                                            {(store?.store_address_city || store?.city) && <p>{`${store.store_address_city || store.city} - ${store.store_address_state || store.address_state}`}</p>}
+                                        </div>
+                                        {store?.phone_number && (
+                                            <div className="pt-4 border-t border-gray-100 dark:border-gray-700 mt-4 flex justify-center">
+                                                <a
+                                                    href={`tel:${store.phone_number.replace(/\D/g, '')}`}
+                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-xl font-bold text-sm hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
+                                                >
+                                                    <Phone className="w-4 h-4" />
+                                                    <span>Ligar: {store.phone_number}</span>
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 {deliveryType === 'DELIVERY' && (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                        {/* CEP Search */}
-                                        <div className="flex gap-2 items-end">
-                                            <div className="flex-1">
-                                                <CustomInput
-                                                    label="CEP"
-                                                    value={cep}
-                                                    onChange={e => handleCepChange(e.target.value)}
-                                                    placeholder="00000-000"
-                                                    mask="cep"
-                                                />
-                                            </div>
-                                            <div className="pb-1">
-                                                {isLoadingCep ? <Loader2 className="w-6 h-6 animate-spin text-brand-500 mb-2" /> : <div className="w-6" />}
-                                            </div>
+
+                                        {/* Rua - StreetSearchSelect */}
+                                        <div className="col-span-2">
+                                            <StreetSearchSelect
+                                                city={store.store_address_city || store.city || ''}
+                                                value={addressStreet}
+                                                onSelect={setAddressStreet}
+                                                label="Rua"
+                                            />
                                         </div>
 
-                                        {/* City (Locked to Store City) */}
-                                        <div className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-3 border border-gray-200 dark:border-gray-700 opacity-70 mb-4">
-                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Cidade (Loja)</label>
-                                            <div className="font-bold text-gray-700 dark:text-gray-300">
-                                                {store?.store_address_city || store?.city || 'Cidade da Loja'} - {store?.store_address_state || store?.address_state || 'UF'}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                                            <div className="md:col-span-3">
-                                                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 block">Nome da Rua</label>
-                                                <CityStreetSelect
-                                                    state={store?.store_address_state || store?.address_state || 'SP'}
-                                                    city={store?.store_address_city || store?.city || ''}
-                                                    value={addressStreet}
-                                                    onSelect={(street) => {
-                                                        if (street) {
-                                                            setAddressStreet(street.logradouro);
-                                                            setCep(street.cep);
-                                                            setAddressNeighborhood(street.bairro);
-                                                            // Auto-select city object to satisfy validation if needed
-                                                            setSelectedCity({ name: street.localidade, state: street.uf, id: 'street-auto' });
-                                                        } else {
-                                                            setAddressStreet('');
-                                                            // Don't clear city/cep aggressively
-                                                        }
-                                                    }}
-                                                    placeholder="Digite o nome da rua..."
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-3 gap-3">
-                                            <CustomInput label="Número" value={addressNumber} onChange={e => setAddressNumber(e.target.value)} placeholder="123" />
-                                            <div className="col-span-2">
-                                                <CustomInput label="CEP" value={cep} onChange={e => setCep(e.target.value)} placeholder="00000-000" mask="cep" />
-                                            </div>
-                                        </div>
-
-                                        <CustomInput label="Complemento" value={addressComplement} onChange={e => setAddressComplement(e.target.value)} placeholder="Apto 101..." />
-                                        <CustomInput label="Ponto de Referência" value={addressReference} onChange={e => setAddressReference(e.target.value)} placeholder="Próximo a..." />
-
-                                        {deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' ? (
+                                        <div className="grid grid-cols-3 gap-4">
                                             <div>
-                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block uppercase tracking-wide">Bairro</label>
-                                                <select
-                                                    value={selectedNeighborhoodId}
-                                                    onChange={e => setSelectedNeighborhoodId(e.target.value)}
-                                                    className="w-full px-4 py-3 rounded-2xl border-2 border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium"
-                                                >
-                                                    <option value="">Selecione...</option>
-                                                    {fees.map(fee => (
-                                                        <option key={fee.id} value={fee.id}>{fee.neighborhood_name} (+ R$ {fee.fee.toFixed(2)})</option>
-                                                    ))}
-                                                </select>
+                                                <CustomInput label="Número" value={addressNumber} onChange={e => setAddressNumber(e.target.value)} placeholder="123" />
                                             </div>
-                                        ) : (
-                                            <CustomInput label="Bairro" value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} placeholder="Seu bairro" />
-                                        )}
+                                            <div className="col-span-2">
+                                                <CustomInput label="Complemento" value={addressComplement} onChange={e => setAddressComplement(e.target.value)} placeholder="Apto, Bloco" />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4">
+                                            {deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' ? (
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block uppercase tracking-wide">Bairro (Taxa de Entrega)</label>
+                                                    <select
+                                                        value={selectedNeighborhoodId}
+                                                        onChange={e => setSelectedNeighborhoodId(e.target.value)}
+                                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-medium"
+                                                    >
+                                                        <option value="">Selecione o bairro...</option>
+                                                        {fees.map(fee => (
+                                                            <option key={fee.id} value={fee.id}>{fee.neighborhood_name} (+ R$ {fee.fee.toFixed(2)})</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            ) : (
+                                                <CustomInput label="Bairro" value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} placeholder="Seu bairro" />
+                                            )}
+                                        </div>
+
+                                        <CustomInput label="Ponto de Referência" value={addressReference} onChange={e => setAddressReference(e.target.value)} placeholder="Próximo a..." />
                                     </div>
                                 )}
                             </section>
@@ -825,7 +929,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         <span className="text-xs font-bold">Cartão</span>
                                     </button>
                                     <button
-                                        onClick={() => setPaymentMethod('DINHEIRO')}
+                                        onClick={() => {
+                                            setPaymentMethod('DINHEIRO');
+                                            // Scroll to change input after render
+                                            setTimeout(() => {
+                                                const changeInput = document.getElementById('change-input-container');
+                                                if (changeInput) {
+                                                    changeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }
+                                            }, 100);
+                                        }}
                                         className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'DINHEIRO' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                     >
                                         <Banknote className="w-6 h-6" />
@@ -834,8 +947,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 </div>
 
                                 {paymentMethod === 'DINHEIRO' && (
-                                    <div className="animate-in fade-in">
-                                        <CustomInput label="Troco para quanto?" value={changeFor} onChange={e => setChangeFor(e.target.value)} placeholder="R$ 50,00" mask="currency" />
+                                    <div id="change-input-container" className="animate-in fade-in pt-2">
+                                        <CustomInput
+                                            label="Troco para quanto?"
+                                            value={changeFor}
+                                            onChange={e => setChangeFor(e.target.value)}
+                                            placeholder="R$ 50,00"
+                                            mask="currency"
+                                            autoFocus
+                                        />
                                     </div>
                                 )}
                             </section>
@@ -852,11 +972,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 fullWidth
                                 size="lg"
                                 onClick={handleCheckout}
-                                className={`rounded-2xl py-5 text-lg shadow-xl shadow-brand-500/20 ${!isStoreOpen ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
-                                disabled={!isStoreOpen}
+                                className={`rounded-2xl py-5 text-lg shadow-xl shadow-brand-500/20 ${!isStoreOpen || isSubmitting ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                                disabled={!isStoreOpen || isSubmitting}
                             >
-                                {isStoreOpen ? (
-                                    <>Enviar Pedido no WhatsApp <ArrowRight className="w-5 h-5 ml-2" /></>
+                                {isSubmitting ? (
+                                    <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Enviando...</>
+                                ) : isStoreOpen ? (
+                                    <>
+                                        {store?.receive_orders_via_platform ? 'Enviar Pedido' : 'Enviar no WhatsApp'}
+                                        <ArrowRight className="w-5 h-5 ml-2" />
+                                    </>
                                 ) : (
                                     <>Loja Fechada</>
                                 )}
@@ -866,6 +991,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 </div>
             )}
 
+            {/* Ratings Modal */}
+            {isRatingModalOpen && store && (
+                <StoreRatingModal
+                    isOpen={isRatingModalOpen}
+                    onClose={() => setIsRatingModalOpen(false)}
+                    storeId={store.id}
+                    storeName={store.store_name || store.name}
+                />
+            )}
         </div>
     );
 };

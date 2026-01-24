@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, CreditCard, Share2, Copy, Edit2, Save, Check, ShoppingBag, Hash, Phone, Mail, Settings, X, Loader2, Lock, Banknote, Eye, EyeOff, CheckCircle, MapPin, Camera, Upload, PhoneIncoming, AlertTriangle } from 'lucide-react';
+import { User, CreditCard, Share2, Copy, Edit2, Save, Check, ShoppingBag, Hash, Phone, Mail, Settings, X, Loader2, Lock, Banknote, Eye, EyeOff, CheckCircle, MapPin, Camera, Upload, PhoneIncoming, AlertTriangle, Star } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
@@ -11,93 +11,9 @@ import { formatPhoneNumber } from '../utils/mapHelpers';
 import { Switch } from './Switch';
 import { CitySearchSelect } from './CitySearchSelect';
 import { useDialog } from '../utils/dialogService';
-
-// --- TOAST COMPONENT ---
-
-
-// Internal Component for Orders
-const MyOrders: React.FC = () => {
-    const [orders, setOrders] = useState<Order[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
-
-    const fetchOrders = async () => {
-        setLoading(true);
-        setError(false);
-        try {
-            const userOrders = await cloud.getMyOrders();
-            setOrders(userOrders);
-        } catch (error) {
-            // console.error("Failed to fetch orders:", error);
-            setError(true);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchOrders();
-    }, []);
-
-    const getStatusChip = (status: string) => {
-        const base = "text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1.5";
-        switch (status) {
-            case 'pending_payment': return <div className={`${base} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300`}>{status.replace('_', ' ')}</div>;
-            case 'pending_approval': return <div className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300`}>{status.replace('_', ' ')}</div>;
-            case 'approved': return <div className={`${base} bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300`}>{status.replace('_', ' ')}</div>;
-            case 'paid': return <div className={`${base} bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300`}>{status.replace('_', ' ')}</div>;
-            case 'shipped': return <div className={`${base} bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300`}>{status.replace('_', ' ')}</div>;
-            case 'delivered': return <div className={`${base} bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-300`}><CheckCircle className="w-3 h-3" /> {status.replace('_', ' ')}</div>;
-            case 'cancelled': return <div className={`${base} bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300`}>{status.replace('_', ' ')}</div>;
-            default: return <div className={`${base} bg-gray-100 text-gray-500`}>{status}</div>;
-        }
-    };
-
-    const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
-    return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 mt-6 mb-6">
-            <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                <ShoppingBag className="w-5 h-5 text-brand-500" /> Meus Pedidos da Loja
-            </h3>
-            {loading ? (
-                <div className="text-center py-4 text-gray-400">Carregando pedidos...</div>
-            ) : error ? (
-                <div className="text-center py-4">
-                    <p className="text-xs text-red-500 mb-2">Erro ao carregar pedidos.</p>
-                    <button onClick={fetchOrders} className="text-xs font-bold text-brand-600 underline">Tentar novamente</button>
-                </div>
-            ) : orders.length === 0 ? (
-                <div className="text-center py-4 text-gray-400">Você ainda não fez nenhum pedido.</div>
-            ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {orders.map(order => (
-                        <div key={order.id} className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                            <div className="flex justify-between items-center">
-                                <div className="text-xs font-mono text-gray-500 flex items-center gap-1">
-                                    <Hash className="w-3 h-3" /> {order.id.substring(0, 8)}
-                                </div>
-                                {getStatusChip(order.status)}
-                            </div>
-                            <div className="mt-2 space-y-1">
-                                {order.items.map(item => (
-                                    <div key={item.product_id} className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-700 dark:text-gray-300">{item.quantity}x {item.name}</span>
-                                        <span className="text-gray-500 dark:text-gray-400">{formatCurrency(item.price)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="border-t border-gray-200 dark:border-gray-600 mt-2 pt-2 flex justify-between items-center">
-                                <span className="font-bold text-gray-800 dark:text-white">Total</span>
-                                <span className="font-bold text-brand-600 dark:text-brand-400">{formatCurrency(order.total_price)}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
+import { RatingModal } from './RatingModal';
+import { useDeliveryRating } from '../hooks/useDeliveryRating';
+// Internal Component for Orders removed: now using UserOrders global tab
 
 // Extracted Bank Form Fields Component to avoid re-render focus loss
 interface BankFormFieldsProps {
@@ -539,66 +455,68 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                 </div>
             )}
 
-            {/* Bank Data Section - AVAILABLE FOR ALL USERS */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Banknote className="w-5 h-5 text-green-500" /> Dados Bancários
-                </h3>
+            {/* Bank Data Section - AVAILABLE FOR DELIVERY PARTNERS/STORES ONLY */}
+            {isPartner && (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <Banknote className="w-5 h-5 text-green-500" /> Dados Bancários
+                    </h3>
 
-                {hasBankData ? (
-                    <div className="animate-in fade-in">
-                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl mb-4 border border-gray-100 dark:border-gray-600">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                                    <Banknote className="w-5 h-5" />
+                    {hasBankData ? (
+                        <div className="animate-in fade-in">
+                            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl mb-4 border border-gray-100 dark:border-gray-600">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                                        <Banknote className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Banco</p>
+                                        <p className="font-bold text-gray-800 dark:text-white">{bankDetails.bankName || 'Cadastrado'}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Banco</p>
-                                    <p className="font-bold text-gray-800 dark:text-white">{bankDetails.bankName || 'Cadastrado'}</p>
-                                </div>
+                                <p className="text-sm text-gray-600 dark:text-gray-300">Chave PIX: <span className="font-mono bg-white dark:bg-gray-800 px-2 py-0.5 rounded border dark:border-gray-600">{bankDetails.pixKey}</span></p>
                             </div>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">Chave PIX: <span className="font-mono bg-white dark:bg-gray-800 px-2 py-0.5 rounded border dark:border-gray-600">{bankDetails.pixKey}</span></p>
-                        </div>
 
-                        <div className="grid grid-cols-3 gap-3">
-                            <button
-                                onClick={() => setShowBankModal(true)}
-                                className="flex flex-col items-center justify-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            >
-                                <Edit2 className="w-5 h-5 text-blue-500" />
-                                <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Editar</span>
-                            </button>
-                            <button
-                                onClick={copyPixKey}
-                                className="flex flex-col items-center justify-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            >
-                                <Copy className="w-5 h-5 text-gray-500" />
-                                <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Copiar</span>
-                            </button>
-                            <button
-                                onClick={sharePixKey}
-                                className="flex flex-col items-center justify-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            >
-                                <Share2 className="w-5 h-5 text-brand-600" />
-                                <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Compartilhar</span>
-                            </button>
+                            <div className="grid grid-cols-3 gap-3">
+                                <button
+                                    onClick={() => setShowBankModal(true)}
+                                    className="flex flex-col items-center justify-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    <Edit2 className="w-5 h-5 text-blue-500" />
+                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Editar</span>
+                                </button>
+                                <button
+                                    onClick={copyPixKey}
+                                    className="flex flex-col items-center justify-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    <Copy className="w-5 h-5 text-gray-500" />
+                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Copiar</span>
+                                </button>
+                                <button
+                                    onClick={sharePixKey}
+                                    className="flex flex-col items-center justify-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    <Share2 className="w-5 h-5 text-brand-600" />
+                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Compartilhar</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ) : (
-                    <BankFormFields
-                        bankDetails={bankDetails}
-                        setBankDetails={setBankDetails}
-                        showSensitive={showSensitive}
-                        setShowSensitive={setShowSensitive}
-                    />
-                )}
-            </div>
+                    ) : (
+                        <BankFormFields
+                            bankDetails={bankDetails}
+                            setBankDetails={setBankDetails}
+                            showSensitive={showSensitive}
+                            setShowSensitive={setShowSensitive}
+                        />
+                    )}
+                </div>
+            )}
 
             <Button fullWidth onClick={handleSaveAll} disabled={isLoading} className="py-4 text-lg shadow-lg">
                 {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Alterações</>}
             </Button>
 
-            <MyOrders />
+            {/* MyOrders moved to separate tab */}
 
             {/* Bank Edit Modal */}
             {showBankModal && (

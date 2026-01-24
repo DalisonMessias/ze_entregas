@@ -40,6 +40,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/mapa-localizacao': 'admin_location_map',
     '/admin/catalogo-produtos': 'admin_base_catalog',
     '/admin/categorias-loja': 'admin_store_categories',
+    '/admin/galeria-imagens': 'admin_image_gallery',
 
     // Shared / Core Routes
     '/perfil': 'profile',
@@ -47,7 +48,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/shop': 'shop',
     '/assistente': 'assistant',
 
-    
+
     '/mapa-calor': 'heatmap',
     '/status': 'status',
     '/privacidade': 'privacy',
@@ -98,6 +99,17 @@ const routeMap: Record<string, ActiveTab> = {
     '/upgrade': 'upgrade_to_partner',
     '/ruas': 'streets_list',
     '/carteira': 'zebank',
+    // User Routes (Novas)
+    '/user/inicio': 'home', // Usuário comum cai na home (landing page busca)
+    '/user/perfil': 'profile',
+    '/user/pedidos': 'profile', // Pedidos estão no perfil
+    '/user/historico': 'profile',
+    '/user/suporte': 'support',
+    '/user/carteira': 'zebank',
+    '/user/configuracoes': 'settings',
+    '/user/privacidade': 'privacy',
+    '/user/notificacoes': 'notifications',
+
     // Authentication Routes
     '/login': 'login',
     '/cadastro': 'signup',
@@ -116,6 +128,11 @@ const reverseRouteMap: Record<string, string> = Object.entries(routeMap).reduce(
  * Se não encontrar, retorna null (o App deve decidir o default).
  */
 export const getTabFromUrl = (pathname: string): ActiveTab | null => {
+    // Check for Order Tracking
+    if (pathname.startsWith('/track/')) {
+        return 'order_tracking';
+    }
+
     // Normaliza removendo trailing slash, exceto se for raiz
     const cleanPath = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
     return routeMap[cleanPath] || null;

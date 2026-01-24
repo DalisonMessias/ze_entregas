@@ -61,6 +61,8 @@ import { AdminPaymentGateways } from './AdminPaymentGateways';
 import { AdminStores } from './AdminStores';
 import { AdminBaseCatalog } from './AdminBaseCatalog';
 import { AdminStoreCategories } from './AdminStoreCategories';
+import { AdminImageGallery } from './Admin/AdminImageGallery';
+
 
 // --- HELPERS ---
 const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -1185,6 +1187,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'location_map': return <MapaLocalizacao />;
             case 'base_catalog': return <AdminBaseCatalog />;
             case 'store_categories': return <AdminStoreCategories />;
+            case 'image_gallery': return <AdminImageGallery />;
+
 
             default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
         }

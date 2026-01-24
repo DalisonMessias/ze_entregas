@@ -2,7 +2,7 @@
 
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, Filter, Calendar, DollarSign, Download, Printer, ChevronDown, ChevronUp, MapPin, Truck, Store, X, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Loader2, Filter, Calendar, DollarSign, Download, Printer, ChevronDown, ChevronUp, MapPin, Truck, Store, X, CheckCircle, Clock, AlertTriangle, MessageCircle } from 'lucide-react';
 
 import { PartnerRequest, HistoryFilters, PartnerRequestStatus } from '../types';
 import * as cloud from '../services/cloud';
@@ -12,6 +12,8 @@ import { CustomDateInput } from './CustomDateInput';
 import { CustomSelect } from './CustomSelect';
 import { Skeleton } from './Skeleton';
 import { ExclusiveLock } from './ExclusiveLock';
+import { StoreOrderChat } from './InternalOrderChat/StoreOrderChat';
+import { ReportOrderModal } from './ReportOrderModal';
 
 interface OrderHistoryProps {
     userRole: 'store_partner' | 'delivery_partner';
@@ -85,6 +87,9 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
     const [cancelLoading, setCancelLoading] = useState(false);
     const [actionMessage, setActionMessage] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [isReportOpen, setIsReportOpen] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState<string>('');
     const dialog = useDialog();
 
     const clientStats = useMemo(() => {
@@ -216,6 +221,12 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
             setLoading(false);
             return;
         }
+
+        // Fetch ID
+        cloud.getClient()?.auth.getUser().then(({ data }) => {
+            if (data.user) setCurrentUserId(data.user.id);
+        });
+
         loadData(true);
     }, [filters, userRole]); // Reload when filters change
 
@@ -471,8 +482,24 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                                 <div className="space-y-2">
                                     <button
                                         onClick={() => {
-                                            dialog.alert({ title: 'Relatar Problema', message: 'Funcionalidade em breve.' });
+                                            window.open(`/track/${selectedOrder.id}`, '_blank');
                                         }}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold uppercase bg-brand-50 hover:bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:hover:bg-brand-900/50 transition-colors"
+                                    >
+                                        <MapPin className="w-5 h-5" />
+                                        Ver como Cliente
+                                    </button>
+
+                                    <button
+                                        onClick={() => setIsChatOpen(true)}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold uppercase bg-brand-100 hover:bg-brand-200 text-brand-700 dark:bg-brand-900/40 dark:hover:bg-brand-900/60 dark:text-brand-300 transition-colors"
+                                    >
+                                        <MessageCircle className="w-5 h-5" />
+                                        Chat com Cliente
+                                    </button>
+
+                                    <button
+                                        onClick={() => setIsReportOpen(true)}
                                         className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold uppercase bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white transition-colors"
                                     >
                                         <AlertTriangle className="w-5 h-5" />
@@ -523,6 +550,26 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Chat Modal */}
+            {selectedOrder && (
+                <StoreOrderChat
+                    isOpen={isChatOpen}
+                    onClose={() => setIsChatOpen(false)}
+                    orderId={selectedOrder.id}
+                    customerName={selectedOrder.customer_name || 'Cliente'} // We mapped partner request, might need to ensure customer_name is present or fetch it.
+                    storeId={currentUserId}
+                />
+            )}
+
+            {selectedOrder && (
+                <ReportOrderModal
+                    isOpen={isReportOpen}
+                    onClose={() => setIsReportOpen(false)}
+                    orderId={selectedOrder.id}
+                    storeId={currentUserId}
+                />
             )}
         </div>
     );

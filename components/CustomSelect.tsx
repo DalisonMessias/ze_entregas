@@ -16,11 +16,11 @@ interface CustomSelectProps {
   className?: string;
 }
 
-export const CustomSelect: React.FC<CustomSelectProps> = ({ 
-  value, 
-  onChange, 
-  options, 
-  placeholder = 'Selecione...', 
+export const CustomSelect: React.FC<CustomSelectProps> = ({
+  value,
+  onChange,
+  options,
+  placeholder = 'Selecione...',
   label,
   className = ''
 }) => {
@@ -43,11 +43,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   return (
     <div className={`relative ${className}`} ref={containerRef}>
       {label && <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">{label}</label>}
-      
+
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-left focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+        className="w-full h-full flex items-center justify-between px-4 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-left focus:ring-2 focus:ring-brand-500 outline-none transition-all"
       >
         <span className={`font-bold ${selectedOption ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
           {selectedOption ? selectedOption.label : placeholder}
@@ -66,20 +66,19 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   onChange(option.value);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-colors text-left ${
-                  String(value) === String(option.value)
-                    ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold'
-                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-colors text-left ${String(value) === String(option.value)
+                  ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
               >
                 <span>{option.label}</span>
                 {String(value) === String(option.value) && <Check className="w-4 h-4" />}
               </button>
             ))}
             {options.length === 0 && (
-                <div className="px-3 py-4 text-center text-xs text-gray-400 italic">
-                    Nenhuma opção disponível
-                </div>
+              <div className="px-3 py-4 text-center text-xs text-gray-400 italic">
+                Nenhuma opção disponível
+              </div>
             )}
           </div>
         </div>

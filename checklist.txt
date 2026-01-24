@@ -1,211 +1,15 @@
-[15/01/2026] - Melhoria: Adicionado botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o "Adicionar Produtos Avulsos" no CollaboratorModule.tsx com cor de destaque (brand-600).
-[15/01/2026] - Ajuste: Removido botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o flutuante "+" do dashboard do colaborador.
-[15/01/2026] - Melhoria: Adicionado resumo de itens (quantidade) nos cards de mesas ativas.
-[15/01/2026] - Melhoria: Alterada a cor do botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o "Conferir" para laranja (bg-orange-500) para melhor visibilidade.
-[15/01/2026] - Melhoria: As observaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes dos itens (ex: "Sem cebola") agora sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o exibidas no modal de conferÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia.
-[15/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Adicionada coluna 'name' e 'observation' em orders_items para persistir detalhes do pedido.
-[15/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Atualizado RPC get_open_orders para listar observaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes na conferÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia da mesa.
-[15/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Ajustada tipagem do objeto Product em CollaboratorModule.tsx (created_at, updated_at, stock_quantity).
-[15/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Atualizado RPC get_products_for_collaborator em supabase_global.sql para referenciar 'sp.category'.
-[15/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Atualizado RPC place_collaborator_order para suportar itens avulsos, nomes e observaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes.
-[15/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Ajustado CollaboratorModule.tsx para enviar 'unit_price' no JSON de itens.
-[15/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Ajustada sintaxe SQL em supabase_global.sql (fechamento de bloco DO).
-[16/01/2026] - Novo: Criada tabela public.orders_tickets para fila de produÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o em supabase_global.sql.
-[16/01/2026] - Novo: RPC place_collaborator_order agora gera tickets de produÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o automaticamente.
-[16/01/2026] - Melhoria: Modal de "ConferÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia" no lojista atualizado para mostrar observaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes e adicionais corretamente.
-[16/01/2026] - Novo: Aba "Pedidos / Cozinha" no colaborador para visualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o/re-impressÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de comandas.
-[16/01/2026] - Novo: Aba "ProduÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o" no painel do lojista (InternalOrders.tsx) para gestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o da fila de tickets.
-[16/01/2026] - Novo: Implementadas funÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes getOrdersTickets e updateTicketStatus no cloud.ts para suporte ao backend.
-[16/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Corrigido erro de sintaxe JSX no CollaboratorModule.tsx (tags de botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes).
-[16/01/2026] - Melhoria: ValidaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Perfil: Agora foca exclusivamente em dados da loja (store_address_*) e nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o mais em dados de usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio.
-[16/01/2026] - Novo: Adicionado campo "Tempo de Preparo" na configuraÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o da loja e sincronizado com banco de dados.
-[16/01/2026] - Melhoria: Nova Entrega: EndereÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o de Coleta agora vem preenchido com dados da loja, oculto por padrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o com opÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de troca manual.
-[16/01/2026] - CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: ValidaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Perfil na pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gina de RelatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rios atualizada para usar campos store_address_* da loja.
-[20/01/2026] - UI Refinada: Implementado design "Flat Premium" para botões, com bordas adaptativas ultra-finas (black/5, white/10) e remoção global de sombras (shadow-sm).
-[20/01/2026] - Limpeza de Código: Removidas todas as classes hardcoded de bordas e sombras (border-gray-100, etc) nos componentes AdminDashboard, PartnerArea, DailyPanel e ScorePanel.
-[20/01/2026] - Correção: Tema escuro no modo Tailwind v4 ajustado para usar estratégia baseada em classe .dark no HTML.
-[20/01/2026] - Refinamento Visual: Implementado estilo "Flat Premium" para todas as abas (tabs) e painéis principais (PartnerArea, FinancialPanel, AdminShopManagement, StoreSettings), removendo bordas brancas (border-gray-100) e sombras residuais.
-[20/01/2026] - Refinamento Visual Final: Abas ativas agora usam cor da marca (brand-600) e bordas de foco brancas foram removidas globalmente.
-[20/01/2026] - Correção AuthWrapper: Adicionado suporte ao tipo 'warning' e corrigida lógica de modo restrito para status 'pending'.
-[20/01/2026] - Banco de Dados: Criada tabela `score_history` para rastrear edições manuais de score dos entregadores.
-[20/01/2026] - Correção WhatsApp: Resolvidos problemas de sincronização e exibição de mensagens "[Mídia]" através de mapeamento robusto no backend.
-[20/01/2026] - WhatsApp Multi-loja: Corrigidas restrições de unicidade e políticas de RLS para permitir que colaboradores e múltiplas lojas usem o sistema simultaneamente.
-[20/01/2026] - UI WhatsApp: Implementada renderização de contatos, localizações e figurinhas no chat para uma experiência mais rica.
-[20/01/2026] - Bug Fix: Resolvido erro de importação do serviço `cloud` no `WhatsappContainer.tsx`.
-[20/01/2026] - UI WhatsApp: Adicionado botão de fechar (X) ao seletor de emojis para melhor usabilidade mobile.
-[20/01/2026] - Zé Assistente: Implementada edição e exclusão de regras customizadas e personalização de regras de sistema.
-[20/01/2026] - Zé Assistente: Habilitados recursos de criação de pedidos e agendamento de entrega por IA.
-[20/01/2026] - Documentação: Criado guia de funcionalidades dos filtros de conversa do WhatsApp.
-[20/01/2026] - Bug Fix: Corrigidos erros de tipagem `pix_key` e ícones em StoreSettings.tsx.
-[20/01/2026] - UI StoreSettings: Reorganizado layout da Chave PIX e E-mail para alinhamento perfeito e correção de cores do seletor.
-[20/01/2026] - Bug Fix: Corrigido problema onde a Chave PIX não era carregada do banco de dados (mapeamento ausente no serviço cloud).
-[20/01/2026] - Refatoração Zé Assistente: Substituído modal customizado por Modal Padrão e corrigido bug de edição de regras (carregamento de palavras-chave).
-[20/01/2026] - Feature WhatsApp: Implementado Modal de Câmera (webcam real), Enquete, Contatos e Figurinhas (com suporte a upload e banco de dados).
-[20/01/2026] - UI WhatsApp: Refatoração visual completa de mensagens de Enquete (PollMessage com radio buttons e progresso) e Contato (Card nativo).
-[20/01/2026] - UI WhatsApp: Correção do modal "Novo Chat" (agora usa BaseModal) e adição do botão "Gerenciar Contatos" na barra lateral.
-[20/01/2026] - Feature WhatsApp: Picker de Contatos agora busca dados reais do sistema (/contacts).
-[20/01/2026] - UI WhatsApp: Refinamento "Pixel Perfect" dos balões de mensagem (Cores, Sombra, Timestamp flutuante) e remoção de Avatars no chat.
-[20/01/2026] - UI WhatsApp: Ajuste fino visual - Removida cauda do balão (SVG) e arredondados todos os cantos (rounded-xl) conforme feedback.
-[20/01/2026] - Logic WhatsApp: Revertido envio para usar endpoint padrão (/send/text). O sistema envia a string crua (POLL/CONTACT) e o backend processa, enquanto a UI local renderiza o componente.
-[20/01/2026] - Logic WhatsApp: Lista de conversas é ocultada automaticamente quando o status é desconectado.
-[20/01/2026] - Database Fix: Corrigido script SQL global para evitar duplicação de regras do Zé Assistente (uso de blocos DO/IF NOT EXISTS).
-[20/01/2026] - UI Zé Assistente: Liberado botão de exclusão para todas as regras (Sistema e Personalizadas).
-[20/01/2026] - UI WhatsApp: Refatoração visual completa de mensagens de Enquete (PollMessage com radio buttons e progresso) e Contato (Card nativo).
-[20/01/2026] - UI WhatsApp: Correção do modal "Novo Chat" (agora usa BaseModal) e adição do botão "Gerenciar Contatos" na barra lateral.
-[20/01/2026] - Feature WhatsApp: Picker de Contatos agora busca dados reais do sistema (/contacts).
-[20/01/2026] - Migração Zé Assistente: Substituição da OpenAI pela SDK oficial do Google Gemini e remoção de limite de produtos para IA.
-[20/01/2026] - Fix 503 WhatsApp: Identificado erro de backend e implementado logs de inicialização de serviços para debug.
-[20/01/2026] - Bug Fix: Corrigido erro de permissão 42501 (permission denied for table pwa_settings) criando a tabela no supabase_global.sql com políticas RLS adequadas (leitura pública, escrita admin).
-[20/01/2026] - Bug Fix: Corrigido erro PGRST116 em pwa_settings (múltiplas linhas) substituindo .single() por .limit(1).maybeSingle() nos arquivos server/routes/pwa.ts e services/cloud.ts.
-[20/01/2026] - Bug Fix Critical: Resolvido loop infinito de requisições ao /pwa/manifest.json causado pelo Service Worker tentando cachear endpoint dinâmico. Removido manifest do cache e adicionado filtro /pwa/ no sw.js.
-[20/01/2026] - UI Fix: Corrigidas cores das abas do painel do entregador (/entregador/painel) para melhor visibilidade no tema claro (gray-700) e uso correto da cor brand-600 quando selecionadas.
-[20/01/2026] - Bug Fix Critical: Corrigido erro "permission denied for table user_terminals" ao ativar maquininha. Criada tabela user_terminals com políticas RLS apropriadas (usuário gerencia próprio terminal, admin gerencia todos).
-[20/01/2026] - Enhancement: Substituídos dados fictícios por cálculos reais no Relatório Resumido da maquininha (SummaryReportModal). Agora filtra por período (Hoje/Semana/Mês) e calcula vendas, reembolsos, taxas e estatísticas reais. Corrigida lógica de filtro para responder corretamente às mudanças de período.
-[20/01/2026] - Feature: Sistema completo de gateways de pagamento criado com InfinitePay e Mercado Pago, fallback automático, painel admin (AdminPaymentGateways) e 4 tabelas no banco (driver_wallets, user_terminal_transactions, payment_gateway_settings, payment_gateway_logs). Serviços: paymentGateway.ts, infinitepay.ts, mercadopago.ts.
-[20/01/2026] - Integration: ZePayStoreModule integrado com sistema de gateways. Recarga ZéPay agora funciona com QR Code PIX real via InfinitePay/Mercado Pago, polling automático de status e atualização de saldo após confirmação.
-[20/01/2026] - Backend: Criadas rotas backend completas (server/routes/payment.ts) com 4 endpoints: generate-qr, status/:txId e webhooks para InfinitePay e Mercado Pago. Sistema de confirmação automática via webhook implementado.
-[21/01/2026] - Bug Fix: Corrigido bug crítico de entregadores fixos não listados na comanda. Tabela `store_delivery_partners` estava faltando no schema e foi adicionada ao `supabase_global.sql`.
-[21/01/2026] - Enhancement: Adicionada solicitação de permissão de câmera explícita no MerchantPOS antes de ativar o scanner QR Code, prevenindo erros de inicialização.
-[21/01/2026] - Banco de Dados: Criada tabela user_status_history em supabase_global.sql para auditoria de status.
-[21/01/2026] - Novo: Implementado sistema de Gerenciamento de Lojas no painel administrativo (/admin/lojas).
-[21/01/2026] - Backend: Adicionadas funções `adminGetStores`, `adminUpdateStoreStatus` e `adminGetStatusHistory` no cloud.ts.
-[21/01/2026] - UI: Criado componente `AdminStores.tsx` com listagem em cards, busca, modal de detalhes e logs de auditoria.
-[21/01/2026] - Segurança: Logs de alteração de status agora incluem o motivo obrigatório e o administrador que realizou a ação.
-[FIX] Implementado gerenciamento de produtos (Importa��o/Exporta��o) via Admin para lojas espec�ficas
-[FEAT] Dashboard Admin: Adicionado painel financeiro detalhado com Recargas, Taxas de Lojistas e Taxas de Entregadores
-[21/01/2026] - Correção: Resolvido problema de redirecionamento automático para a Home no reload. Agora o sistema preserva a rota atual ao usar F5 ou atualizar a página.
-[21/01/2026] - Ajuste AuthWrapper: Corrigida lógica de sincronização de URL que forçava redirecionamento para '/' antes da verificação da sessão. Agora rotas internas do App são preservadas no recarregamento (F5).
-[ 2 1 / 0 1 / 2 0 2 6 ]  
- -  
- D a t a b a s e :  
- C r i a d a  
- t a b e l a  
- c a t a l o g _ b a s e _ p r o d u c t s  
- e  
- a d i c i o n a d a  
- c o l u n a  
- b a s e _ p r o d u c t _ i d  
- a  
- t a b e l a  
- p r o d u c t s  
- p a r a  
- s u p o r t e  
- a o  
- c a t a l o g o  
- b a s e  
- e  
- i m p o r t a c a o .  
- [ 2 2 / 0 1 / 2 0 2 6 ]  
- -  
- F i n a l i z a � � o :  
- D o c u m e n t a � � o  
- e  
- w a l k t h r o u g h  
- c o n c l u � d o s .  
- [ 2 2 / 0 1 / 2 0 2 6 ]  
- -  
- C o r r e � � o :  
- A j u s t e s  
- f i n a i s  
- d e  
- c o m p i l a � � o  
- e  
- i m p o r t s .  
- [ 2 2 / 0 1 / 2 0 2 6 ]  
- -  
- C o r r e � � o :  
- R L S  
- h a b i l i t a d o  
- p a r a  
- c a t e g o r i a s  
- e  
- r o t a  
- a m i g a v e l  
- a d i c i o n a d a .  
- [22/01/2026] - Corre��o AI: Ajustada lista de modelos em cloud.ts para priorizar vers�es est�veis (1.5-flash-latest, pro) e evitar erro 404/429.
-[22/01/2026] - Refatora��o AI: Migrado de SDK para HTTP REST direto em cloud.ts para resolver incompatibilidade de modelos e erros 404/429.
-[22/01/2026] - Fix: Atualizada fun��o update_ticket_status para propagar status (DELIVERED/COMPLETED) para a tabela orders, corrigindo falha no hist�rico.
-[22/01/2026] - Feature: Criada RPC get_store_dashboard_stats para fornecer dados reais ao dashboard da loja.
-[22/01/2026] - Fix: Atualizada get_unified_order_history para incluir pedidos IN_DELIVERY no hist�rico.
-
-[22/01/2026] - Banco: Adicionada coluna delivery_location_reference na tabela orders para refer??ncia de entrega por localiza???o.
-[ 2 2 / 0 1 / 2 0 2 6 ]  
- -  
- C o r r e � � o :  
- C o r r i g i d o  
- e r r o  
- d e  
- a w a i t  
- f o r a  
- d e  
- f u n � � o  
- a s y n c  
- n o  
- c o m p o n e n t e  
- M e r c h a n t P O S . t s x .  
- [ 2 2 / 0 1 / 2 0 2 6 ]  
- -  
- C o r r e � � o :  
- R e s o l v i d o  
- e r r o  
- d e  
- e x p o r t a � � o  
- O r d e r H i s t o r y  
- e  
- u n i f i c a d a  
- i n i c i a l i z a � � o  
- d o  
- S u p a b a s e  
- n a  
- A P I  
- p a r a  
- e v i t a r  
- f a l h a s  
- d e  
- c a r r e g a m e n t o .  
- [ 2 2 / 0 1 / 2 0 2 6 ]  
- -  
- C o r r e � � o  
- D e f i n i t i v a  
- B u i l d  
- V e r c e l :  
- P r o t e g i d a s  
- A P I s  
- d e  
- b r o w s e r  
- e  
- c o r r i g i d a s  
- f u n � � e s  
- i n e x i s t e n t e s  
- n o  
- C M S .  
- [x] Melhorias Card�pio Digital: Link na Loja, Header Rico, Status Aberto/Fechado, Persist�ncia Carrinho, Rota /produtos.
-[x] StoreSettings: Implementa��o de StreetAutocomplete e Atualiza��o din�mica do link do cat�logo.
-[x] Sincroniza��o de Status: Gera��o autom�tica de relat�rio di�rio ao fechar loja via StoreSettings (unificado com StoreStatus).
-[x] Corre��o de sintaxe e aninhamento incorreto de useEffect em StoreSettings.tsx.
-[x] SQL: Adi��o de colunas store_address_*, slugs e triggers para independ�ncia do perfil da loja.
-[x] Backend: Corre��o no mapeamento de PartnerProfile em cloud.ts para incluir city_slug e store_slug.
-[x] Frontend: Melhoria no fluxo de compra (Modal -> Drawer de Carrinho).
-[x] Frontend: Refatora��o do Carrinho para Drawer Lateral (Sidebar) corrigindo scroll.
-[x] Frontend: Separa��o de campos de endere�o (Rua, N�mero, Bairro, etc.) no checkout.
-[x] Frontend: Estiliza��o do carrossel de categorias.
-[x] Frontend: Busca de CEP no Cat�logo Digital (BrasilAPI).
-[x] Frontend: Sele��o de Cidade com CitySearchSelect.
-[x] Frontend: Bot�es de Pagamento no Checkout (PIX/Cart�o/Dinheiro).
-[x] Frontend: Modal de Preview do Produto e Bot�o R�pido de Adi��o.
-[x] Frontend: Ajustes visuais no Cat�logo (Contraste t�tulo, Fundo branco).
-[x] Frontend: Implementado busca de ruas (ViaCEP) no Cat�logo Digital.
-[x] Frontend: Fixado campo Cidade no Checkout para a cidade da Loja.
-[x] Backend: Adicionado getStreetsByCity no cloud.ts.
-[ ] Frontend: Corrigir cor do nome da loja no mobile (Menu Digital).
-[ ] Frontend: Estilizar bot�o de remover item e adicionar bot�o 'Limpar Carrinho'.
-[ ] Frontend: Impedir abertura autom�tica do carrinho ao adicionar item.
-[ ] Backend/Frontend: Corrigir exibi��o de Categorias no Menu (Join category_id).
-[x] Frontend: Corrigir cor do nome da loja no mobile (Dark text).
-[x] Frontend: Estilizar bot�o de remover item e adicionar bot�o 'Limpar Carrinho'.
-[x] Frontend: Impedir abertura autom�tica do carrinho ao adicionar item.
-[x] Backend/Frontend: Corrigir exibi��o de Categorias no Menu (Join category_id).
-[ ] Frontend: Criar Menu Superior Fixo (Logo, Busca, Carrinho).
-[ ] Frontend: Implementar Barra de Pesquisa de Produtos.
-[ ] Frontend: Remover sidebar est�tica 'Seu Pedido' no Desktop.
-[ ] Frontend: Mover Filtros de Categoria para o topo (abaixo do header ou integrado).
+- [x] Início do desenvolvimento de Chat Interno e Catálogo Digital (WhatsApp/Plataforma)
+- [x] Criação de tabelas `order_chats`, `chat_messages`, `order_reports` e configurações de loja no banco de dados.
+- [x] Implementação da UI de Configurações de Recebimento de Pedido (Loja).
+- [x] Implementação do fluxo de checkout do Catálogo Digital (Plataforma/WhatsApp).
+- [x] Criação de RPC e colunas para suporte a pedidos de convidados (Guest Orders).
+- [x] Implementação da Tela de Rastreamento de Pedido (`/track/:id`) com Timeline de Status.
+- [x] Implementação de Chat Público (Guest) em Tempo Real (Polling) via RPCs customizadas.
+- [x] Integração de Chat na visão da Loja (`OrderHistory`) para comunicação com Cliente.
+- [x] Implementação de Modal e Lógica para Reportar Problemas no Pedido (`OrderReports`).
+- [x] Integração de links de rastreamento e chat no Perfil, Global "Meus Pedidos" e Sidebar.
+- [x] Correção da RPC `create_public_order` para persistência de histórico por usuário.
+- [x] Implementação da Galeria de Imagens de Produtos com chat de IA (Google Gemini) no Admin.
+- [x] Configuração de Storage (`gallery` bucket) e políticas de RLS para upload de imagens.
+- [x] Implementação de suporte a Adição Manual de Imagens com abas (Link e Upload direto).
+- [x] Correção de lints de tipagem e erros de SQL (`chat_id`) identificados durante o processo.

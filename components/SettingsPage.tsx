@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, ChevronLeft, Volume2, VolumeX, Mail, AlertCircle, ShoppingBag, Truck } from 'lucide-react';
 import { Switch } from './Switch';
-import { NotificationPreferences } from '../types';
+import { NotificationPreferences, UserRole } from '../types';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 
 interface SettingsPageProps {
     onBack: () => void;
+    userRole?: UserRole;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userRole }) => {
     const { alert } = useDialog();
     const [prefs, setPrefs] = useState<NotificationPreferences>({
         new_orders: true,
@@ -62,6 +63,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
         );
     }
 
+    const isPartner = userRole === 'store_partner' || userRole === 'delivery_partner' || userRole === 'delivery_person';
+
     return (
         <div className="space-y-6 animate-in fade-in pb-24">
             <div className="flex items-center justify-between">
@@ -77,17 +80,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
                 </div>
 
                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                    <div className="flex items-center justify-between p-4">
-                        <div className="flex items-center gap-4">
-                            <ShoppingBag className="w-5 h-5 text-gray-400" />
-                            <span className="text-sm font-medium dark:text-white">Novos Pedidos</span>
+                    {/* Apenas parceiros veem opção de "Novos Pedidos" (tocar quando chegar pedido) */}
+                    {isPartner && (
+                        <div className="flex items-center justify-between p-4">
+                            <div className="flex items-center gap-4">
+                                <ShoppingBag className="w-5 h-5 text-gray-400" />
+                                <span className="text-sm font-medium dark:text-white">Alertas de Novos Pedidos</span>
+                            </div>
+                            <Switch checked={prefs.new_orders} onChange={c => update('new_orders', c)} />
                         </div>
-                        <Switch checked={prefs.new_orders} onChange={c => update('new_orders', c)} />
-                    </div>
+                    )}
+
                     <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-4">
                             <Truck className="w-5 h-5 text-gray-400" />
-                            <span className="text-sm font-medium dark:text-white">Status da Entrega</span>
+                            <span className="text-sm font-medium dark:text-white">Atualizações do Pedido</span>
                         </div>
                         <Switch checked={prefs.order_updates} onChange={c => update('order_updates', c)} />
                     </div>
@@ -108,7 +115,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
                     <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-4">
                             {prefs.sound_enabled ? <Volume2 className="w-5 h-5 text-gray-400" /> : <VolumeX className="w-5 h-5 text-gray-400" />}
-                            <span className="text-sm font-medium dark:text-white">Sons</span>
+                            <span className="text-sm font-medium dark:text-white">Sons do App</span>
                         </div>
                         <Switch checked={prefs.sound_enabled} onChange={c => update('sound_enabled', c)} />
                     </div>

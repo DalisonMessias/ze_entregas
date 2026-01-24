@@ -49,7 +49,7 @@ router.get('/manifest.json', async (req, res) => {
             prefer_related_applications: config.prefer_related_applications || false
         };
 
-        console.log('Serving dynamic manifest for:', manifest.name);
+        // console.log('Serving dynamic manifest for:', manifest.name);
         res.json(manifest);
     } catch (error) {
         console.error('Error generating dynamic manifest:', error);

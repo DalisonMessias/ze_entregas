@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 interface CustomInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
     mask?: 'currency' | 'phone' | 'cpf' | 'cnpj' | 'cep';
-    icon?: React.ElementType;
+    icon?: React.ElementType | React.ReactNode;
     helperText?: string;
     error?: string | boolean;
     success?: boolean;
@@ -139,7 +139,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
                 {Icon && (
                     <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors z-10 ${error ? 'text-red-400' : success ? 'text-green-400' : 'text-gray-400 dark:text-gray-500 group-focus-within:text-brand-500'
                         }`}>
-                        <Icon className="w-5 h-5" />
+                        {React.isValidElement(Icon) ? Icon : React.createElement(Icon as React.ElementType, { className: "w-5 h-5" })}
                     </div>
                 )}
                 <input

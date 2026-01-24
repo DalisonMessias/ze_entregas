@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer, Wallet, ChevronDown, Share2, Copy, ExternalLink, Power } from 'lucide-react';
+import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer, Wallet, ChevronDown, Share2, Copy, ExternalLink, Power, MessageCircle } from 'lucide-react';
 import { Switch } from './Switch';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
@@ -75,7 +75,12 @@ export const StoreSettings: React.FC = () => {
         address_complement: '',
         pix_key: '',
         description: '',
-        is_open: true
+        is_open: true,
+
+        // Order Config
+        receive_orders_via_platform: true,
+        receive_orders_via_whatsapp: false,
+        whatsapp_number: ''
     });
 
     const [citySlug, setCitySlug] = useState('');
@@ -124,7 +129,12 @@ export const StoreSettings: React.FC = () => {
                     address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || ''),
                     pix_key: p.pix_key || '',
                     description: p.description || '',
-                    is_open: p.is_open ?? true
+                    is_open: p.is_open ?? true,
+
+                    // New Fields
+                    receive_orders_via_platform: p.receive_orders_via_platform ?? true,
+                    receive_orders_via_whatsapp: p.receive_orders_via_whatsapp ?? false,
+                    whatsapp_number: p.whatsapp_number || p.phone_number || ''
                 });
 
                 setCitySlug(p.city_slug || '');
@@ -183,7 +193,7 @@ export const StoreSettings: React.FC = () => {
         loadProfileData();
     }, []);
 
-    const handleChange = (field: string, value: string) => {
+    const handleChange = (field: string, value: string | boolean) => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
@@ -227,6 +237,7 @@ export const StoreSettings: React.FC = () => {
 
             const rawPhone = (form.phone_number || '').replace(/\D/g, '');
             const rawZip = (form.address_zip || '').replace(/\D/g, '');
+            const rawWhatsapp = (form.whatsapp_number || '').replace(/\D/g, '');
 
             await cloud.updateMyPartnerProfile({
                 store_name: form.name,
@@ -247,6 +258,11 @@ export const StoreSettings: React.FC = () => {
                 pix_key: form.pix_key,
                 description: form.description,
                 is_open: form.is_open,
+
+                // Order Config
+                receive_orders_via_platform: form.receive_orders_via_platform,
+                receive_orders_via_whatsapp: form.receive_orders_via_whatsapp,
+                whatsapp_number: rawWhatsapp
 
                 // Also update legacy/display 'city' field for compatibility if needed, 
                 // but usually 'city' on profile is for search. Let's keep them synced for now or just update store fields.
@@ -271,7 +287,7 @@ export const StoreSettings: React.FC = () => {
             // Reload profile to get updated slugs/data
             await loadProfileData();
         } catch (e: any) {
-            await alert({ title: 'Erro ao Salvar', message: "Erro ao salvar: " + e.message });
+            await alert({ title: 'Erro ao Salvar', message: 'Erro ao salvar: ' + e.message });
         } finally {
             setSaving(false);
         }
@@ -666,6 +682,52 @@ export const StoreSettings: React.FC = () => {
                                             helperText="Esta chave será enviada aos clientes no WhatsApp."
                                         />
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Order Configuration */}
+                        <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
+                                <MessageCircle className="w-5 h-5 text-gray-500" /> Recebimento de Pedidos
+                            </h3>
+                            <div className="space-y-6">
+                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h4 className="font-bold text-gray-900 dark:text-white">Receber via Plataforma</h4>
+                                            <p className="text-xs text-gray-500">Pedidos aparecem no gestor e seguem fluxo de status (Aguardando → Produção → Entrega).</p>
+                                        </div>
+                                        <Switch
+                                            checked={form.receive_orders_via_platform}
+                                            onChange={() => handleChange('receive_orders_via_platform', !form.receive_orders_via_platform)}
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-600 pt-4">
+                                        <div>
+                                            <h4 className="font-bold text-gray-900 dark:text-white">Receber via WhatsApp</h4>
+                                            <p className="text-xs text-gray-500">Cliente monta o pedido e envia uma mensagem formatada para seu WhatsApp.</p>
+                                        </div>
+                                        <Switch
+                                            checked={form.receive_orders_via_whatsapp}
+                                            onChange={() => handleChange('receive_orders_via_whatsapp', !form.receive_orders_via_whatsapp)}
+                                        />
+                                    </div>
+
+                                    {form.receive_orders_via_whatsapp && (
+                                        <div className="pt-4 animate-in fade-in slide-in-from-top-2">
+                                            <CustomInput
+                                                label="Número do WhatsApp para Pedidos"
+                                                type="tel"
+                                                value={form.whatsapp_number}
+                                                onChange={e => handleChange('whatsapp_number', e.target.value)}
+                                                placeholder="(00) 00000-0000"
+                                                mask="phone"
+                                                icon={MessageCircle}
+                                                helperText="Número que receberá as mensagens dos clientes."
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

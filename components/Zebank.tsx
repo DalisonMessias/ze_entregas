@@ -649,10 +649,12 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                     <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400"><CreditCard className="w-5 h-5" /></div>
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Novo Cartão</span>
                 </button>
-                <button onClick={() => setShowMerchantPOS(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                    <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400"><Smartphone className="w-5 h-5" /></div>
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Maquininha</span>
-                </button>
+                {userRole !== 'user' && (
+                    <button onClick={() => setShowMerchantPOS(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400"><Smartphone className="w-5 h-5" /></div>
+                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Maquininha</span>
+                    </button>
+                )}
             </div>
 
             {/* Cards Section */}

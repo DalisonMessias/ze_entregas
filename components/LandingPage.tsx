@@ -14,11 +14,13 @@ import * as cloud from '../services/cloud';
 import { ShopSettings, PublicStoreProfile, City } from '../types';
 
 interface LandingPageProps {
+    isAuthenticated: boolean;
     onLoginClick: () => void;
     onSignupClick: (type: 'STORE_PARTNER' | 'DELIVERY_PARTNER' | 'USER') => void;
+    onDashboardClick?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLoginClick, onSignupClick, onDashboardClick }) => {
     const [scrolled, setScrolled] = useState(false);
     const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
 
@@ -90,41 +92,53 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignup
                         className="h-8 w-auto"
                         variant={scrolled ? 'default' : 'full-white'}
                     />
-                    <div className="flex items-center gap-4">
-                        {scrolled ? (
-                            <>
-                                <Button
-                                    onClick={onLoginClick}
-                                    className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl transition-all"
-                                >
-                                    Entrar
-                                </Button>
-                                <Button
-                                    onClick={() => onSignupClick('USER')}
-                                    className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl hidden md:block transition-all"
-                                >
-                                    Cadastrar
-                                </Button>
-                            </>
-                        ) : (
-                            <>
-                                <Button
-                                    onClick={onLoginClick}
-                                    variant="ghost"
-                                    className="text-white font-bold hover:bg-white/10 hover:text-white"
-                                >
-                                    Entrar
-                                </Button>
-                                <Button
-                                    onClick={() => onSignupClick('USER')}
-                                    variant="ghost"
-                                    className="text-white font-bold hover:bg-white/10 hover:text-white hidden md:block"
-                                >
-                                    Cadastrar
-                                </Button>
-                            </>
-                        )}
-                    </div>
+                    {!isAuthenticated ? (
+                        <div className="flex items-center gap-4">
+                            {scrolled ? (
+                                <>
+                                    <Button
+                                        onClick={onLoginClick}
+                                        className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl transition-all"
+                                    >
+                                        Entrar
+                                    </Button>
+                                    <Button
+                                        onClick={() => onSignupClick('USER')}
+                                        className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl hidden md:block transition-all"
+                                    >
+                                        Cadastrar
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button
+                                        onClick={onLoginClick}
+                                        variant="ghost"
+                                        className="text-white font-bold hover:bg-white/10 hover:text-white"
+                                    >
+                                        Entrar
+                                    </Button>
+                                    <Button
+                                        onClick={() => onSignupClick('USER')}
+                                        variant="ghost"
+                                        className="text-white font-bold hover:bg-white/10 hover:text-white hidden md:block"
+                                    >
+                                        Cadastrar
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-4">
+                            <Button
+                                onClick={onDashboardClick}
+                                className={`${scrolled ? 'bg-[#EA1D2C] text-white' : 'bg-white/20 text-white hover:bg-white/30'} font-bold px-6 rounded-xl transition-all flex items-center gap-2`}
+                            >
+                                <Users className="w-5 h-5" />
+                                <span>Meu Painel</span>
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </nav>
 

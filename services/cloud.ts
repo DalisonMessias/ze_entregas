@@ -284,6 +284,26 @@ export const getAllUsers = async (): Promise<any[]> => {
 };
 
 /**
+ * Busca lojas públicas por cidade (slug).
+ */
+export const getPublicStoresByCity = async (citySlug: string): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    // Modificado para usar RPC segura e evitar problemas de RLS (24/01/2026)
+    const { data, error } = await sb.rpc('get_public_stores_by_city', { p_city_slug: citySlug });
+
+    if (error) {
+        console.error('Error fetching public stores (RPC):', error);
+        return [];
+    }
+
+    return data || [];
+};
+
+
+
+/**
  * Busca todas as lojas cadastradas no sistema.
  */
 export const adminGetStores = async (): Promise<ManagedUser[]> => {
@@ -5451,5 +5471,95 @@ export const getStreetsByCity = async (state: string, city: string, streetName: 
         console.error('Error fetching streets:', e);
         return [];
     }
+};
+
+// --- PUBLIC ORDER ---
+export const createPublicOrder = async (
+    storeId: string,
+    items: any[],
+    totalPrice: number,
+    paymentMethod: string,
+    shippingAddress: any,
+    deliveryMode: 'DELIVERY' | 'PICKUP',
+    customerName: string,
+    customerPhone: string
+): Promise<{ success: boolean; orderId?: string; error?: any }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not initialized' };
+
+    const { data, error } = await sb.rpc('create_public_order', {
+        p_store_id: storeId,
+        p_items: items,
+        p_total_price: totalPrice,
+        p_payment_method: paymentMethod,
+        p_shipping_address: shippingAddress,
+        p_delivery_mode: deliveryMode,
+        p_customer_name: customerName,
+        p_customer_phone: customerPhone
+    });
+
+    if (error) {
+        console.error('Error creating public order:', error);
+        return { success: false, error };
+    }
+
+    return { success: true, orderId: data };
+};
+
+export const getPublicOrderChat = async (orderId: string): Promise<{ chatId: string, messages: any[] } | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb.rpc('get_public_order_chat', { p_order_id: orderId });
+    if (error) {
+        console.error('Error fetching public chat:', error);
+        return null;
+    }
+
+    // RPC returns 0 or 1 row with chatId and messages array
+    if (data && data.length > 0) {
+        return { chatId: data[0].chat_id, messages: data[0].messages || [] };
+    }
+    return null;
+};
+
+export const sendPublicMessage = async (orderId: string, message: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    const { data, error } = await sb.rpc('send_public_message', { p_order_id: orderId, p_message: message });
+    if (error) {
+        console.error('Error sending public message:', error);
+        return false;
+    }
+    return !!data;
+};
+
+export const createOrderReport = async (orderId: string, storeId: string, type: string, description: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    // As store is creating report? Or Store is reporting?
+    // User reporting: user_id = auth.uid(), store_id = order.store_id.
+    // Store reporting: user_id = auth.uid() (which is store), store_id = auth.uid().
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await sb
+        .from('order_reports')
+        .insert({
+            order_id: orderId,
+            user_id: user.id, // Reporter
+            store_id: storeId, // Target Store (if reporter is user) OR Reporter (if reporter is store)
+            type,
+            description,
+            status: 'open'
+        });
+
+    if (error) {
+        console.error('Error creating report:', error);
+        return false;
+    }
+    return true;
 };
 

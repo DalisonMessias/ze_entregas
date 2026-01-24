@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, LayoutGrid, ChevronUp } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon } from 'lucide-react';
+
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
@@ -80,6 +81,8 @@ const LandingPage = React.lazy(() => import('./LandingPage').then(module => ({ d
 const DigitalMenu = React.lazy(() => import('./DigitalMenu/DigitalMenu').then(module => ({ default: module.DigitalMenu })));
 const PartnerStore = React.lazy(() => import('./PartnerStore').then(m => ({ default: m.PartnerStore })));
 const PartnerDelivery = React.lazy(() => import('./PartnerDelivery').then(m => ({ default: m.PartnerDelivery })));
+const OrderTracking = React.lazy(() => import('./OrderTracking/OrderTracking').then(m => ({ default: m.OrderTracking })));
+const UserOrders = React.lazy(() => import('./UserOrders').then(m => ({ default: m.UserOrders })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -98,7 +101,8 @@ export type ActiveTab =
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
     | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_location_map' | 'admin_base_catalog'
-    | 'admin_store_categories' | 'admin_global_coupons'
+    | 'order_tracking'
+    | 'admin_store_categories' | 'admin_global_coupons' | 'admin_image_gallery'
     | 'admin_insurance'
     | 'profile'
     | 'support'
@@ -158,6 +162,7 @@ export type ActiveTab =
     | 'partner_delivery'
     | 'insurance'
     | 'home'
+    | 'my_orders'
     | 'digital_menu';
 
 
@@ -542,6 +547,15 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         const tabFromUrl = getTabFromUrl(path);
         const authTabs = ['login', 'signup', 'forgot_password'];
         const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu'];
+        const isAuthenticated = userId && userId !== 'guest';
+
+        // REDIRECIONAMENTO: Se o usuário estiver logado, não pode acessar as páginas de autenticação
+        if (isAuthenticated && tabFromUrl && authTabs.includes(tabFromUrl)) {
+            logger.warn('AUTH_PAGE_ACCESS_DENIED_LOGGED_IN', { tab: tabFromUrl, user: userId });
+            const defaultTab = defaultTabByRole[effectiveRole] || 'home';
+            navigate(defaultTab);
+            return;
+        }
 
         // Se não houver sessão ativa e estivermos na raiz ou /home, mantemos a tab home
         if ((!userId || userId === 'guest') && (path === '/' || path === '/home')) {
@@ -587,7 +601,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     // Sincroniza URL quando a aba muda
     useEffect(() => {
         if (activeTab) {
-            syncUrlWithTab(activeTab, effectiveRole);
+            syncUrlWithTab(activeTab);
         }
     }, [activeTab, effectiveRole]);
 
@@ -711,7 +725,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     const generalTabs = new Set<ActiveTab>([
         'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'whatsapp_chat',
-        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup'
+        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders'
     ]);
 
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
@@ -742,7 +756,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'insurance'
         ]),
         collaborator: new Set(['collaborator_area', 'shop', 'internal_orders', 'store_catalog']), // Added shop access
-        user: new Set(['shop', 'profile', 'support', 'addresses', 'home']) // Basic user access
+        user: new Set(['shop', 'profile', 'support', 'addresses', 'home', 'notifications', 'privacy', 'settings', 'zebank']) // Basic user access
     };
 
     const canAccessTab = (tab: ActiveTab) => {
@@ -796,8 +810,15 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         }
 
         const content = (() => {
+            const isAuthenticated = !!userId && userId !== 'guest';
             switch (activeTab) {
-                case 'home': return <LandingPage onLoginClick={() => navigate('login')} onSignupClick={(type) => navigate('signup' as any)} />;
+                case 'home': return <LandingPage
+                    isAuthenticated={isAuthenticated}
+                    onLoginClick={() => navigate('login')}
+                    onSignupClick={(type) => navigate('signup' as any)}
+                    onDashboardClick={() => navigate(effectiveRole === 'user' ? 'profile' : (defaultTabByRole[effectiveRole] || 'profile'))}
+                />;
+                case 'my_orders': return <UserOrders onBack={() => navigate('profile')} />;
                 case 'digital_menu':
                     const pathParts = window.location.pathname.split('/');
                     const cSlug = pathParts[1] || '';
@@ -829,6 +850,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     />;
                 case 'admin_whatsapp': return <WhatsappContainer storeId={userId} attendantId={userId} />;
                 case 'whatsapp_chat': return <WhatsappContainer storeId={userId} attendantId={userId} />;
+                case 'order_tracking': return <OrderTracking />;
 
                 // Store Specific
                 case 'store_status': return <div className="max-w-4xl mx-auto"><h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">Gerenciar Loja</h1><StoreStatus /></div>;
@@ -888,7 +910,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'cloud': return <CloudSync />;
                 case 'privacy': return <PrivacyPolicy onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')} />; // Direct access to privacy policy
                 case 'upgrade_to_partner': return <UpgradeToPartnerPage />;
-                case 'settings': return <SettingsPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
+                case 'settings': return <SettingsPage onBack={() => navigate(effectiveRole === 'user' ? 'profile' : (isDriver ? 'daily_panel' : 'shop'))} userRole={effectiveRole} />;
                 case 'streets_list': return <StreetsList />;
 
                 default: return <div className="p-10 text-center text-gray-500">Etapa não implementada: {activeTab}</div>;
@@ -933,7 +955,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     // Verificação de rotas públicas internas que devem renderizar sem sidebar (Full Width)
-    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu'];
+    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking'];
     const isPublicTab = publicTabs.includes(activeTab);
 
     if (isPublicTab) {
@@ -1061,7 +1083,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuSection title="Operacional" />
                             <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
                             <MenuButton icon={Package} label="Catálogo Base" tab="admin_base_catalog" />
+                            <MenuButton icon={ImageIcon} label="Galeria de Imagens" tab="admin_image_gallery" />
                             <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
+
                             <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                             <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
                             <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
@@ -1112,6 +1136,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
                             <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" />
                             <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
+                            <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
 
                             <MenuSection title="Gestão" />
@@ -1128,6 +1153,16 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         </>
                     )}
 
+                    {/* --- USER MENU --- */}
+                    {effectiveRole === 'user' && (
+                        <>
+                            <MenuSection title="Minha Conta" />
+                            <MenuButton icon={Home} label="Início" tab="home" />
+                            <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
+                            <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
+                        </>
+                    )}
+
                     {/* --- SHARED DRIVER MENU (PARTNER + NORMAL) --- */}
                     {(isPartner || isNormalDriver) && (
                         <>
@@ -1140,6 +1175,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={History} label="Histórico Local" tab="local_history" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
                             <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
+                            <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
                             <MenuButton icon={Shield} label="Seguro Parceiro" tab="insurance" />
 
                             <MenuSection title="Crescimento" />
@@ -1158,26 +1194,41 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                     {/* --- GENERAL MENU (ALL USERS) --- */}
                     <MenuSection title="Geral" />
-                    {/* Exibe Ruas para todos EXCETO colaborador, conforme solicitado */}
-                    {effectiveRole !== 'collaborator' && (
+                    {/* Exibe Ruas para todos EXCETO colaborador e usuário comum */}
+                    {effectiveRole !== 'collaborator' && effectiveRole !== 'user' && (
                         <MenuButton icon={Map} label="Ruas" tab="streets_list" />
                     )}
-                    <MenuButton icon={ShoppingBag} label="Loja de Peças" tab="shop" />
+
+                    {/* Loja de Peças apenas para Entregadores */}
+                    {(isPartner || isNormalDriver) && (
+                        <MenuButton icon={ShoppingBag} label="Loja de Peças" tab="shop" />
+                    )}
+
                     <MenuButton icon={User} label="Meu Perfil" tab="profile" />
                     <MenuButton icon={Headphones} label="Suporte" tab="support" />
                     <MenuButton icon={HelpCircle} label="Perguntas Frequentes (FAQ)" tab="faq" />
                     <MenuButton icon={Bell} label="Notificações" tab="notifications" />
                     <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
-                    <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
+
+                    {/* Backup Nuvem apenas para quem opera offline (Entregadores/Lojistas) */}
+                    {effectiveRole !== 'user' && (
+                        <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
+                    )}
+
                     <MenuButton icon={Info} label="Sobre o App" tab="about" />
-                    <MenuButton icon={Smartphone} label="Instalar App" tab="install_app" />
+                    {effectiveRole === 'user' && ( // Apenas user vê instalar app aqui, para outros já tem fluxo próprio ou não precisa
+                        <MenuButton icon={Smartphone} label="Instalar App" tab="install_app" />
+                    )}
 
                     {/* --- FOOTER ACTIONS --- */}
                     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
                         {/* Idioma removido: app opera exclusivamente em PT-BR */}
                         <MenuButton icon={Share2} label="Compartilhar App" onClick={handleShareApp} />
                         <MenuButton icon={Lock} label="Política de Privacidade" onClick={() => setShowPrivacy(true)} /> {/* DIRECT ACCESS */}
-                        <MenuButton icon={UserCheck} label="Verificar Status" onClick={() => navigate('status')} />
+
+                        {effectiveRole !== 'user' && (
+                            <MenuButton icon={UserCheck} label="Verificar Status" onClick={() => navigate('status')} />
+                        )}
                     </div>
                 </div>
 
