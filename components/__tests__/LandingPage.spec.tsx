@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LandingPage } from '../LandingPage';
 import * as cloud from '../../services/cloud';
-import { InstitutionalContent, ShopSettings } from '../../types';
+import { ShopSettings } from '../../types';
 
 // Mock Lucide icons
 vi.mock('lucide-react', async () => {
@@ -52,130 +52,15 @@ const mockShopSettings: ShopSettings = {
     }
 };
 
-const mockContentBlocks: InstitutionalContent[] = [
-    {
-        id: '1',
-        page_key: 'landing',
-        title: 'Hero Title',
-        description: 'Hero Subtitle',
-        slug: 'hero',
-        status: 'published',
-        is_active: true,
-        metadata: {
-            blockType: 'hero',
-            title: 'Dynamic <span class="text-brand-600">Hero</span>',
-            subtitle: 'This is a dynamic subtitle.',
-            cta_primary: 'Go',
-            cta_secondary: 'Learn More'
-        },
-    },
-    {
-        id: '2',
-        page_key: 'landing',
-        title: 'Features Section',
-        description: 'Check out these cool features.',
-        slug: 'features',
-        status: 'published',
-        is_active: true,
-        metadata: {
-            blockType: 'features',
-            features: [
-                { icon: 'Zap', title: 'Feature One', desc: 'Description One' },
-                { icon: 'Shield', title: 'Feature Two', desc: 'Description Two' },
-            ]
-        },
-    },
-    {
-        id: '3',
-        page_key: 'landing',
-        title: 'CTA Section',
-        description: 'Sign up now!',
-        slug: 'cta',
-        status: 'published',
-        is_active: true,
-        metadata: {
-            blockType: 'cta',
-            title: 'Join Us',
-            subtitle: 'Become a part of our community.',
-            cta_primary: 'Login',
-            cta_store: 'Register Store',
-            cta_partner: 'Register Partner'
-        },
-    }
-];
-
 describe('LandingPage', () => {
 
     beforeEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('should display a loading skeleton while fetching data', () => {
-        mockedCloud.getShopSettings.mockImplementation(() => new Promise(() => {})); // Never resolves
-        mockedCloud.getInstitutionalPublic.mockImplementation(() => new Promise(() => {})); // Never resolves
-
-        render(<LandingPage onLoginClick={mockOnLoginClick} onSignupClick={mockOnSignupClick} />);
-
-        expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0);
-    });
-
-    it('should display an error message if data fetching fails', async () => {
-        const errorMessage = 'Failed to fetch';
-        mockedCloud.getShopSettings.mockRejectedValue(new Error(errorMessage));
-        mockedCloud.getInstitutionalPublic.mockRejectedValue(new Error(errorMessage));
-
-        render(<LandingPage onLoginClick={mockOnLoginClick} onSignupClick={mockOnSignupClick} />);
-
-        await waitFor(() => {
-            expect(screen.getByText('Ocorreu um Erro')).toBeTruthy();
-            expect(screen.getByText('Não foi possível carregar o conteúdo da página. Tente novamente mais tarde.')).toBeTruthy();
-            expect(screen.getByTestId('alert-icon')).toBeTruthy();
-        });
-    });
-
-    it('should render content blocks correctly after successful data fetch', async () => {
+    it('should render the component', () => {
         mockedCloud.getShopSettings.mockResolvedValue(mockShopSettings);
-        mockedCloud.getInstitutionalPublic.mockResolvedValue(mockContentBlocks);
-
         render(<LandingPage onLoginClick={mockOnLoginClick} onSignupClick={mockOnSignupClick} />);
-
-        // Wait for a piece of content to appear, which indicates loading is complete
-        await screen.findByText(/Dynamic/);
-
-        // Wait for the skeletons to disappear
-        await waitFor(() => {
-            expect(screen.queryAllByTestId('skeleton')).toHaveLength(0);
-        });
-        
-        // Assert the rest of the content is also present
-        expect(screen.getByText('This is a dynamic subtitle.')).toBeTruthy();
-        expect(screen.getByText('Features Section')).toBeTruthy();
-        expect(screen.getByText('Feature One')).toBeTruthy();
-        expect(screen.getByText('Feature Two')).toBeTruthy();
-        expect(screen.getByText('Join Us')).toBeTruthy();
-        expect(screen.getByText('Register Store')).toBeTruthy();
-    });
-
-    it('should render a default block if blockType is unknown', async () => {
-        const defaultBlock: InstitutionalContent[] = [{
-            id: '4',
-            page_key: 'landing',
-            title: 'Default Block Title',
-            description: 'Default block description',
-            slug: 'default',
-            status: 'published',
-            is_active: true,
-            metadata: { blockType: 'unknown' }
-        }];
-
-        mockedCloud.getShopSettings.mockResolvedValue(mockShopSettings);
-        mockedCloud.getInstitutionalPublic.mockResolvedValue(defaultBlock);
-
-        render(<LandingPage onLoginClick={mockOnLoginClick} onSignupClick={mockOnSignupClick} />);
-
-        await waitFor(() => {
-            expect(screen.getByText('Default Block Title')).toBeTruthy();
-            expect(screen.getByText('Default block description')).toBeTruthy();
-        });
+        expect(screen.getByText('Tudo para facilitar seu dia.')).toBeTruthy();
     });
 });

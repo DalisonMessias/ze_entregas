@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, LayoutGrid } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, LayoutGrid, ChevronUp } from 'lucide-react';
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
@@ -43,6 +43,10 @@ const StoreProductImport = React.lazy(() => import('./ProductImportExport').then
 const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => ({ default: module.ZePayStore })));
 const StoreApiDocs = React.lazy(() => import('./StoreApiDocs').then(module => ({ default: module.StoreApiDocs })));
 const AdminMercadoPagoConfig = React.lazy(() => import('./AdminMercadoPagoConfig').then(module => ({ default: module.AdminMercadoPagoConfig })));
+const AdminAIConfig = React.lazy(() => import('./AdminAIConfig').then(module => ({ default: module.AdminAIConfig })));
+const AdminInsuranceConfig = React.lazy(() => import('./AdminInsuranceConfig').then(module => ({ default: module.AdminInsuranceConfig })));
+const AdminPlatformCoupons = React.lazy(() => import('./AdminPlatformCoupons'));
+const StorePromotions = React.lazy(() => import('./StorePromotions').then(module => ({ default: module.StorePromotions })));
 
 const DriverMarketing = React.lazy(() => import('./DriverMarketing').then(module => ({ default: module.DriverMarketing })));
 const Reports = React.lazy(() => import('./Reports').then(module => ({ default: module.Reports })));
@@ -67,10 +71,15 @@ const SettingsPage = React.lazy(() => import('./SettingsPage').then(module => ({
 const InstallApp = React.lazy(() => import('./InstallApp').then(module => ({ default: module.InstallApp })));
 const ChatAssistant = React.lazy(() => import('./ChatAssistant').then(module => ({ default: module.ChatAssistant })));
 const PrivacyPolicy = React.lazy(() => import('./PrivacyPolicy').then(module => ({ default: module.PrivacyPolicy })));
+const InsurancePage = React.lazy(() => import('./InsurancePage').then(module => ({ default: module.InsurancePage })));
 const StreetsList = React.lazy(() => import('../src/pages/StreetsList'));
 const LoansModule = React.lazy(() => import('./LoansModule'));
 const CollaboratorWrapper = React.lazy(() => import('./CollaboratorWrapper').then(m => ({ default: m.CollaboratorWrapper })));
 const ScorePanel = React.lazy(() => import('./ScorePanel').then(m => ({ default: m.ScorePanel })));
+const LandingPage = React.lazy(() => import('./LandingPage').then(module => ({ default: module.LandingPage })));
+const DigitalMenu = React.lazy(() => import('./DigitalMenu/DigitalMenu').then(module => ({ default: module.DigitalMenu })));
+const PartnerStore = React.lazy(() => import('./PartnerStore').then(m => ({ default: m.PartnerStore })));
+const PartnerDelivery = React.lazy(() => import('./PartnerDelivery').then(m => ({ default: m.PartnerDelivery })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -88,7 +97,9 @@ export type ActiveTab =
     | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_location_map' | 'admin_base_catalog' | 'admin_store_categories'
+    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_location_map' | 'admin_base_catalog'
+    | 'admin_store_categories' | 'admin_global_coupons'
+    | 'admin_insurance'
     | 'profile'
     | 'support'
     | 'shop'
@@ -132,6 +143,7 @@ export type ActiveTab =
     | 'internal_orders'
     | 'store_catalog'
     | 'store_api_docs'
+    | 'store_promotions'
 
     | 'streets_list'
     | 'score'
@@ -139,9 +151,14 @@ export type ActiveTab =
     | 'loans'
     | 'collaborator_area'
     | 'whatsapp_chat'
+    | 'forgot_password'
     | 'login'
     | 'signup'
-    | 'forgot_password';
+    | 'partner_store'
+    | 'partner_delivery'
+    | 'insurance'
+    | 'home'
+    | 'digital_menu';
 
 
 interface AppProps {
@@ -321,18 +338,15 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         if (tabFromUrl && !authTabs.includes(tabFromUrl)) return tabFromUrl;
 
         // Default tabs by role
+        if (!userId || userId === 'guest') return 'home';
 
         if (userRole === 'admin') return 'admin_dashboard'; // Admin
-
         if (userRole === 'store_partner') return 'wallet'; // Lojistas
-
         if (userRole === 'delivery_person') return 'daily_panel'; //Entregadores Normais
-
         if (userRole === 'delivery_partner') return 'partner'; // Entregadores Parceiros
-
         if (userRole === 'collaborator') return 'collaborator_area'; // Colaboradores
 
-        return 'profile'; // Fallback padrão
+        return 'home'; // Fallback padrão mais seguro
     });
     const [userStatus, setUserStatus] = useState<UserStatus>(initialUserStatus || 'active');
     const [blockingReason, setBlockingReason] = useState<string | null>(null);
@@ -347,6 +361,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [maintenance, setMaintenance] = useState<MaintenanceSettings | null>(null);
     const [effectiveRole, setEffectiveRole] = useState<UserRole>(userRole);
+    const [showScrollTop, setShowScrollTop] = useState(false);
 
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -428,6 +443,23 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
 
     useEffect(() => {
+        if (!userId || userId === 'guest') {
+            // Se for um visitante, carregamos apenas as configurações básicas do sistema (manutenção, notícias, etc.)
+            const fetchPublicPulse = async () => {
+                try {
+                    const { maintenance: maintSettings } = await cloud.getSystemPulse();
+                    if (mounted.current) {
+                        setMaintenance(maintSettings as unknown as MaintenanceSettings);
+                        logger.info('PUBLIC_PULSE_LOADED', { maintenance: !!maintSettings });
+                    }
+                } catch (error) {
+                    console.error("Erro no Public Pulse:", error);
+                }
+            };
+            fetchPublicPulse();
+            return;
+        }
+
         initNotificationService(userId, effectiveRole);
 
         const fetchPulse = async () => {
@@ -506,13 +538,29 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     // Lógica principal de Roteamento / Aba Inicial
     useEffect(() => {
-        const tabFromUrl = getTabFromUrl(window.location.pathname);
+        const path = window.location.pathname;
+        const tabFromUrl = getTabFromUrl(path);
         const authTabs = ['login', 'signup', 'forgot_password'];
+        const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu'];
+
+        // Se não houver sessão ativa e estivermos na raiz ou /home, mantemos a tab home
+        if ((!userId || userId === 'guest') && (path === '/' || path === '/home')) {
+            setActiveTab('home');
+            logger.info('ACTIVE_TAB_GUEST_HOME', { path: path }); // Fixed shorthand
+            return;
+        }
 
         // Se a aba da URL é uma página de autenticação, não fazemos nada aqui.
         // O AuthWrapper é responsável por redirecionar o usuário após o login.
         if (tabFromUrl && authTabs.includes(tabFromUrl)) {
             logger.info('ROUTING_SKIPPED_ON_AUTH_PAGE', { tab: tabFromUrl });
+            return;
+        }
+
+        // Prioridade MÁXIMA para rotas públicas - Nunca sobrescrever com role default enquanto estivermos nela
+        if (tabFromUrl && publicTabs.includes(tabFromUrl)) {
+            setActiveTab(tabFromUrl);
+            logger.info('ACTIVE_TAB_PUBLIC_STAY', { tab: tabFromUrl, path });
             return;
         }
 
@@ -522,22 +570,26 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             logger.info('ACTIVE_TAB_FROM_URL', { tab: tabFromUrl });
         } else {
             // Se a URL não tem uma aba válida (ex: rota raiz '/'), definimos a aba padrão baseada na role.
-            if (effectiveRole === 'admin') { setActiveTab('admin_dashboard'); }
-            else if (effectiveRole === 'store_partner') { setActiveTab('wallet'); }
-            else if (effectiveRole === 'delivery_partner') { setActiveTab('partner'); }
-            else if (effectiveRole === 'delivery_person') { setActiveTab('daily_panel'); }
-            else { setActiveTab('shop'); }
-
-            logger.info('ACTIVE_TAB_DEFAULT_ROLE', { role: effectiveRole });
+            if (userId && userId !== 'guest') {
+                if (effectiveRole === 'admin') { setActiveTab('admin_dashboard'); }
+                else if (effectiveRole === 'store_partner') { setActiveTab('wallet'); }
+                else if (effectiveRole === 'delivery_partner') { setActiveTab('partner'); }
+                else if (effectiveRole === 'delivery_person') { setActiveTab('daily_panel'); }
+                else { setActiveTab('home'); }
+                logger.info('ACTIVE_TAB_DEFAULT_ROLE', { role: effectiveRole });
+            } else {
+                setActiveTab('home');
+                logger.info('ACTIVE_TAB_DEFAULT_GUEST', { role: effectiveRole });
+            }
         }
-    }, [effectiveRole]); // Roda quando o role é definido/alterado (login inicial)
+    }, [effectiveRole, userId]);
 
     // Sincroniza URL quando a aba muda
     useEffect(() => {
         if (activeTab) {
-            syncUrlWithTab(activeTab);
+            syncUrlWithTab(activeTab, effectiveRole);
         }
-    }, [activeTab]);
+    }, [activeTab, effectiveRole]);
 
     // NEW: Global navigation event listener & History support
     useEffect(() => {
@@ -562,9 +614,15 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         window.addEventListener('navigateToTab', handleNavigate as EventListener);
         window.addEventListener('popstate', handlePopState);
 
+        const handleScroll = () => {
+            setShowScrollTop(window.scrollY > 400);
+        };
+        window.addEventListener('scroll', handleScroll, { passive: true });
+
         return () => {
             window.removeEventListener('navigateToTab', handleNavigate as EventListener);
             window.removeEventListener('popstate', handlePopState);
+            window.removeEventListener('scroll', handleScroll);
         };
     }, []);
 
@@ -652,7 +710,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const isDriver = isNormalDriver || isPartner;
 
     const generalTabs = new Set<ActiveTab>([
-        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'whatsapp_chat', 'score'
+        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'whatsapp_chat',
+        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup'
     ]);
 
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
@@ -660,7 +719,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         store_partner: 'wallet',
         delivery_partner: 'partner',
         delivery_person: 'daily_panel',
-        collaborator: 'collaborator_area'
+        collaborator: 'collaborator_area',
+        user: 'home'
     };
 
     const allowedTabs: Record<UserRole, Set<ActiveTab>> = {
@@ -669,19 +729,20 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
             'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
-            'admin_investments', 'admin_whatsapp', 'admin_payment_gateways', 'admin_mercadopago', 'admin_location_map'
+            'admin_investments', 'admin_whatsapp', 'admin_payment_gateways', 'admin_mercadopago', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance'
         ]),
         store_partner: new Set<ActiveTab>([
-            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans'
+            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans', 'store_promotions'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
-            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'loans'
+            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'loans', 'insurance'
         ]),
         delivery_person: new Set<ActiveTab>([
-            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses'
+            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'insurance'
         ]),
-        collaborator: new Set<ActiveTab>(['collaborator_area', 'profile', 'settings', 'support'])
+        collaborator: new Set(['collaborator_area', 'shop', 'internal_orders', 'store_catalog']), // Added shop access
+        user: new Set(['shop', 'profile', 'support', 'addresses', 'home']) // Basic user access
     };
 
     const canAccessTab = (tab: ActiveTab) => {
@@ -725,13 +786,23 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             const subTab = activeTab.replace('admin_', '') as any;
             return (
                 <SectionErrorBoundary componentName="Admin Panel">
-                    <AdminPanel activeSubTab={subTab} />
+                    {activeTab === 'admin_ai_config' && <AdminAIConfig />}
+                    {activeTab === 'admin_mercadopago' && <AdminMercadoPagoConfig />}
+                    {activeTab === 'admin_insurance' && <AdminInsuranceConfig />}
+                    {activeTab === 'admin_global_coupons' && <AdminPlatformCoupons />}
+                    {activeTab !== 'admin_ai_config' && activeTab !== 'admin_mercadopago' && activeTab !== 'admin_insurance' && activeTab !== 'admin_global_coupons' && <AdminPanel activeSubTab={subTab} />}
                 </SectionErrorBoundary>
             );
         }
 
         const content = (() => {
             switch (activeTab) {
+                case 'home': return <LandingPage onLoginClick={() => navigate('login')} onSignupClick={(type) => navigate('signup' as any)} />;
+                case 'digital_menu':
+                    const pathParts = window.location.pathname.split('/');
+                    const cSlug = pathParts[1] || '';
+                    const sSlug = pathParts[2] || '';
+                    return <DigitalMenu citySlug={cSlug} storeSlug={sSlug} />;
                 case 'profile': return <ProfileData onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
                 case 'status': return <StatusPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
                 case 'support': return <SupportPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} onNavigateToChat={() => navigate('assistant')} />;
@@ -774,6 +845,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'zepay_store': return <ZePayStore />; // ZéPay Module
                 case 'internal_orders': return <InternalOrders />;
                 case 'store_catalog': return <StoreCatalog />;
+                case 'store_promotions': return <StorePromotions storeId={userId} />;
                 case 'store_api_docs': return <StoreApiDocs onNavigate={navigate} />;
                 case 'store_loans': return <LoansModule />;
                 case 'collaborator_area': return <CollaboratorWrapper userId={userId} onLogout={handleLogout} />;
@@ -804,6 +876,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             />
                         </div>
                     );
+                case 'partner_store': return <PartnerStore />;
+                case 'partner_delivery': return <PartnerDelivery />;
+                case 'insurance': return <InsurancePage />;
 
                 case 'about': return <AboutApp />;
                 case 'faq': return <FaqPage />;
@@ -856,6 +931,24 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const MenuSection = ({ title }: { title: string }) => (
         <p className={`text-[10px] font-bold text-gray-400 uppercase ml-3 mt-4 mb-2 tracking-wider transition-opacity duration-300 ${!isSidebarExpanded ? 'md:hidden' : ''}`}>{title}</p>
     );
+
+    // Verificação de rotas públicas internas que devem renderizar sem sidebar (Full Width)
+    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu'];
+    const isPublicTab = publicTabs.includes(activeTab);
+
+    if (isPublicTab) {
+        return (
+            <div className="min-h-screen bg-white dark:bg-gray-950">
+                {renderContent()}
+
+                {showPrivacy && (
+                    <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
+                        <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
+                    </Suspense>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
@@ -983,6 +1076,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                             <MenuSection title="Financeiro" />
                             <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
+                            <MenuButton icon={Banknote} label="Cupons Globais (Plataforma)" tab="admin_global_coupons" />
                             <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
                             <MenuButton icon={CreditCard} label="Config. Empréstimos" tab="admin_loan_config" />
                             <MenuButton icon={DollarSign} label="Financeiro das Lojas" tab="admin_store_finance" />
@@ -993,6 +1087,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuSection title="Marketing & Conteúdo" />
                             <MenuButton icon={Megaphone} label="Indicações" tab="admin_referrals" />
                             <MenuButton icon={Bell} label="Notificações Globais" tab="admin_notifications" />
+                            <MenuButton icon={Shield} label="Config. Seguros" tab="admin_insurance" />
                             <MenuButton icon={FileText} label="Institucional" tab="admin_institutional" />
                             <MenuButton icon={Newspaper} label="Novidades da Plataforma" tab="admin_platform_news" />
 
@@ -1026,6 +1121,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
                             <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
                             <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
+                            <MenuButton icon={Banknote} label="Promoções e Cupons" tab="store_promotions" />
                             <MenuButton icon={FileText} label="Comanda" tab="internal_orders" />
                             <MenuButton icon={CreditCard} label="Financeiro ZéPay" tab="zepay_store" />
                             <MenuButton icon={Key} label="Docs API / Integradores" tab="store_api_docs" />
@@ -1044,6 +1140,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={History} label="Histórico Local" tab="local_history" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
                             <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
+                            <MenuButton icon={Shield} label="Seguro Parceiro" tab="insurance" />
 
                             <MenuSection title="Crescimento" />
                             <MenuButton icon={Store} label="Lojas Vinculadas" tab="associate_driver" />
@@ -1134,6 +1231,17 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
                     <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
                 </Suspense>
+            )}
+
+            {/* Botão Voltar ao Topo */}
+            {showScrollTop && (
+                <button
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    className="fixed bottom-6 right-6 z-50 p-4 bg-brand-600 text-white rounded-full shadow-2xl hover:bg-brand-700 transition-all animate-in fade-in slide-in-from-bottom-4 active:scale-90"
+                    aria-label="Voltar ao Topo"
+                >
+                    <ChevronUp className="w-6 h-6" />
+                </button>
             )}
         </div>
     );
