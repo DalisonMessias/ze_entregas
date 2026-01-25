@@ -56,10 +56,20 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
     };
 
     const loadStore = async () => {
-        if (!citySlug || !storeSlug) return;
+        console.log("StoreChatPage: loadStore called", { citySlug, storeSlug });
+        if (!citySlug || !storeSlug) {
+            console.error("StoreChatPage: Missing slugs");
+            setLoading(false);
+            return;
+        }
         try {
             const data = await cloud.getStoreBySlug(citySlug, storeSlug);
-            setStore(data);
+            console.log("StoreChatPage: store loaded", data);
+            if (data) {
+                setStore(data);
+            } else {
+                console.error("StoreChatPage: Store not found via slug");
+            }
         } catch (e) {
             console.error("Error loading store", e);
         } finally {
