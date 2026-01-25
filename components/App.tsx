@@ -157,6 +157,7 @@ export type ActiveTab =
     | 'loans'
     | 'collaborator_area'
     | 'whatsapp_chat'
+    | 'chat'
     | 'forgot_password'
     | 'login'
     | 'signup'
@@ -852,6 +853,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     />;
                 case 'admin_whatsapp': return <WhatsappContainer storeId={userId} attendantId={userId} />;
                 case 'whatsapp_chat': return <WhatsappContainer storeId={userId} attendantId={userId} />;
+                case 'chat': return <WhatsappContainer storeId={userId} attendantId={userId} />;
                 case 'order_tracking': return <OrderTracking />;
 
                 // Store Specific
