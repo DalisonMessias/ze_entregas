@@ -7,7 +7,7 @@ import http from 'http';
 
 import streetsNeighborhoodsRoutes from './routes/streetsNeighborhoods.js';
 import integrationRoutes from './routes/integration.js';
-import whatsappRoutes from './routes/whatsapp.js';
+import chatRoutes from './routes/chat.js';
 import zeAssistantRoutes from './routes/zeAssistant.js';
 import pwaRoutes from './routes/pwa.js';
 import paymentRoutes from './routes/payment.js';
@@ -42,7 +42,7 @@ app.use((req, res, next) => {
 // Rotas
 app.use('/api/streets-neighborhoods', streetsNeighborhoodsRoutes);
 app.use('/api/v1', integrationRoutes);
-app.use('/api/whatsapp', whatsappRoutes); // Usar rotas do WhatsApp
+app.use('/api/chat', chatRoutes); // Usar rotas de Chat (antigo WhatsApp)
 app.use('/api/ze-assistant', zeAssistantRoutes); // Usar rotas do Zé Assistente
 app.use('/pwa', pwaRoutes); // Rotas para PWA dinâmico
 app.use('/api/payment', paymentRoutes); // Rota para pagamentos

@@ -41,11 +41,8 @@ class InternalChatService extends EventEmitter {
     }) {
         const { storeId, conversationId, content, senderId, senderName, fromMe, type = 'chat' } = params;
 
-        // Impedir que a loja fale com ela mesma
-        if (senderId === conversationId || storeId === conversationId) {
-            console.warn(`[InternalChat] Bloqueada tentativa de auto-chat: ${storeId}`);
-            return { success: false, error: 'Você não pode enviar mensagens para si mesmo.' };
-        }
+        // A verificação de auto-chat original foi removida pois bloqueava visitantes (onde senderId == conversationId).
+        // if (senderId === conversationId || storeId === conversationId) { ... }
 
         try {
             const messageId = `internal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

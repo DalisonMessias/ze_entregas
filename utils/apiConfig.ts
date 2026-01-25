@@ -2,9 +2,9 @@
 
 export const getApiBaseUrl = () => {
     // Se definirmos VITE_API_BASE_URL no .env, usamos ela (ex: https://meu-backend.com)
-    // Caso contrário, usamos '/api/whatsapp' para cair no Proxy local do Vite
+    // Caso contrário, usamos '/api/chat' para cair no Proxy local do Vite
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    return `${baseUrl}/api/whatsapp`;
+    return `${baseUrl}/api/chat`;
 };
 
 export const getWebSocketUrl = () => {
@@ -13,10 +13,10 @@ export const getWebSocketUrl = () => {
 
     if (baseUrl) {
         // Substitui http por ws e https por wss
-        return baseUrl.replace(/^http/, 'ws') + '/ws-whatsapp';
+        return baseUrl.replace(/^http/, 'ws') + '/ws-chat';
     }
 
     // Fallback para localhost (proxy Vite)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.host}/ws-whatsapp`;
+    return `${protocol}//${window.location.host}/ws-chat`;
 };

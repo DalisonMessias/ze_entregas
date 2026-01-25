@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as whatsappController from '../controllers/whatsappController.js';
+import * as chatController from '../controllers/chatController.js';
 import multer from 'multer';
 
 const upload = multer();
@@ -23,7 +23,7 @@ const router = Router();
  *       200:
  *         description: O status atual e o QR code, se houver
  */
-router.get('/status', whatsappController.getStatus);
+router.get('/status', chatController.getStatus);
 
 /**
  * @swagger
@@ -52,7 +52,7 @@ router.get('/status', whatsappController.getStatus);
  *       500:
  *         description: Erro interno
  */
-router.post('/send/text', whatsappController.sendTextMessage);
+router.post('/send/text', chatController.sendTextMessage);
 
 /**
  * @swagger
@@ -68,11 +68,11 @@ router.post('/send/text', whatsappController.sendTextMessage);
  *     summary: Envia mensagem do chat interno (Menu Digital)
  *     tags: [WhatsApp]
  */
-router.post('/chat/internal/send', whatsappController.sendInternalMessage);
+router.post('/chat/internal/send', chatController.sendInternalMessage);
 
 // router.post('/send/audio', upload.single('audio'), whatsappController.sendAudioMessage); // Removido: Chat interno usa API genérica
 
-router.get('/conversations', whatsappController.getConversations);
+router.get('/conversations', chatController.getConversations);
 
 /**
  * @swagger
@@ -81,7 +81,7 @@ router.get('/conversations', whatsappController.getConversations);
  *     summary: Obtém a ordem manual das conversas
  *     tags: [WhatsApp]
  */
-router.get('/conversations/order', whatsappController.getConversationOrder);
+router.get('/conversations/order', chatController.getConversationOrder);
 
 /**
  * @swagger
@@ -90,7 +90,7 @@ router.get('/conversations/order', whatsappController.getConversationOrder);
  *     summary: Salva a ordem manual das conversas
  *     tags: [WhatsApp]
  */
-router.post('/conversations/order', whatsappController.saveConversationOrder);
+router.post('/conversations/order', chatController.saveConversationOrder);
 
 /**
  * @swagger
@@ -109,7 +109,7 @@ router.post('/conversations/order', whatsappController.saveConversationOrder);
  *       200:
  *         description: Uma lista de mensagens
  */
-router.get('/messages/:conversationId', whatsappController.getMessages);
+router.get('/messages/:conversationId', chatController.getMessages);
 
 /**
  * @swagger
@@ -118,7 +118,7 @@ router.get('/messages/:conversationId', whatsappController.getMessages);
  *     summary: Busca foto de perfil de um contato
  *     tags: [WhatsApp]
  */
-router.get('/profile-picture/:jid', whatsappController.getProfilePicture);
+router.get('/profile-picture/:jid', chatController.getProfilePicture);
 
 /**
  * @swagger
@@ -127,7 +127,7 @@ router.get('/profile-picture/:jid', whatsappController.getProfilePicture);
  *     summary: Marca mensagem como lida
  *     tags: [WhatsApp]
  */
-router.post('/mark-read', whatsappController.markAsRead);
+router.post('/mark-read', chatController.markAsRead);
 
 /**
  * @swagger
@@ -136,7 +136,7 @@ router.post('/mark-read', whatsappController.markAsRead);
  *     summary: Lista todos os contatos
  *     tags: [WhatsApp]
  */
-router.get('/contacts', whatsappController.getContacts);
+router.get('/contacts', chatController.getContacts);
 
 /**
  * @swagger
@@ -145,7 +145,7 @@ router.get('/contacts', whatsappController.getContacts);
  *     summary: Cria ou atualiza um contato
  *     tags: [WhatsApp]
  */
-router.post('/contacts', whatsappController.upsertContact);
+router.post('/contacts', chatController.upsertContact);
 
 /**
  * @swagger
@@ -154,7 +154,7 @@ router.post('/contacts', whatsappController.upsertContact);
  *     summary: Exclui um contato
  *     tags: [WhatsApp]
  */
-router.delete('/contacts/:id', whatsappController.deleteContact);
+router.delete('/contacts/:id', chatController.deleteContact);
 
 /**
  * @swagger
@@ -163,7 +163,7 @@ router.delete('/contacts/:id', whatsappController.deleteContact);
  *     summary: Desconecta e limpa a sessão do WhatsApp
  *     tags: [WhatsApp]
  */
-router.post('/logout', whatsappController.logout);
+router.post('/logout', chatController.logout);
 
 /**
  * @swagger
@@ -189,9 +189,9 @@ router.post('/logout', whatsappController.logout);
  *       200:
  *         description: Imagem enviada com sucesso
  */
-import * as whatsappMediaController from '../controllers/whatsappMediaController.js';
+import * as chatMediaController from '../controllers/chatMediaController.js';
 
-router.post('/send/image', whatsappMediaController.uploadMiddleware, whatsappMediaController.sendImage);
+router.post('/send/image', chatMediaController.uploadMiddleware, chatMediaController.sendImage);
 
 /**
  * @swagger
@@ -200,7 +200,7 @@ router.post('/send/image', whatsappMediaController.uploadMiddleware, whatsappMed
  *     summary: Envia um áudio
  *     tags: [WhatsApp]
  */
-router.post('/send/audio', whatsappMediaController.uploadMiddleware, whatsappMediaController.sendAudio);
+router.post('/send/audio', chatMediaController.uploadMiddleware, chatMediaController.sendAudio);
 
 /**
  * @swagger
@@ -209,7 +209,7 @@ router.post('/send/audio', whatsappMediaController.uploadMiddleware, whatsappMed
  *     summary: Envia um vídeo
  *     tags: [WhatsApp]
  */
-router.post('/send/video', whatsappMediaController.uploadMiddleware, whatsappMediaController.sendVideo);
+router.post('/send/video', chatMediaController.uploadMiddleware, chatMediaController.sendVideo);
 
 /**
  * @swagger
@@ -218,7 +218,7 @@ router.post('/send/video', whatsappMediaController.uploadMiddleware, whatsappMed
  *     summary: Envia um documento
  *     tags: [WhatsApp]
  */
-router.post('/send/document', whatsappMediaController.uploadMiddleware, whatsappMediaController.sendDocument);
+router.post('/send/document', chatMediaController.uploadMiddleware, chatMediaController.sendDocument);
 
 /**
  * @swagger
@@ -227,7 +227,7 @@ router.post('/send/document', whatsappMediaController.uploadMiddleware, whatsapp
  *     summary: Reinicia o serviço de WhatsApp (força nova conexão/QR)
  *     tags: [WhatsApp]
  */
-router.post('/restart', whatsappController.restartService);
+router.post('/restart', chatController.restartService);
 
 /**
  * @swagger
@@ -236,7 +236,7 @@ router.post('/restart', whatsappController.restartService);
  *     summary: Atualiza a prioridade de uma conversa
  *     tags: [WhatsApp]
  */
-router.patch('/conversations/:conversationId/priority', whatsappController.updatePriority);
+router.patch('/conversations/:conversationId/priority', chatController.updatePriority);
 
 /**
  * @swagger
@@ -245,7 +245,7 @@ router.patch('/conversations/:conversationId/priority', whatsappController.updat
  *     summary: Atualiza a preferência de ordenação das conversas
  *     tags: [WhatsApp]
  */
-router.patch('/conversations/sort-preference', whatsappController.updateSortPreference);
+router.patch('/conversations/sort-preference', chatController.updateSortPreference);
 
 
 /**
@@ -255,7 +255,7 @@ router.patch('/conversations/sort-preference', whatsappController.updateSortPref
  *     summary: Deleta uma conversa sincronizado com o aparelho
  *     tags: [WhatsApp]
  */
-router.delete('/conversations/:conversationId', whatsappController.deleteConversation);
+router.delete('/conversations/:conversationId', chatController.deleteConversation);
 
 /**
  * @swagger
@@ -264,7 +264,7 @@ router.delete('/conversations/:conversationId', whatsappController.deleteConvers
  *     summary: Limpa todo o histórico de mensagens de uma conversa (Hard Delete)
  *     tags: [WhatsApp]
  */
-router.delete('/conversations/:conversationId/messages', whatsappController.clearConversationMessages);
+router.delete('/conversations/:conversationId/messages', chatController.clearConversationMessages);
 
 /**
  * @swagger
@@ -273,6 +273,6 @@ router.delete('/conversations/:conversationId/messages', whatsappController.clea
  *     summary: Deleta uma mensagem específica (Hard Delete)
  *     tags: [WhatsApp]
  */
-router.delete('/messages/:messageId', whatsappController.deleteMessage);
+router.delete('/messages/:messageId', chatController.deleteMessage);
 
 export default router;
