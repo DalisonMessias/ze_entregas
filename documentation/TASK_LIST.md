@@ -1,23 +1,22 @@
-# TASK_LIST - Chat Interno, Respostas Rápidas e UI
+# Lista de Tarefas - Implementação de Chat e Broadcast
 
-[x] Criar InternalChatService e desativar Baileys
-[x] Implementar endpoint de envio de mensagem interna
-[x] Adaptar WebSocket para rotear mensagens nativas
-[x] Renomear "WhatsApp" para "Chat Interno" no Menu Admin
-[x] Refatorar WhatsappContainer para Branding Vermelho (brand-600)
-[x] Remover UI de conexão e QR Code
-[x] Adicionar botão de chat flutuante no DigitalMenu
-[x] Criar StoreChatPage para interface do cliente
-[x] Configurar rotas dinâmicas no AuthWrapper
-[x] Validar persistência de mensagens e tempo real
-[x] Criar tabela store_quick_replies no DB
-[x] Implementar ZeAssistantQuickReplies.tsx para cadastro de mensagens prontas
-[x] Remover botão "Novo Chat" no WhatsappContainer.tsx
-[x] Integrar suporte a atalhos de mensagens (/gatilho) no chat
-[x] Impedir que a loja inicie chat com ela mesma (Validação no Backend/UI)
-[x] Implementar identificação do tipo de cliente (Zé, Loja, Visitante)
-[x] Configurar instrução de "Loja Fechada" no Zé Assistente
-[x] Automatizar bot para responder quando a loja estiver fechada
-[x] Corrigir atraso na abertura do chat no Menu Digital
-[x] Consertar botões voltar/fechar na StoreChatPage.tsx
-[x] Implementar "Super Bot" IA (Gemini) para dúvidas de catálogo (mesmo loja fechada)
+## 1. Correções de Chat (Visitante/Loop Loading)
+- [x] Investigar loop de loading no `StoreChatPage`.
+- [x] Identificar falta de RPC pública para dados da loja.
+- [x] Criar RPC `public_get_store_by_slug` no `supabase_global.sql`.
+- [x] Corrigir erro de coluna inexistente (`state`) na RPC. 
+- [x] Atualizar `cloud.ts` para usar a nova RPC.
+- [x] Corrigir permissões RLS da tabela `store_quick_replies`.
+
+## 2. Funcionalidade de Broadcast (Disparo em Massa)
+- [x] Identificar componente de chat (`WhatsappContainer`).
+- [x] Criar componente `BroadcastModal` com lógica de envio em loop.
+- [x] Adicionar botão "Megafone" na barra lateral de ferramentas do chat.
+- [x] Integrar modal no fluxo principal do `WhatsappContainer`.
+
+## 3. Rotas e Navegação
+- [x] Adicionar rota `/chat` explícita no `App.tsx` apontando para `WhatsappContainer`.
+
+## Observações
+- O envio em massa é feito via frontend com delay humanizado para evitar bloqueio.
+- As correções de banco de dados (RPC/RLS) precisam ser executadas manualmente no Supabase pelo usuário.

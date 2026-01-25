@@ -10,7 +10,8 @@ import SearchBar from './SearchBar';
 import ContactsManager from './ContactsManager';
 import { BaseModal } from '../BaseModal';
 import { ZeAssistantConfig, ZeAssistantRulesManager, ZeAssistantDashboard, ZeAssistantQuickReplies } from './ZeAssistant/index';
-import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot, Shield } from 'lucide-react';
+import { BroadcastModal } from './BroadcastModal';
+import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot, Shield, Megaphone } from 'lucide-react';
 
 import { getApiBaseUrl } from '../../utils/apiConfig';
 import * as cloud from '../../services/cloud';
@@ -62,6 +63,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
   const [showQrModal, setShowQrModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAssistantModal, setShowAssistantModal] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false); // Novo state
   const [isAssistantActive, setIsAssistantActive] = useState(true);
   const [pixKey, setPixKey] = useState<string>("");
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -815,6 +817,14 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
             </button>
 
             <button
+              onClick={() => setShowBroadcastModal(true)}
+              title="Disparo em Massa"
+              className={`p-2 rounded-full transition-colors relative hover:bg-gray-200`}
+            >
+              <Megaphone size={20} className="text-[#54656F]" />
+            </button>
+
+            <button
               onClick={() => setActiveTab(activeTab === 'contacts' ? 'conversations' : 'contacts')}
               title="Gerenciar Contatos"
               className={`p-2 rounded-full transition-colors ${activeTab === 'contacts' ? 'bg-brand-50 text-brand-600' : 'hover:bg-gray-200 text-[#54656F]'}`}
@@ -1238,6 +1248,15 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal: Broadcast / Disparo em Massa */}
+      {showBroadcastModal && (
+        <BroadcastModal
+          storeId={storeId}
+          attendantId={attendantId}
+          onClose={() => setShowBroadcastModal(false)}
+        />
       )}
     </div>
   );

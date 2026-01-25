@@ -5396,15 +5396,24 @@ export const getStoreBySlug = async (citySlug: string, storeSlug: string) => {
     const sb = getClient();
     if (!sb) return null;
 
-    const { data, error } = await sb
-        .from('user_profiles')
-        .select('*')
-        .eq('city_slug', citySlug)
-        .eq('store_slug', storeSlug)
-        .eq('role', 'store_partner')
-        .single();
+    // Usar RPC segura para evitar problemas de RLS com permissão pública
+    const { data, error } = await sb.rpc('public_get_store_by_slug', {
+        p_city_slug: citySlug,
+        p_store_slug: storeSlug
+    });
 
-    if (error || !data) return null;
+    if (error) {
+        console.error('getStoreBySlug RPC error:', error);
+        return null;
+    }
+
+    // Se não encontrou via RPC (retorna null ou vazio), tenta select direto como fallback (para admins)
+    if (!data) {
+        // ... (código antigo se necessário, mas RPC deve resolver)
+        return null;
+    }
+
+    // RPC retorna JSON, precisamos garantir formato compatível
     return data;
 };
 
@@ -5432,11 +5441,17 @@ export const getPublicDeliverySettings = async (storeId: string) => {
     const sb = getClient();
     if (!sb) return null;
 
-    const { data } = await sb
+    const { data, error } = await sb
         .from('store_delivery_settings')
         .select('*')
         .eq('store_id', storeId)
-        .single();
+        .maybeSingle();
+
+    if (error) {
+        // Silently fail for public view if not enabled/found to avoid blocking menu load
+        console.warn('Delivery settings not loaded:', error.message);
+        return null;
+    }
 
     return data;
 };

@@ -4,6 +4,8 @@ import * as cloud from '../../services/cloud';
 import { getWebSocketUrl, getApiBaseUrl } from '../../utils/apiConfig';
 import { PartnerProfile } from '../../types';
 import axios from 'axios';
+import { BaseModal } from '../BaseModal';
+import { Button } from '../Button';
 
 interface StoreChatPageProps {
     citySlug: string;
@@ -27,6 +29,7 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
     const [inputText, setInputText] = useState('');
     const [isConnecting, setIsConnecting] = useState(true);
     const [showOptionsObj, setShowOptionsObj] = useState<{ [key: string]: boolean }>({});
+    const [showClearModal, setShowClearModal] = useState(false);
 
     const ws = useRef<WebSocket | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -39,6 +42,11 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
         document.addEventListener('click', handleClickOutside);
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
+
+    // LOAD STORE DATA
+    useEffect(() => {
+        loadStore();
+    }, [citySlug, storeSlug]);
 
     useEffect(() => {
         if (store?.id) {
@@ -205,8 +213,6 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
     };
 
     const handleClearChat = async () => {
-        if (!confirm('Tem certeza que deseja apagar todas as mensagens?')) return;
-
         setMessages([]);
         saveLocalHistory([]);
 
@@ -216,6 +222,7 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
         } catch (e) {
             console.error("Error clearing chat", e);
         }
+        setShowClearModal(false);
     };
 
     if (loading) {
@@ -254,7 +261,7 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
 
                 {/* Botão Limpar Chat */}
                 <button
-                    onClick={handleClearChat}
+                    onClick={() => setShowClearModal(true)}
                     className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-red-500"
                     title="Limpar conversa"
                 >
@@ -374,6 +381,18 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
                     <Send className="w-5 h-5" />
                 </button>
             </div>
+
+            {/* Modal de Confirmação de Limpeza */}
+            <BaseModal isOpen={showClearModal} onClose={() => setShowClearModal(false)} title="Limpar Conversa" icon={<Trash2 className="w-6 h-6 text-red-500" />}>
+                <div className="space-y-4">
+                    <p className="text-gray-600 dark:text-gray-300">Tem certeza que deseja apagar todas as mensagens desta conversa?</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Esta ação não pode ser desfeita.</p>
+                    <div className="flex gap-3 pt-4">
+                        <Button onClick={() => setShowClearModal(false)} variant="outline" fullWidth>Cancelar</Button>
+                        <Button onClick={handleClearChat} className="bg-red-500 hover:bg-red-600 text-white" fullWidth>Apagar Tudo</Button>
+                    </div>
+                </div>
+            </BaseModal>
         </div>
     );
 };

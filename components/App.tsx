@@ -84,6 +84,7 @@ const PartnerStore = React.lazy(() => import('./PartnerStore').then(m => ({ defa
 const PartnerDelivery = React.lazy(() => import('./PartnerDelivery').then(m => ({ default: m.PartnerDelivery })));
 const OrderTracking = React.lazy(() => import('./OrderTracking/OrderTracking').then(m => ({ default: m.OrderTracking })));
 const UserOrders = React.lazy(() => import('./UserOrders').then(m => ({ default: m.UserOrders })));
+const StoreChatPage = React.lazy(() => import('./DigitalMenu/StoreChatPage').then(m => ({ default: m.StoreChatPage })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -166,7 +167,8 @@ export type ActiveTab =
     | 'insurance'
     | 'home'
     | 'my_orders'
-    | 'digital_menu';
+    | 'digital_menu'
+    | 'store_public_chat';
 
 
 interface AppProps {
@@ -728,7 +730,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     const generalTabs = new Set<ActiveTab>([
         'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'whatsapp_chat',
-        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders'
+        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat'
     ]);
 
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
@@ -827,6 +829,13 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     const cSlug = pathParts[1] || '';
                     const sSlug = pathParts[2] || '';
                     return <DigitalMenu citySlug={cSlug} storeSlug={sSlug} />;
+                case 'store_public_chat':
+                    const chatPathParts = window.location.pathname.split('/');
+                    // /city/store/chat
+                    return <StoreChatPage citySlug={chatPathParts[1]} storeSlug={chatPathParts[2]} onBack={() => {
+                        window.history.pushState({}, '', `/${chatPathParts[1]}/${chatPathParts[2]}`);
+                        window.dispatchEvent(new CustomEvent('popstate'));
+                    }} />;
                 case 'profile': return <ProfileData onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
                 case 'status': return <StatusPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
                 case 'support': return <SupportPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} onNavigateToChat={() => navigate('assistant')} />;
@@ -960,7 +969,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     // Verificação de rotas públicas internas que devem renderizar sem sidebar (Full Width)
-    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking'];
+    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
     const isPublicTab = publicTabs.includes(activeTab);
 
     if (isPublicTab) {

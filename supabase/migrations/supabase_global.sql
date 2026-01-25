@@ -9830,3 +9830,98 @@ BEGIN
         CREATE POLICY "Público pode ler respostas rápidas para uso no chat" ON public.store_quick_replies FOR SELECT USING (true);
     END IF;
 END $$;
+
+-- RPC Segura para buscar loja por slug (CORRIGIDA FINAL: removidas colunas inexistentes payment_methods, delivery_settings e corrigido state)
+CREATE OR REPLACE FUNCTION public_get_store_by_slug(p_city_slug text, p_store_slug text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_store record;
+BEGIN
+    SELECT 
+        id, store_name, store_logo_url, cover_url, is_open, 
+        phone_number, whatsapp_number, description,
+        store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,
+        receive_orders_via_whatsapp, receive_orders_via_platform,
+        city, store_address_state AS state, store_address_zip,
+        store_slug, city_slug
+    INTO v_store
+    FROM user_profiles
+    WHERE city_slug = p_city_slug 
+      AND store_slug = p_store_slug
+      AND role = 'store_partner'
+    LIMIT 1;
+
+    RETURN row_to_json(v_store);
+END;
+$$;
+
+
+-- ==================================================================
+-- CORREÇÕES FINAIS DE PERMISSÕES E RPCs (CONSOLIDADO)
+-- ==================================================================
+
+-- 1. Resolver erro de permissão na tabela store_quick_replies
+ALTER TABLE public.store_quick_replies ENABLE ROW LEVEL SECURITY;
+
+-- Limpeza de políticas antigas
+DROP POLICY IF EXISTS "Lojistas podem ver suas próprias respostas rápidas" ON public.store_quick_replies;
+DROP POLICY IF EXISTS "Público pode ler respostas rápidas para uso no chat" ON public.store_quick_replies;
+DROP POLICY IF EXISTS "Public read access" ON public.store_quick_replies;
+
+-- Política de Leitura Pública
+CREATE POLICY "Public read access" ON public.store_quick_replies FOR SELECT USING (true);
+
+-- Políticas de Escrita (Lojista)
+DROP POLICY IF EXISTS "Lojistas podem inserir suas próprias respostas rápidas" ON public.store_quick_replies;
+CREATE POLICY "Lojistas podem inserir suas próprias respostas rápidas" ON public.store_quick_replies FOR INSERT WITH CHECK (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Lojistas podem atualizar suas próprias respostas rápidas" ON public.store_quick_replies;
+CREATE POLICY "Lojistas podem atualizar suas próprias respostas rápidas" ON public.store_quick_replies FOR UPDATE USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Lojistas podem deletar suas próprias respostas rápidas" ON public.store_quick_replies;
+CREATE POLICY "Lojistas podem deletar suas próprias respostas rápidas" ON public.store_quick_replies FOR DELETE USING (auth.uid() = store_id);
+
+-- Grants
+GRANT SELECT ON public.store_quick_replies TO anon, authenticated, service_role;
+GRANT ALL ON public.store_quick_replies TO service_role;
+GRANT INSERT, UPDATE, DELETE ON public.store_quick_replies TO authenticated;
+
+
+-- 2. Garantir permissões na tabela store_delivery_settings (Erro 406 resolvido)
+ALTER TABLE public.store_delivery_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read access settings" ON public.store_delivery_settings;
+CREATE POLICY "Public read access settings" ON public.store_delivery_settings FOR SELECT USING (true);
+GRANT SELECT ON public.store_delivery_settings TO anon, authenticated, service_role;
+
+
+-- 3. RPC de Busca de Loja (CORRIGIDA FINAL: sem colunas inexistentes)
+CREATE OR REPLACE FUNCTION public_get_store_by_slug(p_city_slug text, p_store_slug text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_store record;
+BEGIN
+    SELECT 
+        id, store_name, store_logo_url, cover_url, is_open, 
+        phone_number, whatsapp_number, description,
+        store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,
+        receive_orders_via_whatsapp, receive_orders_via_platform,
+        city, store_address_state AS state, store_address_zip,
+        store_slug, city_slug
+    INTO v_store
+    FROM user_profiles
+    WHERE city_slug = p_city_slug 
+      AND store_slug = p_store_slug
+      AND role = 'store_partner'
+    LIMIT 1;
+
+    RETURN row_to_json(v_store);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public_get_store_by_slug(text, text) TO anon, authenticated, service_role;

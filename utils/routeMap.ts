@@ -75,7 +75,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/comanda': 'internal_orders',
     '/loja/dashboard': 'wallet',
     '/loja/colaborador': 'collaborator_area',
-    '/loja/whatsapp': 'whatsapp_chat',
+    '/loja/chat': 'whatsapp_chat',
     '/loja/nova-entrega': 'new_request',
     '/loja/pedidos': 'associate_orders',
     '/loja/historico': 'history',
@@ -132,6 +132,13 @@ export const getTabFromUrl = (pathname: string): ActiveTab | null => {
     // Check for Order Tracking
     if (pathname.startsWith('/track/')) {
         return 'order_tracking';
+    }
+
+    // Check for Store Public Chat (/city/store/chat)
+    // Regex: /slug/slug/chat
+    const chatMatch = pathname.match(/^\/[^\/]+\/[^\/]+\/chat$/);
+    if (chatMatch) {
+        return 'store_public_chat';
     }
 
     // Normaliza removendo trailing slash, exceto se for raiz

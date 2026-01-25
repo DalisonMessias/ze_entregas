@@ -59,7 +59,7 @@ class InternalChatService extends EventEmitter {
                 content: content,
                 sender_name: senderName,
                 from_me: fromMe,
-                timestamp: timestamp,
+                message_timestamp: timestamp,
                 status: 'sent',
                 message_type: type
             });
@@ -123,8 +123,15 @@ class InternalChatService extends EventEmitter {
             this.emit('messages.upsert', { storeId, msg: msgPayload });
 
             return { success: true, messageId };
-        } catch (error) {
-            console.error('[InternalChat] Erro ao enviar mensagem:', error);
+        } catch (error: any) {
+            console.error('[InternalChat] Erro ao enviar mensagem:', {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint,
+                storeId,
+                conversationId
+            });
             return { success: false, error };
         }
     }
