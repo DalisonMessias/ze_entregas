@@ -1,6 +1,6 @@
 import { Server as HttpServer } from 'http';
 import { WebSocketServer, WebSocket as WebSocketBase } from 'ws';
-import whatsappService from './services/whatsappService.js';
+import internalChatService from './services/internalChatService.js';
 import url from 'url';
 
 // Estende a interface WebSocket padrão para incluir storeId
@@ -40,16 +40,16 @@ export const initializeWebSocket = (server: HttpServer) => {
     ws.storeId = storeId;
     console.log(`Novo cliente WebSocket conectado para a loja: ${storeId}`);
 
-    // Envia o status atual da conexão do WhatsApp imediatamente após a conexão do cliente.
-    const status = whatsappService.getStatus(storeId);
+    // Envia o status atual do Chat Interno imediatamente
+    const status = internalChatService.getStatus(storeId);
 
     const sendToWs = (type: string, payload: any) => {
       console.log(`📤 Enviando para WS (loja ${storeId}): ${type}`);
       ws.send(JSON.stringify({ type, payload }));
     };
 
-    if (status.status === 'WAITING_QR' && status.qrCode) {
-      sendToWs('whatsapp.qr', { qr: status.qrCode });
+    if (status.status === 'WAITING_QR' && (status as any).qrCode) {
+      sendToWs('whatsapp.qr', { qr: (status as any).qrCode });
     } else {
       sendToWs('whatsapp.status', status);
     }
@@ -63,23 +63,22 @@ export const initializeWebSocket = (server: HttpServer) => {
     });
   });
 
-  // Re-transmite os eventos do WhatsappService para os clientes da loja correspondente.
+  // Re-transmite os eventos do InternalChatService para os clientes da loja correspondente.
 
-  whatsappService.on('qr.update', ({ storeId, qr }) => {
+  internalChatService.on('qr.update', ({ storeId, qr }) => {
     broadcastByStore(storeId, { type: 'whatsapp.qr', payload: { qr } });
   });
 
-  whatsappService.on('status.change', ({ storeId, status }) => {
-    // Aqui status já é o novo status, mas se quisermos pegar o objeto completo (incluindo qrCode se houver):
-    const statusPayload = whatsappService.getStatus(storeId);
+  internalChatService.on('status.change', ({ storeId, status }) => {
+    const statusPayload = internalChatService.getStatus(storeId);
     broadcastByStore(storeId, { type: 'whatsapp.status', payload: statusPayload });
   });
 
-  whatsappService.on('messages.upsert', ({ storeId, msg }) => {
+  internalChatService.on('messages.upsert', ({ storeId, msg }) => {
     broadcastByStore(storeId, { type: 'whatsapp.message', payload: msg });
   });
 
-  whatsappService.on('message.status.update', ({ storeId, messageId, status }) => {
+  internalChatService.on('message.status.update', ({ storeId, messageId, status }) => {
     broadcastByStore(storeId, { type: 'whatsapp.message_status', payload: { messageId, status } });
   });
 

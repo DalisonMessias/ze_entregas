@@ -341,3 +341,96 @@ export async function confirmOrder(req: Request, res: Response) {
         res.status(500).json({ error: 'Erro ao confirmar pedido' });
     }
 }
+// PATCH /api/ze-assistant/conversations/:storeId/:conversationId/toggle-assistant
+export async function toggleAssistant(req: Request, res: Response) {
+    try {
+        const { storeId, conversationId } = req.params;
+        const { active } = req.body;
+
+        const supabase = cloud.getClient();
+        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
+
+        const { error } = await supabase
+            .from('ze_assistant_conversations')
+            .update({ is_assistant_active: active })
+            .eq('store_id', storeId)
+            .eq('conversation_id', conversationId);
+
+        if (error) {
+            console.error('Erro ao alternar assistente:', error);
+            return res.status(500).json({ error: 'Erro ao alternar assistente na conversa' });
+        }
+
+        res.json({ success: true, active });
+    } catch (error) {
+        console.error('Erro ao alternar assistente:', error);
+        res.status(500).json({ error: 'Erro ao alternar assistente' });
+    }
+}
+
+// GET /api/ze-assistant/quick-replies/:storeId
+export async function getQuickReplies(req: Request, res: Response) {
+    try {
+        const { storeId } = req.params;
+        const supabase = cloud.getClient();
+        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
+
+        const { data, error } = await supabase
+            .from('store_quick_replies')
+            .select('*')
+            .eq('store_id', storeId)
+            .order('title', { ascending: true });
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        console.error('Erro ao buscar quick replies:', error);
+        res.status(500).json({ error: 'Erro ao buscar respostas rápidas' });
+    }
+}
+
+// POST /api/ze-assistant/quick-replies
+export async function upsertQuickReply(req: Request, res: Response) {
+    try {
+        const { storeId, reply } = req.body;
+        const supabase = cloud.getClient();
+        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
+
+        const { data, error } = await supabase
+            .from('store_quick_replies')
+            .upsert({
+                store_id: storeId,
+                title: reply.title,
+                message: reply.message,
+                id: reply.id // Se tiver ID, atualiza
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        console.error('Erro ao salvar quick reply:', error);
+        res.status(500).json({ error: 'Erro ao salvar resposta rápida' });
+    }
+}
+
+// DELETE /api/ze-assistant/quick-replies/:id
+export async function deleteQuickReply(req: Request, res: Response) {
+    try {
+        const { id } = req.params;
+        const supabase = cloud.getClient();
+        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
+
+        const { error } = await supabase
+            .from('store_quick_replies')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Erro ao deletar quick reply:', error);
+        res.status(500).json({ error: 'Erro ao deletar resposta rápida' });
+    }
+}

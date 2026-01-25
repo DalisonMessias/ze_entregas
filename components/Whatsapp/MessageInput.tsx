@@ -14,8 +14,15 @@ interface MessageInputProps {
   storeId?: string;
 }
 
+import * as cloud from '../../services/cloud';
+import { QuickReply } from '../../types';
+
 const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSendAudio, pixKey, storeId }) => {
   const [text, setText] = useState('');
+  const [replies, setReplies] = useState<QuickReply[]>([]);
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [filteredReplies, setFilteredReplies] = useState<QuickReply[]>([]);
+  const [selectedReplyIndex, setSelectedReplyIndex] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -32,6 +39,42 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
   const [showPoll, setShowPoll] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showSticker, setShowSticker] = useState(false);
+
+  React.useEffect(() => {
+    if (storeId) {
+      cloud.getQuickReplies(storeId).then(setReplies);
+    }
+  }, [storeId]);
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setText(value);
+
+    // Ajusta altura
+    const target = e.target;
+    target.style.height = 'auto';
+    target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+
+    // Lógica de Respostas Rápidas
+    if (value.startsWith('/') && value.length > 1) {
+      const query = value.toLowerCase();
+      const matches = replies.filter(r => r.trigger.startsWith(query));
+      if (matches.length > 0) {
+        setFilteredReplies(matches);
+        setShowQuickReplies(true);
+        setSelectedReplyIndex(0);
+      } else {
+        setShowQuickReplies(false);
+      }
+    } else {
+      setShowQuickReplies(false);
+    }
+  };
+
+  const applyQuickReply = (reply: QuickReply) => {
+    setText(reply.message);
+    setShowQuickReplies(false);
+  };
 
   const handleCameraCapture = (file: File) => {
     onSendMedia?.(file);
@@ -229,7 +272,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
             <button
               onClick={handleSendMedia}
               disabled={isUploading}
-              className="p-2 bg-[#00A884] hover:bg-[#008f6f] text-white rounded-full transition-colors disabled:opacity-50"
+              className="p-2 bg-brand-600 hover:bg-brand-700 text-white rounded-full transition-colors disabled:opacity-50"
             >
               {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
             </button>
@@ -282,6 +325,28 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
               </div>
             )}
           </div>
+
+          {/* Popover de Respostas Rápidas */}
+          {showQuickReplies && (
+            <div className="absolute bottom-full left-12 mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[60] animate-in slide-in-from-bottom-4">
+              <div className="bg-brand-50 px-4 py-2 border-b border-brand-100">
+                <span className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Respostas Rápidas</span>
+              </div>
+              <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                {filteredReplies.map((reply, idx) => (
+                  <button
+                    key={reply.id}
+                    onClick={() => applyQuickReply(reply)}
+                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 flex flex-col gap-0.5 border-b border-gray-50 last:border-0 transition-colors ${idx === selectedReplyIndex ? 'bg-brand-50/50' : ''}`}
+                  >
+                    <span className="text-xs font-black text-brand-600">{reply.trigger}</span>
+                    <span className="text-sm text-gray-700 truncate">{reply.message}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => setShowMenu(!showMenu)}
             className={`p-2 rounded-full transition-colors ${showMenu ? 'bg-gray-200 text-[#111B21]' : 'hover:bg-gray-200'}`}
@@ -311,13 +376,30 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
               className="flex-1 px-4 py-1.5 bg-transparent outline-none text-[#111B21] placeholder:text-gray-500 text-[15px] resize-none max-h-32 custom-scrollbar"
               rows={1}
               value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = 'auto';
-                target.style.height = Math.min(target.scrollHeight, 128) + 'px';
-              }}
+              onChange={handleTextChange}
               onKeyDown={(e) => {
+                if (showQuickReplies) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedReplyIndex(prev => (prev + 1) % filteredReplies.length);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedReplyIndex(prev => (prev - 1 + filteredReplies.length) % filteredReplies.length);
+                    return;
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    applyQuickReply(filteredReplies[selectedReplyIndex]);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    setShowQuickReplies(false);
+                    return;
+                  }
+                }
+
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   e.stopPropagation();

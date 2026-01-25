@@ -32,9 +32,16 @@ export class ZeAssistantService {
         }
 
         try {
-            // 1. Verificar se assistente está ativo para esta loja
+            // 1. Buscar Configuração
             const config = await this.getConfig(payload.storeId);
-            if (!config || !config.is_enabled) {
+            if (!config) return { success: false, responseText: '', responseType: 'HUMAN', shouldHandoff: true };
+
+            // 2. Verificar se a loja está aberta
+            const storeContext = await this.getStoreContext(payload.storeId);
+            const isOpen = this.checkIfStoreIsOpen(storeContext?.openingHours);
+
+            // 3. Se estiver aberta, verificar se assistente está ativo
+            if (isOpen && !config.is_enabled) {
                 return {
                     success: false,
                     responseText: '',
@@ -44,7 +51,7 @@ export class ZeAssistantService {
                 };
             }
 
-            // 2. Buscar ou criar conversa
+            // 4. Buscar ou criar conversa
             const conversation = await this.getOrCreateConversation(
                 payload.conversationId,
                 payload.storeId,
@@ -52,8 +59,9 @@ export class ZeAssistantService {
                 payload.customerName
             );
 
-            // Se conversa foi transferida para humano, não processar
-            if (conversation.handoff_to_human) {
+            // Se conversa foi transferida para humano e LOJA ESTÁ ABERTA, não processar
+            // (Se loja fechada, o bot assume sempre)
+            if (conversation.handoff_to_human && isOpen) {
                 return {
                     success: false,
                     responseText: '',
@@ -63,43 +71,74 @@ export class ZeAssistantService {
                 };
             }
 
-            // 3. Buscar contexto da conversa
+            // 5. Buscar contexto da conversa
             const context: ConversationContext = conversation.context_data as ConversationContext || {
                 confusionCount: conversation.confusion_count || 0,
-                variables: {}
+                variables: {},
+                currentFlow: null,
+                flowStep: null
             };
 
-            // 4. Tentar processar com REGRAS FIXAS primeiro (se ativado)
             let response: ProcessMessageResponse | null = null;
 
-            if (config.rules_enabled) {
-                response = await this.processWithRules(
-                    payload.messageText,
-                    payload.storeId,
-                    context
-                );
+            // 6. Se LOJA FECHADA, usar IA DIRETAMENTE (Super Bot)
+            if (!isOpen) {
+                const geminiKey = await this.getGeminiApiKey(payload.storeId);
+                if (geminiKey) {
+                    response = await zeAssistantAIService.processMessage(
+                        payload.messageText,
+                        { ...storeContext, isClosed: true, closedInstruction: config.instruction_closed_store },
+                        context,
+                        geminiKey
+                    );
+                    response.responseType = 'AI';
+                }
+
+                // Fallback se IA falhar ou não houver chave
+                if (!response || !response.success) {
+                    response = {
+                        success: true,
+                        responseText: config.instruction_closed_store || 'Olá! No momento estamos fechados, mas deixe sua mensagem que responderemos em breve.',
+                        responseType: 'RULE',
+                        shouldHandoff: false
+                    };
+                }
+            } else {
+                // 7. Fluxo normal para loja aberta...
+                // Se estiver em um fluxo guiado, processar o passo do fluxo
+                if (context.currentFlow === 'ORDER') {
+                    response = await this.processOrderFlow(payload.messageText, payload.storeId, context);
+                }
+
+                // Tentar processar com REGRAS FIXAS (se não estiver em fluxo ou se o fluxo não gerou resposta)
+                if (!response && config.rules_enabled) {
+                    response = await this.processWithRules(
+                        payload.messageText,
+                        payload.storeId,
+                        context
+                    );
+                }
+
+                // Se regras indicarem início de pedido, iniciar o fluxo
+                if (response?.metadata?.isOrderStart) {
+                    context.currentFlow = 'ORDER';
+                    context.flowStep = 'ADDRESS';
+                }
+
+                // Se nada funcionou e IA está ativada, usar IA
+                if (!response && config.ai_enabled) {
+                    const geminiKey = await this.getGeminiApiKey(payload.storeId) || '';
+                    response = await zeAssistantAIService.processMessage(
+                        payload.messageText,
+                        storeContext,
+                        context,
+                        geminiKey
+                    );
+                    response.responseType = 'AI';
+                }
             }
 
-            // 5. Se regras não encontraram match, usar IA (se ativado)
-            if (!response && config.ai_enabled) {
-                const storeContext = await this.getStoreContext(payload.storeId);
-
-                // Buscar API Key do Gemini
-                // 1. Tentar de shop_settings (geralmente salva via AdminAIConfig)
-                // 2. Tentar de api_keys (tabela global/segura)
-                // Se não encontrar, passa string vazia e o serviço trata
-                const geminiKey = await this.getGeminiApiKey(payload.storeId) || '';
-
-                response = await zeAssistantAIService.processMessage(
-                    payload.messageText,
-                    storeContext,
-                    context,
-                    geminiKey
-                );
-                response.responseType = 'AI';
-            }
-
-            // 6. Se nem regra nem IA funcionaram, usar fallback
+            // 8. Se nem regra nem IA funcionaram, usar fallback
             if (!response || !response.success) {
                 context.confusionCount++;
 
@@ -161,6 +200,83 @@ export class ZeAssistantService {
                 handoffReason: 'Erro no processamento'
             };
         }
+    }
+
+    /**
+     * Gerencia o fluxo estruturado de pedidos
+     */
+    private async processOrderFlow(
+        messageText: string,
+        storeId: string,
+        context: ConversationContext
+    ): Promise<ProcessMessageResponse | null> {
+        const step = context.flowStep;
+
+        if (step === 'ADDRESS') {
+            context.variables.deliveryAddress = messageText;
+            context.flowStep = 'ITEMS';
+            return {
+                success: true,
+                responseText: 'Entendido! Agora, o que você gostaria de pedir? (Pode listar os itens e quantidades)',
+                responseType: 'RULE',
+                shouldHandoff: false
+            };
+        }
+
+        if (step === 'ITEMS') {
+            context.variables.orderItems = messageText;
+            context.flowStep = 'PAYMENT';
+            return {
+                success: true,
+                responseText: 'Perfeito. Qual será a forma de pagamento? (Dinheiro, Cartão ou Pix)',
+                responseType: 'RULE',
+                shouldHandoff: false
+            };
+        }
+
+        if (step === 'PAYMENT') {
+            context.variables.paymentMethod = messageText;
+            context.flowStep = 'CONFIRMATION';
+
+            const summary = `*Resumo do Pedido*\n\n` +
+                `📍 *Endereço:* ${context.variables.deliveryAddress}\n` +
+                `🛒 *Itens:* ${context.variables.orderItems}\n` +
+                `💳 *Pagamento:* ${context.variables.paymentMethod}\n\n` +
+                `Confirma o pedido? (Responda "Sim" para finalizar)`;
+
+            return {
+                success: true,
+                responseText: summary,
+                responseType: 'RULE',
+                shouldHandoff: false
+            };
+        }
+
+        if (step === 'CONFIRMATION') {
+            if (messageText.toLowerCase().includes('sim')) {
+                context.currentFlow = null;
+                context.flowStep = null;
+
+                return {
+                    success: true,
+                    responseText: 'Pedido confirmado com sucesso! 🎉 Um atendente irá validar as informações e entrar em contato em breve.',
+                    responseType: 'RULE',
+                    shouldHandoff: true,
+                    handoffReason: 'Pedido finalizado pelo assistente'
+                };
+            } else if (messageText.toLowerCase().includes('não') || messageText.toLowerCase().includes('nao')) {
+                context.currentFlow = null;
+                context.flowStep = null;
+                return {
+                    success: true,
+                    responseText: 'Sem problemas. Pedido cancelado. Se precisar de algo mais, é só chamar!',
+                    responseType: 'RULE',
+                    shouldHandoff: false
+                };
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -477,6 +593,47 @@ export class ZeAssistantService {
         } catch (error) {
             console.error('Erro ao buscar Gemini API Key:', error);
             return null;
+        }
+    }
+
+    /**
+     * Verifica se a loja está aberta baseada na string de opening_hours
+     */
+    private checkIfStoreIsOpen(openingHours: string | null | undefined): boolean {
+        if (!openingHours) return true; // Se não tem horário, assume aberto
+
+        try {
+            const now = new Date();
+            const days = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+            const currentDay = days[now.getDay()];
+            const currentTime = now.getHours() * 100 + now.getMinutes();
+
+            // Exemplo esperado: "segunda: 08:00-18:00, terça: 08:00-18:00..."
+            const dayConfigs = openingHours.toLowerCase().split(',').map(s => s.trim());
+            const todayConfig = dayConfigs.find(c => c.startsWith(currentDay));
+
+            if (!todayConfig) return true;
+
+            const timeRange = todayConfig.split(':')[1]?.trim();
+            if (!timeRange || timeRange === 'fechado' || timeRange === '24h') {
+                return timeRange !== 'fechado';
+            }
+
+            const [start, end] = timeRange.split('-').map(t => {
+                const [h, m] = t.trim().split(':').map(Number);
+                return h * 100 + m;
+            });
+
+            // Lógica simples (não trata horários que passam da meia-noite)
+            if (end < start) {
+                // Horário atravessa meia-noite (ex: 18:00 - 02:00)
+                return currentTime >= start || currentTime <= end;
+            }
+
+            return currentTime >= start && currentTime <= end;
+        } catch (e) {
+            console.error('[ZeAssistant] Erro ao validar horário:', e);
+            return true;
         }
     }
 }

@@ -28,6 +28,7 @@ export class WhatsappInstance extends EventEmitter {
   private status: ConnectionStatus = 'DISCONNECTED';
   private qrCode: string | undefined;
   private storeId: string;
+  private isConnecting = false;
   private groupCache = new Map<string, string>(); // Cache para nomes de grupos
 
   constructor(storeId: string) {
@@ -50,12 +51,16 @@ export class WhatsappInstance extends EventEmitter {
     }
   }
 
-  private async updateDatabaseStatus() {
+  private async updateDatabaseStatus(extraData: any = {}) {
     try {
+      if (Object.keys(extraData).length > 0) {
+        console.log(`[Loja ${this.storeId}] 📝 Atualizando banco com dados extras:`, JSON.stringify(extraData));
+      }
       await supabaseAdmin.from('whatsapp_sessions').upsert({
         store_id: this.storeId,
         status: this.status,
-        updated_at: new Date()
+        updated_at: new Date(),
+        ...extraData
       }, { onConflict: 'store_id' });
     } catch (error) {
       console.error(`[Loja ${this.storeId}] Erro ao atualizar status no banco:`, error);
@@ -71,7 +76,13 @@ export class WhatsappInstance extends EventEmitter {
   }
 
   private async connectToWhatsApp() {
+    if (this.isConnecting) {
+      console.log(`[Loja ${this.storeId}] ⏳ Já existe uma tentativa de conexão em curso. Ignorando...`);
+      return;
+    }
+
     try {
+      this.isConnecting = true;
       console.log(`[Loja ${this.storeId}] 📡 Conectando ao banco de dados para buscar sessão...`);
       const { state, saveCreds } = await useDatabaseAuth(this.storeId);
       console.log(`[Loja ${this.storeId}] ✅ Estado de autenticação carregado.`);
@@ -79,12 +90,18 @@ export class WhatsappInstance extends EventEmitter {
       const { version, isLatest } = await fetchLatestBaileysVersion();
       console.log(`[Loja ${this.storeId}] 📡 Usando versão do WA v${version.join('.')}, isLatest: ${isLatest}`);
 
+      // Se um sock já existir (por uma conexão antiga parcial), limpa antes de criar novo
+      if (this.sock) {
+        try { (this.sock as any).end(undefined); } catch (e) { }
+        this.sock = undefined;
+      }
+
       this.sock = makeWASocket({
         version,
         printQRInTerminal: false,
-        auth: state,
-        logger: pino({ level: 'error' }), // Reduzido para evitar flood em logs com muitas lojas
         browser: Browsers.macOS('Desktop'),
+        auth: state,
+        logger: pino({ level: 'error' }),
         syncFullHistory: true,
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 60000,
@@ -97,10 +114,11 @@ export class WhatsappInstance extends EventEmitter {
       console.error(`[Loja ${this.storeId}] ❌ Erro ao conectar com o WhatsApp:`, error.message || error);
       this.status = 'DISCONNECTED';
       this.emit('status.change', this.status);
-      this.sock = undefined;
+      this.updateDatabaseStatus();
+    } finally {
+      this.isConnecting = false;
     }
   }
-
   private setupEventHandlers() {
     if (!this.sock) return;
 
@@ -134,14 +152,13 @@ export class WhatsappInstance extends EventEmitter {
           this.connectToWhatsApp();
         }
       } else if (connection === 'open') {
-        console.log(`[Loja ${this.storeId}] ✅ WhatsApp conectado!`);
-        this.status = 'CONNECTED';
-        this.qrCode = undefined;
+        console.log(`[Loja ${this.storeId}] ✅ WhatsApp conectado com sucesso!`);
         this.status = 'CONNECTED';
         this.qrCode = undefined;
         this.emit('status.change', this.status);
-        this.updateDatabaseStatus();
+        await this.updateDatabaseStatus();
         this.emit('connection.open');
+        console.log(`[Loja ${this.storeId}] 📡 Aguardando eventos de histórico (messaging-history.set)...`);
       }
     });
 
@@ -200,15 +217,71 @@ export class WhatsappInstance extends EventEmitter {
       }
     });
 
+    // Eventos de Conversa (Real-time sync do aparelho)
+    this.sock.ev.on('chats.upsert', async (newChats) => {
+      const individualChats = newChats.filter(c => !c.id.includes('@g.us') && c.id !== 'status@broadcast');
+      if (individualChats.length === 0) return;
+
+      console.log(`[Loja ${this.storeId}] 🆕 ${individualChats.length} novas conversas individuais detectadas no aparelho.`);
+      const batch = individualChats.map(chat => ({
+        store_id: this.storeId,
+        conversation_id: chat.id,
+        phone_number: chat.id.split('@')[0].split(':')[0].replace(/\D/g, ''),
+        contact_name: chat.name || chat.id.split('@')[0],
+        unread_count: chat.unreadCount || 0,
+        last_message_timestamp: chat.conversationTimestamp ? new Date(Number(chat.conversationTimestamp) * 1000) : new Date(),
+      }));
+
+      await supabaseAdmin.from('whatsapp_conversations').upsert(batch, { onConflict: 'store_id,conversation_id' });
+    });
+
+    this.sock.ev.on('chats.update', async (updates) => {
+      for (const update of updates) {
+        if (update.id?.includes('@g.us') || update.id === 'status@broadcast') continue;
+
+        const data: any = {};
+        if (update.name) data.contact_name = update.name;
+        if (update.unreadCount !== undefined) data.unread_count = update.unreadCount;
+        if (update.conversationTimestamp) data.last_message_timestamp = new Date(Number(update.conversationTimestamp) * 1000);
+
+        if (Object.keys(data).length > 0) {
+          await supabaseAdmin.from('whatsapp_conversations')
+            .update(data)
+            .eq('store_id', this.storeId)
+            .eq('conversation_id', update.id);
+        }
+      }
+    });
+
+    this.sock.ev.on('chats.delete', async (deletions) => {
+      for (const id of deletions) {
+        await supabaseAdmin.from('whatsapp_conversations')
+          .delete()
+          .eq('store_id', this.storeId)
+          .eq('conversation_id', id);
+      }
+    });
+
     // Sincronização de histórico
     this.sock.ev.on('messaging-history.set', async (history) => {
-      const { chats, messages } = history;
-      console.log(`[Loja ${this.storeId}] 📚 Histórico recebido: ${chats.length} conversas, ${messages.length} mensagens.`);
+      const { chats, messages, isLatest } = history;
+      console.log(`[Loja ${this.storeId}] 📚 Histórico bruto recebido: ${chats?.length || 0} chats, ${messages?.length || 0} msgs. isLatest: ${isLatest}`);
 
       // 1. Bulk Upsert de Conversas
-      const conversationBatch = chats.map(chat => {
-        const isGroup = chat.id.includes('@g.us');
-        const phoneNumber = isGroup ? null : chat.id.split('@')[0].split(':')[0].replace(/\D/g, '');
+      const conversationBatch = chats.filter(c => !c.id.includes('@g.us') && c.id !== 'status@broadcast').map(chat => {
+        const phoneNumber = chat.id.split('@')[0].split(':')[0].replace(/\D/g, '');
+
+        // Tentar encontrar a última mensagem deste chat no pacote de histórico para preencher o last_message_content
+        const chatMessages = messages.filter(m => m.key.remoteJid === chat.id);
+        const lastMsg = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
+
+        let lastContent = '';
+        if (lastMsg) {
+          const type = getContentType(lastMsg.message!);
+          if (type === 'conversation') lastContent = lastMsg.message!.conversation!;
+          else if (type === 'extendedTextMessage') lastContent = lastMsg.message!.extendedTextMessage!.text!;
+          else lastContent = `[${type?.replace('Message', '') || 'Mídia'}]`;
+        }
 
         return {
           store_id: this.storeId,
@@ -217,22 +290,20 @@ export class WhatsappInstance extends EventEmitter {
           contact_name: chat.name || chat.id.split('@')[0],
           unread_count: chat.unreadCount || 0,
           last_message_timestamp: chat.conversationTimestamp ? new Date(Number(chat.conversationTimestamp) * 1000) : new Date(),
+          last_message_content: lastContent.substring(0, 500)
         };
-      }).filter(c => c.conversation_id !== 'status@broadcast');
+      });
 
       if (conversationBatch.length > 0) {
+        console.log(`[Loja ${this.storeId}] 💾 Gravando ${conversationBatch.length} conversas históricas...`);
         try {
           const CHUNK_SIZE = 100;
           for (let i = 0; i < conversationBatch.length; i += CHUNK_SIZE) {
             const chunk = conversationBatch.slice(i, i + CHUNK_SIZE);
-            // Upsert baseado em store_id,phone_number para unificar (conforme nova constraint)
-            // Se for grupo, mantemos o JID como identificador de conflito
-            for (const conv of chunk) {
-              // Usar store_id e conversation_id como chave de conflito para suportar multi-loja corretamente
-              await supabaseAdmin.from('whatsapp_conversations').upsert(conv, { onConflict: 'store_id,conversation_id' });
-            }
+            const { error } = await supabaseAdmin.from('whatsapp_conversations').upsert(chunk, { onConflict: 'store_id,conversation_id' });
+            if (error) console.error(`[Loja ${this.storeId}] ❌ Erro ao upsert lote de conversas:`, error.message);
           }
-          console.log(`[Loja ${this.storeId}] ✅ ${conversationBatch.length} conversas históricas salvas.`);
+          console.log(`[Loja ${this.storeId}] ✅ ${conversationBatch.length} conversas históricas processadas.`);
         } catch (e) {
           console.error(`[Loja ${this.storeId}] Erro ao salvar conversas históricas:`, e);
         }
@@ -293,9 +364,13 @@ export class WhatsappInstance extends EventEmitter {
         const CHUNK_SIZE = 100;
         for (let i = 0; i < messageBatch.length; i += CHUNK_SIZE) {
           const chunk = messageBatch.slice(i, i + CHUNK_SIZE);
-          await supabaseAdmin.from('whatsapp_messages').upsert(chunk, { onConflict: 'store_id,message_id' });
+          const { error } = await supabaseAdmin.from('whatsapp_messages').upsert(chunk, { onConflict: 'store_id,message_id' });
+          if (error) console.error(`[Loja ${this.storeId}] ❌ Erro ao upsert lote de mensagens:`, error.message);
         }
-        console.log(`[Loja ${this.storeId}] ✅ Sincronização inicial em lote concluída.`);
+        console.log(`[Loja ${this.storeId}] ✅ Sincronização inicial de mensagens concluída.`);
+
+        // Atualiza a data da sincronização completa
+        await this.updateDatabaseStatus({ last_full_sync_at: new Date() });
       }
     });
   }
@@ -303,9 +378,11 @@ export class WhatsappInstance extends EventEmitter {
   private async handleNewMessage(message: WAMessage, attendantId?: string) {
     try {
       const rawJid = message.key.remoteJid!;
-      const conversationId = rawJid.includes('@g.us')
-        ? rawJid
-        : rawJid.split('@')[0].split(':')[0] + '@s.whatsapp.net';
+      if (rawJid.includes('@g.us') || rawJid === 'status@broadcast') {
+        return; // Filtro de Privacidade: Ignorar Grupos e Status
+      }
+
+      const conversationId = rawJid.split('@')[0].split(':')[0] + '@s.whatsapp.net';
 
       const isFromMe = message.key.fromMe!;
       const messageType = getContentType(message.message!);
@@ -364,24 +441,7 @@ export class WhatsappInstance extends EventEmitter {
       else content = `[${messageType?.replace('Message', '') || 'Mídia'}]`;
 
       let contactName = message.pushName || conversationId.split('@')[0];
-      const isGroup = isJidGroup(conversationId);
-
-      if (isGroup) {
-        // Tenta obter o nome do grupo do cache ou do sock
-        if (this.groupCache.has(conversationId)) {
-          contactName = this.groupCache.get(conversationId)!;
-        } else if (this.sock) {
-          try {
-            const metadata = await this.sock.groupMetadata(conversationId);
-            contactName = metadata.subject;
-            this.groupCache.set(conversationId, contactName);
-          } catch (e) {
-            // Se falhar (ex: não é mais participante), mantém pushName ou ID
-          }
-        }
-      }
-
-      const phoneNumber = isGroup ? null : conversationId.split('@')[0].split(':')[0].replace(/\D/g, '');
+      const phoneNumber = conversationId.split('@')[0].split(':')[0].replace(/\D/g, '');
 
       // 1. Atualiza conversa (onConflict: store_id,conversation_id para evitar colisões)
       const conversationUpsert = {
@@ -567,12 +627,13 @@ export class WhatsappInstance extends EventEmitter {
 
   async disconnect() {
     console.log(`[Loja ${this.storeId}] 🚪 Desconectando e limpando sessão...`);
+    this.isConnecting = false; // Interrompe qualquer tentativa pendente
+
     if (this.sock) {
       try {
-        // Tenta deslogar oficialmente (invalida no servidor do WA)
         await this.sock.logout();
-      } catch (e) {
-        console.log(`[Loja ${this.storeId}] Erro ao deslogar do socket (pode já estar fechado):`, e.message);
+      } catch (e: any) {
+        console.log(`[Loja ${this.storeId}] Erro ao deslogar do socket:`, e.message);
       }
       try {
         (this.sock as any).end(undefined);
@@ -580,7 +641,6 @@ export class WhatsappInstance extends EventEmitter {
       this.sock = undefined;
     }
 
-    // Limpa o banco de dados
     await clearDatabaseSession(this.storeId);
 
     this.status = 'DISCONNECTED';
@@ -592,6 +652,8 @@ export class WhatsappInstance extends EventEmitter {
 
   async reconnect() {
     console.log(`[Loja ${this.storeId}] 🔄 Tentando reconectar usando sessão existente...`);
+    this.isConnecting = false;
+
     if (this.sock) {
       try { (this.sock as any).end(undefined); } catch (e) { }
       this.sock = undefined;
@@ -601,24 +663,14 @@ export class WhatsappInstance extends EventEmitter {
     this.emit('status.change', this.status);
     this.updateDatabaseStatus();
 
-    setTimeout(() => this.connectToWhatsApp(), 1000);
+    // Pequeno delay para garantir limpeza
+    setTimeout(() => this.connectToWhatsApp(), 1500);
   }
 
   async restart() {
-    console.log(`[Loja ${this.storeId}] 🔄 Reiniciando serviço e limpando sessão antiga...`);
-    if (this.sock) {
-      try { (this.sock as any).end(undefined); } catch (e) { }
-      this.sock = undefined;
-    }
-
-    // Força limpeza da sessão no banco para garantir novo QR Code
-    await clearDatabaseSession(this.storeId);
-
-    this.status = 'DISCONNECTED';
-    this.qrCode = undefined;
-    this.emit('status.change', this.status);
-    this.updateDatabaseStatus();
-    setTimeout(() => this.connectToWhatsApp(), 1000);
+    console.log(`[Loja ${this.storeId}] 🔄 Reiniciando instância e limpando sessão...`);
+    await this.disconnect();
+    setTimeout(() => this.connectToWhatsApp(), 1500);
   }
 }
 
@@ -695,6 +747,19 @@ class WhatsappServiceManager extends EventEmitter {
   public async reconnect(storeId: string) {
     const instance = this.getInstance(storeId);
     await instance.reconnect();
+  }
+
+  public async restart(storeId: string) {
+    console.log(`[Gerenciador] Solicitando reinício total (Stateless) para loja ${storeId}`);
+    const instance = this.instances.get(storeId);
+    if (instance) {
+      await instance.disconnect();
+      this.instances.delete(storeId);
+    } else {
+      await clearDatabaseSession(storeId);
+    }
+    // Força a criação de uma nova instância limpa
+    this.getInstance(storeId);
   }
 }
 

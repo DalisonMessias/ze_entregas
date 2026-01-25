@@ -75,7 +75,8 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                     can_delivery: config.can_delivery,
                     can_pickup: config.can_pickup,
                     greeting_message: config.greeting_message,
-                    fallback_message: config.fallback_message
+                    fallback_message: config.fallback_message,
+                    instruction_closed_store: config.instruction_closed_store
                 })
                 .eq('store_id', storeId);
 
@@ -225,6 +226,20 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                             className="w-full p-2 border rounded-md text-sm focus:ring-purple-500 focus:border-purple-500"
                             rows={2}
                             placeholder="Ex: Desculpe, não entendi. Vou chamar um humano..."
+                        />
+                    </div>
+
+                    <div className="bg-brand-50 p-4 rounded-xl border border-brand-100">
+                        <label className="block text-sm font-bold text-brand-700 mb-1">
+                            Instrução para Loja Fechada
+                        </label>
+                        <p className="text-[10px] text-brand-600 mb-2 font-medium">Esta mensagem será enviada automaticamente pelo Zé quando a loja estiver fechada, mesmo que ele esteja pausado.</p>
+                        <textarea
+                            value={config.instruction_closed_store || ''}
+                            onChange={(e) => setConfig({ ...config, instruction_closed_store: e.target.value })}
+                            className="w-full p-2 border border-brand-200 rounded-md text-sm focus:ring-brand-500 focus:border-brand-500 bg-white"
+                            rows={3}
+                            placeholder="Ex: Olá! No momento estamos fechados..."
                         />
                     </div>
                 </div>

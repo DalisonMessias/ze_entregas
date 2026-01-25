@@ -623,8 +623,8 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'cancellation_count_monthly') THEN
         ALTER TABLE public.user_profiles ADD COLUMN cancellation_count_monthly INTEGER DEFAULT 0;
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'monthly_reset_date') THEN
-        ALTER TABLE public.user_profiles ADD COLUMN monthly_reset_date TIMESTAMPTZ DEFAULT (date_trunc('month', now()) + interval '1 month');
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'config') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN config JSONB DEFAULT '{}'::jsonb;
     END IF;
 
 END $$;
@@ -9535,11 +9535,12 @@ CREATE OR REPLACE FUNCTION public.create_public_order(
     p_store_id UUID,
     p_items JSONB[],
     p_total_price NUMERIC,
-    p_payment_method TEXT, -- Recebe texto e casta
+    p_payment_method TEXT,
     p_shipping_address JSONB,
-    p_delivery_mode TEXT, -- 'DELIVERY' | 'PICKUP'
+    p_delivery_mode TEXT,
     p_customer_name TEXT,
-    p_customer_phone TEXT
+    p_customer_phone TEXT,
+    p_pix_active BOOLEAN DEFAULT FALSE
 )
 RETURNS UUID
 AS $$
@@ -9547,6 +9548,15 @@ DECLARE
     v_order_id UUID;
     v_status public.order_status := 'pending';
 BEGIN
+    -- Definir status baseado na ativação do PIX
+    IF p_payment_method = 'PIX' THEN
+        IF p_pix_active THEN
+            v_status := 'Aguardando pagamento (PIX)';
+        ELSE
+            v_status := 'Pagamento a combinar com a loja';
+        END IF;
+    END IF;
+
     INSERT INTO public.orders (
         store_id, 
         user_id, 
@@ -9555,13 +9565,13 @@ BEGIN
         total_price, 
         payment_method, 
         shipping_address, 
-        order_type, -- Usamos order_type para Delivery/Pickup
+        order_type,
         customer_name, 
         customer_phone
     )
     VALUES (
         p_store_id, 
-        auth.uid(), -- Link to user if authenticated, NULL otherwise (GUEST)
+        auth.uid(),
         v_status, 
         p_items, 
         p_total_price, 
@@ -9718,3 +9728,105 @@ DROP POLICY IF EXISTS "Authenticated Delete" ON storage.objects;
 CREATE POLICY "Authenticated Delete" ON storage.objects FOR DELETE USING (bucket_id = 'gallery' AND auth.role() = 'authenticated');
 
 
+
+-- ==================================================================
+-- ATUALIZAÇÃO DE STATUS DE PEDIDO (24/01/2026)
+-- ==================================================================
+-- Adicionando novos status ao enum de forma segura
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'order_status' AND e.enumlabel = 'Aguardando pagamento (PIX)') THEN
+        ALTER TYPE public.order_status ADD VALUE 'Aguardando pagamento (PIX)';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'order_status' AND e.enumlabel = 'Pagamento a combinar com a loja') THEN
+        ALTER TYPE public.order_status ADD VALUE 'Pagamento a combinar com a loja';
+    END IF;
+END $$;
+
+-- ==================================================================
+-- EXTENSÕES WHATSAPP E ZÉ ASSISTENTE (25/01/2026)
+-- ==================================================================
+
+-- 1. Coluna de prioridade para conversas
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsapp_conversations' AND column_name = 'priority') THEN
+        ALTER TABLE public.whatsapp_conversations ADD COLUMN priority TEXT DEFAULT 'normal';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsapp_conversations' AND column_name = 'last_message_content') THEN
+        ALTER TABLE public.whatsapp_conversations ADD COLUMN last_message_content TEXT;
+    END IF;
+END $$;
+
+-- 2. Controle de sincronização completa nas sessões
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsapp_sessions' AND column_name = 'last_full_sync_at') THEN
+        ALTER TABLE public.whatsapp_sessions ADD COLUMN last_full_sync_at TIMESTAMPTZ;
+    END IF;
+END $$;
+
+-- 3. Preferência de ordenação no assistente
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ze_assistant_config' AND column_name = 'whatsapp_sort_preference') THEN
+        ALTER TABLE public.ze_assistant_config ADD COLUMN whatsapp_sort_preference TEXT DEFAULT 'recent';
+    END IF;
+END $$;
+
+-- Comentários explicativos
+COMMENT ON COLUMN public.whatsapp_conversations.priority IS 'Nível de prioridade da conversa: critical, high, normal, low';
+COMMENT ON COLUMN public.whatsapp_sessions.last_full_sync_at IS 'Data/hora da última sincronização completa de todas as conversas do aparelho';
+COMMENT ON COLUMN public.ze_assistant_config.whatsapp_sort_preference IS 'Preferência de ordenação das conversas para o lojista: recent, manual';
+
+
+-- Tabela para Respostas Rápidas do Chat Interno
+CREATE TABLE IF NOT EXISTS public.store_quick_replies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    trigger TEXT NOT NULL, -- Ex: /pix, /ola
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, trigger)
+);
+
+-- Adicionar nova instrução para loja fechada no Zé Assistente
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ze_assistant_config' AND column_name='instruction_closed_store') THEN
+        ALTER TABLE public.ze_assistant_config ADD COLUMN instruction_closed_store TEXT DEFAULT 'Olá! No momento estamos fechados, mas deixe sua mensagem que responderemos assim que abrirmos.';
+    END IF;
+
+    -- Adicionar classificação de cliente ao chat
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_conversations' AND column_name='customer_type') THEN
+        ALTER TABLE public.whatsapp_conversations ADD COLUMN customer_type TEXT CHECK (customer_type IN ('ze', 'store', 'visitor'));
+    END IF;
+END $$;
+
+-- Habilitar RLS para store_quick_replies
+ALTER TABLE public.store_quick_replies ENABLE ROW LEVEL SECURITY;
+
+-- Políticas para store_quick_replies
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas podem ver suas próprias respostas rápidas' AND tablename = 'store_quick_replies') THEN
+        CREATE POLICY "Lojistas podem ver suas próprias respostas rápidas" ON public.store_quick_replies FOR SELECT USING (auth.uid() = store_id);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas podem inserir suas próprias respostas rápidas' AND tablename = 'store_quick_replies') THEN
+        CREATE POLICY "Lojistas podem inserir suas próprias respostas rápidas" ON public.store_quick_replies FOR INSERT WITH CHECK (auth.uid() = store_id);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas podem atualizar suas próprias respostas rápidas' AND tablename = 'store_quick_replies') THEN
+        CREATE POLICY "Lojistas podem atualizar suas próprias respostas rápidas" ON public.store_quick_replies FOR UPDATE USING (auth.uid() = store_id);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas podem deletar suas próprias respostas rápidas' AND tablename = 'store_quick_replies') THEN
+        CREATE POLICY "Lojistas podem deletar suas próprias respostas rápidas" ON public.store_quick_replies FOR DELETE USING (auth.uid() = store_id);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Público pode ler respostas rápidas para uso no chat' AND tablename = 'store_quick_replies') THEN
+        CREATE POLICY "Público pode ler respostas rápidas para uso no chat" ON public.store_quick_replies FOR SELECT USING (true);
+    END IF;
+END $$;

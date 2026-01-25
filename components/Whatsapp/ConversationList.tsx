@@ -1,6 +1,7 @@
 import React from 'react';
 import { WhatsappConversation, PriorityLevel } from './types';
-import { UserPlus, Star, MessageSquare, Trash2 } from 'lucide-react';
+import { UserPlus, Star, MessageSquare, Trash2, MoreVertical, GripVertical } from 'lucide-react';
+
 
 interface ConversationListProps {
   conversations: WhatsappConversation[];
@@ -39,10 +40,10 @@ const ConversationList: React.FC<ConversationListProps> = ({
 
   const getPriorityColor = (priority?: PriorityLevel) => {
     switch (priority) {
-      case 'critical': return 'text-red-500';
-      case 'high': return 'text-yellow-500';
+      case 'critical': return 'text-red-500 animate-pulse';
+      case 'high': return 'text-orange-500';
       case 'normal': return 'text-gray-300 hover:text-gray-400';
-      case 'low': return 'text-green-500';
+      case 'low': return 'text-blue-400';
       default: return 'text-gray-300 hover:text-gray-400';
     }
   };
@@ -59,10 +60,10 @@ const ConversationList: React.FC<ConversationListProps> = ({
 
   const getPriorityBorder = (priority?: PriorityLevel) => {
     switch (priority) {
-      case 'critical': return 'border-l-4 border-l-red-500';
-      case 'high': return 'border-l-4 border-l-yellow-500';
+      case 'critical': return 'border-l-4 border-l-red-600 shadow-sm bg-red-50/10';
+      case 'high': return 'border-l-4 border-l-orange-500';
       case 'normal': return '';
-      case 'low': return 'border-l-4 border-l-green-500';
+      case 'low': return 'border-l-4 border-l-blue-400';
       default: return '';
     }
   };
@@ -81,7 +82,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
     }
 
     return (
-      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#25D366] to-[#128C7E] flex items-center justify-center text-white font-semibold flex-shrink-0 text-sm">
+      <div className="w-12 h-12 rounded-full bg-brand-600 flex items-center justify-center text-white font-semibold flex-shrink-0 text-sm">
         {getInitials(conversation.contact_name || conversation.conversation_id)}
       </div>
     );
@@ -117,15 +118,33 @@ const ConversationList: React.FC<ConversationListProps> = ({
             className={`p-3 border-b border-gray-100 cursor-pointer transition-all hover:bg-gray-50 group flex items-center gap-3 relative ${isSelected ? 'bg-[#f0f2f5]' : ''} ${draggedId === conversation.conversation_id ? 'opacity-50 grayscale' : ''} ${getPriorityBorder(conversation.priority)}`}
           >
             {/* Status Indicator Bar */}
-            <div className={`absolute left-0 top-0 bottom-0 w-1 ${conversation.status === 'open' ? 'bg-[#25D366]' : conversation.status === 'closed' ? 'bg-gray-400' : 'bg-transparent'}`} />
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${conversation.status === 'open' ? 'bg-brand-600' : conversation.status === 'closed' ? 'bg-gray-400' : 'bg-transparent'}`} />
 
             <div className="flex items-center gap-3 w-full overflow-hidden">
+              {/* Drag Handle (Visible only if isManualOrder is true) */}
+              {isManualOrder && (
+                <div className="cursor-grab active:cursor-grabbing text-gray-400 p-1 hover:bg-gray-100 rounded">
+                  <GripVertical size={16} />
+                </div>
+              )}
+
               {renderAvatar(conversation)}
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-0.5">
-                  <h3 className="font-normal text-[#111B21] truncate text-[16px]">
+                  <h3 className="font-normal text-[#111B21] truncate text-[16px] flex items-center gap-2">
                     {conversation.contact_name || conversation.conversation_id}
+
+                    {/* Tags de Classificação de Cliente */}
+                    {conversation.customer_type === 'ze' && (
+                      <span className="px-1.5 py-0.5 bg-brand-100 text-brand-600 rounded text-[9px] font-black uppercase tracking-tighter" title="Usuário logado na plataforma">Cliente Zé</span>
+                    )}
+                    {conversation.customer_type === 'store' && (
+                      <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-[9px] font-black uppercase tracking-tighter" title="Contato salvo na lista da loja">Cliente Loja</span>
+                    )}
+                    {conversation.customer_type === 'visitor' && (
+                      <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[9px] font-black uppercase tracking-tighter" title="Usuário não identificado (Menu Digital)">Visitante</span>
+                    )}
                   </h3>
                   <span className="text-xs text-[#667781] flex-shrink-0 tabular-nums">
                     {conversation.last_message_timestamp ? new Date(conversation.last_message_timestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
@@ -150,7 +169,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
                           const newName = prompt('Digite o nome para este contato:', conversation.conversation_id.split('@')[0]);
                           if (newName) onSaveContactName?.(conversation.conversation_id, newName);
                         }}
-                        className="p-1 text-green-600 hover:bg-green-50 rounded-full transition-colors"
+                        className="p-1 text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
                         title="Salvar Nome do Contato"
                       >
                         <UserPlus size={14} />
@@ -172,7 +191,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
 
                     {/* Unread Badge */}
                     {unreadCount > 0 && (
-                      <span className="bg-[#25D366] text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
+                      <span className="bg-brand-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
                         {unreadCount}
                       </span>
                     )}
@@ -180,7 +199,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
                     {/* Add Contact for unknowns */}
                     {isUnknownContact && (
                       <button
-                        className="p-1 text-[#00a884] hover:bg-gray-100 rounded-full"
+                        className="p-1 text-brand-600 hover:bg-gray-100 rounded-full"
                         title="Adicionar contato"
                         onClick={(e) => {
                           e.stopPropagation();

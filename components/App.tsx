@@ -43,6 +43,7 @@ const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => 
 const StoreProductImport = React.lazy(() => import('./ProductImportExport').then(module => ({ default: module.ProductImportExport })));
 const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => ({ default: module.ZePayStore })));
 const StoreApiDocs = React.lazy(() => import('./StoreApiDocs').then(module => ({ default: module.StoreApiDocs })));
+const StoreReceivingPayment = React.lazy(() => import('./StoreReceivingPayment').then(module => ({ default: module.StoreReceivingPayment })));
 const AdminMercadoPagoConfig = React.lazy(() => import('./AdminMercadoPagoConfig').then(module => ({ default: module.AdminMercadoPagoConfig })));
 const AdminAIConfig = React.lazy(() => import('./AdminAIConfig').then(module => ({ default: module.AdminAIConfig })));
 const AdminInsuranceConfig = React.lazy(() => import('./AdminInsuranceConfig').then(module => ({ default: module.AdminInsuranceConfig })));
@@ -118,6 +119,7 @@ export type ActiveTab =
     | 'store_settings'
     | 'store_product_import'
     | 'store_status'
+    | 'store_receiving_payment'
     | 'store_finance_panel'
     | 'partner'
     | 'daily_panel'
@@ -746,7 +748,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'admin_investments', 'admin_whatsapp', 'admin_payment_gateways', 'admin_mercadopago', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance'
         ]),
         store_partner: new Set<ActiveTab>([
-            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans', 'store_promotions'
+            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans', 'store_promotions'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
@@ -862,6 +864,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'store_marketing': return <StoreMarketing />;
                 case 'store_integrations': return <StoreIntegrations onNavigate={navigate} />;
                 case 'store_settings': return <StoreSettings />;
+                case 'store_receiving_payment': return <StoreReceivingPayment />;
                 case 'store_product_import': return <StoreProductImport />;
                 case 'store_finance_panel': return <ZePayStore />;
                 case 'zepay_store': return <ZePayStore />; // ZéPay Module
@@ -1089,7 +1092,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                             <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
                             <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
-                            <MenuButton icon={MessageSquare} label="Atendimento WhatsApp" tab="admin_whatsapp" />
+                            <MenuButton icon={MessageSquare} label="Chat Interno" tab="admin_whatsapp" />
 
                             <MenuSection title="Conteúdo & App" />
                             <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
@@ -1134,7 +1137,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
                             <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
                             <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
-                            <MenuButton icon={MessageSquare} label="WhatsApp" tab="whatsapp_chat" />
+                            <MenuButton icon={MessageSquare} label="Chat Interno" tab="whatsapp_chat" />
                             <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
                             <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
@@ -1144,6 +1147,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
                             <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
                             <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
+                            <MenuButton icon={Smartphone} label="Recebimento PIX" tab="store_receiving_payment" />
                             <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
                             <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
                             <MenuButton icon={Banknote} label="Promoções e Cupons" tab="store_promotions" />

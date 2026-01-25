@@ -56,12 +56,21 @@ router.post('/send/text', whatsappController.sendTextMessage);
 
 /**
  * @swagger
- * /api/whatsapp/send/audio:
+ * /api/whatsapp/chat/internal/send:
  *   post:
- *     summary: Envia uma mensagem de áudio (PTT)
+ *     summary: Envia mensagem do chat interno (Menu Digital)
  *     tags: [WhatsApp]
  */
-router.post('/send/audio', upload.single('audio'), whatsappController.sendAudioMessage);
+/**
+ * @swagger
+ * /api/whatsapp/chat/internal/send:
+ *   post:
+ *     summary: Envia mensagem do chat interno (Menu Digital)
+ *     tags: [WhatsApp]
+ */
+router.post('/chat/internal/send', whatsappController.sendInternalMessage);
+
+// router.post('/send/audio', upload.single('audio'), whatsappController.sendAudioMessage); // Removido: Chat interno usa API genérica
 
 router.get('/conversations', whatsappController.getConversations);
 
@@ -220,8 +229,6 @@ router.post('/send/document', whatsappMediaController.uploadMiddleware, whatsapp
  */
 router.post('/restart', whatsappController.restartService);
 
-router.post('/restart', whatsappController.restartService);
-
 /**
  * @swagger
  * /api/whatsapp/conversations/{conversationId}/priority:
@@ -233,11 +240,39 @@ router.patch('/conversations/:conversationId/priority', whatsappController.updat
 
 /**
  * @swagger
+ * /api/whatsapp/conversations/sort-preference:
+ *   patch:
+ *     summary: Atualiza a preferência de ordenação das conversas
+ *     tags: [WhatsApp]
+ */
+router.patch('/conversations/sort-preference', whatsappController.updateSortPreference);
+
+
+/**
+ * @swagger
  * /api/whatsapp/conversations/{conversationId}:
  *   delete:
  *     summary: Deleta uma conversa sincronizado com o aparelho
  *     tags: [WhatsApp]
  */
 router.delete('/conversations/:conversationId', whatsappController.deleteConversation);
+
+/**
+ * @swagger
+ * /api/whatsapp/conversations/{conversationId}/messages:
+ *   delete:
+ *     summary: Limpa todo o histórico de mensagens de uma conversa (Hard Delete)
+ *     tags: [WhatsApp]
+ */
+router.delete('/conversations/:conversationId/messages', whatsappController.clearConversationMessages);
+
+/**
+ * @swagger
+ * /api/whatsapp/messages/{messageId}:
+ *   delete:
+ *     summary: Deleta uma mensagem específica (Hard Delete)
+ *     tags: [WhatsApp]
+ */
+router.delete('/messages/:messageId', whatsappController.deleteMessage);
 
 export default router;

@@ -64,6 +64,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/marketing': 'store_marketing',
     '/loja/integracoes': 'store_integrations',
     '/loja/configuracoes': 'store_settings',
+    '/loja/receiving-payment': 'store_receiving_payment',
     '/loja/produtos': 'store_product_import',
     '/loja/status': 'store_status',
     '/loja/financeiro': 'store_finance_panel',

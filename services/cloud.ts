@@ -13,7 +13,7 @@ import {
     UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator, StoreAddonOption, StoreAddonGroup,
     StoreDeliverySettings, StoreNeighborhoodFee, PaymentGatewayConfig, PaymentGatewayLog,
     FinancialTransaction, BlacklistEntry, PartnerRating, Claim,
-    CatalogBaseProduct
+    CatalogBaseProduct, QuickReply
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -791,6 +791,62 @@ export const deleteSticker = async (stickerId: string) => {
     if (!sb) return false;
     const { error } = await sb.from('store_stickers').delete().eq('id', stickerId);
     return !error;
+};
+
+// --- QUICK REPLIES ---
+export const getQuickReplies = async (storeId: string): Promise<QuickReply[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb
+        .from('store_quick_replies')
+        .select('*')
+        .eq('store_id', storeId)
+        .order('trigger', { ascending: true });
+    if (error) {
+        console.error('Error fetching quick replies:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const createQuickReply = async (storeId: string, trigger: string, message: string): Promise<QuickReply | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data, error } = await sb
+        .from('store_quick_replies')
+        .insert({ store_id: storeId, trigger, message })
+        .select()
+        .single();
+    if (error) {
+        console.error('Error creating quick reply:', error);
+        return null;
+    }
+    return data;
+};
+
+export const updateQuickReply = async (id: string, trigger: string, message: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+    const { error } = await sb
+        .from('store_quick_replies')
+        .update({ trigger, message, updated_at: new Date().toISOString() })
+        .eq('id', id);
+    if (error) {
+        console.error('Error updating quick reply:', error);
+        return false;
+    }
+    return true;
+};
+
+export const deleteQuickReply = async (id: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+    const { error } = await sb.from('store_quick_replies').delete().eq('id', id);
+    if (error) {
+        console.error('Error deleting quick reply:', error);
+        return false;
+    }
+    return true;
 };
 
 export const uploadProductImage = async (file: File): Promise<string> => {
@@ -5482,7 +5538,8 @@ export const createPublicOrder = async (
     shippingAddress: any,
     deliveryMode: 'DELIVERY' | 'PICKUP',
     customerName: string,
-    customerPhone: string
+    customerPhone: string,
+    pixActive: boolean = false
 ): Promise<{ success: boolean; orderId?: string; error?: any }> => {
     const sb = getClient();
     if (!sb) return { success: false, error: 'Client not initialized' };
@@ -5495,7 +5552,8 @@ export const createPublicOrder = async (
         p_shipping_address: shippingAddress,
         p_delivery_mode: deliveryMode,
         p_customer_name: customerName,
-        p_customer_phone: customerPhone
+        p_customer_phone: customerPhone,
+        p_pix_active: pixActive
     });
 
     if (error) {

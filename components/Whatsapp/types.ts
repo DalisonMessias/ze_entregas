@@ -13,6 +13,7 @@ export interface WhatsappConversation {
   created_at?: string;
   updated_at?: string;
   priority?: PriorityLevel;
+  customer_type?: 'ze' | 'store' | 'visitor' | null;
 }
 
 export type SortCriteria = 'manual' | 'recent' | 'unread' | 'priority' | 'inprogress' | 'closed';

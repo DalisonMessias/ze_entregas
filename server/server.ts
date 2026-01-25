@@ -12,11 +12,11 @@ import zeAssistantRoutes from './routes/zeAssistant.js';
 import pwaRoutes from './routes/pwa.js';
 import paymentRoutes from './routes/payment.js';
 import { initializeWebSocket } from './websocket.js';
-import './services/whatsappService.js'; // Importa para inicializar o serviço
-import './services/zeAssistantService.js'; // Importa para inicializar o serviço de Assistente
+import './services/internalChatService.js'; // Chat Interno Nativo
+import './services/zeAssistantService.js';
 import { supabaseAdmin } from './services/supabaseClient.js';
 
-console.log('✅ Serviços carregados: WhatsApp, Zé Assistente');
+console.log('✅ Serviços carregados: Chat Interno, Zé Assistente');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,7 +61,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       streetsNeighborhoods: '/api/streets-neighborhoods',
-      whatsapp: '/api/whatsapp/status'
+      chat: '/api/chat/status'
     }
   });
 });
@@ -104,7 +104,7 @@ server.listen(PORT, '0.0.0.0', async () => {
 
   const base = `http://localhost:${PORT}`;
   console.log(`📍 Health check: ${base}/health`);
-  console.log(`💬 WhatsApp API: ${base}/api/whatsapp/status\n`);
+  console.log(`💬 Chat Interno API: ${base}/api/chat/status\n`);
 });
 
 export default app;

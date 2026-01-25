@@ -9,8 +9,8 @@ import QrCodeModal from './QrCodeModal';
 import SearchBar from './SearchBar';
 import ContactsManager from './ContactsManager';
 import { BaseModal } from '../BaseModal';
-import { ZeAssistantConfig, ZeAssistantRulesManager, ZeAssistantDashboard } from './ZeAssistant/index';
-import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot } from 'lucide-react';
+import { ZeAssistantConfig, ZeAssistantRulesManager, ZeAssistantDashboard, ZeAssistantQuickReplies } from './ZeAssistant/index';
+import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot, Shield } from 'lucide-react';
 
 import { getApiBaseUrl } from '../../utils/apiConfig';
 import * as cloud from '../../services/cloud';
@@ -57,13 +57,14 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
 
   // Estados para Modais de Funcionalidade
   const [showContactDetails, setShowContactDetails] = useState(false);
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [newChatNumber, setNewChatNumber] = useState('');
   const [showBlockConfirm, setShowBlockConfirm] = useState<'block' | 'report' | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAssistantModal, setShowAssistantModal] = useState(false);
+  const [isAssistantActive, setIsAssistantActive] = useState(true);
   const [pixKey, setPixKey] = useState<string>("");
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const scrollFilters = (direction: 'left' | 'right') => {
     if (filterContainerRef.current) {
@@ -74,6 +75,21 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
       });
     }
   };
+
+  // Fechar menu de mais opções ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setShowMoreMenu(false);
+      }
+    };
+    if (showMoreMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMoreMenu]);
 
   // Monitorar status online
   useEffect(() => {
@@ -247,10 +263,29 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
     return () => clearTimeout(syncTimer);
   }, [status.status, isOnline, storeId, selectedConversation, fetchConversations, fetchMessages]);
 
-  const handleSelectConversation = (conversation: WhatsappConversation) => {
+  const handleSelectConversation = async (conversation: WhatsappConversation) => {
     setSelectedConversation(conversation);
     setActiveTab('conversations');
     fetchMessages(conversation.conversation_id);
+
+    // Buscar status do assistente para esta conversa
+    try {
+      const { data: assistantData } = await cloud.getClient()
+        ?.from('ze_assistant_conversations')
+        .select('is_assistant_active')
+        .eq('store_id', storeId)
+        .eq('conversation_id', conversation.conversation_id)
+        .single() || { data: null };
+
+      if (assistantData) {
+        setIsAssistantActive(assistantData.is_assistant_active);
+      } else {
+        setIsAssistantActive(true); // Default
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar status do assistente:', e);
+      setIsAssistantActive(true);
+    }
   };
 
   const handleStartChatFromContact = (phoneNumber: string, contactName: string) => {
@@ -320,6 +355,34 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
 
     return sorted;
   }, [conversations, searchQuery, sortCriteria, manualOrder]);
+
+  const handleUpdateSortPreference = async (preference: SortCriteria) => {
+    if (preference !== 'recent' && preference !== 'manual') return;
+
+    setSortCriteria(preference);
+    try {
+      await axios.patch(`${API_BASE_URL}/conversations/sort-preference`, { preference, storeId });
+    } catch (error) {
+      console.error('Erro ao salvar preferência de ordenação:', error);
+    }
+  };
+
+  const handleToggleAssistant = async () => {
+    if (!selectedConversation) return;
+
+    const newState = !isAssistantActive;
+    setIsAssistantActive(newState);
+
+    try {
+      await axios.patch(`${API_BASE_URL.replace('/whatsapp', '/ze-assistant')}/conversations/${storeId}/${encodeURIComponent(selectedConversation.conversation_id)}/toggle-assistant`, {
+        active: newState
+      });
+    } catch (error) {
+      console.error('Erro ao alternar assistente:', error);
+      alert('Erro ao alternar estado do assistente.');
+      setIsAssistantActive(!newState); // Revert
+    }
+  };
 
   const handleReorder = (draggedId: string, targetId: string) => {
     const newSorted = [...sortedConversations];
@@ -459,29 +522,6 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
     }
   };
 
-  const handleStartNewChat = async () => {
-    if (!newChatNumber.trim()) return;
-
-    const pureNumber = newChatNumber.replace(/\D/g, '');
-    const jid = `${pureNumber}@s.whatsapp.net`;
-
-    const newConv: WhatsappConversation = {
-      conversation_id: jid,
-      phone_number: pureNumber,
-      store_id: storeId,
-      contact_name: pureNumber,
-      unread_count: 0,
-      last_message_content: 'Nova conversa iniciada',
-      last_message_timestamp: new Date().toISOString(),
-      status: 'open',
-      profile_pic_url: null
-    };
-
-    setConversations(prev => [newConv, ...prev.filter(c => c.phone_number !== pureNumber)]);
-    setSelectedConversation(newConv);
-    setShowNewChatModal(false);
-    setNewChatNumber('');
-  };
 
   const handleContactAction = async (action: 'block' | 'report') => {
     if (!selectedConversation) return;
@@ -562,19 +602,29 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
 
       await axios.post(`${API_BASE_URL}/restart`, { storeId, forceLogout });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao reiniciar serviço:', error);
       setStatus({ status: 'DISCONNECTED' });
-      alert('Não foi possível iniciar a conexão. Verifique se o servidor está rodando.');
+      const errorMessage = error.response?.data?.message || error.message || 'Erro desconhecido';
+      alert(`Não foi possível iniciar a conexão.\n\nDetalhe técnico: ${errorMessage}\n\nVerifique se o seu servidor backend está rodando na porta correta (4000) e se o Supabase está acessível.`);
     }
   };
 
   const handleWhatsappDisconnect = async () => {
-    setShowLogoutConfirm(true);
+    // Só mostramos o modal de confirmação se o status atual for CONNECTED
+    // Se estiver em CONNECTING ou WAITING_QR, fechamos sem perguntar (como solicitado)
+    if (status.status === 'CONNECTED') {
+      setShowLogoutConfirm(true);
+    } else {
+      // Se não está conectado, apenas fechamos o modal do QR e limpamos estado local
+      setShowQrModal(false);
+      setStatus({ status: 'DISCONNECTED' });
+    }
   };
 
   const confirmLogout = async () => {
     setShowLogoutConfirm(false);
+    setShowQrModal(false);
     try {
       await axios.post(`${API_BASE_URL}/logout`, { storeId });
     } catch (error) {
@@ -605,6 +655,12 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
           if (res.data.hasSession !== undefined) {
             setHasSession(res.data.hasSession);
           }
+        }
+
+        // Buscar configuração do assistente para pegar a preferência de ordenação
+        const { data: config } = await cloud.getClient()?.from('ze_assistant_config').select('whatsapp_sort_preference').eq('store_id', storeId).single() || { data: null };
+        if (config?.whatsapp_sort_preference) {
+          setSortCriteria(config.whatsapp_sort_preference as SortCriteria);
         }
       } catch (e) {
         // Silently fail on status poll
@@ -729,14 +785,6 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
               <div className="w-10 h-10 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center cursor-pointer" onClick={() => setActiveTab('contacts')}>
                 <Users className="text-gray-600" size={24} />
               </div>
-              {/* Status Indicator (Compact) */}
-              {status.status !== 'CONNECTED' && (
-                <div className="flex items-center gap-1 bg-yellow-100 flex-col px-2 py-0.5 rounded">
-                  <span className="text-[10px] text-yellow-800 font-bold">
-                    {status.status === 'WAITING_QR' ? 'ESCANEIE O QR' : 'CONECTANDO...'}
-                  </span>
-                </div>
-              )}
             </div>
 
 
@@ -744,13 +792,13 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
               <button
                 onClick={() => setActiveTab('conversations')}
                 title="Conversas"
-                className={`p-2 rounded-full transition-colors relative ${activeTab === 'conversations' ? 'bg-[#dcf8c6]' : 'hover:bg-gray-200'}`}
+                className={`p-2 rounded-full transition-colors relative ${activeTab === 'conversations' ? 'bg-brand-50' : 'hover:bg-gray-200'}`}
               >
                 <div className="relative">
                   <MessageCircle size={20} />
                   {/* Badge de mensagens não lidas */}
                   {conversations.reduce((acc, curr) => acc + (curr.unread_count || 0), 0) > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] flex items-center justify-center">
+                    <span className="absolute -top-2 -right-2 bg-brand-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] flex items-center justify-center">
                       {conversations.reduce((acc, curr) => acc + (curr.unread_count || 0), 0)}
                     </span>
                   )}
@@ -769,83 +817,38 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
             <button
               onClick={() => setActiveTab(activeTab === 'contacts' ? 'conversations' : 'contacts')}
               title="Gerenciar Contatos"
-              className={`p-2 rounded-full transition-colors ${activeTab === 'contacts' ? 'bg-[#dcf8c6] text-[#00a884]' : 'hover:bg-gray-200 text-[#54656F]'}`}
+              className={`p-2 rounded-full transition-colors ${activeTab === 'contacts' ? 'bg-brand-50 text-brand-600' : 'hover:bg-gray-200 text-[#54656F]'}`}
             >
               <Users size={20} />
             </button>
 
-            <button
-              onClick={() => setShowNewChatModal(true)}
-              title="Novo Chat"
-              className="p-2 hover:bg-gray-200 rounded-full transition-colors text-[#54656F]"
-            >
-              <UserPlus size={20} />
-            </button>
 
-            <div className="relative group/more">
+            <div className="relative" ref={moreMenuRef}>
               <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
                 title="Mais opções"
-                className="p-2 hover:bg-gray-200 rounded-full transition-colors relative"
+                className={`p-2 rounded-full transition-colors relative ${showMoreMenu ? 'bg-gray-200' : 'hover:bg-gray-200'} text-[#54656F]`}
               >
                 <MoreVertical size={20} />
               </button>
-              <div className="absolute right-0 top-full mt-1 w-48 bg-white shadow-lg rounded-md border border-gray-100 py-1 z-50 opacity-0 invisible group-hover/more:opacity-100 group-hover/more:visible transition-all">
-                <button onClick={fetchConversations} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                  <RefreshCw size={14} /> Atualizar lista
-                </button>
-                <button onClick={() => setActiveTab(activeTab === 'conversations' ? 'contacts' : 'conversations')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                  <Users size={14} /> {activeTab === 'conversations' ? 'Ver Contatos' : 'Ver Conversas'}
-                </button>
-                <div className="h-px bg-gray-100 my-1"></div>
-                <button onClick={handleWhatsappDisconnect} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
-                  <LogOut size={14} /> Desconectar tudo
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Connection Alert Bar */}
-          {status.status === 'CONNECTED' ? (
-            <div className="bg-green-100 px-4 py-1 flex justify-between items-center animate-in slide-in-from-top duration-300">
-              <span className="text-xs text-green-800">Conectado ao WhatsApp</span>
-              <button onClick={handleWhatsappDisconnect} className="text-xs text-red-600 hover:underline flex items-center gap-1 font-medium">
-                <LogOut size={10} /> Desconectar
-              </button>
-            </div>
-          ) : (
-            <div className="bg-orange-50 px-4 py-1 flex flex-col items-center border-b border-orange-100">
-              <div className="w-full flex justify-between items-center mb-0.5">
-                <span className="text-[10px] text-orange-700 font-medium">
-                  {status.status === 'WAITING_QR' ? '⚠️ Clique em Conectar para escanear o QR Code' :
-                    status.status === 'DISCONNECTED' ? '🔴 Desconectado - Clique para conectar' : '🔌 Tentando conectar...'}
-                </span>
-                <button
-                  onClick={() => {
-                    if (status.status === 'DISCONNECTED') {
-                      handleRestart();
-                    } else if (status.status === 'WAITING_QR') {
-                      setShowQrModal(true);
-                    } else {
-                      handleWhatsappDisconnect();
-                    }
-                  }}
-                  className="text-[10px] text-blue-600 hover:underline font-bold"
-                >
-                  {status.status === 'DISCONNECTED'
-                    ? (hasSession ? 'RECONECTAR' : 'CONECTAR')
-                    : status.status === 'WAITING_QR'
-                      ? 'CONECTAR'
-                      : 'LIMPAR SESSÃO'}
-                </button>
-              </div>
-              {isSyncing && (
-                <div className="w-full flex items-center justify-center gap-2 py-0.5 bg-blue-50/50">
-                  <RefreshCw size={10} className="animate-spin text-blue-600" />
-                  <span className="text-[10px] text-blue-700 font-medium italic">Sincronizando histórico do aparelho...</span>
+              {showMoreMenu && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white shadow-lg rounded-md border border-gray-100 py-1 z-50 animate-in fade-in zoom-in duration-200 origin-top-right">
+                  <button onClick={() => { fetchConversations(); setShowMoreMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                    <RefreshCw size={14} /> Atualizar lista
+                  </button>
+                  <button onClick={() => { setActiveTab(activeTab === 'conversations' ? 'contacts' : 'conversations'); setShowMoreMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                    <Users size={14} /> {activeTab === 'conversations' ? 'Ver Contatos' : 'Ver Conversas'}
+                  </button>
+                  <div className="h-px bg-gray-100 my-1"></div>
+                  <button onClick={() => { handleWhatsappDisconnect(); setShowMoreMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                    <LogOut size={14} /> Desconectar tudo
+                  </button>
                 </div>
               )}
             </div>
-          )}
+          </div>
+
+          {/* Connection Alert Bar removed as it's internal now */}
 
           {activeTab === 'contacts' && (
             <ContactsManager
@@ -886,9 +889,15 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
                   ].map((crit) => (
                     <button
                       key={crit.id}
-                      onClick={() => setSortCriteria(crit.id as SortCriteria)}
+                      onClick={() => {
+                        if (crit.id === 'recent' || crit.id === 'manual') {
+                          handleUpdateSortPreference(crit.id as SortCriteria);
+                        } else {
+                          setSortCriteria(crit.id as SortCriteria);
+                        }
+                      }}
                       className={`px-3 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap transition-all border ${sortCriteria === crit.id
-                        ? 'bg-[#00a884] text-white border-[#00a884] shadow-sm'
+                        ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
                         : 'bg-[#F0F2F5] text-[#54656F] border-transparent hover:bg-[#E9EDEF]'
                         }`}
                     >
@@ -957,12 +966,34 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
                     <h3 className="font-normal text-[#111B21] truncate text-[16px]">
                       {selectedConversation.contact_name || selectedConversation.conversation_id.split('@')[0]}
                     </h3>
-                    <span className="text-xs text-gray-500 truncate">
-                      clique para dados do contato
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 truncate">
+                        clique para dados do contato
+                      </span>
+                      {isAssistantActive && (
+                        <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+                          <Bot size={10} /> ASSISTENTE ATIVO
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-4 text-[#54656F]">
+                <div className="flex gap-2 items-center text-[#54656F]">
+                  <button
+                    onClick={handleToggleAssistant}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm ${isAssistantActive
+                      ? 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                      : 'bg-green-100 text-green-600 hover:bg-green-200'
+                      }`}
+                    title={isAssistantActive ? 'Pausar assistente nesta conversa' : 'Retomar assistente'}
+                  >
+                    {isAssistantActive ? (
+                      <><RefreshCw size={14} /> PAUSAR ZÉ</>
+                    ) : (
+                      <><Bot size={14} /> RETOMAR ZÉ</>
+                    )}
+                  </button>
+
                   <button onClick={() => setShowContactDetails(true)} className="p-2 hover:bg-gray-200 rounded-full" title="Ver Detalhes"><Users size={20} /></button>
                   <button onClick={() => setShowBlockConfirm('block')} className="p-2 hover:bg-gray-200 rounded-full" title="Bloquear Contato"><AlertTriangle size={20} /></button>
                 </div>
@@ -993,20 +1024,20 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center bg-[#F0F2F5] border-b-[6px] border-[#25D366] text-center px-10 h-full">
+            <div className="flex-1 flex flex-col items-center justify-center bg-[#F0F2F5] border-b-[6px] border-brand-600 text-center px-10 h-full">
               <div className="mb-8">
                 <div className="flex items-center justify-center mb-5 mx-auto">
                   <MessageCircle size={80} className="text-[#d1d7db]" />
                 </div>
-                <h1 className="text-3xl font-light text-[#41525d] mb-4">WhatsApp Web</h1>
+                <h1 className="text-3xl font-light text-[#41525d] mb-4">Chat Interno</h1>
                 <p className="text-[#667781] text-sm">
-                  Envie e receba mensagens sem precisar manter seu celular conectado.<br />
-                  Use o WhatsApp em até 4 aparelhos e 1 celular ao mesmo tempo.
+                  Fale com seus clientes e visitantes em tempo real de forma nativa.<br />
+                  Mantenha todas as conversas organizadas em um só lugar.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-[#8696a0] text-xs mt-10">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 7a2 2 0 1 0-.001-4.001A2 2 0 0 0 12 7zm0 2a2 2 0 1 0-.001 3.999A2 2 0 0 0 12 9zm0 6a2 2 0 1 0-.001 3.999A2 2 0 0 0 12 15z"></path></svg>
-                <span>Protegido com criptografia de ponta a ponta</span>
+                <Shield size={12} className="text-brand-600" />
+                <span>Mensagens persistidas com segurança no banco de dados</span>
               </div>
             </div>
           )}
@@ -1062,38 +1093,6 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
         )
       }
 
-      <BaseModal
-        isOpen={showNewChatModal}
-        onClose={() => setShowNewChatModal(false)}
-        title="Novo Chat"
-        icon={<UserPlus className="w-6 h-6 text-green-600" />}
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">Digite o número com DDD e DDI (ex: 5511999999999)</p>
-          <input
-            type="text"
-            placeholder="Número do telefone"
-            className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500 bg-gray-50"
-            value={newChatNumber}
-            onChange={(e) => setNewChatNumber(e.target.value)}
-            autoFocus
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              onClick={() => setShowNewChatModal(false)}
-              className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleStartNewChat}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium transition-colors shadow-sm"
-            >
-              Iniciar Conversa
-            </button>
-          </div>
-        </div>
-      </BaseModal>
 
       {/* Modal: Detalhes do Contato */}
       {showContactDetails && selectedConversation && (
@@ -1225,6 +1224,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
               <ZeAssistantDashboard storeId={storeId} />
+              <ZeAssistantQuickReplies storeId={storeId} />
               <ZeAssistantConfig storeId={storeId} />
               <ZeAssistantRulesManager storeId={storeId} />
             </div>

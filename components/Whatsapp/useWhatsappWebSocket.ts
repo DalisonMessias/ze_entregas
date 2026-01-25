@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { WAMessage } from '@whiskeysockets/baileys';
-import { WhatsappStatus, WebSocketMessagePayload } from './types';
+import { WhatsappStatus, WebSocketMessagePayload, WhatsappMessage } from './types';
 import { getWebSocketUrl } from '../../utils/apiConfig';
 
 const WEBSOCKET_URL = getWebSocketUrl();
 
 export const useWhatsappWebSocket = (storeId: string) => {
   const [status, setStatus] = useState<WhatsappStatus>({ status: 'CONNECTING' });
-  const [lastMessage, setLastMessage] = useState<WAMessage | null>(null);
+  const [lastMessage, setLastMessage] = useState<WhatsappMessage | null>(null);
   const [lastStatusUpdate, setLastStatusUpdate] = useState<{ messageId: string, status: string } | null>(null);
   const ws = useRef<WebSocket | null>(null);
 
@@ -56,7 +55,7 @@ export const useWhatsappWebSocket = (storeId: string) => {
               setStatus({ status: 'WAITING_QR', qrCode: data.payload.qr });
               break;
             case 'whatsapp.message':
-              setLastMessage(data.payload as WAMessage);
+              setLastMessage(data.payload as WhatsappMessage);
               break;
             case 'whatsapp.message_status':
               setLastStatusUpdate(data.payload as { messageId: string, status: string });

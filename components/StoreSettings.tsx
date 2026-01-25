@@ -695,22 +695,38 @@ export const StoreSettings: React.FC = () => {
                                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-4">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <h4 className="font-bold text-gray-900 dark:text-white">Receber via Plataforma</h4>
-                                            <p className="text-xs text-gray-500">Pedidos aparecem no gestor e seguem fluxo de status (Aguardando → Produção → Entrega).</p>
+                                            <h4 className="font-bold text-gray-900 dark:text-white">Receber via Plataforma (Recomendado)</h4>
+                                            <p className="text-xs text-gray-500 leading-relaxed">
+                                                Ativa o fluxo profissional. Os pedidos chegam no seu painel em tempo real, geram histórico, relatórios financeiros e o cliente pode rastrear cada etapa.
+                                            </p>
                                         </div>
                                         <Switch
                                             checked={form.receive_orders_via_platform}
-                                            onChange={() => handleChange('receive_orders_via_platform', !form.receive_orders_via_platform)}
+                                            onChange={() => {
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    receive_orders_via_platform: !prev.receive_orders_via_platform,
+                                                    receive_orders_via_whatsapp: prev.receive_orders_via_platform ? prev.receive_orders_via_whatsapp : false
+                                                }));
+                                            }}
                                         />
                                     </div>
                                     <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-600 pt-4">
                                         <div>
                                             <h4 className="font-bold text-gray-900 dark:text-white">Receber via WhatsApp</h4>
-                                            <p className="text-xs text-gray-500">Cliente monta o pedido e envia uma mensagem formatada para seu WhatsApp.</p>
+                                            <p className="text-xs text-gray-500 leading-relaxed">
+                                                Atendimento manual. O cliente envia o carrinho para o seu WhatsApp. <strong>Nota:</strong> Desativa o rastreamento automático e o PIX da plataforma.
+                                            </p>
                                         </div>
                                         <Switch
                                             checked={form.receive_orders_via_whatsapp}
-                                            onChange={() => handleChange('receive_orders_via_whatsapp', !form.receive_orders_via_whatsapp)}
+                                            onChange={() => {
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    receive_orders_via_whatsapp: !prev.receive_orders_via_whatsapp,
+                                                    receive_orders_via_platform: prev.receive_orders_via_whatsapp ? prev.receive_orders_via_platform : false
+                                                }));
+                                            }}
                                         />
                                     </div>
 

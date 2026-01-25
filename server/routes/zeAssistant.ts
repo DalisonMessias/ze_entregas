@@ -28,5 +28,12 @@ router.post('/knowledge/:storeId/sync', zeAssistantController.syncKnowledge);
 
 // Conversas e Histórico
 router.get('/conversations/:storeId', zeAssistantController.getConversations);
+router.patch('/conversations/:storeId/:conversationId/toggle-assistant', zeAssistantController.toggleAssistant);
+
+// Quick Replies
+router.get('/quick-replies/:storeId', zeAssistantController.getQuickReplies);
+router.post('/quick-replies', zeAssistantController.upsertQuickReply);
+router.delete('/quick-replies/:id', zeAssistantController.deleteQuickReply);
 
 export default router;
+

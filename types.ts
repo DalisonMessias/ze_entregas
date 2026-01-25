@@ -3,7 +3,7 @@ export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator' | 'user';
 export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found' | 'blocked' | 'suspended' | 'error';
 export interface PublicStoreProfile extends PartnerProfile { }
-export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION';
+export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION' | 'WAITING_PAYMENT_PIX' | 'PAYMENT_TO_ARRANGE';
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER' | 'PENDING';
 export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
 export type VehicleType = 'moto' | 'car' | 'bike' | 'other';
@@ -119,6 +119,15 @@ export interface ChatMessageData {
     is_read: boolean;
     created_at: string;
     pending?: boolean;
+}
+
+export interface QuickReply {
+    id: string;
+    store_id: string;
+    trigger: string;
+    message: string;
+    created_at: string;
+    updated_at: string;
 }
 
 export type StorageKey = string;
@@ -637,6 +646,7 @@ export interface PartnerProfile {
     receive_orders_via_platform?: boolean;
     receive_orders_via_whatsapp?: boolean;
     whatsapp_number?: string;
+    config?: any;
 }
 
 export interface StoreDailyReport {

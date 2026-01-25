@@ -22,6 +22,7 @@ export interface ZeAssistantConfig {
     auto_handoff_on_confusion: boolean;
     max_confusion_attempts: number;
     response_delay_ms: number;
+    instruction_closed_store: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -149,4 +150,6 @@ export interface ConversationContext {
     awaitingConfirmation?: boolean;
     confusionCount: number;
     variables: Record<string, any>;
+    currentFlow?: 'ORDER' | null;
+    flowStep?: 'ADDRESS' | 'ITEMS' | 'PAYMENT' | 'CONFIRMATION' | null;
 }

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingBag, ChevronLeft, Minus, Plus, X, MapPin, Clock, Phone, Search, Store as StoreIcon, AlertCircle, ShoppingCart, Bike, Trash2, ArrowRight, CheckCircle, Star } from 'lucide-react';
+import { Phone, Clock, Bike, Store as StoreIcon, MapPin, Search, ShoppingBag, ArrowRight, Loader2, AlertCircle, Trash2, ShoppingCart, Star, QrCode, CreditCard, Banknote, ShieldCheck, Instagram, Facebook, Globe, MessageSquare, ChevronRight, Play, ExternalLink, Calendar, Map, ClipboardList, TrendingUp, DollarSign, Wallet, RefreshCw, X, ChevronUp, Copy, Check, Minus, Plus, ChevronLeft, MessageCircle } from 'lucide-react';
 import * as cloud from '../../services/cloud';
 import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee } from '../../types';
 import { Logo } from '../Logo';
@@ -9,8 +8,8 @@ import { CustomInput } from '../CustomInput';
 import { StreetSearchSelect } from '../StreetSearchSelect';
 import { CitySearchSelect } from '../CitySearchSelect';
 import { useDialog } from '../../utils/dialogService';
-import { Loader2, CreditCard, Banknote, QrCode } from 'lucide-react'; // Added icons for payment
 import { StoreRatingModal } from './StoreRatingModal';
+import { PixPaymentModal } from '../PixPaymentModal';
 
 interface DigitalMenuProps {
     citySlug: string;
@@ -66,6 +65,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [changeFor, setChangeFor] = useState('');
     const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isPixModalOpen, setIsPixModalOpen] = useState(false);
+    const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
 
     const { alert, confirm } = useDialog();
 
@@ -320,6 +321,19 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     image_url: item.product.image_url
                 }));
 
+                // Validar PIX se selecionado
+                if (paymentMethod === 'PIX') {
+                    const pixConfig = store?.config?.pixdata;
+                    if (!pixConfig?.enabled) {
+                        await alert({
+                            title: 'Pagamento Indisponível',
+                            message: 'O pagamento via PIX automático não está disponível nesta loja no momento. Por favor, escolha outra forma de pagamento ou combine com a loja pelo WhatsApp.'
+                        });
+                        setIsSubmitting(false);
+                        return;
+                    }
+                }
+
                 const { success, orderId, error } = await cloud.createPublicOrder(
                     store!.id,
                     orderItems,
@@ -335,14 +349,21 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     // Success!
                     setCart([]);
                     setIsCartOpen(false);
-                    await alert({
-                        title: 'Pedido Recebido com Sucesso! 🎉',
-                        message: `Seu pedido #${orderId.slice(0, 8).toUpperCase()} foi enviado para a loja.\n\nVocê será redirecionado para a tela de rastreamento.`
-                    });
 
-                    // Redirect to Tracking
-                    window.history.pushState({}, '', `/track/${orderId}`);
-                    window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                    // Lógica de PIX Ativo
+                    const pixConfig = store?.config?.pixdata;
+                    if (paymentMethod === 'PIX' && pixConfig?.enabled) {
+                        setCreatedOrderId(orderId);
+                        setIsPixModalOpen(true);
+                    } else {
+                        await alert({
+                            title: 'Pedido Recebido com Sucesso! 🎉',
+                            message: `Seu pedido #${orderId.slice(0, 8).toUpperCase()} foi enviado para a loja.\n\nVocê será redirecionado para a tela de rastreamento.`
+                        });
+                        // Redirect to Tracking
+                        window.history.pushState({}, '', `/track/${orderId}`);
+                        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                    }
                 } else {
                     throw error || new Error('Falha ao criar pedido');
                 }
@@ -407,6 +428,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             }
 
             msg += `\n*Forma de Pagamento:* ${paymentMethod}\n`;
+
+            const pixConfig = store?.config?.pixdata;
+            if (paymentMethod === 'PIX') {
+                if (pixConfig?.enabled) {
+                    msg += `_(Pagamento via PIX enviado via plataforma)_\n`;
+                } else {
+                    msg += `_(Pagamento PIX: Favor solicitar a chave no WhatsApp)_\n`;
+                }
+            }
+
             if (paymentMethod === 'DINHEIRO' && changeFor) {
                 msg += `Troco para: ${changeFor}\n`;
             }
@@ -991,6 +1022,42 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 </div>
             )}
 
+            {/* Pix Payment Modal */}
+            {isPixModalOpen && store?.config?.pixdata && createdOrderId && (
+                <PixPaymentModal
+                    isOpen={isPixModalOpen}
+                    onClose={() => {
+                        setIsPixModalOpen(false);
+                        // Redirect to Tracking after payment modal close
+                        window.history.pushState({}, '', `/track/${createdOrderId}`);
+                        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                    }
+                    }
+                    pixData={store.config.pixdata}
+                    amount={cartTotal}
+                    orderId={createdOrderId}
+                    storePhone={store.whatsapp_number || store.phone_number}
+                />
+            )}
+
+            {/* Pix Payment Modal */}
+            {isPixModalOpen && store?.config?.pixdata && createdOrderId && (
+                <PixPaymentModal
+                    isOpen={isPixModalOpen}
+                    onClose={() => {
+                        setIsPixModalOpen(false);
+                        // Redirect to Tracking after payment modal close
+                        window.history.pushState({}, '', `/track/${createdOrderId}`);
+                        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                    }
+                    }
+                    pixData={store.config.pixdata}
+                    amount={cartTotal}
+                    orderId={createdOrderId}
+                    storePhone={store.whatsapp_number || store.phone_number}
+                />
+            )}
+
             {/* Ratings Modal */}
             {isRatingModalOpen && store && (
                 <StoreRatingModal
@@ -1000,6 +1067,25 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     storeName={store.store_name || store.name}
                 />
             )}
+
+            {/* --- FLOATING NATIIVE CHAT BUTTON --- */}
+            <div className="fixed bottom-24 md:bottom-8 right-6 z-50 flex flex-col gap-3 items-end">
+                <button
+                    onClick={() => {
+                        // Navega para a página de chat (StoreChatPage)
+                        window.history.pushState({}, '', `/${citySlug}/${storeSlug}/chat`);
+                        window.dispatchEvent(new CustomEvent('popstate'));
+                        window.dispatchEvent(new CustomEvent('pushstate_changed'));
+                    }}
+                    className="flex items-center gap-3 bg-brand-600 text-white px-6 py-4 rounded-full shadow-2xl hover:bg-brand-700 transition-all hover:scale-105 active:scale-95 group"
+                >
+                    <div className="relative">
+                        <MessageCircle className="w-6 h-6" />
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse"></span>
+                    </div>
+                    <span className="font-black text-sm uppercase tracking-tighter">Falar com a Loja</span>
+                </button>
+            </div>
         </div>
     );
 };

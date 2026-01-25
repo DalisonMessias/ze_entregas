@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import whatsappService from '../services/whatsappService.js';
+import internalChatService from '../services/internalChatService.js';
 import { supabaseAdmin } from '../services/supabaseClient.js';
 
 /**
@@ -20,33 +20,10 @@ const getStoreId = (req: Request): string => {
 export const getStatus = async (req: Request, res: Response) => {
   try {
     const storeId = getStoreId(req);
-    // 1. Pega status da memória
-    const memoryStatus = whatsappService.getStatus(storeId);
-
-    // 2. Se estiver desconectado em memória, verifica no banco se deveria estar conectado ou se tem sessão
-    if (memoryStatus.status === 'DISCONNECTED') {
-      const { data: session } = await supabaseAdmin
-        .from('whatsapp_sessions')
-        .select('status')
-        .eq('store_id', storeId)
-        .single();
-
-      if (session) {
-        // Se existe sessão no banco, mas memória está desconectada, pode estar reiniciando ou falhou
-        // Retornamos o status do banco se for mais "ativo" que disconnected, ou mantemos disconnected
-        // Mas o frontend precisa saber se TEM sessão para mostrar "Conectar Novamente" vs "Novo QR"
-        return res.status(200).json({
-          status: memoryStatus.status,
-          qrCode: memoryStatus.qrCode,
-          hasSession: true,
-          databaseStatus: session.status
-        });
-      }
-    }
-
-    res.status(200).json({ ...memoryStatus, hasSession: true }); // Assumimos true se está conectado em memória
+    const status = internalChatService.getStatus(storeId);
+    res.status(200).json({ ...status, hasSession: true });
   } catch (error: any) {
-    res.status(200).json({ status: 'DISCONNECTED', hasSession: false, error: error.message });
+    res.status(200).json({ status: 'CONNECTED', hasSession: true, isInternal: true });
   }
 };
 
@@ -54,7 +31,7 @@ export const getStatus = async (req: Request, res: Response) => {
  * Envia uma mensagem de texto para um destinatário.
  */
 export const sendTextMessage = async (req: Request, res: Response) => {
-  const { to, text, attendantId } = req.body;
+  const { to, text, attendantId, senderName } = req.body;
 
   if (!to || !text) {
     return res.status(400).json({ error: 'Os campos "to" e "text" são obrigatórios.' });
@@ -62,34 +39,59 @@ export const sendTextMessage = async (req: Request, res: Response) => {
 
   try {
     const storeId = getStoreId(req);
-    await whatsappService.sendMessage(to, text, storeId, attendantId);
-    res.status(200).json({ success: true, message: 'Mensagem enviada com sucesso.' });
+    const result = await internalChatService.sendMessage({
+      storeId,
+      conversationId: to,
+      content: text,
+      senderId: attendantId || storeId,
+      senderName: senderName || 'Atendente',
+      fromMe: true
+    });
+
+    if (result.success) {
+      res.status(200).json({ success: true, message: 'Mensagem enviada com sucesso.' });
+    } else {
+      throw result.error;
+    }
   } catch (error: any) {
-    console.error('Erro ao enviar mensagem de texto via API:', error);
+    console.error('Erro ao enviar mensagem interna via API:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 /**
- * Envia uma mensagem de áudio para um destinatário.
+ * Envia uma mensagem interna vinda do Menu Digital (Visitante -> Loja).
  */
-export const sendAudioMessage = async (req: Request, res: Response) => {
-  const { to, attendantId } = req.body;
-  const file = req.file;
+export const sendInternalMessage = async (req: Request, res: Response) => {
+  const { storeId, visitorId, content, senderId, isFromVisitor } = req.body;
 
-  if (!to || !file) {
-    return res.status(400).json({ error: 'Os campos "to" e o arquivo de áudio são obrigatórios.' });
+  if (!storeId || !content) {
+    return res.status(400).json({ error: 'Campos storeId e content são obrigatórios.' });
   }
 
   try {
-    const storeId = getStoreId(req);
-    await whatsappService.sendAudio(to, file.buffer, storeId, attendantId);
-    res.status(200).json({ success: true, message: 'Áudio enviado com sucesso.' });
+    const result = await internalChatService.sendMessage({
+      storeId,
+      conversationId: visitorId || senderId, // Para visitantes, o ID da conversa é o ID do visitante
+      content,
+      senderId: senderId || visitorId,
+      senderName: isFromVisitor ? 'Visitante' : 'Atendente',
+      fromMe: !isFromVisitor, // Se é do visitante, não é fromMe (da loja)
+      type: 'chat'
+    });
+
+    if (result.success) {
+      res.status(200).json({ success: true, messageId: result.messageId });
+    } else {
+      throw result.error;
+    }
   } catch (error: any) {
-    console.error('Erro ao enviar áudio via API:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Erro ao enviar mensagem interna (Menu Digital):', error);
+    res.status(500).json({ success: false, message: error.message || 'Erro interno.' });
   }
 };
+
+// sendAudioMessage removido pois o chat interno tratará uploads via API genérica futuramente
 
 /**
  * Busca a lista de todas as conversas salvas no banco de dados para a loja.
@@ -104,6 +106,7 @@ export const getConversations = async (req: Request, res: Response) => {
       .order('last_message_timestamp', { ascending: false });
 
     if (error) throw error;
+    console.log(`[Loja ${storeId}] 🔍 getConversations: Retornando ${data?.length || 0} conversas.`);
     res.status(200).json(data);
   } catch (error: any) {
     // Modificação ROBUSTA: Qualquer erro de banco retorna array vazio e loga o erro, NÃO retorna 500
@@ -210,49 +213,14 @@ export const getMessages = async (req: Request, res: Response) => {
  * Busca a foto de perfil de um contato usando a instância da loja.
  */
 export const getProfilePicture = async (req: Request, res: Response) => {
-  try {
-    const { jid } = req.params;
-    const storeId = getStoreId(req);
-
-    if (!jid) return res.status(400).json({ error: 'JID é obrigatório' });
-
-    const instance = whatsappService.getInstance(storeId);
-
-    if (!instance) {
-      console.warn(`[API] getProfilePicture: Instância não encontrada para loja ${storeId}`);
-      return res.status(404).json({ error: 'WhatsApp não inicializado para esta loja' });
-    }
-
-    const profilePicUrl = await instance.getProfilePicture(jid);
-
-    // Se retornar null, apenas mandamos null (não é erro 500)
-    res.status(200).json({ profilePicUrl });
-  } catch (error: any) {
-    console.error(`[API] Erro CRÍTICO ao buscar foto de perfil (${req.params.jid}):`, error);
-    res.status(500).json({ error: error.message });
-  }
+  res.status(200).json({ profilePicUrl: null });
 };
 
 /**
  * Marca mensagem como lida na instância da loja.
  */
 export const markAsRead = async (req: Request, res: Response) => {
-  try {
-    const { conversationId, messageId } = req.body;
-    const storeId = getStoreId(req);
-
-    if (!conversationId || !messageId) {
-      return res.status(400).json({ error: 'conversationId e messageId são obrigatórios' });
-    }
-
-    const instance = whatsappService.getInstance(storeId);
-    await instance.markMessageAsRead(conversationId, messageId);
-
-    res.status(200).json({ success: true });
-  } catch (error: any) {
-    console.error('Erro ao marcar como lida:', error);
-    res.status(500).json({ error: error.message });
-  }
+  res.status(200).json({ success: true });
 };
 
 /**
@@ -358,48 +326,14 @@ export const clearDatabaseSession = async (storeId: string) => {
  * Se apenas reconectar, use o endpoint específico.
  */
 export const restartService = async (req: Request, res: Response) => {
-  try {
-    const storeId = getStoreId(req);
-    const { forceLogout } = req.body;
-
-    const instance = whatsappService.getInstance(storeId);
-
-    if (forceLogout === false) {
-      await instance.reconnect();
-      res.json({ success: true, message: `Reconectando sessão da loja ${storeId}...` });
-    } else {
-      await instance.restart();
-      res.json({ success: true, message: `Reiniciando serviço da loja ${storeId} (Novo QR)...` });
-    }
-  } catch (error: any) {
-    console.error('[API] Erro ao reiniciar serviço:', error);
-    res.status(500).json({ success: false, error: error.message, stack: error.stack });
-  }
+  res.json({ success: true, message: `Serviço de Chat Interno operando normalmente.` });
 };
 
 /**
  * Logout da instância da loja.
  */
 export const logout = async (req: Request, res: Response) => {
-  try {
-    const storeId = getStoreId(req);
-
-    // Tenta fazer o logout da instância
-    try {
-      await whatsappService.logout(storeId);
-    } catch (e) {
-      console.warn('Erro ao chamar logout no serviço (pode já estar desconectado):', e);
-    }
-
-    // Garante a limpeza no banco
-    await clearDatabaseSession(storeId);
-
-    res.json({ success: true, message: 'Logout realizado com sucesso e instância removida.' });
-  } catch (error: any) {
-    console.error('Erro ao realizar logout:', error);
-    // Mesmo com erro, retorna sucesso para o frontend não travar no loading
-    res.status(200).json({ success: true, message: 'Logout forçado realizado.', warning: error.message });
-  }
+  res.json({ success: true, message: 'O Chat Interno não requer logout de sessão externa.' });
 };
 
 /**
@@ -445,11 +379,111 @@ export const deleteConversation = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'ConversationId é obrigatório.' });
     }
 
-    await whatsappService.deleteConversation(conversationId, storeId);
-    res.status(200).json({ success: true, message: 'Conversa deletada com sucesso.' });
+    // 1. Apagar mensagens da conversa (Garantia de limpeza total)
+    await supabaseAdmin.from('whatsapp_messages')
+      .delete()
+      .eq('conversation_id', conversationId)
+      .eq('store_id', storeId);
+
+    // 2. Apagar a conversa
+    await supabaseAdmin.from('whatsapp_conversations')
+      .delete()
+      .eq('conversation_id', conversationId)
+      .eq('store_id', storeId);
+
+    res.status(200).json({ success: true, message: 'Conversa e histórico deletados com sucesso.' });
   } catch (error: any) {
-    console.error('Erro ao deletar conversa via API:', error);
+    console.error('Erro ao deletar conversa interna:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+/**
+ * Atualiza a preferência de ordenação das conversas (manual vs automático).
+ */
+export const updateSortPreference = async (req: Request, res: Response) => {
+  try {
+    const { preference } = req.body;
+    const storeId = getStoreId(req);
+
+    if (!['recent', 'manual'].includes(preference)) {
+      return res.status(400).json({ error: 'Preferência inválida (recent ou manual).' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('ze_assistant_config')
+      .update({ whatsapp_sort_preference: preference })
+      .eq('store_id', storeId);
+
+    if (error) throw error;
+
+    res.status(200).json({ success: true });
+  } catch (error: any) {
+    console.error('Erro ao atualizar preferência de ordenação:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+/**
+ * Deleta uma mensagem específica (sincronizado: apaga para todos).
+ */
+export const deleteMessage = async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+    const storeId = getStoreId(req);
+
+    if (!messageId) {
+      return res.status(400).json({ error: 'MessageId é obrigatório.' });
+    }
+
+    // Hard Delete: apaga do banco, sumindo para Store e Cliente
+    const { error } = await supabaseAdmin
+      .from('whatsapp_messages')
+      .delete()
+      .eq('message_id', messageId)
+      .eq('store_id', storeId);
+
+    if (error) throw error;
+
+    res.status(200).json({ success: true, message: 'Mensagem apagada com sucesso.' });
+  } catch (error: any) {
+    console.error('Erro ao deletar mensagem:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+/**
+ * Limpa o histórico de uma conversa (sincronizado: apaga para todos), mas mantém a conversa aberta.
+ */
+export const clearConversationMessages = async (req: Request, res: Response) => {
+  try {
+    const { conversationId } = req.params;
+    const storeId = getStoreId(req);
+
+    if (!conversationId) {
+      return res.status(400).json({ error: 'ConversationId é obrigatório.' });
+    }
+
+    // Hard Delete em todas as mensagens da conversa
+    const { error } = await supabaseAdmin
+      .from('whatsapp_messages')
+      .delete()
+      .eq('conversation_id', conversationId)
+      .eq('store_id', storeId);
+
+    if (error) throw error;
+
+    // Atualiza a conversa para remover o snippet da última mensagem
+    await supabaseAdmin
+      .from('whatsapp_conversations')
+      .update({
+        last_message_content: '',
+        unread_count: 0
+      })
+      .eq('conversation_id', conversationId)
+      .eq('store_id', storeId);
+
+    res.status(200).json({ success: true, message: 'Histórico da conversa limpo com sucesso.' });
+  } catch (error: any) {
+    console.error('Erro ao limpar conversa:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

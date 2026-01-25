@@ -21,6 +21,7 @@ type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_pa
 
 // Helper simples para navegar e atualizar URL sem reload (apenas auth flows que não estão no App.tsx router principal)
 import { DigitalMenu } from './DigitalMenu/DigitalMenu';
+import { StoreChatPage } from './DigitalMenu/StoreChatPage';
 
 const updateAuthUrl = (view: AuthView) => {
   // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
@@ -71,6 +72,7 @@ export const AuthWrapper: React.FC = () => {
 
   // Inicializa view baseado na URL
   const [view, setView] = useState<AuthView>(() => getAuthViewFromUrl());
+  const [currentPath, setCurrentPath] = useState(typeof window !== 'undefined' ? window.location.pathname : '');
 
   // Sincroniza URL quando view muda e NÃO temos sessão ativa
   useEffect(() => {
@@ -84,9 +86,14 @@ export const AuthWrapper: React.FC = () => {
     const handlePopState = () => {
       const newView = getAuthViewFromUrl();
       setView(newView);
+      setCurrentPath(window.location.pathname);
     };
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('pushstate_changed', handlePopState); // Evento customizado opcional
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('pushstate_changed', handlePopState);
+    };
   }, []);
   const [signupType, setSignupType] = useState<'STORE_PARTNER' | 'DELIVERY_PARTNER' | 'USER' | null>(null);
 
@@ -596,11 +603,26 @@ export const AuthWrapper: React.FC = () => {
   }
 
   // PUBLIC ROUTE CHECK (CARDÁPIO DIGITAL)
-  const publicRouteMatch = typeof window !== 'undefined' ? window.location.pathname.match(/^\/([^\/]+)\/([^\/]+)\/produtos$/) : null;
+  const publicRouteMatch = currentPath.match(/^\/([^\/]+)\/([^\/]+)\/produtos$/);
   const isPublicRoute = !!publicRouteMatch;
 
   if (isPublicRoute && publicRouteMatch) {
     return <DigitalMenu citySlug={publicRouteMatch[1]} storeSlug={publicRouteMatch[2]} />;
+  }
+
+  // PUBLIC CHAT ROUTE
+  const publicChatMatch = currentPath.match(/^\/([^\/]+)\/([^\/]+)\/chat$/);
+  if (publicChatMatch) {
+    return (
+      <StoreChatPage
+        citySlug={publicChatMatch[1]}
+        storeSlug={publicChatMatch[2]}
+        onBack={() => {
+          window.history.pushState({}, '', `/${publicChatMatch[1]}/${publicChatMatch[2]}/produtos`);
+          window.dispatchEvent(new CustomEvent('popstate'));
+        }}
+      />
+    );
   }
 
   if (session && userId) {
