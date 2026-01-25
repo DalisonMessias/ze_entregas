@@ -24,10 +24,10 @@ export default defineConfig(({ mode }) => {
           ws: true,
         },
         // Configuração genérica para o WebSocket do WhatsApp
-        '/ws-whatsapp': {
+        '/ws-chat': {
           target: 'ws://127.0.0.1:4000',
           ws: true,
-          rewrite: (path) => path.replace(/^\/ws-whatsapp/, '')
+          rewrite: (path) => path.replace(/^\/ws-chat/, '')
         },
         '/pwa': {
           target: 'http://127.0.0.1:4000',

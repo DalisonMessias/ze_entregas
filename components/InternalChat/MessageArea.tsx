@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { WhatsappMessage } from './types';
+import { ChatMessage } from './types';
 import { Download, Check, CheckCheck, User, MapPin } from 'lucide-react';
 import ImageLightbox from './ImageLightbox';
 import { PollMessage } from './Messages/PollMessage';
 import { ContactMessage } from './Messages/ContactMessage';
 
 interface MessageAreaProps {
-  messages: WhatsappMessage[];
+  messages: ChatMessage[];
   onLoadMore?: () => void;
   hasMore?: boolean;
 }
@@ -84,7 +84,7 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
       .toUpperCase();
   };
 
-  const renderMediaContent = (message: WhatsappMessage) => {
+  const renderMediaContent = (message: ChatMessage) => {
     const mediaUrl = message.media_url ? `http://localhost:3001${message.media_url}` : null;
 
     if (!mediaUrl || !message.media_type) {

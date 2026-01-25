@@ -100,7 +100,7 @@ export const getConversations = async (req: Request, res: Response) => {
   try {
     const storeId = getStoreId(req);
     const { data, error } = await supabaseAdmin
-      .from('whatsapp_conversations')
+      .from('chat_conversations')
       .select('*')
       .eq('store_id', storeId)
       .order('last_message_timestamp', { ascending: false });
@@ -132,7 +132,7 @@ export const getConversationOrder = async (req: Request, res: Response) => {
     }
 
     const { data, error } = await supabaseAdmin
-      .from('whatsapp_conversation_orders')
+      .from('chat_conversation_orders')
       .select('conversation_id, position')
       .eq('store_id', storeId)
       .eq('attendant_id', attendantId)
@@ -171,7 +171,7 @@ export const saveConversationOrder = async (req: Request, res: Response) => {
     }));
 
     const { error } = await supabaseAdmin
-      .from('whatsapp_conversation_orders')
+      .from('chat_conversation_orders')
       .upsert(orderData, { onConflict: 'attendant_id,store_id,conversation_id' });
 
     if (error) throw error;
@@ -195,7 +195,7 @@ export const getMessages = async (req: Request, res: Response) => {
   try {
     const storeId = getStoreId(req);
     const { data, error } = await supabaseAdmin
-      .from('whatsapp_messages')
+      .from('chat_messages')
       .select('*')
       .eq('store_id', storeId)
       .eq('conversation_id', conversationId)
@@ -230,7 +230,7 @@ export const getContacts = async (req: Request, res: Response) => {
   try {
     const storeId = getStoreId(req);
     const { data, error } = await supabaseAdmin
-      .from('whatsapp_contacts')
+      .from('chat_contacts')
       .select('*')
       .eq('store_id', storeId)
       .order('name', { ascending: true });
@@ -265,7 +265,7 @@ export const upsertContact = async (req: Request, res: Response) => {
     Object.keys(contactData).forEach(key => (contactData as any)[key] === undefined && delete (contactData as any)[key]);
 
     const { data, error } = await supabaseAdmin
-      .from('whatsapp_contacts')
+      .from('chat_contacts')
       .upsert(contactData, { onConflict: 'store_id,phone_number' })
       .select()
       .single();
@@ -286,7 +286,7 @@ export const deleteContact = async (req: Request, res: Response) => {
     const { id } = req.params;
     const storeId = getStoreId(req);
     const { error } = await supabaseAdmin
-      .from('whatsapp_contacts')
+      .from('chat_contacts')
       .delete()
       .eq('id', id)
       .eq('store_id', storeId);
@@ -305,7 +305,7 @@ export const deleteContact = async (req: Request, res: Response) => {
 export const clearDatabaseSession = async (storeId: string) => {
   try {
     const { error } = await supabaseAdmin
-      .from('whatsapp_sessions')
+      .from('chat_sessions')
       .delete()
       .eq('store_id', storeId);
 
@@ -354,7 +354,7 @@ export const updatePriority = async (req: Request, res: Response) => {
     }
 
     const { error } = await supabaseAdmin
-      .from('whatsapp_conversations')
+      .from('chat_conversations')
       .update({ priority })
       .eq('conversation_id', conversationId)
       .eq('store_id', storeId);
@@ -380,13 +380,13 @@ export const deleteConversation = async (req: Request, res: Response) => {
     }
 
     // 1. Apagar mensagens da conversa (Garantia de limpeza total)
-    await supabaseAdmin.from('whatsapp_messages')
+    await supabaseAdmin.from('chat_messages')
       .delete()
       .eq('conversation_id', conversationId)
       .eq('store_id', storeId);
 
     // 2. Apagar a conversa
-    await supabaseAdmin.from('whatsapp_conversations')
+    await supabaseAdmin.from('chat_conversations')
       .delete()
       .eq('conversation_id', conversationId)
       .eq('store_id', storeId);
@@ -436,7 +436,7 @@ export const deleteMessage = async (req: Request, res: Response) => {
 
     // Hard Delete: apaga do banco, sumindo para Store e Cliente
     const { error } = await supabaseAdmin
-      .from('whatsapp_messages')
+      .from('chat_messages')
       .delete()
       .eq('message_id', messageId)
       .eq('store_id', storeId);
@@ -464,7 +464,7 @@ export const clearConversationMessages = async (req: Request, res: Response) => 
 
     // Hard Delete em todas as mensagens da conversa
     const { error } = await supabaseAdmin
-      .from('whatsapp_messages')
+      .from('chat_messages')
       .delete()
       .eq('conversation_id', conversationId)
       .eq('store_id', storeId);
@@ -473,7 +473,7 @@ export const clearConversationMessages = async (req: Request, res: Response) => 
 
     // Atualiza a conversa para remover o snippet da última mensagem
     await supabaseAdmin
-      .from('whatsapp_conversations')
+      .from('chat_conversations')
       .update({
         last_message_content: '',
         unread_count: 0

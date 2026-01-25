@@ -1,4 +1,9 @@
 ﻿-- ==================================================================
+-- [DOCUMENTATION NOTE]
+-- AS TABELAS COM PREFIXO 'whatsapp_' REFEREM-SE AO CHAT INTERNO DO SISTEMA.
+-- ELAS FORAM MANTIDAS COM ESSE NOME PARA PRESERVAR DADOS EXISTENTES.
+-- NO CÓDIGO (FE/BE), ELAS SÃO TRATADAS COMO 'Chat Interno'.
+-- ==================================================================
 -- 0.x EXTENSIONS E CONFIGURAﾃ�髭S GERAIS
 -- ==================================================================
 
@@ -6711,10 +6716,180 @@ CREATE INDEX IF NOT EXISTS partner_requests_store_status_idx ON public.partner_r
 -- Todas as alteraﾃｧﾃｵes de banco de dados devem ser adicionadas aqui de forma nﾃ｣o destrutiva.
 -- Nﾃ｣o remova ou altere cﾃｳdigo existente, apenas adicione novas estruturas ou modificaﾃｧﾃｵes.
 
--- Escrevendo as novas tabelas para o chat do WhatsApp
+-- Escrevendo as novas tabelas para o Chat Interno
 
--- Tabela para armazenar sessﾃｵes de autenticaﾃｧﾃ｣o do WhatsApp
-CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+-- Tabela para armazenar sessões de autenticação do Chat
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    session_id TEXT PRIMARY KEY,
+    session_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE chat_sessions IS 'Armazena os dados da sessão do Chat Interno.';
+COMMENT ON COLUMN chat_sessions.session_id IS 'Identificador único da sessão.';
+COMMENT ON COLUMN chat_sessions.session_data IS 'Dados completos da sessão.';
+
+-- Tabela para gerenciar as conversas ativas
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    conversation_id TEXT PRIMARY KEY,
+    contact_name TEXT,
+    unread_count INTEGER DEFAULT 0,
+    last_message_timestamp TIMESTAMPTZ,
+    last_message_content TEXT,
+    profile_pic_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índices para chat_conversations
+CREATE INDEX IF NOT EXISTS idx_chat_conv_last_msg ON chat_conversations(last_message_timestamp DESC);
+
+COMMENT ON TABLE chat_conversations IS 'Gerencia as conversas ativas do Chat.';
+COMMENT ON COLUMN chat_conversations.conversation_id IS 'ID do contato ou conversa.';
+COMMENT ON COLUMN chat_conversations.contact_name IS 'Nome do contato.';
+COMMENT ON COLUMN chat_conversations.unread_count IS 'Contador de mensagens não lidas.';
+COMMENT ON COLUMN chat_conversations.last_message_timestamp IS 'Timestamp da última mensagem.';
+COMMENT ON COLUMN chat_conversations.last_message_content IS 'Preview do conteúdo.';
+COMMENT ON COLUMN chat_conversations.profile_pic_url IS 'URL da foto de perfil.';
+
+
+-- Tabela para armazenar o histórico de mensagens
+CREATE TABLE IF NOT EXISTS chat_messages (
+    message_id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    content TEXT,
+    media_url TEXT,
+    media_type TEXT,
+    status TEXT,
+    message_timestamp TIMESTAMPTZ NOT NULL,
+    from_me BOOLEAN NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT fk_chat_conversation
+      FOREIGN KEY(conversation_id) 
+	  REFERENCES chat_conversations(conversation_id)
+      ON DELETE CASCADE
+);
+
+-- Índices para chat_messages
+CREATE INDEX IF NOT EXISTS idx_chat_msg_conv_id ON chat_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_chat_msg_timestamp ON chat_messages(message_timestamp ASC);
+
+COMMENT ON TABLE chat_messages IS 'Armazena o histórico de mensagens trocadas.';
+COMMENT ON COLUMN chat_messages.message_id IS 'ID único da mensagem.';
+COMMENT ON COLUMN chat_messages.conversation_id IS 'FK para conversa.';
+COMMENT ON COLUMN chat_messages.sender_id IS 'ID de quem enviou.';
+COMMENT ON COLUMN chat_messages.from_me IS 'Enviada por nós (true) ou recebida (false).';
+
+
+-- Adicionar triggers para atualizar o campo updated_at automaticamente
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Remover triggers existentes
+DROP TRIGGER IF EXISTS update_chat_sessions_updated_at ON chat_sessions;
+DROP TRIGGER IF EXISTS update_chat_conversations_updated_at ON chat_conversations;
+DROP TRIGGER IF EXISTS update_chat_messages_updated_at ON chat_messages;
+
+CREATE TRIGGER update_chat_sessions_updated_at
+BEFORE UPDATE ON chat_sessions
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_chat_conversations_updated_at
+BEFORE UPDATE ON chat_conversations
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_chat_messages_updated_at
+BEFORE UPDATE ON chat_messages
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Tabela para contatos salvos do Chat
+CREATE TABLE IF NOT EXISTS chat_contacts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    email VARCHAR(255),
+    notes TEXT,
+    tags VARCHAR(100)[],
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(store_id, phone_number)
+);
+
+-- Índices para chat_contacts
+CREATE INDEX IF NOT EXISTS idx_chat_contacts_store ON chat_contacts(store_id);
+CREATE INDEX IF NOT EXISTS idx_chat_contacts_phone ON chat_contacts(phone_number);
+
+-- Garantir que o upsert por phone_number funcione
+ALTER TABLE chat_contacts DROP CONSTRAINT IF EXISTS chat_contacts_phone_number_key;
+ALTER TABLE chat_contacts ADD CONSTRAINT chat_contacts_phone_number_key UNIQUE (phone_number);
+
+-- Trigger para updated_at em chat_contacts
+DROP TRIGGER IF EXISTS update_chat_contacts_updated_at ON chat_contacts;
+CREATE TRIGGER update_chat_contacts_updated_at
+    BEFORE UPDATE ON chat_contacts
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Permissões e Segurança para o módulo de Chat
+GRANT ALL ON TABLE public.chat_sessions TO service_role;
+GRANT ALL ON TABLE public.chat_conversations TO service_role;
+GRANT ALL ON TABLE public.chat_messages TO service_role;
+GRANT ALL ON TABLE public.chat_contacts TO service_role;
+
+-- Desabilitar RLS para estas tabelas (Caso esteja bloqueando o service_role)
+ALTER TABLE public.chat_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_conversations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_contacts DISABLE ROW LEVEL SECURITY;
+
+-- Fim das tabelas de chat
+
+
+-- ===============================================================
+-- SCRIPT DE CORREÇÃO MANUAL - COLUNAS UPDATED_AT FALTANTES
+-- ===============================================================
+
+ALTER TABLE public.chat_messages 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.chat_conversations 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.chat_sessions 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.chat_contacts 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+
+-- ==================================================================
+-- INTEGRAÇÃO BRASIL ABERTO (Adicionado em 2026-01-17)
+-- ==================================================================
+-- ORGANIZAÇÃO MANUAL DE CONVERSAS (Adicionado em 2026-01-18)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.chat_conversation_orders (
+    attendant_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    conversation_id TEXT,
+    position INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (attendant_id, store_id, conversation_id)
+);
     session_id TEXT PRIMARY KEY,
     session_data JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -9896,6 +10071,210 @@ DROP POLICY IF EXISTS "Public read access settings" ON public.store_delivery_set
 CREATE POLICY "Public read access settings" ON public.store_delivery_settings FOR SELECT USING (true);
 GRANT SELECT ON public.store_delivery_settings TO anon, authenticated, service_role;
 
+-- ==================================================================
+-- MIGRAÇÃO FINAL: WHATSAPP -> CHAT (Colunas e Tabelas)
+-- ==================================================================
+
+-- 1. Renomear Colunas (user_profiles, shop_settings)
+DO $$
+BEGIN
+    -- user_profiles.whatsapp_number -> chat_number
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'whatsapp_number') THEN
+        ALTER TABLE public.user_profiles RENAME COLUMN whatsapp_number TO chat_number;
+    END IF;
+
+    -- user_profiles.receive_orders_via_whatsapp -> receive_orders_via_chat
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'receive_orders_via_whatsapp') THEN
+        ALTER TABLE public.user_profiles RENAME COLUMN receive_orders_via_whatsapp TO receive_orders_via_chat;
+    END IF;
+
+    -- whatsapp_sort_preference -> chat_sort_preference (Generic Search)
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'whatsapp_sort_preference') THEN
+        ALTER TABLE public.user_profiles RENAME COLUMN whatsapp_sort_preference TO chat_sort_preference;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shop_settings' AND column_name = 'whatsapp_sort_preference') THEN
+        ALTER TABLE public.shop_settings RENAME COLUMN whatsapp_sort_preference TO chat_sort_preference;
+    END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ze_assistant_config' AND column_name = 'whatsapp_sort_preference') THEN
+        ALTER TABLE public.ze_assistant_config RENAME COLUMN whatsapp_sort_preference TO chat_sort_preference;
+    END IF;
+END $$;
+
+
+-- 2. Atualizar RPC de Busca de Loja
+CREATE OR REPLACE FUNCTION public_get_store_by_slug(p_city_slug text, p_store_slug text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_store record;
+BEGIN
+    SELECT 
+        id, store_name, store_logo_url, cover_url, is_open, 
+        phone_number, chat_number, description,
+        store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,
+        receive_orders_via_chat, receive_orders_via_platform,
+        city, store_address_state AS state, store_address_zip,
+        store_slug, city_slug
+    INTO v_store
+    FROM user_profiles
+    WHERE city_slug = p_city_slug 
+      AND store_slug = p_store_slug
+      AND role = 'store_partner'
+    LIMIT 1;
+
+    RETURN row_to_json(v_store);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public_get_store_by_slug(text, text) TO anon, authenticated, service_role;
+
+
+-- 3. Renomear Tabelas (Garantia)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_messages') THEN
+    ALTER TABLE public.whatsapp_messages RENAME TO chat_messages;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_conversations') THEN
+    ALTER TABLE public.whatsapp_conversations RENAME TO chat_conversations;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_contacts') THEN
+    ALTER TABLE public.whatsapp_contacts RENAME TO chat_contacts;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_conversation_orders') THEN
+    ALTER TABLE public.whatsapp_conversation_orders RENAME TO chat_conversation_orders;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_sessions') THEN
+    ALTER TABLE public.whatsapp_sessions RENAME TO chat_sessions;
+  END IF;
+  
+  -- Remover tabelas obsoletas se sobrarem
+  DROP TABLE IF EXISTS public.whatsapp_groups;
+  DROP TABLE IF EXISTS public.whatsapp_queue;
+END $$;
+
+
+-- 4. chat_contacts (Contatos da Loja)
+CREATE TABLE IF NOT EXISTS public.chat_contacts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL, 
+    phone_number TEXT NOT NULL,
+    name TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, phone_number)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_contacts' AND column_name = 'name') THEN
+        ALTER TABLE public.chat_contacts ADD COLUMN name TEXT;
+    END IF;
+END $$;
+
+ALTER TABLE public.chat_contacts ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_contacts TO authenticated, service_role;
+DROP POLICY IF EXISTS "Stores can manage their contacts" ON public.chat_contacts;
+CREATE POLICY "Stores can manage their contacts" ON public.chat_contacts USING (auth.uid()::text = store_id::text);
+
+
+-- 5. chat_conversations (Conversas)
+CREATE TABLE IF NOT EXISTS public.chat_conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL,
+    conversation_id TEXT NOT NULL, 
+    last_message_content TEXT,
+    last_message_timestamp TIMESTAMPTZ,
+    unread_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'open', 
+    customer_type TEXT DEFAULT 'visitor', 
+    attendant_id UUID, 
+    contact_name TEXT,
+    profile_pic_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, conversation_id)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_conversations' AND column_name = 'customer_type') THEN
+        ALTER TABLE public.chat_conversations ADD COLUMN customer_type TEXT DEFAULT 'visitor';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_conversations' AND column_name = 'attendant_id') THEN
+        ALTER TABLE public.chat_conversations ADD COLUMN attendant_id UUID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_conversations' AND column_name = 'contact_name') THEN
+        ALTER TABLE public.chat_conversations ADD COLUMN contact_name TEXT;
+    END IF;
+END $$;
+
+ALTER TABLE public.chat_conversations ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_conversations TO authenticated, service_role, anon;
+DROP POLICY IF EXISTS "Stores can manage their conversations" ON public.chat_conversations;
+CREATE POLICY "Stores can manage their conversations" ON public.chat_conversations USING (auth.uid()::text = store_id::text);
+
+-- 6. chat_messages (Mensagens)
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL,
+    conversation_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    content TEXT,
+    sender_name TEXT,
+    from_me BOOLEAN DEFAULT false,
+    message_timestamp TIMESTAMPTZ DEFAULT now(),
+    status TEXT DEFAULT 'pending', 
+    message_type TEXT DEFAULT 'chat', 
+    media_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(message_id)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_messages' AND column_name = 'from_me') THEN
+        ALTER TABLE public.chat_messages ADD COLUMN from_me BOOLEAN DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_messages' AND column_name = 'message_type') THEN
+        ALTER TABLE public.chat_messages ADD COLUMN message_type TEXT DEFAULT 'chat';
+    END IF;
+END $$;
+
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_messages TO authenticated, service_role, anon;
+DROP POLICY IF EXISTS "Stores can view messages" ON public.chat_messages;
+CREATE POLICY "Stores can view messages" ON public.chat_messages USING (auth.uid()::text = store_id::text);
+
+-- 7. chat_conversation_orders (Ordem Manual)
+CREATE TABLE IF NOT EXISTS public.chat_conversation_orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL,
+    attendant_id UUID,
+    conversation_id TEXT NOT NULL,
+    position INTEGER DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, attendant_id, conversation_id)
+);
+ALTER TABLE public.chat_conversation_orders ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_conversation_orders TO authenticated, service_role;
+DROP POLICY IF EXISTS "Stores can manage orders" ON public.chat_conversation_orders;
+CREATE POLICY "Stores can manage orders" ON public.chat_conversation_orders USING (auth.uid()::text = store_id::text);
+
+-- 8. chat_sessions (Sessões/Status Antigo)
+CREATE TABLE IF NOT EXISTS public.chat_sessions (
+    store_id UUID PRIMARY KEY,
+    status TEXT DEFAULT 'DISCONNECTED',
+    qr_code TEXT,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_sessions TO authenticated, service_role;
+DROP POLICY IF EXISTS "Stores can view session" ON public.chat_sessions;
+CREATE POLICY "Stores can view session" ON public.chat_sessions USING (auth.uid()::text = store_id::text);
+
 
 -- 3. RPC de Busca de Loja (CORRIGIDA FINAL: sem colunas inexistentes)
 CREATE OR REPLACE FUNCTION public_get_store_by_slug(p_city_slug text, p_store_slug text)
@@ -9925,3 +10304,148 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public_get_store_by_slug(text, text) TO anon, authenticated, service_role;
+
+
+-- ==================================================================
+-- GARANTIA DO SCHEMA DO CHAT INTERNO (UPDATE: tabelas renomeadas para chat_*)
+-- ==================================================================
+
+-- Migração: Renomear tabelas antigas se existirem
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_messages') THEN
+    ALTER TABLE public.whatsapp_messages RENAME TO chat_messages;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_conversations') THEN
+    ALTER TABLE public.whatsapp_conversations RENAME TO chat_conversations;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_contacts') THEN
+    ALTER TABLE public.whatsapp_contacts RENAME TO chat_contacts;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_conversation_orders') THEN
+    ALTER TABLE public.whatsapp_conversation_orders RENAME TO chat_conversation_orders;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_sessions') THEN
+    ALTER TABLE public.whatsapp_sessions RENAME TO chat_sessions;
+  END IF;
+END $$;
+
+
+-- 1. chat_contacts (Contatos da Loja)
+CREATE TABLE IF NOT EXISTS public.chat_contacts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL, 
+    phone_number TEXT NOT NULL,
+    name TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, phone_number)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_contacts' AND column_name = 'name') THEN
+        ALTER TABLE public.chat_contacts ADD COLUMN name TEXT;
+    END IF;
+END $$;
+
+ALTER TABLE public.chat_contacts ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_contacts TO authenticated, service_role;
+DROP POLICY IF EXISTS "Stores can manage their contacts" ON public.chat_contacts;
+CREATE POLICY "Stores can manage their contacts" ON public.chat_contacts USING (auth.uid()::text = store_id::text);
+
+
+-- 2. chat_conversations (Conversas)
+CREATE TABLE IF NOT EXISTS public.chat_conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL,
+    conversation_id TEXT NOT NULL, 
+    last_message_content TEXT,
+    last_message_timestamp TIMESTAMPTZ,
+    unread_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'open', 
+    customer_type TEXT DEFAULT 'visitor', 
+    attendant_id UUID, 
+    contact_name TEXT,
+    profile_pic_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, conversation_id)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_conversations' AND column_name = 'customer_type') THEN
+        ALTER TABLE public.chat_conversations ADD COLUMN customer_type TEXT DEFAULT 'visitor';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_conversations' AND column_name = 'attendant_id') THEN
+        ALTER TABLE public.chat_conversations ADD COLUMN attendant_id UUID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_conversations' AND column_name = 'contact_name') THEN
+        ALTER TABLE public.chat_conversations ADD COLUMN contact_name TEXT;
+    END IF;
+END $$;
+
+ALTER TABLE public.chat_conversations ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_conversations TO authenticated, service_role, anon;
+DROP POLICY IF EXISTS "Stores can manage their conversations" ON public.chat_conversations;
+CREATE POLICY "Stores can manage their conversations" ON public.chat_conversations USING (auth.uid()::text = store_id::text);
+
+-- 3. chat_messages (Mensagens)
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL,
+    conversation_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    content TEXT,
+    sender_name TEXT,
+    from_me BOOLEAN DEFAULT false,
+    message_timestamp TIMESTAMPTZ DEFAULT now(),
+    status TEXT DEFAULT 'pending', 
+    message_type TEXT DEFAULT 'chat', 
+    media_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(message_id)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_messages' AND column_name = 'from_me') THEN
+        ALTER TABLE public.chat_messages ADD COLUMN from_me BOOLEAN DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_messages' AND column_name = 'message_type') THEN
+        ALTER TABLE public.chat_messages ADD COLUMN message_type TEXT DEFAULT 'chat';
+    END IF;
+END $$;
+
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_messages TO authenticated, service_role, anon;
+DROP POLICY IF EXISTS "Stores can view messages" ON public.chat_messages;
+CREATE POLICY "Stores can view messages" ON public.chat_messages USING (auth.uid()::text = store_id::text);
+
+-- 4. chat_conversation_orders (Ordem Manual)
+CREATE TABLE IF NOT EXISTS public.chat_conversation_orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL,
+    attendant_id UUID,
+    conversation_id TEXT NOT NULL,
+    position INTEGER DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, attendant_id, conversation_id)
+);
+ALTER TABLE public.chat_conversation_orders ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_conversation_orders TO authenticated, service_role;
+DROP POLICY IF EXISTS "Stores can manage orders" ON public.chat_conversation_orders;
+CREATE POLICY "Stores can manage orders" ON public.chat_conversation_orders USING (auth.uid()::text = store_id::text);
+
+-- 5. chat_sessions (Sessões/Status Antigo)
+CREATE TABLE IF NOT EXISTS public.chat_sessions (
+    store_id UUID PRIMARY KEY,
+    status TEXT DEFAULT 'DISCONNECTED',
+    qr_code TEXT,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.chat_sessions TO authenticated, service_role;
+DROP POLICY IF EXISTS "Stores can view session" ON public.chat_sessions;
+CREATE POLICY "Stores can view session" ON public.chat_sessions USING (auth.uid()::text = store_id::text);

@@ -1,12 +1,12 @@
 import React from 'react';
-import { WhatsappConversation, PriorityLevel } from './types';
+import { ChatConversation, PriorityLevel } from './types';
 import { UserPlus, Star, MessageSquare, Trash2, MoreVertical, GripVertical } from 'lucide-react';
 
 
 interface ConversationListProps {
-  conversations: WhatsappConversation[];
+  conversations: ChatConversation[];
   selectedId?: string;
-  onSelectConversation: (conversation: WhatsappConversation) => void;
+  onSelectConversation: (conversation: ChatConversation) => void;
   profilePictures?: Record<string, string>;
   isManualOrder?: boolean;
   onReorder?: (draggedId: string, targetId: string) => void;

@@ -102,7 +102,7 @@ const ContactsManager: React.FC<ContactsManagerProps> = ({ storeId, onStartChat 
     };
 
     const handleDelete = async (id: string) => {
-        const confirmed = await confirm({ title: 'Excluir Contato', message: 'Deseja realmente excluir este contato?' });
+        const confirmed = await confirm({ title: 'Excluir Contato', message: 'Deseja realmente excluir este Chat?' });
         if (!confirmed) return;
 
         try {
@@ -185,7 +185,7 @@ const ContactsManager: React.FC<ContactsManagerProps> = ({ storeId, onStartChat 
 
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => onStartChat(contact.phone_number + '@s.whatsapp.net', contact.name)}
+                                    onClick={() => onStartChat(contact.phone_number + '@s.chat.net', contact.name)}
                                     className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors"
                                     title="Iniciar conversa"
                                 >

@@ -1,14 +1,14 @@
 
-import { WhatsappConversation, WhatsappMessage } from '../components/Whatsapp/types';
+import { WhatsappConversation, WhatsappMessage } from '../components/InternalChat/types';
 
-const DB_NAME = 'ze_entregas_whatsapp_offline';
+const DB_NAME = 'ze_entregas_chat_offline';
 const DB_VERSION = 2;
 
-export class WhatsappOfflineService {
+export class ChatOfflineService {
     private db: IDBDatabase | null = null;
 
     async init(): Promise<void> {
-        // console.log('🔹 WhatsappOfflineService Init (v2)');
+        // console.log('🔹 ChatOfflineService Init (v2)');
         if (this.db) return;
 
         return new Promise((resolve, reject) => {
@@ -81,7 +81,7 @@ export class WhatsappOfflineService {
 
     private notifyUnreadChange(count: number) {
         if (typeof window !== 'undefined') {
-            const event = new CustomEvent('whatsapp_unread_update', { detail: { count } });
+            const event = new CustomEvent('chat_unread_update', { detail: { count } });
             window.dispatchEvent(event);
         }
     }
@@ -171,4 +171,4 @@ export class WhatsappOfflineService {
     }
 }
 
-export const whatsappOfflineService = new WhatsappOfflineService();
+export const chatOfflineService = new ChatOfflineService();

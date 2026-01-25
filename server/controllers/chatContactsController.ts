@@ -13,7 +13,7 @@ export const getAllContacts = async (req: Request, res: Response) => {
         }
 
         const { data, error } = await supabaseAdmin
-            .from('whatsapp_contacts')
+            .from('chat_contacts')
             .select('*')
             .eq('store_id', storeId)
             .order('name', { ascending: true });
@@ -42,7 +42,7 @@ export const createContact = async (req: Request, res: Response) => {
         const cleanPhone = phoneNumber.replace(/\D/g, '');
 
         const { data, error } = await supabaseAdmin
-            .from('whatsapp_contacts')
+            .from('chat_contacts')
             .insert({
                 store_id: storeId,
                 name,
@@ -84,7 +84,7 @@ export const updateContact = async (req: Request, res: Response) => {
         if (tags !== undefined) updateData.tags = tags;
 
         const { data, error } = await supabaseAdmin
-            .from('whatsapp_contacts')
+            .from('chat_contacts')
             .update(updateData)
             .eq('id', id)
             .select()
@@ -111,7 +111,7 @@ export const deleteContact = async (req: Request, res: Response) => {
         const { id } = req.params;
 
         const { error } = await supabaseAdmin
-            .from('whatsapp_contacts')
+            .from('chat_contacts')
             .delete()
             .eq('id', id);
 

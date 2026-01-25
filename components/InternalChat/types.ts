@@ -1,5 +1,5 @@
 // Estrutura de dados para uma conversa na lista de conversas
-export interface WhatsappConversation {
+export interface ChatConversation {
   conversation_id: string;
   phone_number?: string | null;
   store_id?: string;
@@ -27,7 +27,7 @@ export interface ManualOrder {
 }
 
 // Estrutura de dados para uma única mensagem no chat
-export interface WhatsappMessage {
+export interface ChatMessage {
   message_id: string;
   conversation_id: string;
   store_id?: string;
@@ -42,8 +42,8 @@ export interface WhatsappMessage {
   created_at?: string;
 }
 
-// Estrutura para o status da conexão do WhatsApp vindo do backend
-export interface WhatsappStatus {
+// Estrutura para o status da conexao do Chat vindo do backend
+export interface ChatStatus {
   status: 'CONNECTED' | 'CONNECTING' | 'DISCONNECTED' | 'WAITING_QR';
   qrCode?: string;
 }

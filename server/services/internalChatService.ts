@@ -49,7 +49,7 @@ class InternalChatService extends EventEmitter {
             const timestamp = new Date();
 
             // 1. Persistir Mensagem (Tabela whatsapp_messages)
-            const { error: msgError } = await supabaseAdmin.from('whatsapp_messages').insert({
+            const { error: msgError } = await supabaseAdmin.from('chat_messages').insert({
                 store_id: storeId,
                 conversation_id: conversationId,
                 message_id: messageId,
@@ -78,7 +78,7 @@ class InternalChatService extends EventEmitter {
             } else {
                 // Verificar se é Cliente Loja (está na lista de contatos da loja)
                 const { data: contact } = await supabaseAdmin
-                    .from('whatsapp_contacts')
+                    .from('chat_contacts')
                     .select('id')
                     .eq('store_id', storeId)
                     .eq('phone_number', conversationId.split('@')[0])
@@ -90,7 +90,7 @@ class InternalChatService extends EventEmitter {
             }
 
             // 3. Atualizar Conversa (Tabela whatsapp_conversations)
-            const { error: convError } = await supabaseAdmin.from('whatsapp_conversations').upsert({
+            const { error: convError } = await supabaseAdmin.from('chat_conversations').upsert({
                 store_id: storeId,
                 conversation_id: conversationId,
                 last_message_content: content.substring(0, 500),

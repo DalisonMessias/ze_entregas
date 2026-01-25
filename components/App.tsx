@@ -31,7 +31,7 @@ const PartnerArea = React.lazy(() => import('./PartnerArea').then(module => ({ d
 const StoreWalletModule = React.lazy(() => import('./StoreWallet'));
 const InternalOrders = React.lazy(() => import('./InternalOrders').then(module => ({ default: module.InternalOrders })));
 const StoreCatalog = React.lazy(() => import('./StoreCatalog').then(module => ({ default: module.StoreCatalog })));
-const WhatsappContainer = React.lazy(() => import('./Whatsapp/WhatsappContainer'));
+const InternalChatContainer = React.lazy(() => import('./InternalChat/InternalChatContainer'));
 
 const StoreRequest = React.lazy(() => import('./StoreRequest').then(module => ({ default: module.StoreRequest })));
 const OrderHistory = React.lazy(() => import('./OrderHistory'));
@@ -102,7 +102,7 @@ export type ActiveTab =
     | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides' | 'admin_tips' | 'admin_whatsapp' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_location_map' | 'admin_base_catalog'
+    | 'admin_slides' | 'admin_tips' | 'admin_chat' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_location_map' | 'admin_base_catalog'
     | 'order_tracking'
     | 'admin_store_categories' | 'admin_global_coupons' | 'admin_image_gallery'
     | 'admin_insurance'
@@ -157,7 +157,7 @@ export type ActiveTab =
     | 'store_loans'
     | 'loans'
     | 'collaborator_area'
-    | 'whatsapp_chat'
+    | 'internal_chat'
     | 'chat'
     | 'forgot_password'
     | 'login'
@@ -729,7 +729,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const isDriver = isNormalDriver || isPartner;
 
     const generalTabs = new Set<ActiveTab>([
-        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'whatsapp_chat',
+        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'internal_chat',
         'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat'
     ]);
 
@@ -748,7 +748,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
             'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
-            'admin_investments', 'admin_whatsapp', 'admin_payment_gateways', 'admin_mercadopago', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance'
+            'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance'
         ]),
         store_partner: new Set<ActiveTab>([
             'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans', 'store_promotions'
@@ -860,9 +860,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         userRole={effectiveRole}
                         onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')}
                     />;
-                case 'admin_whatsapp': return <WhatsappContainer storeId={userId} attendantId={userId} />;
-                case 'whatsapp_chat': return <WhatsappContainer storeId={userId} attendantId={userId} />;
-                case 'chat': return <WhatsappContainer storeId={userId} attendantId={userId} />;
+                case 'admin_chat': return <InternalChatContainer storeId={userId} attendantId={userId} />;
+                case 'internal_chat': return <InternalChatContainer storeId={userId} attendantId={userId} />;
+                case 'chat': return <InternalChatContainer storeId={userId} attendantId={userId} />;
                 case 'order_tracking': return <OrderTracking />;
 
                 // Store Specific
@@ -1103,7 +1103,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                             <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
                             <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
-                            <MenuButton icon={MessageSquare} label="Chat Interno" tab="admin_whatsapp" />
+                            <MenuButton icon={MessageSquare} label="Chat Interno" tab="admin_chat" />
 
                             <MenuSection title="Conteúdo & App" />
                             <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
@@ -1148,7 +1148,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
                             <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
                             <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
-                            <MenuButton icon={MessageSquare} label="Chat Interno" tab="whatsapp_chat" />
+                            <MenuButton icon={MessageSquare} label="Chat Interno" tab="internal_chat" />
                             <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
                             <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
                             <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />

@@ -56,7 +56,7 @@ export class WhatsappInstance extends EventEmitter {
       if (Object.keys(extraData).length > 0) {
         console.log(`[Loja ${this.storeId}] 📝 Atualizando banco com dados extras:`, JSON.stringify(extraData));
       }
-      await supabaseAdmin.from('whatsapp_sessions').upsert({
+      await supabaseAdmin.from('chat_sessions').upsert({
         store_id: this.storeId,
         status: this.status,
         updated_at: new Date(),
@@ -185,7 +185,7 @@ export class WhatsappInstance extends EventEmitter {
             console.log(`[Loja ${this.storeId}] 📌 Atualizando status da msg ${key.id}: ${status}`);
             try {
               await supabaseAdmin
-                .from('whatsapp_messages')
+                .from('chat_messages')
                 .update({ status })
                 .eq('store_id', this.storeId)
                 .eq('message_id', key.id);
@@ -204,7 +204,7 @@ export class WhatsappInstance extends EventEmitter {
       for (const contact of contacts) {
         try {
           if (contact.name || contact.notify) {
-            await supabaseAdmin.from('whatsapp_contacts').upsert({
+            await supabaseAdmin.from('chat_contacts').upsert({
               store_id: this.storeId,
               phone_number: contact.id.split('@')[0],
               name: contact.name || contact.notify || contact.id.split('@')[0],
@@ -232,7 +232,7 @@ export class WhatsappInstance extends EventEmitter {
         last_message_timestamp: chat.conversationTimestamp ? new Date(Number(chat.conversationTimestamp) * 1000) : new Date(),
       }));
 
-      await supabaseAdmin.from('whatsapp_conversations').upsert(batch, { onConflict: 'store_id,conversation_id' });
+      await supabaseAdmin.from('chat_conversations').upsert(batch, { onConflict: 'store_id,conversation_id' });
     });
 
     this.sock.ev.on('chats.update', async (updates) => {
@@ -245,7 +245,7 @@ export class WhatsappInstance extends EventEmitter {
         if (update.conversationTimestamp) data.last_message_timestamp = new Date(Number(update.conversationTimestamp) * 1000);
 
         if (Object.keys(data).length > 0) {
-          await supabaseAdmin.from('whatsapp_conversations')
+          await supabaseAdmin.from('chat_conversations')
             .update(data)
             .eq('store_id', this.storeId)
             .eq('conversation_id', update.id);
@@ -255,7 +255,7 @@ export class WhatsappInstance extends EventEmitter {
 
     this.sock.ev.on('chats.delete', async (deletions) => {
       for (const id of deletions) {
-        await supabaseAdmin.from('whatsapp_conversations')
+        await supabaseAdmin.from('chat_conversations')
           .delete()
           .eq('store_id', this.storeId)
           .eq('conversation_id', id);
@@ -300,7 +300,7 @@ export class WhatsappInstance extends EventEmitter {
           const CHUNK_SIZE = 100;
           for (let i = 0; i < conversationBatch.length; i += CHUNK_SIZE) {
             const chunk = conversationBatch.slice(i, i + CHUNK_SIZE);
-            const { error } = await supabaseAdmin.from('whatsapp_conversations').upsert(chunk, { onConflict: 'store_id,conversation_id' });
+            const { error } = await supabaseAdmin.from('chat_conversations').upsert(chunk, { onConflict: 'store_id,conversation_id' });
             if (error) console.error(`[Loja ${this.storeId}] ❌ Erro ao upsert lote de conversas:`, error.message);
           }
           console.log(`[Loja ${this.storeId}] ✅ ${conversationBatch.length} conversas históricas processadas.`);
@@ -364,7 +364,7 @@ export class WhatsappInstance extends EventEmitter {
         const CHUNK_SIZE = 100;
         for (let i = 0; i < messageBatch.length; i += CHUNK_SIZE) {
           const chunk = messageBatch.slice(i, i + CHUNK_SIZE);
-          const { error } = await supabaseAdmin.from('whatsapp_messages').upsert(chunk, { onConflict: 'store_id,message_id' });
+          const { error } = await supabaseAdmin.from('chat_messages').upsert(chunk, { onConflict: 'store_id,message_id' });
           if (error) console.error(`[Loja ${this.storeId}] ❌ Erro ao upsert lote de mensagens:`, error.message);
         }
         console.log(`[Loja ${this.storeId}] ✅ Sincronização inicial de mensagens concluída.`);
@@ -453,11 +453,11 @@ export class WhatsappInstance extends EventEmitter {
         last_message_timestamp: new Date(Number(message.messageTimestamp) * 1000),
       };
 
-      await supabaseAdmin.from('whatsapp_conversations').upsert(conversationUpsert, { onConflict: 'store_id,conversation_id' });
+      await supabaseAdmin.from('chat_conversations').upsert(conversationUpsert, { onConflict: 'store_id,conversation_id' });
 
       // 2. Insere mensagem
       const senderJid = isFromMe ? this.getMyJid() : (message.key.participant || conversationId);
-      await supabaseAdmin.from('whatsapp_messages').upsert({
+      await supabaseAdmin.from('chat_messages').upsert({
         store_id: this.storeId,
         message_id: message.key.id,
         conversation_id: conversationId,
@@ -572,7 +572,7 @@ export class WhatsappInstance extends EventEmitter {
         // Buscar a última mensagem no banco para ter uma chave completa (id, fromMe)
         // O Baileys exige uma chave completa para o delete no chatModify
         const { data: lastMsg } = await supabaseAdmin
-          .from('whatsapp_messages')
+          .from('chat_messages')
           .select('message_id, is_from_me')
           .eq('store_id', this.storeId)
           .eq('conversation_id', conversationId)
@@ -610,11 +610,11 @@ export class WhatsappInstance extends EventEmitter {
 
       // 2. Deletar no banco (Supabase)
       // Removemos tanto o ID original quanto o normalizado para limpar quaisquer resquícios
-      await supabaseAdmin.from('whatsapp_messages').delete()
+      await supabaseAdmin.from('chat_messages').delete()
         .eq('store_id', this.storeId)
         .or(`conversation_id.eq.${conversationId},conversation_id.eq.${baseJid}`);
 
-      await supabaseAdmin.from('whatsapp_conversations').delete()
+      await supabaseAdmin.from('chat_conversations').delete()
         .eq('store_id', this.storeId)
         .or(`conversation_id.eq.${conversationId},conversation_id.eq.${baseJid}`);
 
@@ -778,7 +778,7 @@ WhatsappInstance.prototype.processWithZeAssistant = async function (
 
     // Verificar se conversa está bloqueada por atendente humano
     const { data: conversation } = await supabaseAdmin
-      .from('whatsapp_conversations')
+      .from('chat_conversations')
       .select('locked_by_agent_id')
       .eq('store_id', this.storeId)
       .eq('conversation_id', conversationId)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { WhatsappConversation, WhatsappMessage, SortCriteria, ManualOrder, PriorityLevel } from './types';
-import { useWhatsappWebSocket } from './useWhatsappWebSocket';
+import { ChatConversation, ChatMessage, SortCriteria, ManualOrder, PriorityLevel } from './types';
+import { useChatWebSocket } from './useChatWebSocket';
 import ConversationList from './ConversationList';
 import MessageArea from './MessageArea';
 import MessageInput from './MessageInput';
@@ -20,20 +20,20 @@ const API_BASE_URL = getApiBaseUrl();
 
 type TabType = 'conversations' | 'contacts';
 
-import { whatsappOfflineService } from '../../services/whatsappOfflineService';
+import { chatOfflineService as whatsappOfflineService } from '../../services/chatOfflineService';
 
-interface WhatsappContainerProps {
+interface InternalChatContainerProps {
   storeId?: string;
   attendantId?: string; // ID do atendente logado
   onBack?: () => void; // Função para voltar ao dashboard do app
 }
 
-const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
+const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   storeId = 'default-store-id',
   attendantId,
   onBack
 }) => {
-  const { status, setStatus, lastMessage, lastStatusUpdate } = useWhatsappWebSocket(storeId);
+  const { status, setStatus, lastMessage, lastStatusUpdate } = useChatWebSocket(storeId);
   const [hasSession, setHasSession] = useState(false);
   const [conversations, setConversations] = useState<WhatsappConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<WhatsappConversation | null>(null);
@@ -630,7 +630,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
     try {
       await axios.post(`${API_BASE_URL}/logout`, { storeId });
     } catch (error) {
-      console.error('Erro ao desconectar WhatsApp (prosseguindo com limpeza local):', error);
+      console.error('Erro ao descConectar Chat (prosseguindo com limpeza local):', error);
     } finally {
       // Force cleanup regardless of backend success/failure
       setStatus({ status: 'DISCONNECTED' });
@@ -1190,7 +1190,7 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
           <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
             <h3 className="text-lg font-bold mb-2">Desconectar?</h3>
             <p className="text-sm text-gray-600 mb-6">
-              Você deseja realmente desconectar o WhatsApp desta loja? Todas as sessões serão encerradas.
+              Você deseja realmente desconectarQR Code Chat desta loja? Todas as sessões serão encerradas.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -1263,4 +1263,4 @@ const WhatsappContainer: React.FC<WhatsappContainerProps> = ({
 };
 
 
-export default WhatsappContainer;
+export default InternalChatContainer;

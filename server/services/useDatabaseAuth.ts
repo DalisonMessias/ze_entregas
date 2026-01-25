@@ -13,7 +13,7 @@ import {
 export const clearDatabaseSession = async (storeId: string) => {
   try {
     const { error } = await supabaseAdmin
-      .from('whatsapp_sessions')
+      .from('chat_sessions')
       .delete()
       .eq('store_id', storeId);
 
@@ -40,7 +40,7 @@ export const useDatabaseAuth = async (storeId: string): Promise<{ state: Authent
 
   // Tenta carregar a sessão existente do banco de dados para a loja específica
   const { data: sessionData, error: fetchError } = await supabaseAdmin
-    .from('whatsapp_sessions')
+    .from('chat_sessions')
     .select('session_data')
     .eq('store_id', storeId)
     .single();
@@ -66,7 +66,7 @@ export const useDatabaseAuth = async (storeId: string): Promise<{ state: Authent
     const value = JSON.parse(JSON.stringify(sessionToSave, BufferJSON.replacer));
 
     try {
-      const { error } = await supabaseAdmin.from('whatsapp_sessions').upsert({
+      const { error } = await supabaseAdmin.from('chat_sessions').upsert({
         store_id: storeId,
         session_id: `session_${storeId}`, // Mantemos um ID de sessão baseado no store_id
         session_data: value,

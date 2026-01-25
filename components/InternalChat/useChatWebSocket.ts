@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { WhatsappStatus, WebSocketMessagePayload, WhatsappMessage } from './types';
+import { ChatStatus, WebSocketMessagePayload, ChatMessage } from './types';
 import { getWebSocketUrl } from '../../utils/apiConfig';
 
 const WEBSOCKET_URL = getWebSocketUrl();
 
-export const useWhatsappWebSocket = (storeId: string) => {
+export const useChatWebSocket = (storeId: string) => {
   const [status, setStatus] = useState<WhatsappStatus>({ status: 'CONNECTING' });
   const [lastMessage, setLastMessage] = useState<WhatsappMessage | null>(null);
   const [lastStatusUpdate, setLastStatusUpdate] = useState<{ messageId: string, status: string } | null>(null);

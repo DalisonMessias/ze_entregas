@@ -3,6 +3,8 @@
  */
 import { useState, useCallback } from 'react';
 
+import { getApiBaseUrl } from '../../utils/apiConfig';
+
 interface ProfilePictureCache {
     [jid: string]: string | null;
 }
@@ -25,7 +27,7 @@ export const useProfilePictures = () => {
         setLoading(prev => new Set(prev).add(jid));
 
         try {
-            const response = await fetch(`http://${window.location.hostname}:3001/api/whatsapp/profile-picture/${jid}`);
+            const response = await fetch(`${getApiBaseUrl()}/profile-picture/${jid}`);
             const data = await response.json();
 
             const profilePicUrl = data.profilePicUrl || null;

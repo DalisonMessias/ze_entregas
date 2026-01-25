@@ -86,7 +86,7 @@ server.listen(PORT, '0.0.0.0', async () => {
 
   // Teste de integridade multi-loja no boot
   try {
-    const { error } = await supabaseAdmin.from('whatsapp_sessions').select('store_id').limit(1);
+    const { error } = await supabaseAdmin.from('chat_sessions').select('store_id').limit(1);
     if (error) {
       console.error('\n❌ ERRO DE CONFIGURAÇÃO DO BANCO DE DADOS:');
       if (error.message.includes('column "store_id" does not exist')) {

@@ -1,5 +1,5 @@
 /**
- * Serviço de notificações do navegador para WhatsApp
+ * Serviço de notificações do navegador para chat
  */
 
 let notificationPermission: NotificationPermission = 'default';
@@ -46,8 +46,8 @@ export const showMessageNotification = (
 
     const notification = new Notification(`Nova mensagem de ${contactName}`, {
         body: messageContent.substring(0, 100),
-        icon: '/whatsapp-icon.png', // Adicione um ícone do WhatsApp em public/
-        badge: '/whatsapp-badge.png',
+        icon: '/chat-icon.png', // Adicione um ícone do chat em public/
+        badge: '/chat-badge.png',
         tag: conversationId, // Evita múltiplas notificações da mesma conversa
         requireInteraction: false,
         silent: false,
