@@ -42,7 +42,7 @@ app.use((req, res, next) => {
 // Rotas
 app.use('/api/streets-neighborhoods', streetsNeighborhoodsRoutes);
 app.use('/api/v1', integrationRoutes);
-app.use('/api/chat', chatRoutes); // Usar rotas de Chat (antigo WhatsApp)
+app.use('/api/chat', chatRoutes); // Usar rotas de Chat Interno
 app.use('/api/ze-assistant', zeAssistantRoutes); // Usar rotas do Zé Assistente
 app.use('/pwa', pwaRoutes); // Rotas para PWA dinâmico
 app.use('/api/payment', paymentRoutes); // Rota para pagamentos

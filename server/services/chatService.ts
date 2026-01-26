@@ -23,7 +23,7 @@ type ConnectionStatus = 'CONNECTED' | 'CONNECTING' | 'DISCONNECTED' | 'WAITING_Q
 /**
  * Representa uma instância individual do WhatsApp para uma loja.
  */
-export class WhatsappInstance extends EventEmitter {
+export class ChatInstance extends EventEmitter {
   private sock: WASocket | undefined;
   private status: ConnectionStatus = 'DISCONNECTED';
   private qrCode: string | undefined;
@@ -39,7 +39,7 @@ export class WhatsappInstance extends EventEmitter {
 
   private async initialize() {
     try {
-      console.log(`[Loja ${this.storeId}] Iniciando o serviço de WhatsApp...`);
+      console.log(`[Loja ${this.storeId}] Iniciando o serviço de Chat...`);
       this.status = 'CONNECTING';
       this.emit('status.change', this.status);
       await this.connectToWhatsApp();
@@ -677,13 +677,13 @@ export class WhatsappInstance extends EventEmitter {
 /**
  * Gerenciador de Instâncias do WhatsApp.
  */
-class WhatsappServiceManager extends EventEmitter {
-  private instances: Map<string, WhatsappInstance> = new Map();
+class ChatServiceManager extends EventEmitter {
+  private instances: Map<string, ChatInstance> = new Map();
 
-  public getInstance(storeId: string): WhatsappInstance {
+  public getInstance(storeId: string): ChatInstance {
     let instance = this.instances.get(storeId);
     if (!instance) {
-      instance = new WhatsappInstance(storeId);
+      instance = new ChatInstance(storeId);
 
       // Re-emitir eventos individuais no manager incluindo o storeId
       instance.on('status.change', (status) => this.emit('status.change', { storeId, status }));
@@ -764,9 +764,9 @@ class WhatsappServiceManager extends EventEmitter {
 }
 
 /**
- * Processa mensagem com Zé Assistente (Método da classe WhatsappInstance)
+ * Processa mensagem com Zé Assistente (Método da classe ChatInstance)
  */
-WhatsappInstance.prototype.processWithZeAssistant = async function (
+ChatInstance.prototype.processWithZeAssistant = async function (
   conversationId: string,
   customerPhone: string | null,
   customerName: string,
@@ -815,5 +815,5 @@ WhatsappInstance.prototype.processWithZeAssistant = async function (
   }
 };
 
-const whatsappService = new WhatsappServiceManager();
-export default whatsappService;
+const chatService = new ChatServiceManager();
+export default chatService;

@@ -28,6 +28,7 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [isConnecting, setIsConnecting] = useState(true);
+    const [isWsConnected, setIsWsConnected] = useState(false);
     const [showOptionsObj, setShowOptionsObj] = useState<{ [key: string]: boolean }>({});
     const [showClearModal, setShowClearModal] = useState(false);
 
@@ -50,6 +51,8 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
 
     useEffect(() => {
         if (store?.id) {
+            loadLocalHistory();
+            loadServerHistory();
             connectWebSocket();
         }
         return () => ws.current?.close();
@@ -100,25 +103,46 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
         localStorage.setItem(`ze_chat_history_${storeSlug}`, JSON.stringify(newMessages));
     };
 
+
+
     const connectWebSocket = () => {
         const wsUrl = `${getWebSocketUrl()}?visitorId=${visitorId.current}&storeId=${store?.id}`;
         ws.current = new WebSocket(wsUrl);
 
-        ws.current.onopen = () => setIsConnecting(false);
+        ws.current.onopen = () => {
+            console.log("WebSocket connected");
+            setIsWsConnected(true);
+            setIsConnecting(false);
+        };
+
         ws.current.onclose = () => {
-            setIsConnecting(true);
+            console.log("WebSocket disconnected");
+            setIsWsConnected(false);
             setTimeout(connectWebSocket, 3000);
         };
 
         ws.current.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.type === 'internal.message' && data.payload.senderId !== visitorId.current) {
+                // Servidor envia 'chat.message', não 'internal.message'
+                if (data.type === 'chat.message') {
+                    const msgPayload = data.payload;
+                    const senderId = msgPayload.key?.fromMe ? store!.id : msgPayload.key?.remoteJid;
+                    if (senderId === visitorId.current) return; // Evitar duplicatas
+                    // Extrair conteúdo da mensagem
+                    let content = '';
+                    if (msgPayload.message?.conversation) {
+                        content = msgPayload.message.conversation;
+                    } else if (msgPayload.message?.extendedTextMessage?.text) {
+                        content = msgPayload.message.extendedTextMessage.text;
+                    }
+                    if (!content) return;
+
                     const newMessage: Message = {
-                        id: data.payload.message_id || Date.now().toString(),
-                        text: data.payload.content,
+                        id: msgPayload.key?.id || Date.now().toString(),
+                        text: content,
                         isFromMe: false,
-                        timestamp: new Date().toISOString(),
+                        timestamp: new Date(msgPayload.messageTimestamp * 1000 || Date.now()).toISOString(),
                         status: 'read'
                     };
                     setMessages(prev => {
@@ -135,11 +159,37 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
         };
     };
 
+    const loadServerHistory = async () => {
+        if (!store?.id) return;
+        try {
+            const response = await axios.get(`${getApiBaseUrl()}/messages/${visitorId.current}?storeId=${store.id}`);
+            const serverMessages = response.data.map((msg: any) => ({
+                id: msg.message_id || msg.id,
+                text: msg.content || msg.message,
+                isFromMe: !!msg.from_me,
+                timestamp: msg.message_timestamp,
+                status: msg.status || 'read'
+            }));
+
+            setMessages(prev => {
+                const existingIds = new Set(prev.map(m => m.id));
+                const filteredNew = serverMessages.filter((m: any) => !existingIds.has(m.id));
+                const updated = [...prev, ...filteredNew].sort((a, b) =>
+                    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                );
+                saveLocalHistory(updated);
+                return updated;
+            });
+        } catch (e) {
+            console.error("Error loading server history", e);
+        }
+    };
+
     const sendMessageToApi = async (message: Message) => {
         if (!store?.id) return;
 
         try {
-            const response = await axios.post(`${getApiBaseUrl()}/chat/internal/send`, {
+            const response = await axios.post(`${getApiBaseUrl()}/internal/send`, {
                 storeId: store.id,
                 visitorId: visitorId.current,
                 content: message.text,
@@ -253,8 +303,8 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
                     <div>
                         <h1 className="font-black text-gray-900 leading-tight uppercase tracking-tighter text-sm">Chat com {store?.store_name}</h1>
                         <div className="flex items-center gap-1.5">
-                            <div className={`w-2 h-2 rounded-full ${isConnecting ? 'bg-orange-400 animate-pulse' : 'bg-green-500'}`}></div>
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{isConnecting ? 'Conectando...' : 'Online'}</span>
+                            <div className={`w-2 h-2 rounded-full ${!isWsConnected ? 'bg-orange-400 animate-pulse' : 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'}`}></div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{!isWsConnected ? 'Conectando...' : 'Online'}</span>
                         </div>
                     </div>
                 </div>

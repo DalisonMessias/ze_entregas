@@ -9,16 +9,16 @@ const router = Router();
 /**
  * @swagger
  * tags:
- *   name: WhatsApp
- *   description: API para gerenciamento do WhatsApp
+ *   name: Chat
+ *   description: API para gerenciamento do Chat
  */
 
 /**
  * @swagger
- * /api/whatsapp/status:
+ * /api/chat/status:
  *   get:
- *     summary: Retorna o status da conexão do WhatsApp
- *     tags: [WhatsApp]
+ *     summary: Retorna o status da conexão do Chat
+ *     tags: [Chat]
  *     responses:
  *       200:
  *         description: O status atual e o QR code, se houver
@@ -27,10 +27,10 @@ router.get('/status', chatController.getStatus);
 
 /**
  * @swagger
- * /api/whatsapp/send/text:
+ * /api/chat/send/text:
  *   post:
  *     summary: Envia uma mensagem de texto
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  *     requestBody:
  *       required: true
  *       content:
@@ -56,19 +56,12 @@ router.post('/send/text', chatController.sendTextMessage);
 
 /**
  * @swagger
- * /api/whatsapp/chat/internal/send:
+ * /api/chat/internal/send:
  *   post:
  *     summary: Envia mensagem do chat interno (Menu Digital)
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
-/**
- * @swagger
- * /api/whatsapp/chat/internal/send:
- *   post:
- *     summary: Envia mensagem do chat interno (Menu Digital)
- *     tags: [WhatsApp]
- */
-router.post('/chat/internal/send', chatController.sendInternalMessage);
+router.post('/internal/send', chatController.sendInternalMessage);
 
 // router.post('/send/audio', upload.single('audio'), whatsappController.sendAudioMessage); // Removido: Chat interno usa API genérica
 
@@ -76,28 +69,28 @@ router.get('/conversations', chatController.getConversations);
 
 /**
  * @swagger
- * /api/whatsapp/conversations/order:
+ * /api/chat/conversations/order:
  *   get:
  *     summary: Obtém a ordem manual das conversas
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.get('/conversations/order', chatController.getConversationOrder);
 
 /**
  * @swagger
- * /api/whatsapp/conversations/order:
+ * /api/chat/conversations/order:
  *   post:
  *     summary: Salva a ordem manual das conversas
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.post('/conversations/order', chatController.saveConversationOrder);
 
 /**
  * @swagger
- * /api/whatsapp/messages/{conversationId}:
+ * /api/chat/messages/{conversationId}:
  *   get:
  *     summary: Obtém as mensagens de uma conversa específica
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  *     parameters:
  *       - in: path
  *         name: conversationId
@@ -113,64 +106,64 @@ router.get('/messages/:conversationId', chatController.getMessages);
 
 /**
  * @swagger
- * /api/whatsapp/profile-picture/{jid}:
+ * /api/chat/profile-picture/{jid}:
  *   get:
  *     summary: Busca foto de perfil de um contato
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.get('/profile-picture/:jid', chatController.getProfilePicture);
 
 /**
  * @swagger
- * /api/whatsapp/mark-read:
+ * /api/chat/mark-read:
  *   post:
  *     summary: Marca mensagem como lida
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.post('/mark-read', chatController.markAsRead);
 
 /**
  * @swagger
- * /api/whatsapp/contacts:
+ * /api/chat/contacts:
  *   get:
  *     summary: Lista todos os contatos
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.get('/contacts', chatController.getContacts);
 
 /**
  * @swagger
- * /api/whatsapp/contacts:
+ * /api/chat/contacts:
  *   post:
  *     summary: Cria ou atualiza um contato
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.post('/contacts', chatController.upsertContact);
 
 /**
  * @swagger
- * /api/whatsapp/contacts/{id}:
+ * /api/chat/contacts/{id}:
  *   delete:
  *     summary: Exclui um contato
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.delete('/contacts/:id', chatController.deleteContact);
 
 /**
  * @swagger
- * /api/whatsapp/logout:
+ * /api/chat/logout:
  *   post:
- *     summary: Desconecta e limpa a sessão do WhatsApp
- *     tags: [WhatsApp]
+ *     summary: Desconecta e limpa a sessão do Chat
+ *     tags: [Chat]
  */
 router.post('/logout', chatController.logout);
 
 /**
  * @swagger
- * /api/whatsapp/send/image:
+ * /api/chat/send/image:
  *   post:
  *     summary: Envia uma imagem
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  *     requestBody:
  *       required: true
  *       content:
@@ -195,83 +188,83 @@ router.post('/send/image', chatMediaController.uploadMiddleware, chatMediaContro
 
 /**
  * @swagger
- * /api/whatsapp/send/audio:
+ * /api/chat/send/audio:
  *   post:
  *     summary: Envia um áudio
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.post('/send/audio', chatMediaController.uploadMiddleware, chatMediaController.sendAudio);
 
 /**
  * @swagger
- * /api/whatsapp/send/video:
+ * /api/chat/send/video:
  *   post:
  *     summary: Envia um vídeo
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.post('/send/video', chatMediaController.uploadMiddleware, chatMediaController.sendVideo);
 
 /**
  * @swagger
- * /api/whatsapp/send/document:
+ * /api/chat/send/document:
  *   post:
  *     summary: Envia um documento
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.post('/send/document', chatMediaController.uploadMiddleware, chatMediaController.sendDocument);
 
 /**
  * @swagger
- * /api/whatsapp/restart:
+ * /api/chat/restart:
  *   post:
- *     summary: Reinicia o serviço de WhatsApp (força nova conexão/QR)
- *     tags: [WhatsApp]
+ *     summary: Reinicia o serviço de Chat (força nova conexão/QR)
+ *     tags: [Chat]
  */
 router.post('/restart', chatController.restartService);
 
 /**
  * @swagger
- * /api/whatsapp/conversations/{conversationId}/priority:
+ * /api/chat/conversations/{conversationId}/priority:
  *   patch:
  *     summary: Atualiza a prioridade de uma conversa
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.patch('/conversations/:conversationId/priority', chatController.updatePriority);
 
 /**
  * @swagger
- * /api/whatsapp/conversations/sort-preference:
+ * /api/chat/conversations/sort-preference:
  *   patch:
  *     summary: Atualiza a preferência de ordenação das conversas
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.patch('/conversations/sort-preference', chatController.updateSortPreference);
 
 
 /**
  * @swagger
- * /api/whatsapp/conversations/{conversationId}:
+ * /api/chat/conversations/{conversationId}:
  *   delete:
  *     summary: Deleta uma conversa sincronizado com o aparelho
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.delete('/conversations/:conversationId', chatController.deleteConversation);
 
 /**
  * @swagger
- * /api/whatsapp/conversations/{conversationId}/messages:
+ * /api/chat/conversations/{conversationId}/messages:
  *   delete:
  *     summary: Limpa todo o histórico de mensagens de uma conversa (Hard Delete)
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.delete('/conversations/:conversationId/messages', chatController.clearConversationMessages);
 
 /**
  * @swagger
- * /api/whatsapp/messages/{messageId}:
+ * /api/chat/messages/{messageId}:
  *   delete:
  *     summary: Deleta uma mensagem específica (Hard Delete)
- *     tags: [WhatsApp]
+ *     tags: [Chat]
  */
 router.delete('/messages/:messageId', chatController.deleteMessage);
 

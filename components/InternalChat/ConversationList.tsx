@@ -68,7 +68,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
     }
   };
 
-  const renderAvatar = (conversation: WhatsappConversation) => {
+  const renderAvatar = (conversation: ChatConversation) => {
     const profilePic = profilePictures[conversation.conversation_id];
 
     if (profilePic) {

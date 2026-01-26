@@ -114,7 +114,7 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                     </div>
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">Zé Assistente</h2>
-                        <p className="text-sm text-gray-500">Seu assistente virtual inteligente para WhatsApp</p>
+                        <p className="text-sm text-gray-500">Seu assistente virtual inteligente para Chat Interno</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">

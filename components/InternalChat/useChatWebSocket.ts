@@ -5,8 +5,8 @@ import { getWebSocketUrl } from '../../utils/apiConfig';
 const WEBSOCKET_URL = getWebSocketUrl();
 
 export const useChatWebSocket = (storeId: string) => {
-  const [status, setStatus] = useState<WhatsappStatus>({ status: 'CONNECTING' });
-  const [lastMessage, setLastMessage] = useState<WhatsappMessage | null>(null);
+  const [status, setStatus] = useState<ChatStatus>({ status: 'CONNECTING' });
+  const [lastMessage, setLastMessage] = useState<ChatMessage | null>(null);
   const [lastStatusUpdate, setLastStatusUpdate] = useState<{ messageId: string, status: string } | null>(null);
   const ws = useRef<WebSocket | null>(null);
 
@@ -48,16 +48,16 @@ export const useChatWebSocket = (storeId: string) => {
           const data: WebSocketMessagePayload = JSON.parse(event.data);
 
           switch (data.type) {
-            case 'whatsapp.status':
-              setStatus(data.payload as WhatsappStatus);
+            case 'chat.status':
+              setStatus(data.payload as ChatStatus);
               break;
-            case 'whatsapp.qr':
+            case 'chat.qr':
               setStatus({ status: 'WAITING_QR', qrCode: data.payload.qr });
               break;
-            case 'whatsapp.message':
-              setLastMessage(data.payload as WhatsappMessage);
+            case 'chat.message':
+              setLastMessage(data.payload as ChatMessage);
               break;
-            case 'whatsapp.message_status':
+            case 'chat.message_status':
               setLastStatusUpdate(data.payload as { messageId: string, status: string });
               break;
             default:

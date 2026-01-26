@@ -65,6 +65,8 @@ export const sendTextMessage = async (req: Request, res: Response) => {
 export const sendInternalMessage = async (req: Request, res: Response) => {
   const { storeId, visitorId, content, senderId, isFromVisitor } = req.body;
 
+  console.log('[sendInternalMessage] Recebido:', { storeId, visitorId, content, senderId, isFromVisitor });
+
   if (!storeId || !content) {
     return res.status(400).json({ error: 'Campos storeId e content são obrigatórios.' });
   }
@@ -86,8 +88,14 @@ export const sendInternalMessage = async (req: Request, res: Response) => {
       throw result.error;
     }
   } catch (error: any) {
-    console.error('Erro ao enviar mensagem interna (Menu Digital):', error);
-    res.status(500).json({ success: false, message: error.message || 'Erro interno.' });
+    console.error('[sendInternalMessage] ERRO COMPLETO:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      stack: error.stack
+    });
+    res.status(500).json({ success: false, message: error.message || 'Erro interno.', details: error.details || error.hint });
   }
 };
 
@@ -109,12 +117,16 @@ export const getConversations = async (req: Request, res: Response) => {
     console.log(`[Loja ${storeId}] 🔍 getConversations: Retornando ${data?.length || 0} conversas.`);
     res.status(200).json(data);
   } catch (error: any) {
-    // Modificação ROBUSTA: Qualquer erro de banco retorna array vazio e loga o erro, NÃO retorna 500
-    // Isso evita travar o frontend se o banco estiver instável ou sem migração
+    // Modificação ROBUSTA: Qualquer erro de banco (mesmo schema ausente) retorna array vazio
     const safeStoreId = (req.query.storeId as string) || (req.body.storeId as string) || 'unknown';
     console.error(`[Loja ${safeStoreId}] ❌ ERROR_GET_CONVERSATIONS:`, error.message);
 
-    // Retorna 200 com array vazio e meta-informação do erro nos headers ou corpo
+    // Se for erro de schema/tabela, retornamos 200/[] silenciosamente
+    if (error.message?.includes('schema cache') || error.message?.includes('does not exist') || error.code?.startsWith('42')) {
+      return res.status(200).json([]);
+    }
+
+    // Outros erros ainda retornam 200/[] mas com log
     return res.status(200).json([]);
   }
 };
@@ -141,8 +153,8 @@ export const getConversationOrder = async (req: Request, res: Response) => {
     if (error) throw error;
     res.status(200).json(data);
   } catch (error: any) {
-    // Silencia erros de tabela inexistente
-    if (error.message?.includes('does not exist') || error.code?.startsWith('42')) {
+    // Silencia erros de tabela inexistente ou schema cache
+    if (error.message?.includes('does not exist') || error.message?.includes('schema cache') || error.code?.startsWith('42')) {
       return res.status(200).json([]);
     }
     console.error('Erro ao buscar ordem das conversas:', error);
@@ -205,6 +217,9 @@ export const getMessages = async (req: Request, res: Response) => {
     res.status(200).json(data);
   } catch (error: any) {
     console.error(`Erro ao buscar mensagens para a conversa ${conversationId}:`, error);
+    if (error.message?.includes('does not exist') || error.message?.includes('schema cache') || error.code?.startsWith('42')) {
+      return res.status(200).json([]);
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -239,6 +254,9 @@ export const getContacts = async (req: Request, res: Response) => {
     res.status(200).json(data);
   } catch (error: any) {
     console.error('Erro ao buscar contatos:', error);
+    if (error.message?.includes('does not exist') || error.message?.includes('schema cache') || error.code?.startsWith('42')) {
+      return res.status(200).json([]);
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -411,7 +429,7 @@ export const updateSortPreference = async (req: Request, res: Response) => {
 
     const { error } = await supabaseAdmin
       .from('ze_assistant_config')
-      .update({ whatsapp_sort_preference: preference })
+      .update({ chat_sort_preference: preference })
       .eq('store_id', storeId);
 
     if (error) throw error;

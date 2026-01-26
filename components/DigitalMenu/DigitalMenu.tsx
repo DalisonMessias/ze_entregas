@@ -291,7 +291,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
         const usePlatform = store?.receive_orders_via_platform;
         // Se ambos estiverem desligados, fallback para WhatsApp
-        const useWhatsApp = store?.receive_orders_via_whatsapp || !usePlatform;
+        const useWhatsApp = store?.receive_orders_via_chat || !usePlatform;
 
         // PLATFORM CHECKOUT
         if (usePlatform) {
@@ -443,7 +443,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             }
 
             // PRIORIDADE PARA NÚMERO DE WHATSAPP CONFIGURADO
-            const phone = (store?.whatsapp_number || store?.phone_number)?.replace(/\D/g, '');
+            const phone = (store?.chat_number || store?.phone_number)?.replace(/\D/g, '');
             if (phone) {
                 const url = `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`;
                 window.open(url, '_blank');
@@ -1036,27 +1036,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     pixData={store.config.pixdata}
                     amount={cartTotal}
                     orderId={createdOrderId}
-                    storePhone={store.whatsapp_number || store.phone_number}
+                    storePhone={store.chat_number || store.phone_number}
                 />
             )}
 
-            {/* Pix Payment Modal */}
-            {isPixModalOpen && store?.config?.pixdata && createdOrderId && (
-                <PixPaymentModal
-                    isOpen={isPixModalOpen}
-                    onClose={() => {
-                        setIsPixModalOpen(false);
-                        // Redirect to Tracking after payment modal close
-                        window.history.pushState({}, '', `/track/${createdOrderId}`);
-                        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
-                    }
-                    }
-                    pixData={store.config.pixdata}
-                    amount={cartTotal}
-                    orderId={createdOrderId}
-                    storePhone={store.whatsapp_number || store.phone_number}
-                />
-            )}
 
             {/* Ratings Modal */}
             {isRatingModalOpen && store && (

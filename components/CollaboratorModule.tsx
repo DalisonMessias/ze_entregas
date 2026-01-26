@@ -13,7 +13,7 @@ import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 import { Logo } from './Logo';
 
-const WhatsappContainer = React.lazy(() => import('./Whatsapp/WhatsappContainer'));
+const ChatContainer = React.lazy(() => import('./InternalChat/InternalChatContainer'));
 
 interface Props {
     collaborator: any;
@@ -26,7 +26,7 @@ const parseCurrency = (val: string): number => {
     return Number(digits) / 100;
 };
 
-type View = 'dashboard' | 'menu' | 'tables' | 'history' | 'reports' | 'external_order' | 'orders' | 'whatsapp_chat' | 'kitchen';
+type View = 'dashboard' | 'menu' | 'tables' | 'history' | 'reports' | 'external_order' | 'orders' | 'internal_chat' | 'kitchen';
 
 export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) => {
     const [view, setView] = useState<View>('dashboard');
@@ -691,13 +691,13 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                 </button>
 
                 <button
-                    onClick={() => setView('whatsapp_chat')}
+                    onClick={() => setView('internal_chat')}
                     className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all flex flex-col items-center gap-3 group active:scale-95"
                 >
                     <div className="w-14 h-14 bg-green-50 dark:bg-green-900/20 rounded-2xl flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors">
                         <MessageCircle className="w-7 h-7" />
                     </div>
-                    <span className="text-xs font-black dark:text-white uppercase tracking-tighter">WhatsApp</span>
+                    <span className="text-xs font-black dark:text-white uppercase tracking-tighter">Chat</span>
                     <span className="text-[10px] text-gray-400 font-bold -mt-2">Atendimento Interno</span>
                 </button>
 
@@ -919,7 +919,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     return (
         <div className="h-screen h-[100dvh] bg-gray-100 dark:bg-gray-900 flex flex-col font-sans select-none overflow-hidden">
             {/* Header com Navegação - Escondido no WhatsApp Chat mobile para ganhar espaço */}
-            <header className={`${view === 'whatsapp_chat' ? 'hidden md:flex' : 'flex'} bg-white dark:bg-gray-800 shadow-md p-4 justify-between items-center z-40 sticky top-0 flex-shrink-0`}>
+            <header className={`${view === 'internal_chat' ? 'hidden md:flex' : 'flex'} bg-white dark:bg-gray-800 shadow-md p-4 justify-between items-center z-40 sticky top-0 flex-shrink-0`}>
                 <div className="flex items-center gap-3">
                     {view !== 'dashboard' ? (
                         <button onClick={() => setView('dashboard')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-500"><ArrowLeft className="w-6 h-6" /></button>
@@ -946,10 +946,10 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                 {view === 'reports' && renderReports()}
                 {view === 'orders' && renderOrders()}
                 {view === 'kitchen' && renderKitchen()}
-                {view === 'whatsapp_chat' && (
+                {view === 'internal_chat' && (
                     <div className="flex-1 flex flex-col overflow-hidden md:items-center md:justify-center md:bg-gray-200/50 md:p-4">
                         <React.Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-brand-600" /></div>}>
-                            <WhatsappContainer
+                            <ChatContainer
                                 storeId={collaborator.store_id}
                                 attendantId={collaborator.id}
                                 onBack={() => setView('dashboard')}

@@ -53,7 +53,7 @@ const QrCodeModal: React.FC<QrCodeModalProps> = ({ qrCode, onClose }) => {
               <li className="flex items-start gap-4">
                 <span className="flex items-center justify-center w-6 h-6 border-2 border-[#3b4a54] rounded-full font-medium text-sm mt-0.5 shrink-0">1</span>
                 <div>
-                  Abra o WhatsApp <span className="inline-flex items-center justify-center"><Smartphone size={16} className="mx-1 text-green-500" /></span> no seu celular.
+                  Abra o app de Chat <span className="inline-flex items-center justify-center"><Smartphone size={16} className="mx-1 text-green-500" /></span> no seu celular.
                 </div>
               </li>
               <li className="flex items-start gap-4">

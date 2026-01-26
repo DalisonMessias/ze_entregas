@@ -379,7 +379,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const [cart, setCart] = useState<any[]>([]);
 
     // WhatsApp Unread Count State
-    const [whatsappUnreadCount, setWhatsappUnreadCount] = useState(0);
+    const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
     const { alert } = useDialog();
 
@@ -390,20 +390,20 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     useEffect(() => {
         const handleUnreadUpdate = (event: CustomEvent) => {
             if (event.detail && typeof event.detail.count === 'number') {
-                setWhatsappUnreadCount(event.detail.count);
+                setChatUnreadCount(event.detail.count);
             }
         };
 
-        window.addEventListener('whatsapp_unread_update', handleUnreadUpdate as EventListener);
+        window.addEventListener('chat_unread_update', handleUnreadUpdate as EventListener);
 
         // Initial check via service if possible, or just wait for event
         // Importing service dynamically to avoid circular dependencies if any
-        import('../services/whatsappOfflineService').then(({ whatsappOfflineService }) => {
-            whatsappOfflineService.getUnreadCount().then(count => setWhatsappUnreadCount(count));
+        import('../services/chatOfflineService').then(({ chatOfflineService }) => {
+            chatOfflineService.getUnreadCount().then(count => setChatUnreadCount(count));
         }).catch(() => { });
 
         return () => {
-            window.removeEventListener('whatsapp_unread_update', handleUnreadUpdate as EventListener);
+            window.removeEventListener('chat_unread_update', handleUnreadUpdate as EventListener);
         };
     }, []);
 

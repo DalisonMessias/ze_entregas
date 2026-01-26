@@ -79,8 +79,8 @@ export const StoreSettings: React.FC = () => {
 
         // Order Config
         receive_orders_via_platform: true,
-        receive_orders_via_whatsapp: false,
-        whatsapp_number: ''
+        receive_orders_via_chat: false,
+        chat_number: ''
     });
 
     const [citySlug, setCitySlug] = useState('');
@@ -133,8 +133,8 @@ export const StoreSettings: React.FC = () => {
 
                     // New Fields
                     receive_orders_via_platform: p.receive_orders_via_platform ?? true,
-                    receive_orders_via_whatsapp: p.receive_orders_via_whatsapp ?? false,
-                    whatsapp_number: p.whatsapp_number || p.phone_number || ''
+                    receive_orders_via_chat: p.receive_orders_via_chat ?? false,
+                    chat_number: p.chat_number || p.phone_number || ''
                 });
 
                 setCitySlug(p.city_slug || '');
@@ -237,7 +237,7 @@ export const StoreSettings: React.FC = () => {
 
             const rawPhone = (form.phone_number || '').replace(/\D/g, '');
             const rawZip = (form.address_zip || '').replace(/\D/g, '');
-            const rawWhatsapp = (form.whatsapp_number || '').replace(/\D/g, '');
+            const rawChatNumber = (form.chat_number || '').replace(/\D/g, '');
 
             await cloud.updateMyPartnerProfile({
                 store_name: form.name,
@@ -261,8 +261,8 @@ export const StoreSettings: React.FC = () => {
 
                 // Order Config
                 receive_orders_via_platform: form.receive_orders_via_platform,
-                receive_orders_via_whatsapp: form.receive_orders_via_whatsapp,
-                whatsapp_number: rawWhatsapp
+                receive_orders_via_chat: form.receive_orders_via_chat,
+                chat_number: rawChatNumber
 
                 // Also update legacy/display 'city' field for compatibility if needed, 
                 // but usually 'city' on profile is for search. Let's keep them synced for now or just update store fields.
@@ -706,7 +706,7 @@ export const StoreSettings: React.FC = () => {
                                                 setForm(prev => ({
                                                     ...prev,
                                                     receive_orders_via_platform: !prev.receive_orders_via_platform,
-                                                    receive_orders_via_whatsapp: prev.receive_orders_via_platform ? prev.receive_orders_via_whatsapp : false
+                                                    receive_orders_via_chat: prev.receive_orders_via_platform ? prev.receive_orders_via_chat : false
                                                 }));
                                             }}
                                         />
@@ -719,24 +719,24 @@ export const StoreSettings: React.FC = () => {
                                             </p>
                                         </div>
                                         <Switch
-                                            checked={form.receive_orders_via_whatsapp}
+                                            checked={form.receive_orders_via_chat}
                                             onChange={() => {
                                                 setForm(prev => ({
                                                     ...prev,
-                                                    receive_orders_via_whatsapp: !prev.receive_orders_via_whatsapp,
-                                                    receive_orders_via_platform: prev.receive_orders_via_whatsapp ? prev.receive_orders_via_platform : false
+                                                    receive_orders_via_chat: !prev.receive_orders_via_chat,
+                                                    receive_orders_via_platform: prev.receive_orders_via_chat ? prev.receive_orders_via_platform : false
                                                 }));
                                             }}
                                         />
                                     </div>
 
-                                    {form.receive_orders_via_whatsapp && (
+                                    {form.receive_orders_via_chat && (
                                         <div className="pt-4 animate-in fade-in slide-in-from-top-2">
                                             <CustomInput
                                                 label="Número do WhatsApp para Pedidos"
                                                 type="tel"
-                                                value={form.whatsapp_number}
-                                                onChange={e => handleChange('whatsapp_number', e.target.value)}
+                                                value={form.chat_number}
+                                                onChange={e => handleChange('chat_number', e.target.value)}
                                                 placeholder="(00) 00000-0000"
                                                 mask="phone"
                                                 icon={MessageCircle}

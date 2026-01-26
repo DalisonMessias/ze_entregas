@@ -34,7 +34,7 @@ export const BroadcastModal: React.FC<BroadcastModalProps> = ({ storeId, attenda
                 let contacts: { id: string, name: string }[] = [];
 
                 if (audience === 'recent_conversations') {
-                    // Busca conversas do WhatsApp (endpoint existente)
+                    // Busca conversas do Chat (endpoint existente)
                     const res = await axios.get(`${API_BASE_URL}/conversations?storeId=${storeId}`);
                     // Filtra apenas números válidos
                     contacts = res.data.map((c: any) => ({
@@ -48,7 +48,7 @@ export const BroadcastModal: React.FC<BroadcastModalProps> = ({ storeId, attenda
                     // Assumindo que endpoint retorna lista
                     if (Array.isArray(res.data)) {
                         contacts = res.data.map((c: any) => ({
-                            id: `${c.phone}@s.whatsapp.net`, // Formato whatsapp
+                            id: c.phone.includes('@') ? c.phone : `${c.phone}@s.whatsapp.net`, // Garante formato de ID válido
                             name: c.name
                         }));
                     }
@@ -93,7 +93,7 @@ export const BroadcastModal: React.FC<BroadcastModalProps> = ({ storeId, attenda
         let sent = 0;
         let failed = 0;
 
-        // Loop de envio com delay para evitar bloqueio do whatsapp e sobrecarga
+        // Loop de envio com delay para evitar bloqueio e sobrecarga
         for (let i = 0; i < targetContacts.length; i++) {
             const contact = targetContacts[i];
             try {

@@ -20,7 +20,7 @@ const API_BASE_URL = getApiBaseUrl();
 
 type TabType = 'conversations' | 'contacts';
 
-import { chatOfflineService as whatsappOfflineService } from '../../services/chatOfflineService';
+import { chatOfflineService } from '../../services/chatOfflineService';
 
 interface InternalChatContainerProps {
   storeId?: string;
@@ -35,9 +35,9 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
 }) => {
   const { status, setStatus, lastMessage, lastStatusUpdate } = useChatWebSocket(storeId);
   const [hasSession, setHasSession] = useState(false);
-  const [conversations, setConversations] = useState<WhatsappConversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<WhatsappConversation | null>(null);
-  const [messages, setMessages] = useState<WhatsappMessage[]>([]);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<ChatConversation | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [profilePictures, setProfilePictures] = useState<Record<string, string>>({});
@@ -107,10 +107,10 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
 
   const fetchConversations = useCallback(async () => {
     try {
-      const response = await axios.get<WhatsappConversation[]>(`${API_BASE_URL}/conversations?storeId=${storeId}`);
+      const response = await axios.get<ChatConversation[]>(`${API_BASE_URL}/conversations?storeId=${storeId}`);
 
       // Normalizar e Remover Duplicatas Rigorosamente
-      const seen = new Map<string, WhatsappConversation>();
+      const seen = new Map<string, ChatConversation>();
       response.data.forEach(conv => {
         // Normaliza o ID para apenas dígitos (ex: 5511999999999:1@s.whatsapp.net -> 5511999999999)
         // Se for grupo (@g.us), mantemos o ID original
@@ -133,7 +133,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       const uniqueConversations = Array.from(seen.values());
 
       setConversations(uniqueConversations);
-      await whatsappOfflineService.saveConversations(storeId, uniqueConversations);
+      await chatOfflineService.saveConversations(storeId, uniqueConversations);
       setApiError(null);
 
       uniqueConversations.forEach(async (conv) => {
@@ -151,7 +151,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     } catch (error: any) {
       console.error('Erro ao buscar conversas:', error);
       // Fallback offline
-      const offlineData = await whatsappOfflineService.getConversations(storeId);
+      const offlineData = await chatOfflineService.getConversations(storeId);
       if (offlineData.length > 0) setConversations(offlineData);
 
       const data = error.response?.data;
@@ -166,13 +166,13 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   const fetchMessages = useCallback(async (conversationId: string) => {
     setIsLoadingMessages(true);
     try {
-      const response = await axios.get<WhatsappMessage[]>(`${API_BASE_URL}/messages/${conversationId}?storeId=${storeId}`);
+      const response = await axios.get<ChatMessage[]>(`${API_BASE_URL}/messages/${conversationId}?storeId=${storeId}`);
       setMessages(response.data);
-      await whatsappOfflineService.saveMessages(storeId, conversationId, response.data);
+      await chatOfflineService.saveMessages(storeId, conversationId, response.data);
     } catch (error) {
       console.error('Erro ao buscar mensagens:', error);
       // Fallback offline
-      const offlineMsgs = await whatsappOfflineService.getMessages(storeId, conversationId);
+      const offlineMsgs = await chatOfflineService.getMessages(storeId, conversationId);
       if (offlineMsgs.length > 0) setMessages(offlineMsgs);
     } finally {
       setIsLoadingMessages(false);
@@ -188,13 +188,13 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
         orderMap[o.conversation_id] = o.position;
       });
       setManualOrder(orderMap);
-      if (typeof whatsappOfflineService.saveConversationOrders === 'function') {
-        await whatsappOfflineService.saveConversationOrders(response.data.map(o => ({ ...o, attendant_id: attendantId, store_id: storeId })));
+      if (typeof chatOfflineService.saveConversationOrders === 'function') {
+        await chatOfflineService.saveConversationOrders(response.data.map(o => ({ ...o, attendant_id: attendantId, store_id: storeId })));
       }
     } catch (error) {
       console.error('Erro ao buscar ordem manual:', error);
-      if (typeof whatsappOfflineService.getConversationOrders === 'function') {
-        const offlineOrder = await whatsappOfflineService.getConversationOrders(attendantId, storeId);
+      if (typeof chatOfflineService.getConversationOrders === 'function') {
+        const offlineOrder = await chatOfflineService.getConversationOrders(attendantId, storeId);
         const orderMap: Record<string, number> = {};
         offlineOrder.forEach(o => {
           orderMap[o.conversation_id] = o.position;
@@ -213,7 +213,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
 
     // Otimista
     setManualOrder(newOrder);
-    await whatsappOfflineService.saveConversationOrders(orderList.map(o => ({ ...o, attendant_id: attendantId, store_id: storeId })));
+    await chatOfflineService.saveConversationOrders(orderList.map(o => ({ ...o, attendant_id: attendantId, store_id: storeId })));
 
     if (isOnline) {
       try {
@@ -233,7 +233,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     const syncOfflineMessages = async () => {
       if (status.status !== 'CONNECTED' || !isOnline) return;
 
-      const pending = await whatsappOfflineService.getPendingSync();
+      const pending = await chatOfflineService.getPendingSync();
       const myPending = pending.filter(p => p.store_id === storeId);
 
       if (myPending.length === 0) return;
@@ -248,7 +248,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
             storeId: item.store_id,
             attendantId: item.attendantId
           });
-          await whatsappOfflineService.clearPendingItem(item.temp_id);
+          await chatOfflineService.clearPendingItem(item.temp_id);
         } catch (error) {
           console.error('Erro ao sincronizar mensagem offline:', error);
           break; // Tenta novamente depois
@@ -265,7 +265,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     return () => clearTimeout(syncTimer);
   }, [status.status, isOnline, storeId, selectedConversation, fetchConversations, fetchMessages]);
 
-  const handleSelectConversation = async (conversation: WhatsappConversation) => {
+  const handleSelectConversation = async (conversation: ChatConversation) => {
     setSelectedConversation(conversation);
     setActiveTab('conversations');
     fetchMessages(conversation.conversation_id);
@@ -298,7 +298,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       handleSelectConversation(existingConv);
     } else {
       // Criar nova conversa temporária
-      const newConv: WhatsappConversation = {
+      const newConv: ChatConversation = {
         conversation_id: phoneNumber,
         contact_name: contactName,
         unread_count: 0,
@@ -376,7 +376,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     setIsAssistantActive(newState);
 
     try {
-      await axios.patch(`${API_BASE_URL.replace('/whatsapp', '/ze-assistant')}/conversations/${storeId}/${encodeURIComponent(selectedConversation.conversation_id)}/toggle-assistant`, {
+      await axios.patch(`${API_BASE_URL.replace('/chat', '/ze-assistant')}/conversations/${storeId}/${encodeURIComponent(selectedConversation.conversation_id)}/toggle-assistant`, {
         active: newState
       });
     } catch (error) {
@@ -455,7 +455,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     if (!selectedConversation) return;
 
     const tempId = Date.now().toString();
-    const newMessage: WhatsappMessage = {
+    const newMessage: ChatMessage = {
       message_id: tempId,
       conversation_id: selectedConversation.conversation_id,
       store_id: storeId,
@@ -485,7 +485,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     } else {
       // Modo Offline: Fila de sincronização
       console.log('Mensagem enfileirada para envio posterior (offline)');
-      await whatsappOfflineService.queueMessage(storeId, selectedConversation.conversation_id, text, attendantId);
+      await chatOfflineService.queueMessage(storeId, selectedConversation.conversation_id, text, attendantId);
     }
   };
 
@@ -493,7 +493,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     if (!selectedConversation) return;
 
     const tempId = 'audio-' + Date.now();
-    const newMessage: WhatsappMessage = {
+    const newMessage: ChatMessage = {
       message_id: tempId,
       conversation_id: selectedConversation.conversation_id,
       store_id: storeId,
@@ -612,7 +612,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     }
   };
 
-  const handleWhatsappDisconnect = async () => {
+  const handleChatDisconnect = async () => {
     // Só mostramos o modal de confirmação se o status atual for CONNECTED
     // Se estiver em CONNECTING ou WAITING_QR, fechamos sem perguntar (como solicitado)
     if (status.status === 'CONNECTED') {
@@ -630,7 +630,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     try {
       await axios.post(`${API_BASE_URL}/logout`, { storeId });
     } catch (error) {
-      console.error('Erro ao descConectar Chat (prosseguindo com limpeza local):', error);
+      console.error('Erro ao desconectar Chat (prosseguindo com limpeza local):', error);
     } finally {
       // Force cleanup regardless of backend success/failure
       setStatus({ status: 'DISCONNECTED' });
@@ -660,9 +660,9 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
         }
 
         // Buscar configuração do assistente para pegar a preferência de ordenação
-        const { data: config } = await cloud.getClient()?.from('ze_assistant_config').select('whatsapp_sort_preference').eq('store_id', storeId).single() || { data: null };
-        if (config?.whatsapp_sort_preference) {
-          setSortCriteria(config.whatsapp_sort_preference as SortCriteria);
+        const { data: config } = await cloud.getClient()?.from('ze_assistant_config').select('chat_sort_preference').eq('store_id', storeId).single() || { data: null };
+        if (config?.chat_sort_preference) {
+          setSortCriteria(config.chat_sort_preference as SortCriteria);
         }
       } catch (e) {
         // Silently fail on status poll
@@ -850,7 +850,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                     <Users size={14} /> {activeTab === 'conversations' ? 'Ver Contatos' : 'Ver Conversas'}
                   </button>
                   <div className="h-px bg-gray-100 my-1"></div>
-                  <button onClick={() => { handleWhatsappDisconnect(); setShowMoreMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                  <button onClick={() => { handleChatDisconnect(); setShowMoreMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
                     <LogOut size={14} /> Desconectar tudo
                   </button>
                 </div>
@@ -1062,7 +1062,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
             status={status.status}
             onClose={() => {
               setShowQrModal(false);
-              handleWhatsappDisconnect();
+              handleChatDisconnect();
             }}
           />
         )
@@ -1075,7 +1075,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
               <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Apagar conversa?</h3>
               <p className="text-gray-500 text-sm mb-6 text-left">
-                Esta ação irá apagar permanentemente todas as mensagens desta conversa **tanto no sistema quanto no seu aparelho WhatsApp**. Esta ação não pode ser desfeita.
+                Esta ação irá apagar permanentemente todas as mensagens desta conversa **tanto no sistema quanto no seu aparelho vinculado**. Esta ação não pode ser desfeita.
               </p>
               <div className="flex justify-end gap-3">
                 <button
@@ -1108,7 +1108,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       {showContactDetails && selectedConversation && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
           <div className="bg-white rounded-lg w-[400px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
-            <div className="h-48 bg-gradient-to-br from-[#128C7E] to-[#25D366] flex flex-col items-center justify-center relative">
+            <div className="h-48 bg-gradient-to-br from-brand-600 to-brand-700 flex flex-col items-center justify-center relative">
               <button
                 onClick={() => setShowContactDetails(false)}
                 className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"

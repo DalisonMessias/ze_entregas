@@ -3,9 +3,10 @@ import { WebSocketServer, WebSocket as WebSocketBase } from 'ws';
 import internalChatService from './services/internalChatService.js';
 import url from 'url';
 
-// Estende a interface WebSocket padrão para incluir storeId
+// Estende a interface WebSocket padrão para incluir storeId e visitorId
 interface WebSocket extends WebSocketBase {
   storeId?: string;
+  visitorId?: string;
 }
 
 let wss: WebSocketServer;
@@ -20,66 +21,77 @@ export interface WebSocketMessage {
 
 /**
  * Inicializa o servidor WebSocket e o anexa a um servidor HTTP existente.
- * Também configura os listeners para os eventos do WhatsappService.
+ * Também configura os listeners para os eventos do InternalChatService.
  * @param server O servidor HTTP no qual o WebSocket será anexado.
  */
 export const initializeWebSocket = (server: HttpServer) => {
   wss = new WebSocketServer({ server });
 
   wss.on('connection', (ws: WebSocket, req) => {
-    // Extract storeId from the WebSocket connection URL
+    // Extract storeId and visitorId from the WebSocket connection URL
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
     const storeId = url.searchParams.get('storeId');
+    const visitorId = url.searchParams.get('visitorId');
 
-    if (!storeId) {
-      console.error('Cliente WebSocket conectado sem storeId. Fechando conexão.');
-      ws.close(1008, 'Missing storeId');
+    // Visitantes conectam com visitorId + storeId
+    // Lojas conectam apenas com storeId
+    if (!storeId && !visitorId) {
+      console.error('Cliente WebSocket conectado sem storeId ou visitorId. Fechando conexão.');
+      ws.close(1008, 'Missing storeId or visitorId');
       return;
     }
 
-    ws.storeId = storeId;
-    console.log(`Novo cliente WebSocket conectado para a loja: ${storeId}`);
+    ws.storeId = storeId || undefined;
+    ws.visitorId = visitorId || undefined;
 
-    // Envia o status atual do Chat Interno imediatamente
-    const status = internalChatService.getStatus(storeId);
+    const clientType = visitorId ? 'Visitante' : 'Loja';
+    console.log(`Novo cliente WebSocket conectado: ${clientType} (storeId: ${storeId || 'N/A'}, visitorId: ${visitorId || 'N/A'})`);
 
-    const sendToWs = (type: string, payload: any) => {
-      console.log(`📤 Enviando para WS (loja ${storeId}): ${type}`);
-      ws.send(JSON.stringify({ type, payload }));
-    };
+    // Envia o status atual do Chat Interno imediatamente (apenas para lojas)
+    if (storeId && !visitorId) {
+      const status = internalChatService.getStatus(storeId);
 
-    if (status.status === 'WAITING_QR' && (status as any).qrCode) {
-      sendToWs('whatsapp.qr', { qr: (status as any).qrCode });
-    } else {
-      sendToWs('whatsapp.status', status);
+      const sendToWs = (type: string, payload: any) => {
+        console.log(`📤 Enviando para WS (loja ${storeId}): ${type}`);
+        ws.send(JSON.stringify({ type, payload }));
+      };
+
+      if (status.status === 'WAITING_QR' && (status as any).qrCode) {
+        sendToWs('chat.qr', { qr: (status as any).qrCode });
+      } else {
+        sendToWs('chat.status', status);
+      }
     }
 
+    // Eventos de conexão (aplicam a todos os clientes)
     ws.on('close', () => {
-      console.log(`Cliente WebSocket da loja ${storeId} desconectado.`);
+      const identifier = visitorId || storeId;
+      console.log(`Cliente WebSocket ${clientType} (${identifier}) desconectado.`);
     });
 
     ws.on('error', (error) => {
-      console.error(`Erro no WebSocket para loja ${storeId}:`, error);
+      const identifier = visitorId || storeId;
+      console.error(`Erro no WebSocket para ${clientType} (${identifier}):`, error);
     });
   });
 
   // Re-transmite os eventos do InternalChatService para os clientes da loja correspondente.
 
   internalChatService.on('qr.update', ({ storeId, qr }) => {
-    broadcastByStore(storeId, { type: 'whatsapp.qr', payload: { qr } });
+    broadcastByStore(storeId, { type: 'chat.qr', payload: { qr } });
   });
 
   internalChatService.on('status.change', ({ storeId, status }) => {
     const statusPayload = internalChatService.getStatus(storeId);
-    broadcastByStore(storeId, { type: 'whatsapp.status', payload: statusPayload });
+    broadcastByStore(storeId, { type: 'chat.status', payload: statusPayload });
   });
 
   internalChatService.on('messages.upsert', ({ storeId, msg }) => {
-    broadcastByStore(storeId, { type: 'whatsapp.message', payload: msg });
+    broadcastByStore(storeId, { type: 'chat.message', payload: msg });
   });
 
   internalChatService.on('message.status.update', ({ storeId, messageId, status }) => {
-    broadcastByStore(storeId, { type: 'whatsapp.message_status', payload: { messageId, status } });
+    broadcastByStore(storeId, { type: 'chat.message_status', payload: { messageId, status } });
   });
 
   console.log('Servidor WebSocket inicializado e anexado ao servidor HTTP.');

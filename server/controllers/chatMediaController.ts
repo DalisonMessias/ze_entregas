@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import whatsappService from '../services/whatsappService.js';
+import chatService from '../services/chatService.js';
 import { supabaseAdmin } from '../services/supabaseClient.js';
 import multer from 'multer';
 import path from 'path';
@@ -56,7 +56,7 @@ export const sendImage = async (req: Request, res: Response) => {
         if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
 
         const imageBuffer = fs.readFileSync(req.file.path);
-        await whatsappService.sendImage(to, imageBuffer, caption, storeId, attendantId);
+        await chatService.sendImage(to, imageBuffer, caption, storeId, attendantId);
         fs.unlinkSync(req.file.path);
 
         res.status(200).json({ success: true, message: 'Imagem enviada com sucesso.' });
@@ -79,7 +79,7 @@ export const sendAudio = async (req: Request, res: Response) => {
         if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
 
         const audioBuffer = fs.readFileSync(req.file.path);
-        await whatsappService.sendAudio(to, audioBuffer, storeId, attendantId);
+        await chatService.sendAudio(to, audioBuffer, storeId, attendantId);
         fs.unlinkSync(req.file.path);
 
         res.status(200).json({ success: true, message: 'Áudio enviado com sucesso.' });
@@ -102,7 +102,7 @@ export const sendVideo = async (req: Request, res: Response) => {
         if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
 
         const videoBuffer = fs.readFileSync(req.file.path);
-        await whatsappService.sendVideo(to, videoBuffer, caption, storeId, attendantId);
+        await chatService.sendVideo(to, videoBuffer, caption, storeId, attendantId);
         fs.unlinkSync(req.file.path);
 
         res.status(200).json({ success: true, message: 'Vídeo enviado com sucesso.' });
@@ -125,7 +125,7 @@ export const sendDocument = async (req: Request, res: Response) => {
         if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
 
         const documentBuffer = fs.readFileSync(req.file.path);
-        await whatsappService.sendDocument(to, documentBuffer, req.file.originalname, req.file.mimetype, storeId, attendantId);
+        await chatService.sendDocument(to, documentBuffer, req.file.originalname, req.file.mimetype, storeId, attendantId);
         fs.unlinkSync(req.file.path);
 
         res.status(200).json({ success: true, message: 'Documento enviado com sucesso.' });

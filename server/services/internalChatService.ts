@@ -48,30 +48,50 @@ class InternalChatService extends EventEmitter {
             const messageId = `internal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const timestamp = new Date();
 
-            // 1. Persistir Mensagem (Tabela whatsapp_messages)
+            console.log('[InternalChat] Tentando inserir mensagem:', { storeId, conversationId, messageId, senderIdFinal: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(senderId) ? senderId : null });
+
+            // 1. Persistir Mensagem (Tabela chat_messages)
             const { error: msgError } = await supabaseAdmin.from('chat_messages').insert({
                 store_id: storeId,
                 conversation_id: conversationId,
                 message_id: messageId,
                 content: content,
+                message: content, // Redundância para compatibilidade
                 sender_name: senderName,
+                // WORKAROUND: Se senderId não for UUID (visitante), usa storeId para passar na constraint FK/UUID.
+                // A distinção real é feita por 'sender_type' e 'from_me'.
+                sender_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(senderId) ? senderId : storeId,
+                sender_type: fromMe ? 'store' : 'guest',
                 from_me: fromMe,
                 message_timestamp: timestamp,
                 status: 'sent',
-                message_type: type
+                message_type: type,
+                type: 'SUPPORT' // Satisfaz coluna 'type' se existir (enum ou texto)
             });
 
-            if (msgError) throw msgError;
+            if (msgError) {
+                console.error('[InternalChat] FALHA ao inserir mensagem:', msgError);
+                throw msgError;
+            }
+
+            console.log('[InternalChat] Mensagem inserida com sucesso:', messageId);
 
             // 2. Identificar Tipo de Cliente
             let customerType: 'ze' | 'store' | 'visitor' = 'visitor';
 
             // Verificar se é Cliente Zé (tem conta)
-            const { data: userProfile } = await supabaseAdmin
-                .from('user_profiles')
-                .select('id')
-                .eq('id', conversationId)
-                .single();
+            // Verificar se é Cliente Zé (tem conta) - APENAS SE FOR UUID VÁLIDO
+            let userProfile = null;
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId);
+
+            if (isUuid) {
+                const { data } = await supabaseAdmin
+                    .from('user_profiles')
+                    .select('id')
+                    .eq('id', conversationId)
+                    .single();
+                userProfile = data;
+            }
 
             if (userProfile) {
                 customerType = 'ze';
@@ -90,6 +110,8 @@ class InternalChatService extends EventEmitter {
             }
 
             // 3. Atualizar Conversa (Tabela whatsapp_conversations)
+            console.log('[InternalChat] Tentando atualizar conversa:', { storeId, conversationId, customerType });
+
             const { error: convError } = await supabaseAdmin.from('chat_conversations').upsert({
                 store_id: storeId,
                 conversation_id: conversationId,
@@ -99,7 +121,11 @@ class InternalChatService extends EventEmitter {
                 customer_type: customerType
             }, { onConflict: 'store_id,conversation_id' });
 
-            if (convError) throw convError;
+            if (convError) {
+                console.error('[InternalChat] FALHA ao atualizar conversa:', convError);
+                // Não lançar erro aqui para não perder a mensagem, apenas logar
+                // throw convError; 
+            }
 
             // 3. Emitir evento para o WebSocket broadcast
             const msgPayload = {
