@@ -493,18 +493,20 @@ export const InternalOrders: React.FC = () => {
     const loadProducts = async () => {
         setLoading(true);
         try {
-            const [productsData, profile, settings, fees, onlineDrivers, shopSettings] = await Promise.all([
+            const [productsData, profile, settings, fees, onlineDrivers, shopSettings, associatesData] = await Promise.all([
                 cloud.getStoreProducts(),
                 cloud.getMyPartnerProfile(),
                 cloud.getStoreDeliverySettings(),
                 cloud.getStoreNeighborhoodFees(),
                 cloud.getOnlineDrivers(0, 0),
-                cloud.getShopSettings()
+                cloud.getShopSettings(),
+                cloud.getStoreAssociatedPartners()
             ]);
 
             setProducts(productsData);
             setDeliverySettings(settings);
             setNeighborhoodFees(fees);
+            setAssociates(associatesData);
             if (settings) {
                 setCalculationMode(settings.own_delivery_mode);
             }
@@ -1247,17 +1249,20 @@ export const InternalOrders: React.FC = () => {
                                                                     }`}
                                                             >
                                                                 <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                                                                    {associate.avatar_url ? (
-                                                                        <img src={associate.avatar_url} alt={associate.name} className="w-full h-full object-cover" />
+                                                                    {associate.partner_avatar ? (
+                                                                        <img src={associate.partner_avatar} alt={associate.partner_name || 'Entregador'} className="w-full h-full object-cover" />
                                                                     ) : (
                                                                         <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
-                                                                            {associate.name.charAt(0)}
+                                                                            {(associate.partner_name || '?').charAt(0).toUpperCase()}
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                                 <div className="text-left">
-                                                                    <p className="text-sm font-bold dark:text-white">{associate.name}</p>
-                                                                    <p className="text-[10px] text-gray-500">{associate.phone}</p>
+                                                                    <p className="text-sm font-bold dark:text-white">{associate.partner_name || 'Sem Nome'}</p>
+                                                                    <p className="text-[10px] text-gray-500">
+                                                                        {associate.partner_phone}
+                                                                        {associate.partner_vehicle && ` • ${associate.partner_vehicle}`}
+                                                                    </p>
                                                                 </div>
                                                                 {selectedAssociateId === associate.id && (
                                                                     <CheckCircle className="ml-auto w-5 h-5 text-purple-500" />

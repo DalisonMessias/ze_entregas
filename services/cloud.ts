@@ -2614,14 +2614,23 @@ export const getOfflineDriversForContact = async (city: string): Promise<any[]> 
 
 // --- INSTITUTIONAL CONTENT (CMS) ---
 
+// Busca entregadores associados (Wrapper para usar ID da sessão)
 export const getStoreAssociatedPartners = async (): Promise<StoreDeliveryPartner[]> => {
     const sb = getClient();
     if (!sb) return [];
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return [];
 
+    return getStoreDeliveryPartners(user.id);
+};
+
+// Busca entregadores associados a uma loja (Implementação Real)
+export const getStoreDeliveryPartners = async (storeId: string): Promise<StoreDeliveryPartner[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
     // Fetch associations
-    const { data: associations, error } = await sb.from('store_partners').select('*').eq('store_id', user.id);
+    const { data: associations, error } = await sb.from('store_partners').select('*').eq('store_id', storeId);
     if (error || !associations) return [];
 
     // Fetch user profiles for these partners
@@ -2632,8 +2641,6 @@ export const getStoreAssociatedPartners = async (): Promise<StoreDeliveryPartner
     if (!profiles) return [];
 
     // Map to StoreDeliveryPartner interface
-    // Assuming backend returns: id, partner_id, store_id etc in associations
-    // We need to merge profile data
     return associations.map(assoc => {
         const profile = profiles.find(p => p.id === assoc.partner_id);
         return {
@@ -2643,6 +2650,7 @@ export const getStoreAssociatedPartners = async (): Promise<StoreDeliveryPartner
             partner_name: profile?.name || 'Desconhecido',
             partner_phone: profile?.phone_number || '',
             partner_vehicle: profile?.vehicle_type || 'Desconhecido',
+            partner_avatar: profile?.avatar_url || null,
             created_at: assoc.created_at
         } as StoreDeliveryPartner;
     });
@@ -5721,23 +5729,7 @@ export const getPublicShippingRules = async (storeId: string): Promise<StoreShip
 // DELIVERY PARTNERS
 // ========================================
 
-// Busca entregadores associados a uma loja
-export const getStoreDeliveryPartners = async (storeId: string) => {
-    const sb = getClient();
-    if (!sb) return [];
-
-    const { data, error } = await sb
-        .from('store_delivery_partners')
-        .select('*')
-        .eq('store_id', storeId);
-
-    if (error) {
-        console.error('getStoreDeliveryPartners error', error);
-        return [];
-    }
-
-    return data || [];
-};
+// (Funções de busca removidas daqui para serem consolidadas na linha ~2617)
 
 // Envia entrega para entregador fixo associado
 export const sendDeliveryToAssociatePartner = async (

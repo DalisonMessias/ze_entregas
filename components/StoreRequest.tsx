@@ -212,14 +212,10 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
     useEffect(() => {
         if (requestType === 'ASSOCIATE') {
             setLoadingAssociates(true);
-            cloud.getClient()?.auth.getUser().then(({ data }) => {
-                if (data?.user?.id) {
-                    cloud.getStoreDeliveryPartners(data.user.id)
-                        .then(setAssociatedDrivers)
-                        .catch(() => { /* console.error */ })
-                        .finally(() => setLoadingAssociates(false));
-                }
-            });
+            cloud.getStoreAssociatedPartners()
+                .then(setAssociatedDrivers)
+                .catch(err => console.error('Error loading associates:', err))
+                .finally(() => setLoadingAssociates(false));
         } else {
             setSelectedAssociateIds([]);
             setCost(null);
@@ -988,10 +984,27 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     {associatedDrivers.map(d => (
                                         <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer transition-all ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-brand-200'}`}>
-                                            {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
+                                            {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600 shrink-0" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 shrink-0"></div>}
+
+                                            <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0 flex items-center justify-center">
+                                                {d.partner_avatar ? (
+                                                    <img src={d.partner_avatar} alt={d.partner_name || 'Entregador'} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <span className="text-gray-500 font-bold">{(d.partner_name || '?').charAt(0).toUpperCase()}</span>
+                                                )}
+                                            </div>
+
                                             <div>
-                                                <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
-                                                <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
+                                                <p className="font-bold text-sm dark:text-white">{d.partner_name || 'Sem Nome'}</p>
+                                                <p className="text-xs text-gray-500 flex items-center gap-1">
+                                                    {d.partner_phone}
+                                                    {d.partner_vehicle && (
+                                                        <>
+                                                            <span className="w-1 h-1 bg-gray-400 rounded-full" />
+                                                            {d.partner_vehicle}
+                                                        </>
+                                                    )}
+                                                </p>
                                             </div>
                                         </div>
                                     ))}

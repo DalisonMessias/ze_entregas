@@ -4,4 +4,8 @@
 [x] Criada tabela store_delivery_partners no banco de dados
 [x] Ajustada interface para seleção de entregadores fixos com feedback visual correto
 [x] Corrigido bug onde o endereço da loja era puxado do perfil pessoal em vez das configurações da loja (StoreRequest.tsx e InternalOrders.tsx)
-[x] Corrigida listagem de entregadores fixos vazia na tela de Comanda (InternalOrders.tsx) ajustando o nome da função de busca
+[x] Corrigida listagem de entregadores fixos vazia na tela de Comanda (InternalOrders.tsx) e Nova Entrega (StoreRequest.tsx) pela implementação de getStoreAssociatedPartners() no cloud.ts e integração correta
+[x] Corrigida duplicidade de funções getStoreAssociatedPartners e getStoreDeliveryPartners no arquivo cloud.ts
+[x] Corrigido erro "Cannot read properties of undefined (reading 'charAt')" em InternalOrders.tsx adicionando validação para nomes de entregadores vazios
+[x] Corrigido mapeamento de propriedades em InternalOrders.tsx e cloud.ts para exibir corretamente nome, telefone, veículo e avatar do entregador fixo (anteriormente campos estavam vindo vazios ou undefined)
+[x] Atualizado StoreRequest.tsx para incluir avatar e telefone na listagem de seleção, mantendo consistência visual com a Comanda
