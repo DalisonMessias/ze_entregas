@@ -156,7 +156,7 @@ export const InternalOrders: React.FC = () => {
     }, []);
 
     const loadAssociates = async (storeId: string) => {
-        const data = await cloud.getStoreAssociates(storeId);
+        const data = await cloud.getStoreDeliveryPartners(storeId);
         setAssociates(data);
     };
 
@@ -536,9 +536,9 @@ export const InternalOrders: React.FC = () => {
             setMissingFields(validation.missingFields);
 
             if (validation.isValid && profile) {
-                setStoreCity(profile.city || '');
-                setStoreStreet(profile.address_street || '');
-                setAddressCity(profile.city || '');
+                setStoreCity(profile.store_address_city || profile.city || '');
+                setStoreStreet(profile.store_address_street || profile.address_street || '');
+                setAddressCity(profile.store_address_city || profile.city || '');
             }
         } catch (error) {
             // console.error('[InternalOrders] Erro ao carregar:', error);

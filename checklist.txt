@@ -1,41 +1,7 @@
-- Correção do envio de mensagem com a tecla Enter no componente MessageInput.tsx.
-- Refatoração do componente MessageInput.tsx, extraindo a lógica de onKeyDown para a função handleKeyDown e readequando o preventDefault.
-- Substituição do textarea por input no componente MessageInput.tsx para resolver definitivamente o problema de quebra de linha.
-- Restauração do textarea no componente MessageInput.tsx, utilizando a lógica funcional do menu digital (Enter envia, Shift+Enter quebra linha).
-
-- Adição da coluna assistant_name na tabela ze_assistant_config para personalização do chatbot.
-- Implementação da interface de configuração para o lojista definir o nome do assistente.
-- Atualização do prompt da IA para assumir o nome personalizado definido pela loja.
-- Criação de modal de identificação no chat do Menu Digital para capturar o nome do cliente.
-- Implementação da persistência do nome do cliente (contact_name) nas conversas de chat interno.
-- Adição da coluna is_blocked na tabela chat_conversations para suporte a bloqueio interno.
-- Correção do erro 500 ao alternar assistente através do uso de upsert resiliente.
-- Reformulação da lógica de bloqueio de contatos para suportar chat interno e falhas de conexão WA.
-- Implementação de travas de segurança no Zé Assistente para respeitar contatos bloqueados e toggle por conversa.
-- Implementação dos botões "Aceitar" e "Rejeitar" na Fila de Produção e Entrega (InternalOrders.tsx).
-- Ajuste dos filtros de tickets para incluir pedidos pendentes na aba de Entrega.
-- Adição do status REJECTED no banco de dados e atualização da lógica de cancelamento automático.
-- Correção de erros de tipagem e acesso a propriedades de suporte (support_hours) no InternalOrders.tsx.
-
-- Adicionada aba de Pedidos Rejeitados/Cancelados em Produ��o e Entrega.
-- Implementado Badge de pedidos pendentes no menu lateral (Comanda).
-- Implementado sistema de pedidos recentes via localStorage no Card�pio Digital para rastreamento de visitantes.
-- Adicionado bot�o de acompanhamento de pedido no header do Card�pio Digital.
-- Implementada exibi��o de forma de pagamento e toggle de status (Pago/Pendente) no modal de pedido.
-- Adicionada coluna payment_status nas tabelas orders, orders_collaborators e orders_tickets no banco de dados.
-
-- Adicionado payment_status ao tipo Order em types.ts para corrigir erros de lint.
-- Ajustada altura da capa do banner de 48 para 80 no Menu Digital.
-- Alterada cor da descri��o da loja de branco com sombra para cinza sem sombra.
-- Adicionado �cone ChefHat para tempo de preparo no Menu Digital.
-- Implementada automatiza��o de finaliza��o de pedidos: pedidos marcados como 'delivered' ou 'in_transit' nas abas Ready s�o automaticamente movidos para o hist�rico.
-- Atualizada fun��o update_ticket_status no banco de dados para suportar finaliza��o autom�tica.
-
-- Aumentada altura da capa no mobile de h-32 para h-48 no Menu Digital.
-- Alteradas cores do nome da loja para preto (text-gray-900) no mobile, mantendo branco no desktop.
-- Tornada a descri��o da loja vis�vel no mobile com cor cinza (text-gray-600).
-
-- Adicionados comandos ALTER TABLE no final do supabase_global.sql para criar as colunas payment_status nas tabelas orders, orders_collaborators e orders_tickets.
-
-- Criada tabela store_delivery_partners no supabase_global.sql para armazenar os entregadores associados �s lojas.
-- Adicionados �ndices e pol�ticas RLS para a tabela store_delivery_partners.
+[x] Implementada função sendDeliveryToAssociatePartner no backend (cloud.ts) para envio de entregas a parceiros fixos
+[x] Atualizado componente StoreRequest.tsx para suportar múltiplos pontos de parada em entregas de parceiros fixos
+[x] Corrigido contador de badge na barra lateral (App.tsx) implementando atualização em tempo real via Supabase Realtime
+[x] Criada tabela store_delivery_partners no banco de dados
+[x] Ajustada interface para seleção de entregadores fixos com feedback visual correto
+[x] Corrigido bug onde o endereço da loja era puxado do perfil pessoal em vez das configurações da loja (StoreRequest.tsx e InternalOrders.tsx)
+[x] Corrigida listagem de entregadores fixos vazia na tela de Comanda (InternalOrders.tsx) ajustando o nome da função de busca

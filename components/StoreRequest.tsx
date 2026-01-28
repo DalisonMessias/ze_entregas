@@ -85,7 +85,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     setShopSettings(settings);
                 } catch { }
 
-                const profile = await cloud.getClient()?.from('user_profiles').select('city, is_super_store, address_street, address_number, address_district, address_zip, address_state').eq('id', user?.data?.user?.id).single();
+                const profile = await cloud.getClient()?.from('user_profiles').select('city, is_super_store, address_street, address_number, address_district, address_zip, address_state, store_address_street, store_address_number, store_address_district, store_address_zip, store_address_state, store_address_city').eq('id', user?.data?.user?.id).single();
 
                 // console.log('[StoreRequest] Profile completo:', profile);
 
@@ -95,7 +95,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
 
                 if (profile?.data) {
                     // console.log('[StoreRequest] profile.data:', profile.data);
-                    const rawCity = profile.data.city || '';
+                    const rawCity = profile.data.store_address_city || profile.data.city || '';
                     // Aceita tanto "Cidade - UF" quanto "Cidade" (formato antigo)
                     const cleanCity = rawCity.includes(' - ') ? rawCity.split(' - ')[0].trim() : rawCity.trim();
                     // console.log('[StoreRequest] rawCity:', rawCity, 'cleanCity:', cleanCity);
@@ -104,19 +104,27 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     const superStatus = profile.data.is_super_store || false;
                     setIsSuperStore(superStatus);
 
-                    // Autofill pickup address from profile data (Primary Source) or auth metadata (Fallback)
+                    // Autofill pickup address from STORE profile data (Primary Source) or Personal Profile (Secondary)
                     const pData = profile.data;
-                    const hasProfileAddress = pData.address_street && pData.address_number;
 
-                    if (hasProfileAddress) {
+                    // Lógica de Prioridade: Store Address > Personal Address
+                    const useStoreAddress = !!pData.store_address_street || !!pData.store_address_zip;
+
+                    const street = useStoreAddress ? pData.store_address_street : pData.address_street;
+                    const number = useStoreAddress ? pData.store_address_number : pData.address_number;
+                    const neighborhood = useStoreAddress ? pData.store_address_district : pData.address_district;
+                    const zip = useStoreAddress ? pData.store_address_zip : pData.address_zip;
+                    const state = useStoreAddress ? pData.store_address_state : pData.address_state;
+
+                    if (street && number) {
                         setPickup(prev => ({
                             ...prev,
-                            street: pData.address_street || prev.street,
-                            number: pData.address_number || prev.number,
-                            neighborhood: pData.address_district || prev.neighborhood,
-                            cep: pData.address_zip || prev.cep,
+                            street: street || prev.street,
+                            number: number || prev.number,
+                            neighborhood: neighborhood || prev.neighborhood,
+                            cep: zip || prev.cep,
                             city: cleanCity || prev.city,
-                            state: pData.address_state || prev.state,
+                            state: state || prev.state,
                             validated: false, // Requer review/clique em validar para garantir lat/lng corretos na nova sessão
                             error: undefined
                         }));
@@ -146,15 +154,17 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
 
                     // Auto-detect associated partners
                     try {
-                        const associates = await cloud.getStoreAssociatedPartners();
-                        if (associates.length > 0) {
-                            setAssociatedDrivers(associates);
-                            setSelectedAssociateIds(associates.map(a => a.partner_id));
-                            // Não força mais o modo ASSOCIATE, apenas notifica
-                            setNotification({ type: 'info', message: `${associates.length} entregador(es) fixo(s) disponível(is). Você pode escolher entre Parceiro Zé ou Entregador Fixo.` });
+                        if (user?.data?.user?.id) {
+                            const associates = await cloud.getStoreDeliveryPartners(user.data.user.id);
+                            if (associates.length > 0) {
+                                setAssociatedDrivers(associates);
+                                setSelectedAssociateIds(associates.map(a => a.partner_id));
+                                // Não força mais o modo ASSOCIATE, apenas notifica
+                                setNotification({ type: 'info', message: `${associates.length} entregador(es) fixo(s) disponível(is). Você pode escolher entre Parceiro Zé ou Entregador Fixo.` });
+                            }
                         }
                     } catch (e) {
-                        // console.error('Failed to load associates:', e);
+                        console.error('Failed to load associates:', e);
                     }
                 } else {
                     setNotification({
@@ -202,10 +212,14 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
     useEffect(() => {
         if (requestType === 'ASSOCIATE') {
             setLoadingAssociates(true);
-            cloud.getStoreAssociatedPartners()
-                .then(setAssociatedDrivers)
-                .catch(() => { /* console.error */ })
-                .finally(() => setLoadingAssociates(false));
+            cloud.getClient()?.auth.getUser().then(({ data }) => {
+                if (data?.user?.id) {
+                    cloud.getStoreDeliveryPartners(data.user.id)
+                        .then(setAssociatedDrivers)
+                        .catch(() => { /* console.error */ })
+                        .finally(() => setLoadingAssociates(false));
+                }
+            });
         } else {
             setSelectedAssociateIds([]);
             setCost(null);
@@ -577,12 +591,25 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
             const deliveryAddrStr = deliveries.map(formatAddressString).join(' -> ');
 
             if (requestType === 'ASSOCIATE') {
-                const generatedCodes: string[] = []; // DECLARADO AQUI
+                const generatedCodes: string[] = [];
+                const user = await cloud.getClient()?.auth.getUser();
+                const storeId = user?.data?.user?.id;
+
+                if (!storeId) throw new Error("Usuário não autenticado.");
+
                 for (const partnerId of selectedAssociateIds) {
-                    const result = await cloud.createPartnerRequest(pickupAddrStr, deliveryAddrStr, 0, 0, 0, (fees || {}) as PartnerFeeSettings, 'ASSOCIATE', partnerId);
-                    if (result && result.deliveryCode) generatedCodes.push(result.deliveryCode);
+                    // Usar a nova função específica para associados que lida melhor com múltiplos pontos
+                    await cloud.sendDeliveryToAssociatePartner(
+                        pickup,
+                        deliveries,
+                        partnerId,
+                        storeId,
+                        distanceKm || 0,
+                        cost || 0
+                    );
+                    generatedCodes.push('ENVIADO'); // A nova função não retorna código legível por enquanto ou retorna objeto diferente
                 }
-                setNotification({ type: 'success', message: `Solicitação enviada para ${selectedAssociateIds.length} entregador(es)! Códigos: ${generatedCodes.join(', ')}` });
+                setNotification({ type: 'success', message: `Solicitação enviada para ${selectedAssociateIds.length} entregador(es)!` });
             } else {
                 if (distanceKm === null || cost === null || partnerNet === null) {
                     setNotification({ type: 'error', message: 'Calcule os valores antes de confirmar.' });
@@ -827,140 +854,162 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                     </button>
                 </div>
 
-                {requestType === 'PLATFORM' && (
-                    <div className="space-y-4">
-                        {
-                            notification && (
-                                <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 mb-3 ${notification.type === 'success' ? 'bg-green-100 text-green-700' : notification.type === 'info' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                    {notification.type === 'success' ? <Check className="w-5 h-5" /> : notification.type === 'info' ? <Info className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                                    <span className="font-bold text-sm flex-1">{notification.message}</span>
-                                    {notification.action && (
-                                        <button
-                                            onClick={notification.action.onClick}
-                                            className="px-3 py-1 bg-white/50 hover:bg-white/80 rounded-lg text-xs font-bold transition-colors mr-2 whitespace-nowrap"
-                                        >
-                                            {notification.action.label}
-                                        </button>
-                                    )}
-                                    <button onClick={() => setNotification(null)} className=""><X className="w-4 h-4" /></button>
-                                </div>
-                            )
-                        }
-                        {renderAddressInputs(pickup, true)}
-                        {
-                            deliveries.map(d => (
-                                <React.Fragment key={d.id}>
-                                    {renderAddressInputs(d, false)}
-                                </React.Fragment>
-                            ))
-                        }
-                        <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2"><Calculator className="w-4 h-4" /> Cálculo de Valores</h3>
-                                <Button size="sm" onClick={calculateValues} disabled={calculating} className="rounded-lg">{calculating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Calcular'}</Button>
+                <div className="space-y-4">
+                    {
+                        notification && (
+                            <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 mb-3 ${notification.type === 'success' ? 'bg-green-100 text-green-700' : notification.type === 'info' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                {notification.type === 'success' ? <Check className="w-5 h-5" /> : notification.type === 'info' ? <Info className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                                <span className="font-bold text-sm flex-1">{notification.message}</span>
+                                {notification.action && (
+                                    <button
+                                        onClick={notification.action.onClick}
+                                        className="px-3 py-1 bg-white/50 hover:bg-white/80 rounded-lg text-xs font-bold transition-colors mr-2 whitespace-nowrap"
+                                    >
+                                        {notification.action.label}
+                                    </button>
+                                )}
+                                <button onClick={() => setNotification(null)} className=""><X className="w-4 h-4" /></button>
                             </div>
-                            {isSuperStore && (
-                                <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-center gap-2">
-                                    <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                    <p className="text-xs font-bold text-green-700 dark:text-green-300">
-                                        Benefício Super Lojista: Você paga apenas o valor da entrega, sem taxas da plataforma!
+                        )
+                    }
+
+                    {/* Endereços - Visível em ambos os modos */}
+                    {renderAddressInputs(pickup, true)}
+                    {
+                        deliveries.map(d => (
+                            <React.Fragment key={d.id}>
+                                {renderAddressInputs(d, false)}
+                            </React.Fragment>
+                        ))
+                    }
+
+                    {/* Botão Adicionar Parada - Visível em ambos os modos */}
+                    <div className="flex justify-end">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={addDelivery}
+                            className="h-10 rounded-lg focus:ring-2 focus:ring-brand-300"
+                        >
+                            <Plus className="w-4 h-4 mr-1" /> Adicionar Parada
+                        </Button>
+                    </div>
+
+                    {requestType === 'PLATFORM' && (
+                        <>
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2"><Calculator className="w-4 h-4" /> Cálculo de Valores</h3>
+                                    <Button size="sm" onClick={calculateValues} disabled={calculating} className="rounded-lg">{calculating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Calcular'}</Button>
+                                </div>
+                                {isSuperStore && (
+                                    <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-center gap-2">
+                                        <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                        <p className="text-xs font-bold text-green-700 dark:text-green-300">
+                                            Benefício Super Lojista: Você paga apenas o valor da entrega, sem taxas da plataforma!
+                                        </p>
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                        <p className="text-xs font-bold text-gray-500">Distância Total {isRealRoute ? '(Real)' : '(Reta)'}</p>
+                                        <p className="font-bold text-lg">{distanceKm !== null ? `${distanceKm.toFixed(2)} km` : '--'}</p>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                        <p className="text-xs font-bold text-gray-500">Valor Base</p>
+                                        <p className="font-bold text-lg">{formatCurrency(Number(fees?.base_delivery_value || 0))}</p>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                        <p className="text-xs font-bold text-gray-500">Paradas Extras</p>
+                                        <p className="font-bold text-lg">{deliveries.length > 1 ? `${deliveries.length - 1} x ${formatCurrency(Number(fees?.additional_stop_fee || 0))}` : '0'}</p>
+                                    </div>
+                                </div>
+                                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-500">Taxas da Plataforma</p>
+                                        {isSuperStore ? (
+                                            <>
+                                                <p className="text-sm text-green-600 dark:text-green-400 font-bold">Fixa: R$ 0,00 (Isento)</p>
+                                                <p className="text-sm text-green-600 dark:text-green-400 font-bold">Percentual: 0,0% (Isento)</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-sm">Fixa: {formatCurrency(Number(fees?.global_tax_fixed || 0))}</p>
+                                                <p className="text-sm">Percentual: {((Number(fees?.global_tax_percent || 0)) * 100).toFixed(1)}%</p>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-500">Resumo</p>
+                                        <p className="text-sm">Líquido do Entregador: {partnerNet !== null ? formatCurrency(partnerNet) : '--'}</p>
+                                        <p className="text-sm font-bold">Total para a Loja: {cost !== null ? formatCurrency(cost) : '--'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div data-testid="action-grid" className="grid grid-cols-1 md:grid-cols-2 gap-5" style={{ gridAutoRows: '1fr' }}>
+                                <Button
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={handleDispatch}
+                                    disabled={isSubmitting || distanceKm === null || cost === null || partnerNet === null || cost <= 0 || onlineDriversCount === 0}
+                                    className="w-full h-10 rounded-lg focus:ring-2 focus:ring-brand-300 col-span-2"
+                                    style={{ alignSelf: 'center', justifySelf: 'stretch' }}
+                                >
+                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Chamar Entregador Zé'}
+                                </Button>
+                                {onlineDriversCount === 0 && (
+                                    <p className="col-span-1 md:col-span-2 text-center text-xs font-bold text-red-500 mt-2">
+                                        Não há entregadores online nesta cidade no momento.
                                     </p>
+                                )}
+                            </div>
+                            <LoanModal
+                                isOpen={showLoanModal}
+                                onConfirm={confirmLoanAndDispatch}
+                                onCancel={() => setShowLoanModal(false)}
+                                config={loanConfig as LoanConfig}
+                                neededAmount={Math.max(0, (cost || 0) - (walletBalance || 0))}
+                            />
+                        </>
+                    )}
+
+
+                    {requestType === 'ASSOCIATE' && (
+                        <div className="space-y-4 mt-4 bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                            <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2"><Users className="w-4 h-4" /> Selecione os Entregadores</h3>
+
+                            {associatedDrivers.length === 0 ? (
+                                <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <Users className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                                    <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhum entregador fixo associado.</p>
+                                    <p className="text-xs text-gray-400 mt-1">Cadastre entregadores fixos no painel de equipe.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {associatedDrivers.map(d => (
+                                        <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer transition-all ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-brand-200'}`}>
+                                            {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
+                                            <div>
+                                                <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
+                                                <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                                    <p className="text-xs font-bold text-gray-500">Distância Total {isRealRoute ? '(Real)' : '(Reta)'}</p>
-                                    <p className="font-bold text-lg">{distanceKm !== null ? `${distanceKm.toFixed(2)} km` : '--'}</p>
-                                </div>
-                                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                                    <p className="text-xs font-bold text-gray-500">Valor Base</p>
-                                    <p className="font-bold text-lg">{formatCurrency(Number(fees?.base_delivery_value || 0))}</p>
-                                </div>
-                                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                                    <p className="text-xs font-bold text-gray-500">Paradas Extras</p>
-                                    <p className="font-bold text-lg">{deliveries.length > 1 ? `${deliveries.length - 1} x ${formatCurrency(Number(fees?.additional_stop_fee || 0))}` : '0'}</p>
-                                </div>
-                            </div>
-                            <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500">Taxas da Plataforma</p>
-                                    {isSuperStore ? (
-                                        <>
-                                            <p className="text-sm text-green-600 dark:text-green-400 font-bold">Fixa: R$ 0,00 (Isento)</p>
-                                            <p className="text-sm text-green-600 dark:text-green-400 font-bold">Percentual: 0,0% (Isento)</p>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <p className="text-sm">Fixa: {formatCurrency(Number(fees?.global_tax_fixed || 0))}</p>
-                                            <p className="text-sm">Percentual: {((Number(fees?.global_tax_percent || 0)) * 100).toFixed(1)}%</p>
-                                        </>
-                                    )}
-                                </div>
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500">Resumo</p>
-                                    <p className="text-sm">Líquido do Entregador: {partnerNet !== null ? formatCurrency(partnerNet) : '--'}</p>
-                                    <p className="text-sm font-bold">Total para a Loja: {cost !== null ? formatCurrency(cost) : '--'}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div data-testid="action-grid" className="grid grid-cols-1 md:grid-cols-2 gap-5" style={{ gridAutoRows: '1fr' }}>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={addDelivery}
-                                className="w-full h-10 rounded-lg focus:ring-2 focus:ring-brand-300"
-                                style={{ alignSelf: 'center', justifySelf: 'stretch' }}
-                            >
-                                <Plus className="w-4 h-4 mr-1" /> Adicionar Parada
-                            </Button>
+
                             <Button
                                 variant="primary"
                                 size="sm"
                                 onClick={handleDispatch}
-                                disabled={isSubmitting || distanceKm === null || cost === null || partnerNet === null || cost <= 0 || onlineDriversCount === 0}
-                                className="w-full h-10 rounded-lg focus:ring-2 focus:ring-brand-300"
-                                style={{ alignSelf: 'center', justifySelf: 'stretch' }}
+                                disabled={isSubmitting || selectedAssociateIds.length === 0}
+                                className="w-full h-12 rounded-xl focus:ring-2 focus:ring-brand-300 mt-4 text-sm uppercase tracking-wide"
                             >
-                                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Chamar Entregador Zé'}
+                                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : `Enviar para ${selectedAssociateIds.length > 0 ? selectedAssociateIds.length : ''} Entregador(es)`}
                             </Button>
-                            {onlineDriversCount === 0 && (
-                                <p className="col-span-1 md:col-span-2 text-center text-xs font-bold text-red-500 mt-2">
-                                    Não há entregadores online nesta cidade no momento.
-                                </p>
-                            )}
                         </div>
-                        <LoanModal
-                            isOpen={showLoanModal}
-                            onConfirm={confirmLoanAndDispatch}
-                            onCancel={() => setShowLoanModal(false)}
-                            config={loanConfig as LoanConfig}
-                            neededAmount={Math.max(0, (cost || 0) - (walletBalance || 0))}
-                        />
-                    </div >
-                )}
-
-
-                {requestType === 'ASSOCIATE' && (
-                    <div className="space-y-3 mt-4">
-                        {associatedDrivers.length === 0 ? (
-                            <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
-                                <Users className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
-                                <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhum entregador fixo associado.</p>
-                                <p className="text-xs text-gray-400 mt-1">Cadastre entregadores fixos no painel de equipe.</p>
-                            </div>
-                        ) : (
-                            associatedDrivers.map(d => (
-                                <div key={d.id} onClick={() => toggleAssociateSelection(d.partner_id)} className={`p-3 rounded-xl border-2 flex items-center gap-3 cursor-pointer ${selectedAssociateIds.includes(d.partner_id) ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
-                                    {selectedAssociateIds.includes(d.partner_id) ? <CheckCircle className="w-5 h-5 text-brand-600" /> : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>}
-                                    <div>
-                                        <p className="font-bold text-sm dark:text-white">{d.partner_name}</p>
-                                        <p className="text-xs text-gray-500">{d.partner_vehicle}</p>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     )

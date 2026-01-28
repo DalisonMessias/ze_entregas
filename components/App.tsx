@@ -514,6 +514,32 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         // Polling unificado a cada 30 segundos
         const pulseInterval = setInterval(fetchPulse, 30000);
 
+        // Realtime Subscription para Tickets Pendentes e Atualizações Críticas
+        const sb = cloud.getClient();
+        let ticketSubscription: any = null;
+
+        if (sb && userId && effectiveRole === 'store_partner') {
+            ticketSubscription = sb
+                .channel('tickets-badge-counter')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*', // INSERT, UPDATE, DELETE
+                        schema: 'public',
+                        table: 'orders_tickets',
+                        filter: `store_id=eq.${userId}`
+                    },
+                    () => {
+                        // Ao receber qualquer evento relevante, atualizamos o contador
+                        // Isso garante que o badge reflita a realidade instantaneamente
+                        cloud.getPendingTicketsCount().then(c => {
+                            if (mounted.current) setPendingTicketsCount(c);
+                        });
+                    }
+                )
+                .subscribe();
+        }
+
         // Listeners para recarregamento sob demanda
         const handleRefreshPulse = () => {
             void fetchPulse();
@@ -532,6 +558,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             clearInterval(pulseInterval);
             window.removeEventListener('refreshNotifications', handleRefreshPulse);
             window.removeEventListener('refreshUserRole', handleRefreshPulse);
+            if (ticketSubscription) sb?.removeChannel(ticketSubscription);
         };
     }, [userId, effectiveRole]);
 
