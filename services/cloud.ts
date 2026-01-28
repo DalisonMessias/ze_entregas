@@ -197,16 +197,39 @@ export const getBlockingDetails = async (): Promise<{ reason: string; created_at
 export const getSystemPulse = async (): Promise<{
     notifications: AppNotification[],
     maintenance: MaintenanceSettings | null,
-    role: UserRole
+    role: UserRole,
+    pendingTicketsCount: number
 }> => {
     // Carregamos em paralelo no Cloud.ts para aproveitar a latência mínima entre os serviços do Supabase
-    const [notifications, maintenance, { role }] = await Promise.all([
+    const [notifications, maintenance, { role }, pendingTicketsCount] = await Promise.all([
         getNotifications(),
         getMaintenanceSettings(),
-        getInitialUserData()
+        getInitialUserData(),
+        getPendingTicketsCount()
     ]);
 
-    return { notifications, maintenance, role };
+    return { notifications, maintenance, role, pendingTicketsCount };
+};
+
+export const getPendingTicketsCount = async (): Promise<number> => {
+    const sb = getClient();
+    if (!sb) return 0;
+
+    // Buscar o usuário autenticado para pegar o store_id
+    const { data: userData } = await sb.auth.getUser();
+    if (!userData?.user?.id) return 0;
+
+    const { count, error } = await sb
+        .from('orders_tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending')
+        .eq('store_id', userData.user.id);
+
+    if (error) {
+        console.error('getPendingTicketsCount error', error);
+        return 0;
+    }
+    return count || 0;
 };
 
 export const getInitialUserData = async (): Promise<{ role: UserRole, status: UserStatus }> => {
@@ -689,15 +712,17 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
 
 export const updateMyPartnerProfile = async (updates: Partial<PartnerProfile>) => {
     const sb = getClient();
-    if (!sb) return;
+    if (!sb) return { error: { message: "Client not ready" } };
     const { data: { user } } = await sb.auth.getUser();
-    if (!user) return;
+    if (!user) return { error: { message: "Not logged in" } };
 
     // Using user_profiles as partner_profiles table does not exist
-    await sb.from('user_profiles').update({
+    const { error } = await sb.from('user_profiles').update({
         ...updates,
         updated_at: new Date().toISOString()
     }).eq('id', user.id);
+
+    return { error };
 };
 
 export const uploadStoreAsset = async (file: File, type: 'cover' | 'logo'): Promise<string> => {
@@ -1456,11 +1481,16 @@ export const adminUpdateApiKey = async (serviceName: string, value: string) => {
         if (error) throw error;
     }
 
-    // Se a chave for uma das chaves globais do sistema, refletir também em shop_settings
+    // [REGRA DO USUÁRIO] Chaves de API ficam EXCLUSIVAMENTE na tabela api_keys.
+    // Nada deve ser salvo em shop_settings relacionado a chaves.
+    // [REGRA DO USUÁRIO] Chaves de API ficam EXCLUSIVAMENTE na tabela api_keys.
+    // Nada deve ser salvo em shop_settings relacionado a chaves.
+    /*
     const globalKeys = ['google_gemini_api_key', 'open_route_service_api_key', 'infinitepay_handle', 'infinitepay_webhook_secret'];
     if (globalKeys.includes(serviceName)) {
         await adminUpdateShopSettings({ [serviceName]: value });
     }
+    */
 };
 
 export const getApiKey = async (serviceName: string): Promise<string | null> => {
@@ -3465,11 +3495,14 @@ export const getOrdersTickets = async (storeId: string) => {
                 order_type,
                 status,
                 total_price,
+                payment_method,
+                payment_status,
                 created_at
             ),
             orders_collaborators (
                 table_identifier,
-                customer_name
+                customer_name,
+                payment_status
             )
         `)
         .eq('store_id', storeId)
@@ -3496,6 +3529,35 @@ export const updateTicketStatus = async (ticketId: string, status: string) => {
         console.error('updateTicketStatus error', error);
         throw error;
     }
+};
+
+export const toggleTicketPaymentStatus = async (ticketId: string, currentStatus: string) => {
+    const sb = getClient();
+    if (!sb) return;
+
+    const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+
+    // Update Ticket and get references
+    const { data: ticket, error } = await sb.from('orders_tickets')
+        .update({ payment_status: newStatus })
+        .eq('id', ticketId)
+        .select('order_id, general_order_id')
+        .single();
+
+    if (error) {
+        console.error('toggleTicketPaymentStatus error', error);
+        throw error;
+    }
+
+    // Update linked order tables if references exist
+    if (ticket?.general_order_id) {
+        await sb.from('orders').update({ payment_status: newStatus }).eq('id', ticket.general_order_id);
+    }
+    if (ticket?.order_id) {
+        await sb.from('orders_collaborators').update({ payment_status: newStatus }).eq('id', ticket.order_id);
+    }
+
+    return newStatus;
 };
 
 export const getClosedOrders = async (storeId: string, collaboratorId: string) => {
@@ -5554,7 +5616,8 @@ export const createPublicOrder = async (
     deliveryMode: 'DELIVERY' | 'PICKUP',
     customerName: string,
     customerPhone: string,
-    pixActive: boolean = false
+    pixActive: boolean = false,
+    observation: string = ''
 ): Promise<{ success: boolean; orderId?: string; error?: any }> => {
     const sb = getClient();
     if (!sb) return { success: false, error: 'Client not initialized' };
@@ -5568,7 +5631,8 @@ export const createPublicOrder = async (
         p_delivery_mode: deliveryMode,
         p_customer_name: customerName,
         p_customer_phone: customerPhone,
-        p_pix_active: pixActive
+        p_pix_active: pixActive,
+        p_observation: observation
     });
 
     if (error) {
@@ -5634,5 +5698,84 @@ export const createOrderReport = async (orderId: string, storeId: string, type: 
         return false;
     }
     return true;
+};
+
+export const getPublicShippingRules = async (storeId: string): Promise<StoreShippingRule[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('store_shipping_rules')
+        .select('*')
+        .eq('store_id', storeId);
+
+    if (error) {
+        console.error('Error fetching public shipping rules:', error);
+        return [];
+    }
+    return (data as StoreShippingRule[]) || [];
+};
+
+
+// ========================================
+// DELIVERY PARTNERS
+// ========================================
+
+// Busca entregadores associados a uma loja
+export const getStoreDeliveryPartners = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('store_delivery_partners')
+        .select('*')
+        .eq('store_id', storeId);
+
+    if (error) {
+        console.error('getStoreDeliveryPartners error', error);
+        return [];
+    }
+
+    return data || [];
+};
+
+// Envia entrega para entregador fixo associado
+export const sendDeliveryToAssociatePartner = async (
+    pickup: any,
+    deliveries: any[],
+    partnerId: string,
+    storeId: string,
+    distanceKm: number,
+    totalCost: number
+) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Cliente não inicializado');
+
+    // Criar formato de texto das paradas
+    const pickupText = `${pickup.street}, ${pickup.number} - ${pickup.neighborhood}`;
+    const deliveriesText = deliveries.map(d => `${d.street}, ${d.number} - ${d.neighborhood}`).join(' -> ');
+
+    // Criar a solicitação de entrega
+    const { data, error } = await sb
+        .from('partner_requests')
+        .insert({
+            partner_id: partnerId,
+            store_id: storeId,
+            pickup_text: pickupText,
+            delivery_text: deliveriesText,
+            distance_km: distanceKm,
+            cost: totalCost,
+            status: 'pending',
+            created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('sendDeliveryToAssociatePartner error', error);
+        throw new Error('Erro ao enviar entrega para o entregador fixo');
+    }
+
+    return data;
 };
 

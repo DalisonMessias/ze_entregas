@@ -94,6 +94,10 @@ export const initializeWebSocket = (server: HttpServer) => {
     broadcastByStore(storeId, { type: 'chat.message_status', payload: { messageId, status } });
   });
 
+  internalChatService.on('presence.update', ({ storeId, presence }) => {
+    broadcastByStore(storeId, { type: 'chat.presence', payload: presence });
+  });
+
   console.log('Servidor WebSocket inicializado e anexado ao servidor HTTP.');
 };
 

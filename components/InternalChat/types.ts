@@ -14,9 +14,10 @@ export interface ChatConversation {
   updated_at?: string;
   priority?: PriorityLevel;
   customer_type?: 'ze' | 'store' | 'visitor' | null;
+  is_blocked?: boolean;
 }
 
-export type SortCriteria = 'manual' | 'recent' | 'unread' | 'priority' | 'inprogress' | 'closed';
+export type SortCriteria = 'manual' | 'recent' | 'unread' | 'priority' | 'inprogress' | 'closed' | 'blocked';
 export type PriorityLevel = 'critical' | 'high' | 'normal' | 'low';
 
 export interface ManualOrder {

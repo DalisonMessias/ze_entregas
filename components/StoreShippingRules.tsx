@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Truck, Plus, Trash2, Loader2, DollarSign, AlertCircle } from 'lucide-react';
+import { Truck, Plus, Trash2, Info, HelpCircle, DollarSign, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
@@ -95,7 +95,7 @@ export const StoreShippingRules: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in">
+        <div id="shipping-rules-section" className="space-y-6 animate-in fade-in">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700">
                 <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-2">
                     <Truck className="w-6 h-6 text-brand-600" /> Regras de Entrega
@@ -112,31 +112,51 @@ export const StoreShippingRules: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase">Valor Mínimo do Pedido</label>
+                            <div className="flex items-center gap-2 mb-1">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Valor Mínimo do Pedido
+                                </label>
+                                <div className="group relative">
+                                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none text-center shadow-lg">
+                                        Valor mínimo que o cliente precisa comprar para ganhar o frete grátis. Ex: "Acima de R$ 50,00".
+                                        <div className="absolute top-100 left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900"></div>
+                                    </div>
+                                </div>
+                            </div>
                             <CustomInput
-                                mask="currency"
-                                placeholder="Ex: 100,00"
                                 value={threshold}
                                 onChange={e => setThreshold(e.target.value)}
-                                className="mt-1"
+                                placeholder="0,00"
+                                mask="currency"
+                                icon={DollarSign}
                             />
                         </div>
+
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase">
-                                Custo para Loja (Subsídio)
-                            </label>
+                            <div className="flex items-center gap-2 mb-1">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Custo para Loja (Subsídio)
+                                </label>
+                                <div className="group relative">
+                                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none text-center shadow-lg">
+                                        Quanto custaria essa entrega se não fosse grátis. Usado apenas para seu controle financeiro interno, o cliente não vê isso.
+                                        <div className="absolute top-100 left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900"></div>
+                                    </div>
+                                </div>
+                            </div>
                             <CustomInput
-                                mask="currency"
-                                placeholder="Ex: 10,00"
                                 value={value}
                                 onChange={e => setValue(e.target.value)}
-                                className="mt-1"
+                                placeholder="0,00"
+                                mask="currency"
+                                icon={DollarSign}
                             />
                         </div>
                     </div>
-
                     <Button onClick={handleAdd} disabled={saving} fullWidth>
                         {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Adicionar Regra'}
                     </Button>

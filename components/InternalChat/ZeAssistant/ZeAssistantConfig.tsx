@@ -61,19 +61,40 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
         }
     };
 
-    const handleSave = async () => {
+    const updateConfigField = async (field: string, value: any) => {
+        const oldValue = config[field];
+        // Optimistic update
+        setConfig((prev: any) => ({ ...prev, [field]: value }));
+
+        if (!supabase) return;
+        try {
+            // Se for is_enabled (Master Switch), queremos salvar imediatamente
+            // Para outros switches, também fica legal ser instantâneo
+            const { error } = await supabase
+                .from('ze_assistant_config')
+                .update({ [field]: value })
+                .eq('store_id', storeId);
+
+            if (error) throw error;
+
+            if (field === 'is_enabled') {
+                showNotification(value ? 'Zé Assistente Ativado' : 'Zé Assistente Desativado', 'success');
+            }
+        } catch (error) {
+            console.error(`Erro ao atualizar ${field}:`, error);
+            setConfig((prev: any) => ({ ...prev, [field]: oldValue })); // Revert
+            showNotification('Erro ao atualizar configuração', 'error');
+        }
+    };
+
+    const handleSaveTextSettings = async () => {
         if (!supabase) return;
         setSaving(true);
         try {
             const { error } = await supabase
                 .from('ze_assistant_config')
                 .update({
-                    is_enabled: config.is_enabled,
-                    ai_enabled: config.ai_enabled,
-                    rules_enabled: config.rules_enabled,
-                    can_create_orders: config.can_create_orders,
-                    can_delivery: config.can_delivery,
-                    can_pickup: config.can_pickup,
+                    assistant_name: config.assistant_name,
                     greeting_message: config.greeting_message,
                     fallback_message: config.fallback_message,
                     instruction_closed_store: config.instruction_closed_store
@@ -81,7 +102,7 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                 .eq('store_id', storeId);
 
             if (error) throw error;
-            showNotification('Configurações salvas com sucesso!', 'success');
+            showNotification('Textos e configurações salvos com sucesso!', 'success');
         } catch (error) {
             console.error('Erro ao salvar:', error);
             showNotification('Erro ao salvar configurações', 'error');
@@ -123,7 +144,7 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                     </span>
                     <Switch
                         checked={config.is_enabled}
-                        onChange={(checked) => setConfig({ ...config, is_enabled: checked })}
+                        onChange={(checked) => updateConfigField('is_enabled', checked)}
                     />
                 </div>
             </div>
@@ -144,7 +165,7 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                             </div>
                             <Switch
                                 checked={config.ai_enabled}
-                                onChange={(checked) => setConfig({ ...config, ai_enabled: checked })}
+                                onChange={(checked) => updateConfigField('ai_enabled', checked)}
                             />
                         </div>
 
@@ -155,7 +176,7 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                             </div>
                             <Switch
                                 checked={config.rules_enabled}
-                                onChange={(checked) => setConfig({ ...config, rules_enabled: checked })}
+                                onChange={(checked) => updateConfigField('rules_enabled', checked)}
                             />
                         </div>
                     </div>
@@ -176,7 +197,7 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                             </div>
                             <Switch
                                 checked={config.can_create_orders}
-                                onChange={(checked) => setConfig({ ...config, can_create_orders: checked })}
+                                onChange={(checked) => updateConfigField('can_create_orders', checked)}
                             />
                         </div>
 
@@ -188,7 +209,7 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                             <Switch
                                 checked={config.can_delivery}
                                 disabled={!config.can_create_orders}
-                                onChange={(checked) => setConfig({ ...config, can_delivery: checked })}
+                                onChange={(checked) => updateConfigField('can_delivery', checked)}
                             />
                         </div>
                     </div>
@@ -205,12 +226,25 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                 <div className="grid grid-cols-1 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Nome do Assistente
+                        </label>
+                        <input
+                            type="text"
+                            value={config.assistant_name || ''}
+                            onChange={(e) => setConfig({ ...config, assistant_name: e.target.value })}
+                            className="w-full p-2 border rounded-md text-sm focus:ring-brand-500 focus:border-brand-500"
+                            placeholder="Ex: Zé Assistente, Bia, Robô da Pizza..."
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
                             Mensagem de Saudação
                         </label>
                         <textarea
                             value={config.greeting_message || ''}
                             onChange={(e) => setConfig({ ...config, greeting_message: e.target.value })}
-                            className="w-full p-2 border rounded-md text-sm focus:ring-purple-500 focus:border-purple-500"
+                            className="w-full p-2 border rounded-md text-sm focus:ring-brand-500 focus:border-brand-500"
                             rows={2}
                             placeholder="Ex: Olá! Sou o Zé, assistente virtual..."
                         />
@@ -223,7 +257,7 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
                         <textarea
                             value={config.fallback_message || ''}
                             onChange={(e) => setConfig({ ...config, fallback_message: e.target.value })}
-                            className="w-full p-2 border rounded-md text-sm focus:ring-purple-500 focus:border-purple-500"
+                            className="w-full p-2 border rounded-md text-sm focus:ring-brand-500 focus:border-brand-500"
                             rows={2}
                             placeholder="Ex: Desculpe, não entendi. Vou chamar um humano..."
                         />
@@ -247,12 +281,12 @@ export const ZeAssistantConfig: React.FC<ZeAssistantConfigProps> = ({ storeId })
 
             <div className="flex justify-end pt-4 border-t">
                 <Button
-                    onClick={handleSave}
+                    onClick={handleSaveTextSettings}
                     disabled={saving}
-                    className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"
+                    className="bg-brand-600 hover:bg-brand-700 text-white flex items-center gap-2"
                 >
                     {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {saving ? 'Salvando...' : 'Salvar Configurações'}
+                    {saving ? 'Salvando...' : 'Salvar Textos'}
                 </Button>
             </div>
         </div>

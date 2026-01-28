@@ -115,7 +115,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
               onReorder?.(draggedId, conversation.conversation_id);
               setDraggedId(null);
             }}
-            className={`p-3 border-b border-gray-100 cursor-pointer transition-all hover:bg-gray-50 group flex items-center gap-3 relative ${isSelected ? 'bg-[#f0f2f5]' : ''} ${draggedId === conversation.conversation_id ? 'opacity-50 grayscale' : ''} ${getPriorityBorder(conversation.priority)}`}
+            className={`p-3 border-b border-gray-100 cursor-pointer transition-all hover:bg-gray-50 group flex items-center gap-3 relative ${isSelected ? 'bg-[#f0f2f5]' : ''} ${draggedId === conversation.conversation_id ? 'opacity-50 grayscale' : ''} ${getPriorityBorder(conversation.priority)} ${conversation.is_blocked ? 'bg-red-50/50 hover:bg-red-50' : ''}`}
           >
             {/* Status Indicator Bar */}
             <div className={`absolute left-0 top-0 bottom-0 w-1 ${conversation.status === 'open' ? 'bg-brand-600' : conversation.status === 'closed' ? 'bg-gray-400' : 'bg-transparent'}`} />
@@ -144,6 +144,9 @@ const ConversationList: React.FC<ConversationListProps> = ({
                     )}
                     {conversation.customer_type === 'visitor' && (
                       <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[9px] font-black uppercase tracking-tighter" title="Usuário não identificado (Menu Digital)">Visitante</span>
+                    )}
+                    {conversation.is_blocked && (
+                      <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-black uppercase tracking-tighter" title="Contato bloqueado">Bloqueado</span>
                     )}
                   </h3>
                   <span className="text-xs text-[#667781] flex-shrink-0 tabular-nums">
@@ -196,19 +199,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
                       </span>
                     )}
 
-                    {/* Add Contact for unknowns */}
-                    {isUnknownContact && (
-                      <button
-                        className="p-1 text-brand-600 hover:bg-gray-100 rounded-full"
-                        title="Adicionar contato"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log('Adicionar contato:', conversation.conversation_id);
-                        }}
-                      >
-                        <UserPlus size={16} />
-                      </button>
-                    )}
+
                     {/* Trash Icon for Deletion (Visible on hover) */}
                     <button
                       className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all ml-1"

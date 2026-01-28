@@ -149,6 +149,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'pending_payment') THEN
     ALTER TYPE public.order_status ADD VALUE 'pending_payment';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.order_status'::regtype AND enumlabel = 'REJECTED') THEN
+    ALTER TYPE public.order_status ADD VALUE 'REJECTED';
+  END IF;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -395,13 +398,13 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'description') THEN
         ALTER TABLE public.user_profiles ADD COLUMN description TEXT;
     END IF;
-     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_min') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_min') THEN
         ALTER TABLE public.user_profiles ADD COLUMN preparation_time_min INTEGER DEFAULT 0;
     END IF;
-     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_max') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_max') THEN
         ALTER TABLE public.user_profiles ADD COLUMN preparation_time_max INTEGER DEFAULT 0;
     END IF;
-     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'is_open') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'is_open') THEN
         ALTER TABLE public.user_profiles ADD COLUMN is_open BOOLEAN DEFAULT FALSE;
     END IF;
 END $$;
@@ -602,16 +605,6 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'city_slug') THEN
         ALTER TABLE public.user_profiles ADD COLUMN city_slug TEXT;
-    END IF;
-    -- Tempo de preparo da loja (16/01/2026)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time') THEN
-        ALTER TABLE public.user_profiles ADD COLUMN preparation_time INTEGER DEFAULT 0;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_min') THEN
-        ALTER TABLE public.user_profiles ADD COLUMN preparation_time_min INTEGER DEFAULT 0;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'preparation_time_max') THEN
-        ALTER TABLE public.user_profiles ADD COLUMN preparation_time_max INTEGER DEFAULT 0;
     END IF;
     -- Novo campo para vencimento do plano Super Lojista (17/01/2026)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'super_store_expiration') THEN
@@ -1392,7 +1385,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
     delivery_location_reference TEXT, -- Referência ou Local da Entrega (Obrigatório para Entregar por Localização)
     driver_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Entregador atribuído (fixo)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    payment_status TEXT DEFAULT 'pending' -- pending, paid
 );
 CREATE INDEX IF NOT EXISTS orders_store_id_idx ON public.orders (store_id);
 CREATE INDEX IF NOT EXISTS orders_user_id_idx ON public.orders (user_id);
@@ -4574,7 +4568,8 @@ CREATE TABLE IF NOT EXISTS public.orders_collaborators (
     status VARCHAR(50) DEFAULT 'opened', -- opened, sent, completed
     total_amount NUMERIC(10, 2) DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    payment_status TEXT DEFAULT 'pending' -- pending, paid
 );
 
 -- Garantir colunas se a tabela j existir
@@ -4658,7 +4653,8 @@ CREATE TABLE IF NOT EXISTS public.orders_tickets (
     collaborator_id UUID REFERENCES public.collaborators(id) ON DELETE SET NULL,
     items JSONB NOT NULL,
     status TEXT DEFAULT 'pending', -- pending, producing, ready
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    payment_status TEXT DEFAULT 'pending' -- pending, paid
 );
 
 -- Garantir general_order_id dinâmico (Fix: erro 42804 compatibilidade)
@@ -6797,6 +6793,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='chat_conversations' AND column_name='attendant_id') THEN
         ALTER TABLE public.chat_conversations ADD COLUMN attendant_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='chat_conversations' AND column_name='is_blocked') THEN
+        ALTER TABLE public.chat_conversations ADD COLUMN is_blocked BOOLEAN DEFAULT FALSE;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='chat_conversations' AND column_name='created_at') THEN
         ALTER TABLE public.chat_conversations ADD COLUMN created_at TIMESTAMPTZ DEFAULT now();
     END IF;
@@ -7931,6 +7930,7 @@ DECLARE
     v_ticket RECORD;
     v_order RECORD;
     v_next_status TEXT := 'ready';
+    v_final_status TEXT := p_status;
 BEGIN
     -- 1. Atualizar o status do ticket
     UPDATE public.orders_tickets
@@ -7942,7 +7942,21 @@ BEGIN
         RAISE EXCEPTION 'Ticket not found';
     END IF;
 
-    -- 2. Se for finalizado (ready) e tiver pedido principal associado (Delivery/Balcão)
+    -- 2. Se for marcado como 'delivered' ou 'in_transit', finalizar automaticamente
+    -- Isso garante que pedidos nas abas Ready (Entrega/Retirada/Local)
+    -- sejam movidos para o histórico quando entregues
+    IF p_status = 'delivered' OR p_status = 'in_transit' THEN
+        v_final_status := 'delivered';
+        
+        -- Atualizar o ticket para 'delivered' se ainda não estiver
+        IF p_status != 'delivered' THEN
+            UPDATE public.orders_tickets
+            SET status = 'delivered', updated_at = now()
+            WHERE id = p_ticket_id;
+        END IF;
+    END IF;
+
+    -- 3. Se for finalizado (ready) e tiver pedido principal associado (Delivery/Balcão)
     IF p_status = 'ready' AND v_ticket.order_id IS NOT NULL THEN
         -- Buscar pedido para ver tipo
         SELECT * INTO v_order FROM public.orders WHERE id = v_ticket.order_id;
@@ -7960,11 +7974,33 @@ BEGIN
         END IF;
     END IF;
 
-    -- 3. Se for pedido de colaborador (Mesa)
+    -- 4. Se for entregue e tiver pedido principal, marcar pedido como COMPLETED
+    IF v_final_status = 'delivered' AND v_ticket.general_order_id IS NOT NULL THEN
+        UPDATE public.orders
+        SET status = 'COMPLETED'::public.order_status, updated_at = now()
+        WHERE id = v_ticket.general_order_id;
+    END IF;
+
+    -- 5. Se for rejeitado e tiver pedido principal associado
+    IF p_status = 'rejected' AND v_ticket.order_id IS NOT NULL THEN
+        UPDATE public.orders
+        SET status = 'CANCELLED'::public.order_status, updated_at = now()
+        WHERE id = v_ticket.order_id;
+    END IF;
+
+    -- 6. Se for pedido de colaborador (Mesa)
     IF v_ticket.collaborator_order_id IS NOT NULL THEN
-        -- Se o ticket for completado/ready, podemos atualizar a mesa também se necessário
-        -- Por enquanto, mantemos desconectado ou lógica específica se houver
-        NULL;
+        -- Se for rejeitado, cancela o pedido do colaborador também
+        IF p_status = 'rejected' THEN
+            UPDATE public.orders_collaborators
+            SET status = 'cancelled', updated_at = now()
+            WHERE id = v_ticket.collaborator_order_id;
+        -- Se for entregue, marca como completed
+        ELSIF v_final_status = 'delivered' THEN
+            UPDATE public.orders_collaborators
+            SET status = 'completed', updated_at = now()
+            WHERE id = v_ticket.collaborator_order_id;
+        END IF;
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -9184,6 +9220,44 @@ GRANT ALL ON public.store_delivery_settings TO authenticated;
 GRANT SELECT ON public.store_delivery_settings TO anon;
 
 -- ==================================================================
+-- REGRAS DE FRETE (FRETE GRÁTIS / TAXA FIXA)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.store_shipping_rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    rule_type public.shipping_rule_type NOT NULL, -- 'free_above', 'fixed_rate'
+    min_order_value NUMERIC(10, 2) DEFAULT 0.00,
+    shipping_fee NUMERIC(10, 2) DEFAULT 0.00,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trigger updated_at
+DROP TRIGGER IF EXISTS handle_store_shipping_rules_updated_at ON public.store_shipping_rules;
+CREATE TRIGGER handle_store_shipping_rules_updated_at BEFORE UPDATE ON public.store_shipping_rules
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Índices
+CREATE INDEX IF NOT EXISTS store_shipping_rules_store_id_idx ON public.store_shipping_rules(store_id);
+
+-- RLS
+ALTER TABLE public.store_shipping_rules ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read shipping rules" ON public.store_shipping_rules;
+CREATE POLICY "Public read shipping rules" ON public.store_shipping_rules
+FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Store owners manage shipping rules" ON public.store_shipping_rules;
+CREATE POLICY "Store owners manage shipping rules" ON public.store_shipping_rules
+FOR ALL USING (auth.uid() = store_id);
+
+GRANT ALL ON public.store_shipping_rules TO authenticated;
+GRANT SELECT ON public.store_shipping_rules TO anon;
+
+-- ==================================================================
 -- TAXAS POR BAIRRO (ENTREGA PRÓPRIA)
 -- ==================================================================
 
@@ -9537,6 +9611,14 @@ BEGIN
 END $$;
 
 
+-- Adicionar coluna de observação geral no pedido (28/01/2026)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'observation') THEN
+        ALTER TABLE public.orders ADD COLUMN observation TEXT;
+    END IF;
+END $$;
+
 -- RPC para criar pedido público (Checkout Digital Segura)
 CREATE OR REPLACE FUNCTION public.create_public_order(
     p_store_id UUID,
@@ -9547,7 +9629,8 @@ CREATE OR REPLACE FUNCTION public.create_public_order(
     p_delivery_mode TEXT,
     p_customer_name TEXT,
     p_customer_phone TEXT,
-    p_pix_active BOOLEAN DEFAULT FALSE
+    p_pix_active BOOLEAN DEFAULT FALSE,
+    p_observation TEXT DEFAULT NULL
 )
 RETURNS UUID
 AS $$
@@ -9574,19 +9657,21 @@ BEGIN
         shipping_address, 
         order_type,
         customer_name, 
-        customer_phone
+        customer_phone,
+        observation
     )
     VALUES (
         p_store_id, 
         auth.uid(),
         v_status, 
-        p_items, 
+        to_jsonb(p_items), 
         p_total_price, 
         p_payment_method::public.payment_method, 
         p_shipping_address, 
         p_delivery_mode, 
         p_customer_name, 
-        p_customer_phone
+        p_customer_phone,
+        p_observation
     )
     RETURNING id INTO v_order_id;
 
@@ -9594,7 +9679,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB[], NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB[], NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT) TO anon, authenticated;
 
 -- ==================================================================
 -- CHAT PÚBLICO (GUEST) - 24/01/2026
@@ -9912,8 +9997,8 @@ DECLARE
     v_store record;
 BEGIN
     SELECT 
-        id, store_name, store_logo_url, cover_url, is_open, 
-        phone_number, chat_number, description,
+        id, name, store_name, store_logo_url, cover_url, is_open, 
+        phone_number, chat_number, description, pix_key,
         store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,
         receive_orders_via_chat, receive_orders_via_platform,
         city, store_address_state AS state, store_address_zip,
@@ -9930,3 +10015,482 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.public_get_store_by_slug(text, text) TO anon, authenticated, service_role;
+
+-- ==================================================================
+-- 3.x ATUALIZAÇÕES DE CHAT (26/01/2026)
+-- ==================================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_messages' AND column_name = 'is_edited') THEN
+        ALTER TABLE public.chat_messages ADD COLUMN is_edited BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_messages' AND column_name = 'edited_at') THEN
+        ALTER TABLE public.chat_messages ADD COLUMN edited_at TIMESTAMPTZ;
+    END IF;
+END $$;
+
+-- ==================================================================
+-- 4.x FIX PERMISSÕES ZE ASSISTANT (26/01/2026)
+-- ==================================================================
+-- Resolver erro "permission denied for table ze_assistant_conversations"
+ALTER TABLE public.ze_assistant_conversations ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Lojistas podem gerenciar suas conversas do assistente' AND tablename = 'ze_assistant_conversations') THEN
+        CREATE POLICY "Lojistas podem gerenciar suas conversas do assistente" ON public.ze_assistant_conversations FOR ALL USING (auth.uid() = store_id);
+    END IF;
+    -- Permissão para leitura pública (necessário para verificação do bot?)
+    -- Geralmente o bot roda como service_role ou o próprio lojista. Se for visitante, não deve acessar isso diretos.
+END $$;
+
+GRANT ALL ON public.ze_assistant_conversations TO authenticated;
+
+-- ==================================================================
+-- 5.x TABELA DE VOTOS EM ENQUETES (26/01/2026)
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.chat_poll_votes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id TEXT NOT NULL,
+    option_index INTEGER NOT NULL,
+    voter_id TEXT NOT NULL,
+    voter_name TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(message_id, voter_id, option_index)
+);
+
+ALTER TABLE public.chat_poll_votes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Todos podem votar e ver votos" ON public.chat_poll_votes;
+CREATE POLICY "Todos podem votar e ver votos" ON public.chat_poll_votes FOR ALL USING (true) WITH CHECK (true);
+GRANT ALL ON public.chat_poll_votes TO anon, authenticated, service_role;
+
+
+-- ==================================================================
+-- ATUALIZAÇÃO: Campo de Status da Loja em Tempo Real
+-- ==================================================================
+-- Adicionar campo is_currently_open para controlar se a loja está aberta/fechada
+-- Este campo permite que o lojista controle o status manualmente
+ALTER TABLE public.user_profiles 
+ADD COLUMN IF NOT EXISTS is_currently_open BOOLEAN DEFAULT true;
+
+-- Comentário do campo
+COMMENT ON COLUMN public.user_profiles.is_currently_open IS 'Indica se a loja está atualmente aberta (true) ou fechada (false). Controlado manualmente pelo lojista.';
+
+-- ==================================================================
+-- ATUALIZAÇÃO: Bucket de Áudio para Chat
+-- ==================================================================
+-- Criar bucket para armazenar mensagens de áudio
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('chat-audio', 'chat-audio', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Política de upload (autenticados podem fazer upload)
+DROP POLICY IF EXISTS "Usuários autenticados podem fazer upload de áudio" ON storage.objects;
+CREATE POLICY "Usuários autenticados podem fazer upload de áudio"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'chat-audio');
+
+-- Política de leitura (público pode ler)
+DROP POLICY IF EXISTS "Áudios são públicos para leitura" ON storage.objects;
+CREATE POLICY "Áudios são públicos para leitura"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'chat-audio');
+
+-- ==================================================================
+-- 8.x ZÉ ASSISTENTE (IA E AUTOMATION)
+-- ==================================================================
+
+-- Configuração do Assistente (uma por loja)
+CREATE TABLE IF NOT EXISTS public.ze_assistant_config (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    is_enabled BOOLEAN DEFAULT FALSE,
+    ai_enabled BOOLEAN DEFAULT TRUE,
+    rules_enabled BOOLEAN DEFAULT TRUE,
+    can_create_orders BOOLEAN DEFAULT TRUE,
+    can_delivery BOOLEAN DEFAULT TRUE,
+    can_pickup BOOLEAN DEFAULT TRUE,
+    greeting_message TEXT DEFAULT 'Olá! Sou o Zé, o assistente virtual da loja. Como posso ajudar?',
+    fallback_message TEXT DEFAULT 'Desculpe, não entendi. Pode repetir ou pedir para falar com um atendente?',
+    instruction_closed_store TEXT DEFAULT 'No momento estamos fechados. Nosso horário é...',
+    auto_handoff_on_confusion BOOLEAN DEFAULT TRUE,
+    max_confusion_attempts INTEGER DEFAULT 3,
+    response_delay_ms INTEGER DEFAULT 2000,
+    chat_sort_preference VARCHAR(20) DEFAULT 'recent', -- 'recent' ou 'manual'
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT ze_assistant_config_store_id_key UNIQUE (store_id)
+);
+
+-- Regras de Resposta Fixas
+CREATE TABLE IF NOT EXISTS public.ze_assistant_rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    name VARCHAR(100),
+    description TEXT,
+    trigger_keywords TEXT[],
+    response_template TEXT,
+    priority INTEGER DEFAULT 1, -- Quanto maior, maior prioridade
+    match_mode VARCHAR(20) DEFAULT 'contains', -- contains, exact, regex
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Estado da Conversa do Assistente
+CREATE TABLE IF NOT EXISTS public.ze_assistant_conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    conversation_id VARCHAR(100) NOT NULL, -- Telefone ou UUID
+    is_assistant_active BOOLEAN DEFAULT TRUE,
+    handoff_to_human BOOLEAN DEFAULT FALSE,
+    handoff_at TIMESTAMPTZ,
+    handoff_reason TEXT,
+    context_data JSONB DEFAULT '{}'::jsonb,
+    confusion_count INTEGER DEFAULT 0,
+    summary TEXT,
+    last_interaction_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT ze_assistant_conversations_uniq UNIQUE (store_id, conversation_id)
+);
+
+-- Base de Conhecimento (RAG)
+CREATE TABLE IF NOT EXISTS public.ze_assistant_knowledge_base (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    content_type VARCHAR(50) DEFAULT 'FAQ', -- FAQ, PRODUCT, POLICY
+    title TEXT,
+    content TEXT,
+    embedding VECTOR(1536), -- Para embeddings da OpenAI/Gemini
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Logs de Processamento (Opcional, bom ter)
+CREATE TABLE IF NOT EXISTS public.ze_assistant_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID,
+    conversation_id VARCHAR(100),
+    message_input TEXT,
+    response_output TEXT,
+    used_ai BOOLEAN DEFAULT FALSE,
+    sentiment VARCHAR(20),
+    processing_time_ms INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Garantir permissões para service_role (backend) e authenticated
+GRANT ALL ON public.ze_assistant_config TO service_role;
+GRANT ALL ON public.ze_assistant_config TO authenticated;
+
+GRANT ALL ON public.ze_assistant_rules TO service_role;
+GRANT ALL ON public.ze_assistant_rules TO authenticated;
+
+GRANT ALL ON public.ze_assistant_conversations TO service_role;
+GRANT ALL ON public.ze_assistant_conversations TO authenticated;
+
+GRANT ALL ON public.ze_assistant_knowledge_base TO service_role;
+GRANT ALL ON public.ze_assistant_knowledge_base TO authenticated;
+
+GRANT ALL ON public.ze_assistant_logs TO service_role;
+GRANT ALL ON public.ze_assistant_logs TO authenticated;
+
+-- RLS Policies
+
+
+-- RLS Policies
+ALTER TABLE public.ze_assistant_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_knowledge_base ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ze_assistant_logs ENABLE ROW LEVEL SECURITY;
+
+-- Config: Lojista vê e edita a sua
+DROP POLICY IF EXISTS "Lojista gerencia sua config do assistente" ON public.ze_assistant_config;
+CREATE POLICY "Lojista gerencia sua config do assistente" ON public.ze_assistant_config
+    FOR ALL USING (store_id = auth.uid());
+
+-- Regras: Lojista gerencia as suas
+DROP POLICY IF EXISTS "Lojista gerencia suas regras" ON public.ze_assistant_rules;
+CREATE POLICY "Lojista gerencia suas regras" ON public.ze_assistant_rules
+    FOR ALL USING (store_id = auth.uid());
+
+-- Conversas: Lojista vê e edita
+DROP POLICY IF EXISTS "Lojista gerencia conversas do assistente" ON public.ze_assistant_conversations;
+CREATE POLICY "Lojista gerencia conversas do assistente" ON public.ze_assistant_conversations
+    FOR ALL USING (store_id = auth.uid());
+
+-- Knowledge Base: Lojista gerencia
+DROP POLICY IF EXISTS "Lojista gerencia KB" ON public.ze_assistant_knowledge_base;
+CREATE POLICY "Lojista gerencia KB" ON public.ze_assistant_knowledge_base
+    FOR ALL USING (store_id = auth.uid());
+
+-- Logs: Lojista vê seus logs
+DROP POLICY IF EXISTS "Lojista ve logs" ON public.ze_assistant_logs;
+CREATE POLICY "Lojista ve logs" ON public.ze_assistant_logs
+    FOR SELECT USING (store_id = auth.uid());
+
+-- TRIGGERS de Updated At
+DROP TRIGGER IF EXISTS handle_ze_config_updated_at ON public.ze_assistant_config;
+CREATE TRIGGER handle_ze_config_updated_at BEFORE UPDATE ON public.ze_assistant_config
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP TRIGGER IF EXISTS handle_ze_rules_updated_at ON public.ze_assistant_rules;
+CREATE TRIGGER handle_ze_rules_updated_at BEFORE UPDATE ON public.ze_assistant_rules
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP TRIGGER IF EXISTS handle_ze_conversations_updated_at ON public.ze_assistant_conversations;
+CREATE TRIGGER handle_ze_conversations_updated_at BEFORE UPDATE ON public.ze_assistant_conversations
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+-- Adicionar coluna assistant_name para personalização do chatbot
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ze_assistant_config' AND column_name = 'assistant_name') THEN
+        ALTER TABLE public.ze_assistant_config ADD COLUMN assistant_name TEXT DEFAULT 'Zé';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ze_assistant_config' AND column_name = 'chat_sort_preference') THEN
+        ALTER TABLE public.ze_assistant_config ADD COLUMN chat_sort_preference VARCHAR(20) DEFAULT 'recent';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'chat_conversations' AND column_name = 'is_blocked') THEN
+        ALTER TABLE public.chat_conversations ADD COLUMN is_blocked BOOLEAN DEFAULT FALSE;
+    END IF;
+-- Garantir comentários
+COMMENT ON COLUMN public.ze_assistant_config.assistant_name IS 'Nome personalizado do chatbot definido pelo lojista.';
+COMMENT ON COLUMN public.user_profiles.preparation_time_min IS 'Tempo mínimo de preparo em minutos.';
+COMMENT ON COLUMN public.user_profiles.preparation_time_max IS 'Tempo máximo de preparo em minutos.';
+END $$;
+
+-- Tabela de configuraÃ§Ãµes de entrega;
+CREATE TABLE IF NOT EXISTS public.store_delivery_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    is_pickup_enabled BOOLEAN DEFAULT TRUE,
+    is_own_delivery_enabled BOOLEAN DEFAULT FALSE,
+    own_delivery_mode TEXT DEFAULT 'FIXED', -- 'FIXED', 'NEIGHBORHOOD', 'RADIUS'
+    fixed_fee NUMERIC(10, 2) DEFAULT 0,
+    is_partner_delivery_enabled BOOLEAN DEFAULT FALSE,
+    radius_km NUMERIC(10, 2) DEFAULT 0,
+    delivery_time_min INTEGER DEFAULT 30,
+    delivery_time_max INTEGER DEFAULT 60,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_store_delivery_settings UNIQUE (store_id)
+);
+
+CREATE INDEX IF NOT EXISTS store_delivery_settings_store_id_idx ON public.store_delivery_settings (store_id);
+
+DROP TRIGGER IF EXISTS handle_store_delivery_settings_updated_at ON public.store_delivery_settings;
+CREATE TRIGGER handle_store_delivery_settings_updated_at BEFORE UPDATE ON public.store_delivery_settings
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.store_delivery_settings ENABLE ROW LEVEL SECURITY;
+
+-- Garante que colunas novas e essenciais existam (Idempotência para corrigir erro de Schema Cache/Tabela Incompleta)
+DO $$
+BEGIN
+    -- Tempos de Entrega
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_delivery_settings' AND column_name = 'delivery_time_min') THEN
+        ALTER TABLE public.store_delivery_settings ADD COLUMN delivery_time_min INTEGER DEFAULT 30;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_delivery_settings' AND column_name = 'delivery_time_max') THEN
+        ALTER TABLE public.store_delivery_settings ADD COLUMN delivery_time_max INTEGER DEFAULT 60;
+    END IF;
+
+    -- Opções de Entrega (Retirada e Própria)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_delivery_settings' AND column_name = 'is_pickup_enabled') THEN
+        ALTER TABLE public.store_delivery_settings ADD COLUMN is_pickup_enabled BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_delivery_settings' AND column_name = 'is_own_delivery_enabled') THEN
+        ALTER TABLE public.store_delivery_settings ADD COLUMN is_own_delivery_enabled BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_delivery_settings' AND column_name = 'own_delivery_mode') THEN
+        ALTER TABLE public.store_delivery_settings ADD COLUMN own_delivery_mode TEXT DEFAULT 'FIXED';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_delivery_settings' AND column_name = 'fixed_fee') THEN
+        ALTER TABLE public.store_delivery_settings ADD COLUMN fixed_fee NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_delivery_settings' AND column_name = 'radius_km') THEN
+        ALTER TABLE public.store_delivery_settings ADD COLUMN radius_km NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_delivery_settings' AND column_name = 'is_partner_delivery_enabled') THEN
+        ALTER TABLE public.store_delivery_settings ADD COLUMN is_partner_delivery_enabled BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
+
+-- PolÃ­ticas
+DROP POLICY IF EXISTS "Store owners can manage their own delivery settings" ON public.store_delivery_settings;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can manage their own delivery settings' AND tablename = 'store_delivery_settings') THEN
+        CREATE POLICY "Store owners can manage their own delivery settings" ON public.store_delivery_settings FOR ALL USING (auth.uid()::text = store_id::text);
+    END IF;
+END $$;
+
+DROP POLICY IF EXISTS "Public can read store delivery settings" ON public.store_delivery_settings;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public can read store delivery settings' AND tablename = 'store_delivery_settings') THEN
+        CREATE POLICY "Public can read store delivery settings" ON public.store_delivery_settings FOR SELECT USING (true);
+    END IF;
+END $$;
+
+DROP POLICY IF EXISTS "Admins can manage all store delivery settings" ON public.store_delivery_settings;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage all store delivery settings' AND tablename = 'store_delivery_settings') THEN
+        CREATE POLICY "Admins can manage all store delivery settings" ON public.store_delivery_settings FOR ALL USING (public.is_admin());
+    END IF;
+END $$;
+
+
+-- Tabela de taxas por bairro (store_neighborhood_fees) - Garantir existÃªncia
+CREATE TABLE IF NOT EXISTS public.store_neighborhood_fees (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    neighborhood_name VARCHAR(255) NOT NULL,
+    fee NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS store_neighborhood_fees_store_id_idx ON public.store_neighborhood_fees (store_id);
+
+DROP TRIGGER IF EXISTS handle_store_neighborhood_fees_updated_at ON public.store_neighborhood_fees;
+CREATE TRIGGER handle_store_neighborhood_fees_updated_at BEFORE UPDATE ON public.store_neighborhood_fees
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.store_neighborhood_fees ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Store owners can manage their own neighborhood fees" ON public.store_neighborhood_fees;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can manage their own neighborhood fees' AND tablename = 'store_neighborhood_fees') THEN
+        CREATE POLICY "Store owners can manage their own neighborhood fees" ON public.store_neighborhood_fees FOR ALL USING (auth.uid()::text = store_id::text);
+    END IF;
+END $$;
+
+DROP POLICY IF EXISTS "Public can read store neighborhood fees" ON public.store_neighborhood_fees;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public can read store neighborhood fees' AND tablename = 'store_neighborhood_fees') THEN
+        CREATE POLICY "Public can read store neighborhood fees" ON public.store_neighborhood_fees FOR SELECT USING (true);
+    END IF;
+END $$;
+
+DROP POLICY IF EXISTS "Admins can manage neighborhood fees" ON public.store_neighborhood_fees;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage neighborhood fees' AND tablename = 'store_neighborhood_fees') THEN
+        CREATE POLICY "Admins can manage neighborhood fees" ON public.store_neighborhood_fees FOR ALL USING (public.is_admin());
+    END IF;
+END $$;
+
+
+-- Tabela de regras de entrega (store_shipping_rules) - Restaurando tabela faltante
+CREATE TABLE IF NOT EXISTS public.store_shipping_rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    rule_type public.shipping_rule_type NOT NULL, -- 'free_above', 'fixed_rate'
+    threshold NUMERIC(10, 2), -- Valor mínimo do pedido para aplicar a regra (opcional dependendo do tipo)
+    value NUMERIC(10, 2) NOT NULL DEFAULT 0, -- Custo ou Desconto
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS store_shipping_rules_store_id_idx ON public.store_shipping_rules (store_id);
+
+DROP TRIGGER IF EXISTS handle_store_shipping_rules_updated_at ON public.store_shipping_rules;
+CREATE TRIGGER handle_store_shipping_rules_updated_at BEFORE UPDATE ON public.store_shipping_rules
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+ALTER TABLE public.store_shipping_rules ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Store owners can manage their own shipping rules" ON public.store_shipping_rules;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store owners can manage their own shipping rules' AND tablename = 'store_shipping_rules') THEN
+        CREATE POLICY "Store owners can manage their own shipping rules" ON public.store_shipping_rules FOR ALL USING (auth.uid()::text = store_id::text);
+    END IF;
+END $$;
+
+DROP POLICY IF EXISTS "Public can read store shipping rules" ON public.store_shipping_rules;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public can read store shipping rules' AND tablename = 'store_shipping_rules') THEN
+        CREATE POLICY "Public can read store shipping rules" ON public.store_shipping_rules FOR SELECT USING (true);
+    END IF;
+END $$;
+
+
+-- Atualizar configurações do Bucket 'avatars' para permitir WebP, GIF, etc.
+UPDATE storage.buckets
+SET allowed_mime_types = ARRAY['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff', 'video/mp4']
+WHERE id = 'avatars';
+
+-- Garantir que o bucket exista se não existir (Opcional, mas seguro)
+INSERT INTO storage.buckets (id, name, public, allowed_mime_types)
+VALUES ('avatars', 'avatars', true, ARRAY['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff', 'video/mp4'])
+ON CONFLICT (id) DO UPDATE
+SET allowed_mime_types = ARRAY['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff', 'video/mp4'];
+
+-- ========================================
+-- Adicionar colunas payment_status (se não existirem)
+-- ========================================
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'payment_status') THEN
+        ALTER TABLE public.orders ADD COLUMN payment_status TEXT DEFAULT 'pending';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders_collaborators' AND column_name = 'payment_status') THEN
+        ALTER TABLE public.orders_collaborators ADD COLUMN payment_status TEXT DEFAULT 'pending';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders_tickets' AND column_name = 'payment_status') THEN
+        ALTER TABLE public.orders_tickets ADD COLUMN payment_status TEXT DEFAULT 'pending';
+    END IF;
+END $$;
+
+
+-- ========================================
+-- Tabela de Entregadores Associados à Loja
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS public.store_delivery_partners (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    partner_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    partner_name VARCHAR(255),
+    partner_phone VARCHAR(50),
+    partner_vehicle VARCHAR(100),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(store_id, partner_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_store_delivery_partners_store ON public.store_delivery_partners(store_id);
+CREATE INDEX IF NOT EXISTS idx_store_delivery_partners_partner ON public.store_delivery_partners(partner_id);
+
+-- RLS Policies
+ALTER TABLE public.store_delivery_partners ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Store owners can manage their delivery partners" ON public.store_delivery_partners;
+CREATE POLICY "Store owners can manage their delivery partners" ON public.store_delivery_partners FOR ALL USING (auth.uid()::text = store_id::text);
+
+DROP POLICY IF EXISTS "Partners can view their associations" ON public.store_delivery_partners;
+CREATE POLICY "Partners can view their associations" ON public.store_delivery_partners FOR SELECT USING (auth.uid()::text = partner_id::text);
+

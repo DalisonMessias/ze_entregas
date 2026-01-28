@@ -380,6 +380,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     // WhatsApp Unread Count State
     const [chatUnreadCount, setChatUnreadCount] = useState(0);
+    const [pendingTicketsCount, setPendingTicketsCount] = useState(0);
 
     const { alert } = useDialog();
 
@@ -475,11 +476,12 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         const fetchPulse = async () => {
             try {
                 // OTIMIZAÇÃO: Um único chamado unificado (Pulse) para todas as verificações periódicas
-                const { notifications: notifs, maintenance: maintSettings, role: currentRole } = await cloud.getSystemPulse();
+                const { notifications: notifs, maintenance: maintSettings, role: currentRole, pendingTicketsCount: count } = await cloud.getSystemPulse();
 
                 if (mounted.current) {
                     setNotifications(notifs);
                     setMaintenance(maintSettings as unknown as MaintenanceSettings);
+                    setPendingTicketsCount(count);
 
                     // Atualizar status do usuário
                     const { status: freshStatus } = await cloud.getInitialUserData();
@@ -956,7 +958,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 <Icon className={`w-5 h-5 ${activeTab === tab ? 'text-brand-600' : 'text-gray-500'} flex-shrink-0 group-hover:scale-110 transition-transform`} />
                 {badge !== undefined && badge > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900 px-1 animate-pulse">
-                        {badge > 99 ? '99+' : badge}
+                        {badge > 9 ? '9+' : badge}
                     </span>
                 )}
             </div>
@@ -1162,7 +1164,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
                             <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
                             <MenuButton icon={Banknote} label="Promoções e Cupons" tab="store_promotions" />
-                            <MenuButton icon={FileText} label="Comanda" tab="internal_orders" />
+                            <MenuButton icon={FileText} label="Comanda" tab="internal_orders" badge={pendingTicketsCount} />
                             <MenuButton icon={CreditCard} label="Financeiro ZéPay" tab="zepay_store" />
                             <MenuButton icon={Key} label="Docs API / Integradores" tab="store_api_docs" />
                         </>

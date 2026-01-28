@@ -3,7 +3,7 @@ import { zeAssistantService } from '../services/zeAssistantService.js';
 import { zeAssistantRulesService } from '../services/zeAssistantRulesService.js';
 import { zeAssistantKnowledgeService } from '../services/zeAssistantKnowledgeService.js';
 import { zeAssistantOrderService } from '../services/zeAssistantOrderService.js';
-import * as cloud from '../../services/cloud.js';
+import { supabaseAdmin as supabase } from '../services/supabaseClient.js';
 
 /**
  * Controller do Zé Assistente
@@ -14,22 +14,7 @@ import * as cloud from '../../services/cloud.js';
 export async function getConfig(req: Request, res: Response) {
     try {
         const { storeId } = req.params;
-
-        const supabase = cloud.getClient();
-        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
-
-        const { data, error } = await supabase
-            .from('ze_assistant_config')
-            .select('*')
-            .eq('store_id', storeId)
-            .single();
-
-        if (error || !data) {
-            // Se não existir, criar configuração padrão
-            const newConfig = await zeAssistantService.createDefaultConfig(storeId);
-            return res.json(newConfig);
-        }
-
+        const data = await zeAssistantService.getConfig(storeId);
         res.json(data);
     } catch (error) {
         console.error('Erro ao buscar config:', error);
@@ -37,19 +22,19 @@ export async function getConfig(req: Request, res: Response) {
     }
 }
 
-// PUT /api/ze-assistant/config/:storeId - Atualizar configuração
+// PATCH /api/ze-assistant/config/:storeId - Atualizar configuração
 export async function updateConfig(req: Request, res: Response) {
     try {
         const { storeId } = req.params;
         const updates = req.body;
 
-        const success = await zeAssistantService.updateConfig(storeId, updates);
+        const { error } = await supabase
+            .from('ze_assistant_config')
+            .update(updates)
+            .eq('store_id', storeId);
 
-        if (success) {
-            res.json({ success: true });
-        } else {
-            res.status(500).json({ error: 'Erro ao atualizar configuração' });
-        }
+        if (error) throw error;
+        res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar config:', error);
         res.status(500).json({ error: 'Erro ao atualizar configuração' });
@@ -60,61 +45,36 @@ export async function updateConfig(req: Request, res: Response) {
 export async function getRules(req: Request, res: Response) {
     try {
         const { storeId } = req.params;
-        const rules = await zeAssistantRulesService.getActiveRules(storeId);
-        res.json(rules);
+        const data = await zeAssistantRulesService.getActiveRules(storeId);
+        res.json(data);
     } catch (error) {
-        console.error('Erro ao listar regras:', error);
-        res.status(500).json({ error: 'Erro ao listar regras' });
+        console.error('Erro ao buscar regras:', error);
+        res.status(500).json({ error: 'Erro ao buscar regras' });
     }
 }
 
-// POST /api/ze-assistant/rules - Criar regra personalizada
-export async function createRule(req: Request, res: Response) {
+// POST /api/ze-assistant/rules - Criar/Editar regra
+export async function upsertRule(req: Request, res: Response) {
     try {
-        const { storeId, ...ruleData } = req.body;
-        const rule = await zeAssistantRulesService.createCustomRule(storeId, ruleData);
-
-        if (rule) {
-            res.json(rule);
+        const { rule } = req.body;
+        const data = await zeAssistantRulesService.upsertRule(rule);
+        if (data) {
+            res.json(data);
         } else {
-            res.status(500).json({ error: 'Erro ao criar regra' });
+            res.status(500).json({ error: 'Erro ao salvar regra' });
         }
     } catch (error) {
-        console.error('Erro ao criar regra:', error);
-        res.status(500).json({ error: 'Erro ao criar regra' });
+        console.error('Erro ao salvar regra:', error);
+        res.status(500).json({ error: 'Erro ao salvar regra' });
     }
 }
 
-// PUT /api/ze-assistant/rules/:ruleId - Editar regra
-export async function updateRule(req: Request, res: Response) {
-    try {
-        const { ruleId } = req.params;
-        const updates = req.body;
-
-        const success = await zeAssistantRulesService.updateCustomRule(ruleId, updates);
-
-        if (success) {
-            res.json({ success: true });
-        } else {
-            res.status(500).json({ error: 'Erro ao atualizar regra' });
-        }
-    } catch (error) {
-        console.error('Erro ao atualizar regra:', error);
-        res.status(500).json({ error: 'Erro ao atualizar regra' });
-    }
-}
-
-// DELETE /api/ze-assistant/rules/:ruleId - Deletar regra
+// DELETE /api/ze-assistant/rules/:id - Deletar regra
 export async function deleteRule(req: Request, res: Response) {
     try {
-        const { ruleId } = req.params;
-        const success = await zeAssistantRulesService.deleteCustomRule(ruleId);
-
-        if (success) {
-            res.json({ success: true });
-        } else {
-            res.status(500).json({ error: 'Erro ao deletar regra' });
-        }
+        const { id } = req.params;
+        await zeAssistantRulesService.deleteCustomRule(id);
+        res.json({ success: true });
     } catch (error) {
         console.error('Erro ao deletar regra:', error);
         res.status(500).json({ error: 'Erro ao deletar regra' });
@@ -163,9 +123,6 @@ export async function getConversations(req: Request, res: Response) {
         const { storeId } = req.params;
         const { limit = 50, offset = 0 } = req.query;
 
-        const supabase = cloud.getClient();
-        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
-
         const { data, error } = await supabase
             .from('ze_assistant_conversations')
             .select('*')
@@ -173,10 +130,7 @@ export async function getConversations(req: Request, res: Response) {
             .order('last_interaction_at', { ascending: false })
             .range(Number(offset), Number(offset) + Number(limit) - 1);
 
-        if (error) {
-            return res.status(500).json({ error: 'Erro ao buscar conversas' });
-        }
-
+        if (error) throw error;
         res.json(data);
     } catch (error) {
         console.error('Erro ao buscar conversas:', error);
@@ -190,22 +144,16 @@ export async function getAnalytics(req: Request, res: Response) {
         const { storeId } = req.params;
         const { period = '7d' } = req.query;
 
-        // Calcular data de início baseado no período
         const daysAgo = period === '30d' ? 30 : 7;
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - daysAgo);
 
-        const supabase = cloud.getClient();
-        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
-
-        // Total de conversas
         const { count: totalConversations } = await supabase
             .from('ze_assistant_conversations')
             .select('*', { count: 'exact', head: true })
             .eq('store_id', storeId)
             .gte('created_at', startDate.toISOString());
 
-        // Conversas transferidas para humano
         const { count: handoffCount } = await supabase
             .from('ze_assistant_conversations')
             .select('*', { count: 'exact', head: true })
@@ -213,14 +161,12 @@ export async function getAnalytics(req: Request, res: Response) {
             .eq('handoff_to_human', true)
             .gte('created_at', startDate.toISOString());
 
-        // Total de mensagens processadas
         const { count: totalMessages } = await supabase
             .from('ze_assistant_messages')
             .select('*, ze_assistant_conversations!inner(store_id)', { count: 'exact', head: true })
             .eq('ze_assistant_conversations.store_id', storeId)
             .gte('created_at', startDate.toISOString());
 
-        // Mensagens por tipo de resposta
         const { data: messagesByType } = await supabase
             .from('ze_assistant_messages')
             .select('response_type, ze_assistant_conversations!inner(store_id)')
@@ -232,7 +178,6 @@ export async function getAnalytics(req: Request, res: Response) {
             return acc;
         }, {}) || {};
 
-        // Pedidos criados
         const { count: ordersCreated } = await supabase
             .from('ze_assistant_orders')
             .select('*, ze_assistant_conversations!inner(store_id)', { count: 'exact', head: true })
@@ -341,26 +286,23 @@ export async function confirmOrder(req: Request, res: Response) {
         res.status(500).json({ error: 'Erro ao confirmar pedido' });
     }
 }
+
 // PATCH /api/ze-assistant/conversations/:storeId/:conversationId/toggle-assistant
 export async function toggleAssistant(req: Request, res: Response) {
     try {
         const { storeId, conversationId } = req.params;
         const { active } = req.body;
 
-        const supabase = cloud.getClient();
-        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
-
         const { error } = await supabase
             .from('ze_assistant_conversations')
-            .update({ is_assistant_active: active })
-            .eq('store_id', storeId)
-            .eq('conversation_id', conversationId);
+            .upsert({
+                store_id: storeId,
+                conversation_id: conversationId,
+                is_assistant_active: active,
+                updated_at: new Date()
+            }, { onConflict: 'store_id,conversation_id' });
 
-        if (error) {
-            console.error('Erro ao alternar assistente:', error);
-            return res.status(500).json({ error: 'Erro ao alternar assistente na conversa' });
-        }
-
+        if (error) throw error;
         res.json({ success: true, active });
     } catch (error) {
         console.error('Erro ao alternar assistente:', error);
@@ -372,9 +314,6 @@ export async function toggleAssistant(req: Request, res: Response) {
 export async function getQuickReplies(req: Request, res: Response) {
     try {
         const { storeId } = req.params;
-        const supabase = cloud.getClient();
-        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
-
         const { data, error } = await supabase
             .from('store_quick_replies')
             .select('*')
@@ -393,16 +332,13 @@ export async function getQuickReplies(req: Request, res: Response) {
 export async function upsertQuickReply(req: Request, res: Response) {
     try {
         const { storeId, reply } = req.body;
-        const supabase = cloud.getClient();
-        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
-
         const { data, error } = await supabase
             .from('store_quick_replies')
             .upsert({
                 store_id: storeId,
                 title: reply.title,
                 message: reply.message,
-                id: reply.id // Se tiver ID, atualiza
+                id: reply.id
             })
             .select()
             .single();
@@ -419,9 +355,6 @@ export async function upsertQuickReply(req: Request, res: Response) {
 export async function deleteQuickReply(req: Request, res: Response) {
     try {
         const { id } = req.params;
-        const supabase = cloud.getClient();
-        if (!supabase) return res.status(500).json({ error: 'Supabase client not initialized' });
-
         const { error } = await supabase
             .from('store_quick_replies')
             .delete()

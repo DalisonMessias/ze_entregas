@@ -206,6 +206,31 @@ export class ZeAssistantRulesService {
 
         return !error;
     }
+
+    /**
+     * Cria ou atualiza regra personalizada
+     */
+    async upsertRule(rule: Partial<ZeAssistantRule>): Promise<ZeAssistantRule | null> {
+        const supabase = supabaseAdmin;
+        if (!supabase) return null;
+
+        if (rule.id) {
+            const { data, error } = await supabase
+                .from('ze_assistant_rules')
+                .update(rule)
+                .eq('id', rule.id)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Erro ao atualizar regra:', error);
+                return null;
+            }
+            return data;
+        } else {
+            return await this.createCustomRule(rule.store_id || '', rule);
+        }
+    }
 }
 
 export const zeAssistantRulesService = new ZeAssistantRulesService();

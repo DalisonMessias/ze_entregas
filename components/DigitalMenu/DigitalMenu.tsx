@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Phone, Clock, Bike, Store as StoreIcon, MapPin, Search, ShoppingBag, ArrowRight, Loader2, AlertCircle, Trash2, ShoppingCart, Star, QrCode, CreditCard, Banknote, ShieldCheck, Instagram, Facebook, Globe, MessageSquare, ChevronRight, Play, ExternalLink, Calendar, Map, ClipboardList, TrendingUp, DollarSign, Wallet, RefreshCw, X, ChevronUp, Copy, Check, Minus, Plus, ChevronLeft, MessageCircle } from 'lucide-react';
+import { Phone, Clock, Bike, Store as StoreIcon, MapPin, Search, ShoppingBag, ArrowRight, Loader2, AlertCircle, Trash2, ShoppingCart, Star, QrCode, CreditCard, Banknote, ShieldCheck, Instagram, Facebook, Globe, MessageSquare, ChevronRight, Play, ExternalLink, Calendar, Map, ClipboardList, TrendingUp, DollarSign, Wallet, RefreshCw, X, ChevronUp, Copy, Check, Minus, Plus, ChevronLeft, MessageCircle, Zap, ChefHat } from 'lucide-react';
 import * as cloud from '../../services/cloud';
-import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee } from '../../types';
+import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee, StoreShippingRule } from '../../types';
 import { Logo } from '../Logo';
 import { Button } from '../Button';
 import { CustomInput } from '../CustomInput';
@@ -10,6 +10,7 @@ import { CitySearchSelect } from '../CitySearchSelect';
 import { useDialog } from '../../utils/dialogService';
 import { StoreRatingModal } from './StoreRatingModal';
 import { PixPaymentModal } from '../PixPaymentModal';
+import { ShippingRulesModal } from './ShippingRulesModal';
 
 interface DigitalMenuProps {
     citySlug: string;
@@ -29,6 +30,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [products, setProducts] = useState<StoreProduct[]>([]);
     const [deliverySettings, setDeliverySettings] = useState<StoreDeliverySettings | null>(null);
     const [fees, setFees] = useState<StoreNeighborhoodFee[]>([]);
+    const [shippingRules, setShippingRules] = useState<StoreShippingRule[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     // Cart State
@@ -40,6 +42,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [selectedProduct, setSelectedProduct] = useState<StoreProduct | null>(null);
     const [productQuantity, setProductQuantity] = useState(1);
     const [productObservation, setProductObservation] = useState('');
+    const [orderObservation, setOrderObservation] = useState('');
 
     // Checkout State
     const [customerName, setCustomerName] = useState('');
@@ -66,7 +69,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPixModalOpen, setIsPixModalOpen] = useState(false);
+    const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
     const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+    const [checkoutTotal, setCheckoutTotal] = useState(0);
+    const [recentOrders, setRecentOrders] = useState<string[]>([]);
+    const [isRecentOrdersModalOpen, setIsRecentOrdersModalOpen] = useState(false);
 
     const { alert, confirm } = useDialog();
 
@@ -85,15 +92,17 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             }
             setStore(storeData);
 
-            const [prods, settingsData, feesData] = await Promise.all([
+            const [prods, settingsData, feesData, rulesData] = await Promise.all([
                 cloud.getPublicStoreProducts(storeData.id),
                 cloud.getPublicDeliverySettings(storeData.id),
-                cloud.getPublicNeighborhoodFees(storeData.id)
+                cloud.getPublicNeighborhoodFees(storeData.id),
+                cloud.getPublicShippingRules(storeData.id)
             ]);
 
             setProducts(prods);
             setDeliverySettings(settingsData);
             setFees(feesData);
+            setShippingRules(rulesData);
 
             // Initialize selectedCity with store city
             if (storeData.store_address_city || storeData.city) {
@@ -105,11 +114,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             }
 
             // Set default delivery type based on settings
+            // Set default delivery type based on settings - ENHANCED LOGIC
             if (settingsData) {
-                if (settingsData.is_own_delivery_enabled || settingsData.is_partner_delivery_enabled) {
+                const canDeliver = settingsData.is_own_delivery_enabled || settingsData.is_partner_delivery_enabled;
+                const canPickup = settingsData.is_pickup_enabled;
+
+                if (canDeliver && !canPickup) {
                     setDeliveryType('DELIVERY');
-                } else if (settingsData.is_pickup_enabled) {
+                } else if (!canDeliver && canPickup) {
                     setDeliveryType('PICKUP');
+                } else if (canDeliver && canPickup) {
+                    // Both available, keep default or logic preference
+                    setDeliveryType('DELIVERY');
                 }
             }
 
@@ -130,8 +146,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 if (saved) {
                     setCart(JSON.parse(saved));
                 }
+                const savedOrders = localStorage.getItem(`ze_recent_orders_${store.id}`);
+                if (savedOrders) {
+                    setRecentOrders(JSON.parse(savedOrders));
+                }
             } catch (e) {
-                console.error("Failed to restore cart", e);
+                console.error("Failed to restore data", e);
             }
             setCartRestored(true);
         }
@@ -230,6 +250,13 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
         // Prioridade: Entrega Própria -> Parceira (se implementado)
         if (deliverySettings.is_own_delivery_enabled) {
+            // Verificar Regras de Frete (Ex: Frete Grátis acima de X)
+            // Aplica-se ao subtotal do carrinho
+            const freeShippingRule = shippingRules.find(r => r.rule_type === 'free_above');
+            if (freeShippingRule && freeShippingRule.threshold && cartSubtotal >= freeShippingRule.threshold) {
+                return 0;
+            }
+
             if (deliverySettings.own_delivery_mode === 'FIXED') return deliverySettings.fixed_fee;
             if (deliverySettings.own_delivery_mode === 'NEIGHBORHOOD') {
                 const fee = fees.find(f => f.id === selectedNeighborhoodId);
@@ -290,11 +317,26 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         }
 
         const usePlatform = store?.receive_orders_via_platform;
-        // Se ambos estiverem desligados, fallback para WhatsApp
-        const useWhatsApp = store?.receive_orders_via_chat || !usePlatform;
+        const useWhatsApp = store?.receive_orders_via_chat;
+
+        // --- LOGICA DE DECISÃO DE FLUXO SIMPLIFICADA (28/01 - v3) ---
+        // Prioridade ABSOLUTA para Plataforma se estiver ativada.
+        // O usuário relatou conflito quando ambas as opções estão ativas.
+
+        const isPixPayment = paymentMethod === 'PIX';
+        const isPlatformEnabled = store?.receive_orders_via_platform;
+
+        // Se a plataforma estiver ativa, o fluxo é SEMPRE plataforma.
+        // O PIX Automático define apenas se abre o modal ou não (tratado no sucesso do pedido).
+        let flowMode: 'PLATFORM' | 'WHATSAPP' = isPlatformEnabled ? 'PLATFORM' : 'WHATSAPP';
+
+        // Fallback: Se plataforma desligada e whatsapp desligado, força plataforma (segurança)
+        if (!isPlatformEnabled && !store?.receive_orders_via_chat) {
+            flowMode = 'PLATFORM';
+        }
 
         // PLATFORM CHECKOUT
-        if (usePlatform) {
+        if (flowMode === 'PLATFORM') {
             setIsSubmitting(true);
             try {
                 // Prepare Address
@@ -323,8 +365,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                 // Validar PIX se selecionado
                 if (paymentMethod === 'PIX') {
-                    const pixConfig = store?.config?.pixdata;
-                    if (!pixConfig?.enabled) {
+                    // Check pix_key OR legacy config
+                    // UNIFIED LOGIC: Check key existence in either new config or legacy field
+                    const hasPixKey = !!store?.pix_key || !!store?.config?.pixdata?.enabled || (!!store?.config?.pixdata?.key);
+
+                    if (!hasPixKey) {
                         await alert({
                             title: 'Pagamento Indisponível',
                             message: 'O pagamento via PIX automático não está disponível nesta loja no momento. Por favor, escolha outra forma de pagamento ou combine com a loja pelo WhatsApp.'
@@ -334,6 +379,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     }
                 }
 
+                const isPixActive = true; // Se passou da validação acima, consideramos ativo para tentar gerar o modal
+
                 const { success, orderId, error } = await cloud.createPublicOrder(
                     store!.id,
                     orderItems,
@@ -342,17 +389,24 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     shippingAddress,
                     deliveryType,
                     customerName,
-                    customerPhone
+                    customerPhone,
+                    isPixActive, // Sempre true se for PIX e tiver chave
+                    orderObservation
                 );
 
                 if (success && orderId) {
                     // Success!
+                    setCheckoutTotal(cartTotal);
                     setCart([]);
                     setIsCartOpen(false);
 
-                    // Lógica de PIX Ativo
-                    const pixConfig = store?.config?.pixdata;
-                    if (paymentMethod === 'PIX' && pixConfig?.enabled) {
+                    // Salvar nos pedidos recentes
+                    const updatedRecent = [orderId, ...recentOrders.filter(id => id !== orderId)].slice(0, 10);
+                    setRecentOrders(updatedRecent);
+                    localStorage.setItem(`ze_recent_orders_${store!.id}`, JSON.stringify(updatedRecent));
+
+                    // Lógica de PIX Ativo (Unified)
+                    if (paymentMethod === 'PIX') {
                         setCreatedOrderId(orderId);
                         setIsPixModalOpen(true);
                     } else {
@@ -377,8 +431,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             return;
         }
 
-        // WHATSAPP CHECKOUT (Fallback or Configured)
-        if (useWhatsApp) {
+        // WHATSAPP CHECKOUT
+        if (flowMode === 'WHATSAPP') {
             // Build WhatsApp Message - Clean Format
             let msg = `*NOVO PEDIDO* - ${store?.store_name || 'Ze Entregas'}\n`;
             msg += `--------------------------------\n`;
@@ -429,12 +483,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
             msg += `\n*Forma de Pagamento:* ${paymentMethod}\n`;
 
-            const pixConfig = store?.config?.pixdata;
+            const hasPixKey = !!store?.pix_key || !!store?.config?.pixdata?.enabled;
             if (paymentMethod === 'PIX') {
-                if (pixConfig?.enabled) {
-                    msg += `_(Pagamento via PIX enviado via plataforma)_\n`;
+                if (hasPixKey) {
+                    msg += `_(Pagamento via PIX selecionado)_\n`;
                 } else {
-                    msg += `_(Pagamento PIX: Favor solicitar a chave no WhatsApp)_\n`;
+                    msg += `_(Pagamento na Entrega/Retirada.)_\n`;
                 }
             }
 
@@ -453,7 +507,42 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         }
     };
 
-    const isStoreOpen = store?.is_open ?? true;
+    const isStoreOpen = useMemo(() => {
+        if (!store) return true;
+        // Check Manual Override (is_currently_open)
+        // Se is_currently_open for false, a loja tá fechada manualmente.
+        // Se for true (ou null), respeita o horário.
+        if (store.is_currently_open === false) return false;
+
+        // Check Schedule
+        if (!store.opening_hours) return true;
+
+        try {
+            const now = new Date();
+            const days = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+            const currentDay = days[now.getDay()];
+            const currentTime = now.getHours() * 100 + now.getMinutes();
+
+            const dayConfigs = store.opening_hours.toLowerCase().split(',').map(s => s.trim());
+            const todayConfig = dayConfigs.find(c => c.startsWith(currentDay));
+
+            if (!todayConfig) return true; // Sem config pro dia = Aberto? (Ou fechado? Backend assume aberto se não tem config especifica mas tem string)
+
+            const timeRange = todayConfig.split(':')[1]?.trim();
+            if (!timeRange || timeRange === 'fechado') return false;
+            if (timeRange === '24h') return true;
+
+            const [start, end] = timeRange.split('-').map(t => {
+                const [h, m] = t.trim().split(':').map(Number);
+                return h * 100 + m;
+            });
+
+            return currentTime >= start && currentTime <= end;
+        } catch (e) {
+            console.error("Error parsing opening hours", e);
+            return true;
+        }
+    }, [store]);
 
     // --- COMPUTED DATA ---
 
@@ -491,6 +580,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         return presentCats;
     }, [filteredProducts, selectedCategoryFilter]);
 
+    // 4. Delivery Availability
+    const canDeliver = useMemo(() => deliverySettings?.is_own_delivery_enabled || deliverySettings?.is_partner_delivery_enabled, [deliverySettings]);
+    const canPickup = useMemo(() => deliverySettings?.is_pickup_enabled, [deliverySettings]);
+
     // --- RENDER ---
 
     if (loading) {
@@ -519,17 +612,39 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             {/* --- FIXED NAVBAR --- */}
             <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800">
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
-                    <div className="flex-shrink-0"><Logo className="h-8 w-auto" /></div>
+                    <div className="flex items-center gap-4">
+                        <Logo className="h-8 w-auto" />
+                        {recentOrders.length > 0 && (
+                            <button
+                                onClick={() => setIsRecentOrdersModalOpen(true)}
+                                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-brand-50 text-brand-600 rounded-lg text-xs font-bold hover:bg-brand-100 transition-colors"
+                            >
+                                <ClipboardList className="w-4 h-4" />
+                                Acompanhar Pedido
+                            </button>
+                        )}
+                    </div>
                     <div className="flex-1 max-w-lg mx-auto hidden md:block">
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-gray-400" /></div>
                             <input type="text" className="block w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-500 focus:bg-white dark:focus:bg-gray-700 transition-all placeholder-gray-500 text-gray-900 dark:text-white" placeholder="Buscar no cardápio..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
                     </div>
-                    <button onClick={() => setIsCartOpen(true)} className="relative flex-shrink-0 bg-brand-50 text-brand-600 hover:bg-brand-100 p-2.5 rounded-xl transition-colors">
-                        <ShoppingBag className="w-5 h-5" />
-                        {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{cart.reduce((a, b) => a + b.quantity, 0)}</span>}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {recentOrders.length > 0 && (
+                            <button
+                                onClick={() => setIsRecentOrdersModalOpen(true)}
+                                className="bg-brand-50 text-brand-600 hover:bg-brand-100 p-2.5 rounded-xl transition-colors"
+                                title="Acompanhar Meus Pedidos"
+                            >
+                                <ClipboardList className="w-5 h-5" />
+                            </button>
+                        )}
+                        <button onClick={() => setIsCartOpen(true)} className="relative flex-shrink-0 bg-brand-50 text-brand-600 hover:bg-brand-100 p-2.5 rounded-xl transition-colors">
+                            <ShoppingBag className="w-5 h-5" />
+                            {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{cart.reduce((a, b) => a + b.quantity, 0)}</span>}
+                        </button>
+                    </div>
                 </div>
                 <div className="md:hidden px-4 pb-3">
                     <div className="relative">
@@ -547,7 +662,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
             {/* --- STORE BANNER --- */}
             <div className="relative z-0">
-                <div className="h-32 md:h-48 bg-gray-200 dark:bg-gray-800 overflow-hidden relative">
+                <div className="h-48 md:h-80 bg-gray-200 dark:bg-gray-800 overflow-hidden relative">
                     {store.cover_url ? (
                         <img src={store.cover_url} alt="Capa" className="w-full h-full object-cover" />
                     ) : (
@@ -569,7 +684,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                     <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white mb-2 z-10 md:mt-2">
                         <div className="flex flex-col md:flex-row md:items-center justify-center md:justify-start gap-2 mb-2">
-                            <h1 className="text-xl md:text-2xl font-black text-white md:drop-shadow-md">
+                            <h1 className="text-xl md:text-2xl font-black text-gray-900 md:text-white dark:text-white md:drop-shadow-md">
                                 {store.store_name || store.name}
                             </h1>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider self-center md:self-auto ${isStoreOpen ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
@@ -578,7 +693,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         </div>
 
                         {store.description && (
-                            <p className="hidden md:block text-gray-200 md:text-gray-100 dark:text-gray-400 mb-3 max-w-2xl text-sm leading-relaxed md:drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+                            <p className="text-sm md:block text-gray-600 dark:text-gray-400 mb-3 max-w-2xl leading-relaxed">
                                 {store.description}
                             </p>
                         )}
@@ -587,6 +702,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             {store.opening_hours && (
                                 <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
                                     <Clock className="w-4 h-4 text-white" /> {store.opening_hours}
+                                </div>
+                            )}
+                            {(store.preparation_time_min || store.preparation_time_max) && (
+                                <div className="flex items-center gap-1.5 bg-orange-500 text-white px-2.5 py-1.5 rounded-lg">
+                                    <ChefHat className="w-4 h-4 text-white" />
+                                    Preparo: {store.preparation_time_min || 0}-{store.preparation_time_max || 0} min
                                 </div>
                             )}
                             {deliverySettings && (
@@ -608,6 +729,19 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 <span className="font-bold">
                                     {store.average_rating ? store.average_rating.toFixed(1) : 'Avaliar'}
                                 </span>
+                            </div>
+
+                            {/* Botão Falar com a Loja - Fixo ao lado do Avaliar */}
+                            <div
+                                onClick={() => {
+                                    window.history.pushState({}, '', `/${citySlug}/${storeSlug}/chat`);
+                                    window.dispatchEvent(new CustomEvent('popstate'));
+                                    window.dispatchEvent(new CustomEvent('pushstate_changed'));
+                                }}
+                                className="flex items-center gap-1.5 bg-brand-600 text-white px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-brand-700 transition-colors shadow-sm"
+                            >
+                                <MessageCircle className="w-4 h-4" />
+                                <span className="font-bold">Falar com a Loja</span>
                             </div>
                         </div>
 
@@ -669,11 +803,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                                             {/* Quick Add Button - Explicit '+' separate from card click */}
                                             <button
+                                                disabled={!isStoreOpen}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     addToCart(product, 1);
                                                 }}
-                                                className="absolute bottom-4 right-4 w-10 h-10 bg-gray-100 dark:bg-gray-800 hover:bg-brand-600 hover:text-white rounded-full flex items-center justify-center transition-colors shadow-sm z-10"
+                                                className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-colors shadow-sm z-10 ${!isStoreOpen
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-gray-100 dark:bg-gray-800 hover:bg-brand-600 hover:text-white'
+                                                    }`}
                                             >
                                                 <Plus className="w-5 h-5" />
                                             </button>
@@ -763,10 +901,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 </div>
                                 <Button
                                     fullWidth
-                                    className="py-5 text-lg rounded-2xl shadow-xl shadow-brand-500/20"
+                                    disabled={!isStoreOpen}
+                                    className={`py-5 text-lg rounded-2xl shadow-xl ${!isStoreOpen ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed shadow-none' : 'shadow-brand-500/20'}`}
                                     onClick={() => addToCart()} // Calling without args uses modal state
                                 >
-                                    Adicionar
+                                    {isStoreOpen ? 'Adicionar' : 'Loja Fechada'}
                                 </Button>
                             </div>
                         </div>
@@ -825,6 +964,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 </div>
                             </section>
 
+                            {/* Order Observation */}
+                            <section>
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Observação do Pedido</label>
+                                <textarea
+                                    value={orderObservation}
+                                    onChange={e => setOrderObservation(e.target.value)}
+                                    placeholder="Ex: Campainha não funciona, deixar na portaria..."
+                                    className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none resize-none border border-gray-100 dark:border-gray-800 font-medium text-gray-900 dark:text-white placeholder-gray-400"
+                                    rows={2}
+                                />
+                            </section>
+
                             <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
                             {/* Identification */}
@@ -836,37 +987,77 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 </div>
                             </section>
 
-                            {/* Delivery Options */}
+                            {/* Delivery Options - CONDITIONAL RENDERING */}
                             <section className="space-y-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Entrega ou Retirada</h3>
                                 </div>
 
-                                <div className="grid grid-cols-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl mb-4 relative">
-                                    {/* Tabs Indicator Background */}
-                                    <div
-                                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-xl shadow-sm transition-all duration-300 ease-in-out ${deliveryType === 'PICKUP' ? 'left-[calc(50%+2px)]' : 'left-1'
-                                            }`}
-                                    />
+                                {/* Calculate Availability */}
+                                {(() => {
+                                    const canDeliver = deliverySettings?.is_own_delivery_enabled || deliverySettings?.is_partner_delivery_enabled;
+                                    const canPickup = deliverySettings?.is_pickup_enabled;
 
-                                    <button
-                                        onClick={() => setDeliveryType('DELIVERY')}
-                                        className={`relative z-10 p-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${deliveryType === 'DELIVERY' ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                                            }`}
-                                    >
-                                        <Bike className="w-4 h-4" /> Entrega
-                                    </button>
+                                    // 1. Both Available: Show Tabs
+                                    if (canDeliver && canPickup) {
+                                        return (
+                                            <div className="grid grid-cols-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl mb-4 relative">
+                                                {/* Tabs Indicator Background */}
+                                                <div
+                                                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-xl shadow-sm transition-all duration-300 ease-in-out ${deliveryType === 'PICKUP' ? 'left-[calc(50%+2px)]' : 'left-1'
+                                                        }`}
+                                                />
 
-                                    <button
-                                        onClick={() => setDeliveryType('PICKUP')}
-                                        className={`relative z-10 p-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${deliveryType === 'PICKUP' ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                                            }`}
-                                    >
-                                        <StoreIcon className="w-4 h-4" /> Retirada
-                                    </button>
-                                </div>
+                                                <button
+                                                    onClick={() => setDeliveryType('DELIVERY')}
+                                                    className={`relative z-10 p-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${deliveryType === 'DELIVERY' ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                                        }`}
+                                                >
+                                                    <Bike className="w-4 h-4" /> Entrega
+                                                </button>
 
-                                {deliveryType === 'PICKUP' && (
+                                                <button
+                                                    onClick={() => setDeliveryType('PICKUP')}
+                                                    className={`relative z-10 p-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${deliveryType === 'PICKUP' ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                                        }`}
+                                                >
+                                                    <StoreIcon className="w-4 h-4" /> Retirada
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+
+                                    // 2. Only Delivery
+                                    if (canDeliver && !canPickup) {
+                                        if (deliveryType !== 'DELIVERY') setDeliveryType('DELIVERY'); // Force state if wrong
+                                        return (
+                                            <div className="p-3 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 rounded-xl flex items-center justify-center gap-2 font-bold mb-4">
+                                                <Bike className="w-5 h-5" />
+                                                <span>Apenas Entrega Disponível</span>
+                                            </div>
+                                        );
+                                    }
+
+                                    // 3. Only Pickup
+                                    if (!canDeliver && canPickup) {
+                                        if (deliveryType !== 'PICKUP') setDeliveryType('PICKUP'); // Force state if wrong
+                                        return (
+                                            <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 rounded-xl flex items-center justify-center gap-2 font-bold mb-4">
+                                                <StoreIcon className="w-5 h-5" />
+                                                <span>Apenas Retirada na Loja</span>
+                                            </div>
+                                        );
+                                    }
+
+                                    // 4. None (Should not happen if store is active, but fallback)
+                                    return (
+                                        <div className="p-3 bg-red-50 text-red-600 rounded-xl text-center font-bold mb-4">
+                                            Momentaneamente indisponível
+                                        </div>
+                                    );
+                                })()}
+
+                                {canPickup && deliveryType === 'PICKUP' && (
                                     <div className="space-y-2 animate-in fade-in p-6 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 text-center">
                                         <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-2">
                                             <MapPin className="w-6 h-6 text-gray-500" />
@@ -891,7 +1082,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     </div>
                                 )}
 
-                                {deliveryType === 'DELIVERY' && (
+                                {canDeliver && deliveryType === 'DELIVERY' && (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
 
                                         {/* Rua - StreetSearchSelect */}
@@ -945,13 +1136,19 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Pagamento</h3>
 
                                 <div className="grid grid-cols-3 gap-2">
+                                    {/* PIX: Show if Store has PIX enabled (Auto or Manual) */}
+                                    {/* User Request Correction: "independe se ativo ou nao vai motra o pix... se ativo abreo o modal... se noa tivo ainda mostar o botao... e vindo como forma de pagamento sem abrir o modal" */}
+
                                     <button
                                         onClick={() => setPaymentMethod('PIX')}
                                         className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'PIX' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                     >
                                         <QrCode className="w-6 h-6" />
-                                        <span className="text-xs font-bold">PIX</span>
+                                        {/* Show (Auto) tag only if it WILL open the modal */}
+                                        <span className="text-xs font-bold">PIX {(store?.receive_orders_via_platform && store?.config?.pixdata?.enabled) ? '(Auto)' : ''}</span>
                                     </button>
+
+                                    {/* CARTÃO */}
                                     <button
                                         onClick={() => setPaymentMethod('CARTAO')}
                                         className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'CARTAO' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
@@ -959,10 +1156,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         <CreditCard className="w-6 h-6" />
                                         <span className="text-xs font-bold">Cartão</span>
                                     </button>
+
+                                    {/* DINHEIRO */}
                                     <button
                                         onClick={() => {
                                             setPaymentMethod('DINHEIRO');
-                                            // Scroll to change input after render
                                             setTimeout(() => {
                                                 const changeInput = document.getElementById('change-input-container');
                                                 if (changeInput) {
@@ -995,9 +1193,33 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                         {/* Sticky Checkout Footer */}
                         <div className="p-6 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
-                            <div className="flex justify-between items-center mb-4 text-sm">
-                                <span className="text-gray-500 font-medium">Total com Entrega</span>
-                                <span className="font-black text-2xl text-gray-900 dark:text-white">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
+                            <div className="space-y-2 mb-4">
+                                <div className="flex justify-between text-sm text-gray-500">
+                                    <span>Subtotal</span>
+                                    <span>R$ {cartSubtotal.toFixed(2).replace('.', ',')}</span>
+                                </div>
+                                {deliveryType === 'DELIVERY' && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-500">Entrega</span>
+                                        {deliveryFee === 0 ? (
+                                            <span className="font-bold text-green-600 flex items-center">
+                                                Grátis*
+                                                <button
+                                                    onClick={() => setIsRulesModalOpen(true)}
+                                                    className="text-[10px] text-gray-400 font-normal ml-1 hover:text-brand-600 hover:underline transition-colors"
+                                                >
+                                                    (Ver normas)
+                                                </button>
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-900 dark:text-gray-300">+ R$ {deliveryFee.toFixed(2).replace('.', ',')}</span>
+                                        )}
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-800">
+                                    <span className="font-medium text-gray-900 dark:text-white">Total</span>
+                                    <span className="font-black text-2xl text-gray-900 dark:text-white">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
+                                </div>
                             </div>
                             <Button
                                 fullWidth
@@ -1023,18 +1245,26 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             )}
 
             {/* Pix Payment Modal */}
-            {isPixModalOpen && store?.config?.pixdata && createdOrderId && (
+            {isPixModalOpen && createdOrderId && (store?.config?.pixdata || store?.pix_key) && (
                 <PixPaymentModal
                     isOpen={isPixModalOpen}
                     onClose={() => {
                         setIsPixModalOpen(false);
-                        // Redirect to Tracking after payment modal close
+                        // Redirect to Tracking
                         window.history.pushState({}, '', `/track/${createdOrderId}`);
                         window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
-                    }
-                    }
-                    pixData={store.config.pixdata}
-                    amount={cartTotal}
+                    }}
+                    pixData={{
+                        ...(store?.config?.pixdata || {
+                            enabled: true,
+                            key: store?.pix_key,
+                            key_type: store?.pix_key_type || 'CPF',
+                            bank_name: 'Banco'
+                        }),
+                        name: store?.config?.pixdata?.name || store?.name || store?.store_name || 'LOJA',
+                        city: store?.config?.pixdata?.city || store?.store_address_city || store?.city || 'CIDADE'
+                    }}
+                    amount={checkoutTotal}
                     orderId={createdOrderId}
                     storePhone={store.chat_number || store.phone_number}
                 />
@@ -1051,24 +1281,52 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 />
             )}
 
-            {/* --- FLOATING NATIIVE CHAT BUTTON --- */}
-            <div className="fixed bottom-24 md:bottom-8 right-6 z-50 flex flex-col gap-3 items-end">
-                <button
-                    onClick={() => {
-                        // Navega para a página de chat (StoreChatPage)
-                        window.history.pushState({}, '', `/${citySlug}/${storeSlug}/chat`);
-                        window.dispatchEvent(new CustomEvent('popstate'));
-                        window.dispatchEvent(new CustomEvent('pushstate_changed'));
-                    }}
-                    className="flex items-center gap-3 bg-brand-600 text-white px-6 py-4 rounded-full shadow-2xl hover:bg-brand-700 transition-all hover:scale-105 active:scale-95 group"
-                >
-                    <div className="relative">
-                        <MessageCircle className="w-6 h-6" />
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse"></span>
+            {isRecentOrdersModalOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsRecentOrdersModalOpen(false)} />
+                    <div className="relative bg-white dark:bg-gray-900 w-full max-w-sm rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                            <h3 className="text-xl font-black text-gray-900 dark:text-white">Meus Pedidos</h3>
+                            <button onClick={() => setIsRecentOrdersModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                                <X className="w-5 h-5 text-gray-400" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
+                            {recentOrders.length === 0 ? (
+                                <p className="text-center text-gray-500 py-8">Nenhum pedido recente encontrado.</p>
+                            ) : (
+                                recentOrders.map((id, index) => (
+                                    <button
+                                        key={id}
+                                        onClick={() => {
+                                            setIsRecentOrdersModalOpen(false);
+                                            window.history.pushState({}, '', `/track/${id}`);
+                                            window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                                        }}
+                                        className="w-full p-4 bg-gray-50 dark:bg-gray-800 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between transition-all group"
+                                    >
+                                        <div className="text-left">
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pedido</p>
+                                            <p className="font-black text-gray-900 dark:text-white">#{id.slice(0, 8).toUpperCase()}</p>
+                                        </div>
+                                        <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-brand-500 transition-colors" />
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                        <div className="p-6 bg-gray-50 dark:bg-gray-800/50">
+                            <p className="text-[10px] text-center text-gray-400 font-medium uppercase tracking-widest">Apenas pedidos feitos via plataforma</p>
+                        </div>
                     </div>
-                    <span className="font-black text-sm uppercase tracking-tighter">Falar com a Loja</span>
-                </button>
-            </div>
+                </div>
+            )}
+
+            <ShippingRulesModal
+                isOpen={isRulesModalOpen}
+                onClose={() => setIsRulesModalOpen(false)}
+                rules={shippingRules}
+            />
+
         </div>
     );
 };

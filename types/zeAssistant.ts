@@ -136,6 +136,12 @@ export interface ProcessMessageResponse {
     handoffReason?: string;
     confidenceScore?: number;
     metadata?: Record<string, any>;
+    buttons?: Array<{
+        type: 'url' | 'reply';
+        text: string;
+        url?: string;
+        payload?: string;
+    }>;
 }
 
 // Contexto de conversa

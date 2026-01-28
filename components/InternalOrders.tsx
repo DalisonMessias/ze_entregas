@@ -35,7 +35,7 @@ const parseCurrency = (val: string): number => {
 export const InternalOrders: React.FC = () => {
     // View State
     const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'DELIVERY_READY' | 'PICKUP_READY' | 'LOCAL_READY' | 'COMPLETED' | 'TABLES_MANAGE'>('NEW_ORDER');
-    const [productionTab, setProductionTab] = useState<'QUEUE' | 'DELIVERY' | 'PICKUP' | 'LOCAL' | 'HISTORY'>('QUEUE');
+    const [productionTab, setProductionTab] = useState<'QUEUE' | 'DELIVERY' | 'PICKUP' | 'LOCAL' | 'HISTORY' | 'CANCELLED'>('QUEUE');
 
     // Filtros de data para aba HISTORY
     const [historyDateFilter, setHistoryDateFilter] = useState<string>(new Date().toISOString().split('T')[0]); // Data atual por padrão
@@ -80,7 +80,7 @@ export const InternalOrders: React.FC = () => {
     const [longitude, setLongitude] = useState<number | null>(null);
     const [locationInput, setLocationInput] = useState('');
     const [isLocationOnly, setIsLocationOnly] = useState(false);
-    const [calculationMode, setCalculationMode] = useState<'FIXED' | 'NEIGHBORHOOD' | null>(null);
+    const [calculationMode, setCalculationMode] = useState<'FIXED' | 'NEIGHBORHOOD' | 'RADIUS' | null>(null);
 
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
     const [paymentTiming, setPaymentTiming] = useState<'ONLINE' | 'ON_DELIVERY'>('ON_DELIVERY'); // Default para entrega
@@ -228,7 +228,7 @@ export const InternalOrders: React.FC = () => {
 
         // ASSOCIATE ou OWN: Usa as configurações de entrega própria da loja
         if (deliveryMode === 'ASSOCIATE' || deliveryMode === 'OWN') {
-            const currentCalcMode = calculationMode || deliverySettings?.delivery_mode || 'FIXED';
+            const currentCalcMode = calculationMode || deliverySettings?.own_delivery_mode || 'FIXED';
             // console.log('[InternalOrders] Modo ASSOCIATE/OWN - Usando modo de cálculo:', currentCalcMode);
 
             if (currentCalcMode === 'FIXED') {
@@ -493,22 +493,26 @@ export const InternalOrders: React.FC = () => {
     const loadProducts = async () => {
         setLoading(true);
         try {
-            const [productsData, profile, settings, fees, onlineDrivers] = await Promise.all([
+            const [productsData, profile, settings, fees, onlineDrivers, shopSettings] = await Promise.all([
                 cloud.getStoreProducts(),
                 cloud.getMyPartnerProfile(),
                 cloud.getStoreDeliverySettings(),
                 cloud.getStoreNeighborhoodFees(),
-                cloud.getOnlineDrivers(0, 0)
+                cloud.getOnlineDrivers(0, 0),
+                cloud.getShopSettings()
             ]);
 
             setProducts(productsData);
             setDeliverySettings(settings);
             setNeighborhoodFees(fees);
             if (settings) {
-                setCalculationMode(settings.delivery_mode);
+                setCalculationMode(settings.own_delivery_mode);
+            }
+
+            if (shopSettings) {
                 // Inicializar horários do filtro com base nas configurações da loja se disponíveis
-                if (settings.support_hours_start) setHistoryTimeStart(settings.support_hours_start.slice(0, 5));
-                if (settings.support_hours_end) setHistoryTimeEnd(settings.support_hours_end.slice(0, 5));
+                if (shopSettings.support_hours_start) setHistoryTimeStart(shopSettings.support_hours_start.slice(0, 5));
+                if (shopSettings.support_hours_end) setHistoryTimeEnd(shopSettings.support_hours_end.slice(0, 5));
             }
 
             setHasOnlineCouriers(onlineDrivers && onlineDrivers.length > 0);
@@ -1824,6 +1828,12 @@ export const InternalOrders: React.FC = () => {
                                     <Utensils className="w-4 h-4" /> Consumo Local
                                 </button>
                                 <button
+                                    onClick={() => setProductionTab('CANCELLED')}
+                                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 ${productionTab === 'CANCELLED' ? 'bg-red-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
+                                >
+                                    <X className="w-4 h-4" /> Rejeitados/Cancelados
+                                </button>
+                                <button
                                     onClick={() => setProductionTab('HISTORY')}
                                     className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 ${productionTab === 'HISTORY' ? 'bg-green-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
                                 >
@@ -1886,8 +1896,8 @@ export const InternalOrders: React.FC = () => {
                                     // Fila: Apenas pendentes (aguardando início)
                                     filteredTickets = tickets.filter(t => t.status === 'pending');
                                 } else if (productionTab === 'DELIVERY') {
-                                    // Entrega: producing, ready ou in_transit + tipo DELIVERY
-                                    filteredTickets = tickets.filter(t => (t.status === 'producing' || t.status === 'ready' || t.status === 'in_transit') && t.orders?.order_type === 'DELIVERY');
+                                    // Entrega: pending, producing, ready ou in_transit + tipo DELIVERY
+                                    filteredTickets = tickets.filter(t => (t.status === 'pending' || t.status === 'producing' || t.status === 'ready' || t.status === 'in_transit') && t.orders?.order_type === 'DELIVERY');
                                 } else if (productionTab === 'PICKUP') {
                                     // Retirada: producing ou ready + tipo PICKUP
                                     filteredTickets = tickets.filter(t => (t.status === 'producing' || t.status === 'ready') && t.orders?.order_type === 'PICKUP');
@@ -1958,7 +1968,7 @@ export const InternalOrders: React.FC = () => {
                                                             )}
                                                         </div>
                                                         <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">
-                                                            {ticket.orders?.customer_name || ticket.orders_collaborators?.customer_name || (ticket.orders?.order_type === 'DELIVERY' ? 'Entrega' : ticket.orders?.order_type === 'PICKUP' ? 'Retirada' : 'Pedido Cozinha')}
+                                                            {ticket.orders?.customer_name || ticket.orders_collaborators?.customer_name || (ticket.orders?.order_type === 'DELIVERY' ? 'Entrega' : ticket.orders?.order_type === 'PICKUP' ? 'Retirada' : 'Pedido Balcão')}
                                                         </h3>
                                                     </div>
                                                     <Button size="sm" onClick={() => {
@@ -1971,7 +1981,9 @@ export const InternalOrders: React.FC = () => {
                                                                 total_price: i.quantity * (i.unit_price || i.price || 0)
                                                             })),
                                                             total_price: ticket.items.reduce((acc: number, i: any) => acc + (i.quantity * (i.unit_price || i.price || 0)), 0),
-                                                            created_at: ticket.created_at
+                                                            created_at: ticket.created_at,
+                                                            payment_status: ticket.payment_status || 'pending',
+                                                            ticketId: ticket.id
                                                         };
                                                         setLastOrder(order);
                                                         setShowPrintPreview(true);
@@ -1999,13 +2011,27 @@ export const InternalOrders: React.FC = () => {
 
                                                 <div className="flex gap-2 mt-auto">
                                                     {productionTab === 'QUEUE' ? (
-                                                        // FILA DE PRODUÇÃO: Apenas Iniciar
-                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
-                                                            Iniciar Preparo
-                                                        </Button>
+                                                        // FILA DE PRODUÇÃO: Aceitar e Rejeitar
+                                                        <div className="flex gap-2 w-full">
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                Aceitar
+                                                            </Button>
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'rejected')} className="bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                Rejeitar
+                                                            </Button>
+                                                        </div>
                                                     ) : productionTab === 'DELIVERY' ? (
                                                         // ENTREGA
-                                                        ticket.status === 'producing' ? (
+                                                        ticket.status === 'pending' ? (
+                                                            <div className="flex gap-2 w-full">
+                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                    Aceitar
+                                                                </Button>
+                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'rejected')} className="bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                    Rejeitar
+                                                                </Button>
+                                                            </div>
+                                                        ) : ticket.status === 'producing' ? (
                                                             <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
                                                                 Finalizar Produção
                                                             </Button>
@@ -2349,9 +2375,11 @@ export const InternalOrders: React.FC = () => {
                                             const method = lastOrder.payment_method || 'A Combinar';
                                             const translations: Record<string, string> = {
                                                 'CASH': 'Dinheiro',
+                                                'DINHEIRO': 'Dinheiro',
                                                 'PIX': 'PIX',
                                                 'CREDIT_CARD': 'Cartão de Crédito',
                                                 'DEBIT_CARD': 'Cartão de Débito',
+                                                'CARTAO': 'Cartão',
                                                 'OTHER': 'Outro',
                                                 'PENDING': 'Pendente'
                                             };
@@ -2360,7 +2388,25 @@ export const InternalOrders: React.FC = () => {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[8px] font-black uppercase opacity-60">Status</p>
-                                        <p className="text-xs font-black uppercase">PAGO</p>
+                                        <div className="flex flex-col items-end">
+                                            <p className={`text-xs font-black uppercase ${lastOrder.payment_status === 'paid' ? 'text-green-400' : 'text-red-400'}`}>
+                                                {lastOrder.payment_status === 'paid' ? 'PAGO' : 'NÃO PAGO'}
+                                            </p>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const newStatus = await cloud.toggleTicketPaymentStatus((lastOrder as any).ticketId, (lastOrder as any).payment_status);
+                                                        setLastOrder({ ...lastOrder, payment_status: newStatus });
+                                                        await loadTickets();
+                                                    } catch (err) {
+                                                        showAlert({ title: 'Erro', message: 'Não foi possível atualizar o status de pagamento.' });
+                                                    }
+                                                }}
+                                                className="mt-1 text-[8px] font-bold px-2 py-0.5 rounded-full border border-white/20 hover:bg-white/10 transition-colors no-print"
+                                            >
+                                                Alternar
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

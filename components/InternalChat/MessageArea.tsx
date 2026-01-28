@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ChatMessage } from './types';
-import { Download, Check, CheckCheck, User, MapPin } from 'lucide-react';
+import { Download, Check, CheckCheck, User, MapPin, Trash2, Edit2, MoreVertical, X, Copy } from 'lucide-react';
 import ImageLightbox from './ImageLightbox';
 import { PollMessage } from './Messages/PollMessage';
 import { ContactMessage } from './Messages/ContactMessage';
@@ -9,13 +9,25 @@ interface MessageAreaProps {
   messages: ChatMessage[];
   onLoadMore?: () => void;
   hasMore?: boolean;
+  onDeleteMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
-const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore = false }) => {
+const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore = false, onDeleteMessage, onEditMessage }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [showOptionsId, setShowOptionsId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+
+  // Close menus on click outside
+  useEffect(() => {
+    const handleClickOutside = () => setShowOptionsId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -43,30 +55,36 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
     const iconSize = "16";
     switch (status) {
       case 'sent':
-        return (
-          <svg viewBox="0 0 16 11" width={iconSize} height="11" fill="none" className="text-[#667781]">
-            <path d="M1 5L5 9L15 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        );
+        return <Check size={16} className="text-gray-400" />;
       case 'delivered':
-        return (
-          <svg viewBox="0 0 16 11" width={iconSize} height="11" fill="none" className="text-[#667781]">
-            <path d="M1 5L5 9L15 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M5 5L9 9L19 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(-4, 0)" />
-          </svg>
-        );
+        return <CheckCheck size={16} className="text-gray-400" />;
       case 'read':
-        return (
-          <svg viewBox="0 0 16 11" width={iconSize} height="11" fill="none" className="text-[#53bdeb]">
-            <path d="M1 5L5 9L15 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M5 5L9 9L19 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(-4, 0)" />
-          </svg>
-        );
+        return <CheckCheck size={16} className="text-blue-500" />;
       case 'pending':
         return <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />;
       default:
         return null;
     }
+  };
+
+  const formatWhatsAppStyle = (text: string) => {
+    if (!text) return text;
+
+    // 1. Substituir negritos duplos (**texto**) por <b>texto</b>
+    let formattedText = text.replace(/\*\*([^\*\n]+)\*\*/g, '<b>$1</b>');
+
+    // 2. Substituir negritos simples (*texto*) por <b>texto</b>
+    // O regex garante que o asterisco não seja seguido por um espaço (marcador de lista)
+    // e que o conteúdo não seja vazio.
+    formattedText = formattedText.replace(/\*([^\*\s\n][^\*\n]*[^\*\s\n]|\S)\*/g, '<b>$1</b>');
+
+    // Manter as quebras de linha
+    return formattedText.split('\n').map((line, i) => (
+      <React.Fragment key={i}>
+        <span dangerouslySetInnerHTML={{ __html: line }} />
+        {i < text.split('\n').length - 1 && <br />}
+      </React.Fragment>
+    ));
   };
 
   const getInitials = (name: string) => {
@@ -85,10 +103,38 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
   };
 
   const renderMediaContent = (message: ChatMessage) => {
+    // Detect Poll
+    if (message.content?.startsWith('POLL:')) {
+      try {
+        const pollData = JSON.parse(message.content.substring(5));
+        return (
+          <PollMessage
+            messageId={message.message_id}
+            question={pollData.question}
+            options={pollData.options}
+            allowMultiple={pollData.allowMultiple}
+            visitorId={message.is_from_me ? 'admin' : (message as any).sender_id || 'remote'}
+            visitorName={message.is_from_me ? 'Administrador' : (message as any).sender_name || 'Cliente'}
+          />
+        );
+      } catch (e) { /* fall through */ }
+    }
+    // Detect Contact
+    if (message.content?.startsWith('CONTACT:')) {
+      try {
+        const contactData = JSON.parse(message.content.substring(8));
+        return <ContactMessage name={contactData.name} phone={contactData.phone} />;
+      } catch (e) { /* fall through */ }
+    }
+
     const mediaUrl = message.media_url ? `http://localhost:3001${message.media_url}` : null;
 
     if (!mediaUrl || !message.media_type) {
-      return <p className="text-sm break-words whitespace-pre-wrap">{message.content}</p>;
+      return (
+        <div className="text-sm break-words leading-relaxed">
+          {formatWhatsAppStyle(message.content)}
+        </div>
+      );
     }
 
     switch (message.media_type) {
@@ -102,7 +148,9 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
               onClick={() => setLightboxImage(mediaUrl)}
             />
             {message.content !== '[Imagem]' && (
-              <p className="text-sm mt-1 mx-1 break-words whitespace-pre-wrap leading-relaxed">{message.content}</p>
+              <div className="text-sm mt-1 mx-1 break-words leading-relaxed">
+                {formatWhatsAppStyle(message.content)}
+              </div>
             )}
           </div>
         );
@@ -199,7 +247,16 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
         if (message.content?.startsWith('POLL:')) {
           try {
             const pollData = JSON.parse(message.content.substring(5));
-            return <PollMessage question={pollData.question} options={pollData.options} allowMultiple={pollData.allowMultiple} />;
+            return (
+              <PollMessage
+                messageId={message.message_id}
+                question={pollData.question}
+                options={pollData.options}
+                allowMultiple={pollData.allowMultiple}
+                visitorId={message.is_from_me ? 'admin' : (message as any).sender_id || 'remote'}
+                visitorName={message.is_from_me ? 'Administrador' : (message as any).sender_name || 'Cliente'}
+              />
+            );
           } catch (e) { return <p className="text-sm text-red-500">Erro ao renderizar enquete</p>; }
         }
         // Detect Contact
@@ -210,7 +267,11 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
           } catch (e) { return <p className="text-sm text-red-500">Erro ao renderizar contato</p>; }
         }
 
-        return <p className="text-sm break-words whitespace-pre-wrap">{message.content}</p>;
+        return (
+          <div className="text-sm break-words leading-relaxed">
+            {formatWhatsAppStyle(message.content)}
+          </div>
+        );
     }
   };
 
@@ -228,8 +289,40 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
       {messages.map((message) => (
         <div
           key={message.message_id}
-          className={`flex gap-2 ${message.is_from_me ? 'justify-end' : 'justify-start'}`}
+          className={`flex gap-2 ${message.is_from_me ? 'justify-end' : 'justify-start'} group relative`}
         >
+          {/* Options Menu (Only for own messages) */}
+          {message.is_from_me && !editingMessageId && (
+            <div className="absolute top-0 right-0 z-20">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOptionsId(showOptionsId === message.message_id ? null : message.message_id);
+                }}
+                className={`p-1 bg-white shadow hover:bg-gray-50 rounded-full transition-all border border-gray-100 ${showOptionsId === message.message_id ? 'ring-2 ring-brand-500' : ''}`}
+              >
+                <MoreVertical size={14} className="text-gray-600" />
+              </button>
+
+              {showOptionsId === message.message_id && (
+                <div className="absolute right-0 bottom-full mb-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 min-w-[120px] z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingMessageId(message.message_id); setEditContent(message.content); setShowOptionsId(null); }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Edit2 size={14} /> Editar
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDeleteMessage?.(message.message_id); setShowOptionsId(null); }}
+                    className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  >
+                    <Trash2 size={14} /> Apagar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div
             className={`max-w-[65%] sm:max-w-[60%] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] relative text-sm ${message.is_from_me
               ? 'bg-[#d9fdd3] rounded-xl'
@@ -245,11 +338,51 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
             )}
 
             <div className={`px-2 py-1.5 ${message.media_type ? 'pb-1' : ''}`}>
-              {renderMediaContent(message)}
+              {editingMessageId === message.message_id ? (
+                <div className="min-w-[200px]">
+                  <textarea
+                    value={editContent}
+                    onChange={e => {
+                      setEditContent(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
+                    }}
+                    className="w-full p-2 text-sm bg-white border border-green-200 rounded-md focus:outline-none focus:border-green-500 resize-none overflow-hidden"
+                    rows={1}
+                    autoFocus
+                    onFocus={e => {
+                      e.target.style.height = 'auto';
+                      e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
+                    }}
+                    onKeyDown={e => {
+                      // Ignore IME composition
+                      if (e.nativeEvent.isComposing) return;
+
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (editContent.trim()) {
+                          onEditMessage?.(message.message_id, editContent);
+                          setEditingMessageId(null);
+                        }
+                      }
+
+                      if (e.key === 'Escape') setEditingMessageId(null);
+                    }}
+                  />
+                  <div className="flex justify-end gap-2 mt-1">
+                    <button onClick={() => setEditingMessageId(null)} className="text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
+                    <button onClick={() => { onEditMessage?.(message.message_id, editContent); setEditingMessageId(null); }} className="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">Salvar</button>
+                  </div>
+                </div>
+              ) : (
+                renderMediaContent(message)
+              )}
             </div>
 
             <div className={`flex justify-end items-end gap-1 px-2 pb-1.5 -mt-1 select-none pointer-events-none float-right ${message.media_type ? 'relative z-10' : ''}`}>
-              <span className="text-[11px] text-[#667781] leading-none">
+              <span className="text-[11px] text-[#667781] leading-none flex items-center gap-1">
+                {(message as any).is_edited && <span className="italic text-[10px] opacity-70">Editado</span>}
                 {new Date(message.message_timestamp).toLocaleTimeString('pt-BR', {
                   hour: '2-digit',
                   minute: '2-digit',

@@ -11,9 +11,9 @@ interface PixPaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     pixData: {
-        keyPix: string;
-        name: string;
-        city: string;
+        key: string;
+        name?: string;
+        city?: string;
     };
     amount: number;
     orderId: string;
@@ -32,49 +32,79 @@ export const PixPaymentModal: React.FC<PixPaymentModalProps> = ({
     const [qrError, setQrError] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    // Função de geração de payload PIX solicitada
-    const gerarPayloadPix = (chave: string, nome: string, cidade: string, valor: number, txid: string) => {
-        const fixAmount = valor.toFixed(2);
-        const parts = [
-            '000201',
-            '26',
-            `0014BR.GOV.BCB.PIX01${chave.length.toString().padStart(2, '0')}${chave}`,
-            '52040000',
-            '5303986',
-            `54${fixAmount.length.toString().padStart(2, '0')}${fixAmount}`,
-            '5802BR',
-            `59${nome.length.toString().padStart(2, '0')}${nome.toUpperCase()}`,
-            `60${cidade.length.toString().padStart(2, '0')}${cidade.toUpperCase()}`,
-            `62${(txid.length + 4).toString().padStart(2, '0')}05${txid.length.toString().padStart(2, '0')}${txid.toUpperCase()}`
-        ];
+    // Função de geração de payload PIX seguindo padrões do Banco Central
+    const gerarPayloadPix = (valor: number) => {
+        const keyPix = pixData.key;
+        const citypix = pixData.city || 'Brazil';
+        const name = pixData.name || 'LOJA';
 
-        let payload = parts.join('');
+        const ID_PAYLOAD_FORMAT_INDICATOR = "00";
+        const ID_MERCHANT_ACCOUNT_INFORMATION = "26";
+        const ID_MERCHANT_ACCOUNT_INFORMATION_GUI = "00";
+        const ID_MERCHANT_ACCOUNT_INFORMATION_KEY = "01";
+        const ID_MERCHANT_CATEGORY_CODE = "52";
+        const ID_TRANSACTION_CURRENCY = "53";
+        const ID_TRANSACTION_AMOUNT = "54";
+        const ID_COUNTRY_CODE = "58";
+        const ID_MERCHANT_NAME = "59";
+        const ID_MERCHANT_CITY = "60";
+        const ID_ADDITIONAL_DATA_FIELD_TEMPLATE = "62";
+        const ID_ADDITIONAL_DATA_FIELD_TEMPLATE_TXID = "05";
+        const ID_CRC16 = "63";
 
-        const crc16 = (str: string) => {
+        function removerCaracteresEspeciais(str: string) {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "");
+        }
+
+        function _getValue(id: string, value: string) {
+            const size = String(value.length).padStart(2, "0");
+            return id + size + value;
+        }
+
+        function _getMechantAccountInfo() {
+            const gui = _getValue(ID_MERCHANT_ACCOUNT_INFORMATION_GUI, "br.gov.bcb.pix");
+            const key = _getValue(ID_MERCHANT_ACCOUNT_INFORMATION_KEY, keyPix);
+            return _getValue(ID_MERCHANT_ACCOUNT_INFORMATION, gui + key);
+        }
+
+        function _getAdditionalDataFieldTemplate() {
+            const randomDigits = Math.floor(10000 + Math.random() * 90000);
+            const txid = _getValue(ID_ADDITIONAL_DATA_FIELD_TEMPLATE_TXID, "TX" + String(randomDigits).padStart(5, '0'));
+            return _getValue(ID_ADDITIONAL_DATA_FIELD_TEMPLATE, txid);
+        }
+
+        function calcularCRC16(payload: string) {
             let crc = 0xFFFF;
+            let poly = 0x1021;
+            let str = payload + "6304";
             for (let i = 0; i < str.length; i++) {
                 crc ^= str.charCodeAt(i) << 8;
                 for (let j = 0; j < 8; j++) {
-                    if ((crc & 0x8000) !== 0) {
-                        crc = (crc << 1) ^ 0x1021;
-                    } else {
-                        crc <<= 1;
-                    }
+                    crc = (crc & 0x8000) ? ((crc << 1) ^ poly) : (crc << 1);
                 }
             }
             return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-        };
+        }
 
-        return payload + '6304' + crc16(payload + '6304');
+        const cleanedName = removerCaracteresEspeciais(name).substring(0, 25);
+        const cleanedCity = removerCaracteresEspeciais(citypix).substring(0, 15);
+
+        let payload =
+            _getValue(ID_PAYLOAD_FORMAT_INDICATOR, "01") +
+            _getMechantAccountInfo() +
+            _getValue(ID_MERCHANT_CATEGORY_CODE, "0000") +
+            _getValue(ID_TRANSACTION_CURRENCY, "986") +
+            _getValue(ID_TRANSACTION_AMOUNT, valor.toFixed(2)) +
+            _getValue(ID_COUNTRY_CODE, "BR") +
+            _getValue(ID_MERCHANT_NAME, cleanedName) +
+            _getValue(ID_MERCHANT_CITY, cleanedCity) +
+            _getAdditionalDataFieldTemplate();
+
+        const crc16 = calcularCRC16(payload);
+        return payload + ID_CRC16 + "04" + crc16;
     };
 
-    const pixPayload = gerarPayloadPix(
-        pixData.keyPix,
-        pixData.name,
-        pixData.city,
-        amount,
-        orderId.slice(0, 20)
-    );
+    const pixPayload = gerarPayloadPix(amount);
 
     useEffect(() => {
         if (isOpen && canvasRef.current) {
@@ -148,16 +178,20 @@ export const PixPaymentModal: React.FC<PixPaymentModalProps> = ({
                             <span>PIX Copia e Cola</span>
                             {copied && <span className="text-green-600 flex items-center gap-1 animate-in slide-in-from-right-2"><Check className="w-3 h-3" /> Copiado</span>}
                         </div>
-                        <div className="flex gap-2">
-                            <div className="flex-1 text-[10px] font-mono text-gray-500 break-all line-clamp-2 leading-relaxed bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
-                                {pixPayload}
-                            </div>
-                            <button
+                        <div className="flex flex-col gap-2">
+                            <textarea
+                                readOnly
+                                value={pixPayload}
+                                className="w-full text-[10px] font-mono text-gray-600 dark:text-gray-300 break-all leading-relaxed bg-gray-100 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 resize-none h-20 focus:outline-none"
+                            />
+                            <Button
                                 onClick={handleCopy}
-                                className="bg-brand-600 text-white p-3 rounded-xl hover:bg-brand-700 transition-all shadow-lg active:scale-95"
+                                fullWidth
+                                className="bg-brand-600 text-white rounded-xl py-3 hover:bg-brand-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
                             >
-                                <Copy className="w-5 h-5" />
-                            </button>
+                                {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                                {copied ? 'Copiado!' : 'Copiar Código PIX'}
+                            </Button>
                         </div>
                     </div>
 

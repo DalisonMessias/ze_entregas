@@ -22,6 +22,7 @@ type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_pa
 // Helper simples para navegar e atualizar URL sem reload (apenas auth flows que não estão no App.tsx router principal)
 import { DigitalMenu } from './DigitalMenu/DigitalMenu';
 import { StoreChatPage } from './DigitalMenu/StoreChatPage';
+import { PublicSupportPage } from './PublicSupportPage';
 
 const updateAuthUrl = (view: AuthView) => {
   // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
@@ -191,12 +192,20 @@ export const AuthWrapper: React.FC = () => {
 
     const initializeAuth = async () => {
       if (retryCount >= MAX_RETRIES) {
-        logger.error('AUTH_MAX_RETRIES_REACHED', { retryCount });
-        setIsCheckingSession(false);
-        if (fallbackTimeout) clearTimeout(fallbackTimeout);
         setAuthMessage({ type: 'error', text: 'Falha recorrente na autenticação. Tente recarregar a página.' });
         return;
       }
+
+      // PUBLIC SUPPORT ROUTE
+      if (currentPath === '/suporte') {
+        return; // Early return logic handled below or if we want to bypass auth entirely:
+      }
+      // Logic below to actually render it.
+      // Wait, AuthWrapper returns helper functions or JSX?
+      // Looking at previous read file, it's a component.
+      // Let's scroll down to render.
+      // I need to see the return statement of AuthWrapper component.
+
 
       const supabase = cloud.initSupabase();
       if (!supabase) {
@@ -587,6 +596,10 @@ export const AuthWrapper: React.FC = () => {
   };
 
   // Loading: show only the branded logo screen (remove pulse circle loader)
+  if (currentPath === '/suporte') {
+    return <PublicSupportPage />;
+  }
+
   if (isCheckingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 animate-in fade-in">

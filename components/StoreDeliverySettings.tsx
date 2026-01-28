@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { MapPin, DollarSign, Plus, Trash2, Loader2, Save, Info, Truck, ShoppingBag, Clock, CheckCircle } from 'lucide-react';
+import { MapPin, DollarSign, Plus, Trash2, Loader2, Save, Info, Truck, ShoppingBag, Clock, CheckCircle, ArrowRight } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
@@ -185,12 +185,54 @@ export const StoreDeliverySettings: React.FC = () => {
                         <input
                             type="checkbox"
                             className="sr-only peer"
-                            checked={settings.is_pickup_enabled}
+                            checked={!!settings.is_pickup_enabled}
                             onChange={(e) => setSettings(prev => ({ ...prev, is_pickup_enabled: e.target.checked }))}
                         />
                         <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
                     </label>
                 </div>
+            </div>
+
+            {/* Link para Frete Grátis (User Request: "cade a função de ativar entregas gatis") */}
+            <div className="bg-gradient-to-r from-brand-50 to-white dark:from-brand-900/10 dark:to-gray-800 p-6 rounded-3xl border border-brand-100 dark:border-brand-900/30 shadow-sm relative overflow-hidden">
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-full bg-brand-100 text-brand-600">
+                            <Truck className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                                Entrega Grátis Condicional <span className="text-[10px] bg-brand-200 text-brand-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Fidelidade</span>
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Configure regras para oferecer frete grátis acima de um valor.</p>
+                        </div>
+                    </div>
+                    <Button
+                        onClick={() => {
+                            // Find the tab button for 'shipping' logic or scroll to it if already visible?
+                            // In this context, StoreDeliverySettings is rendered INSIDE the shipping tab.
+                            // But StoreShippingRules is likely a sibling BELOW.
+                            // We can emit a custom event or just let the user know it is below.
+                            // The user renders: <StoreDeliverySettings /> <StoreShippingRules />
+                            // So we just need to scroll down or highlight.
+                            const rulesSection = document.getElementById('shipping-rules-section');
+                            if (rulesSection) {
+                                rulesSection.scrollIntoView({ behavior: 'smooth' });
+                            } else {
+                                // Fallback: Just alert or hope the user sees it below.
+                                // Or better: Adding an ID to StoreShippingRules wrapper in parent would be ideal, 
+                                // but we can't edit parent easily here.
+                                // We will rely on user scrolling or modify StoreShippingRules to have ID.
+                                window.scrollBy({ top: 500, behavior: 'smooth' });
+                            }
+                        }}
+                        variant="ghost"
+                        className="bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600 text-brand-600"
+                    >
+                        Configurar Regras <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                </div>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
             </div>
 
             {/* 2. ENTREGA PRÓPRIA */}
@@ -210,7 +252,7 @@ export const StoreDeliverySettings: React.FC = () => {
                         <input
                             type="checkbox"
                             className="sr-only peer"
-                            checked={settings.is_own_delivery_enabled}
+                            checked={!!settings.is_own_delivery_enabled}
                             onChange={(e) => setSettings(prev => ({ ...prev, is_own_delivery_enabled: e.target.checked }))}
                         />
                         <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
@@ -229,14 +271,14 @@ export const StoreDeliverySettings: React.FC = () => {
                             <CustomInput
                                 label="Mínimo (min)"
                                 type="number"
-                                value={String(settings.delivery_time_min)}
+                                value={settings.delivery_time_min !== undefined && settings.delivery_time_min !== null ? String(settings.delivery_time_min) : ''}
                                 onChange={e => setSettings(prev => ({ ...prev, delivery_time_min: parseInt(e.target.value) || 0 }))}
                                 placeholder="30"
                             />
                             <CustomInput
                                 label="Máximo (min)"
                                 type="number"
-                                value={String(settings.delivery_time_max)}
+                                value={settings.delivery_time_max !== undefined && settings.delivery_time_max !== null ? String(settings.delivery_time_max) : ''}
                                 onChange={e => setSettings(prev => ({ ...prev, delivery_time_max: parseInt(e.target.value) || 0 }))}
                                 placeholder="60"
                             />
@@ -269,7 +311,7 @@ export const StoreDeliverySettings: React.FC = () => {
                                 <div>
                                     <CustomInput
                                         label="Valor da Taxa Fixa"
-                                        value={fixedFeeStr}
+                                        value={fixedFeeStr || ''}
                                         onChange={e => setFixedFeeStr(e.target.value)}
                                         placeholder="0,00"
                                         mask="currency"
@@ -284,7 +326,7 @@ export const StoreDeliverySettings: React.FC = () => {
                                         <div className="flex-1">
                                             <CustomInput
                                                 label="Nome do Bairro"
-                                                value={newNeighborhood}
+                                                value={newNeighborhood ?? ''}
                                                 onChange={e => setNewNeighborhood(e.target.value)}
                                                 placeholder="Ex: Centro"
                                             />
@@ -292,7 +334,7 @@ export const StoreDeliverySettings: React.FC = () => {
                                         <div className="w-32">
                                             <CustomInput
                                                 label="Valor"
-                                                value={newFeeStr}
+                                                value={newFeeStr ?? ''}
                                                 onChange={e => setNewFeeStr(e.target.value)}
                                                 placeholder="0,00"
                                                 mask="currency"

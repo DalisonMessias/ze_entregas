@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabaseClient.js';
+import * as cloud from '../../services/cloud.js';
 import { zeAssistantRulesService } from './zeAssistantRulesService.js';
 import { zeAssistantAIService } from './zeAssistantAIService.js';
 import type {
@@ -18,30 +19,68 @@ export class ZeAssistantService {
     /**
      * Processa mensagem recebida via WhatsApp
      */
-    async processMessage(payload: ProcessMessagePayload): Promise<ProcessMessageResponse> {
-        const startTime = Date.now();
-        const supabase = supabaseAdmin;
-        if (!supabase) {
-            return {
-                success: false,
-                responseText: 'Erro interno: Supabase não inicializado',
-                responseType: 'HUMAN',
-                shouldHandoff: true,
-                handoffReason: 'Supabase client error'
-            };
+
+    /**
+     * Busca configuração da loja ou cria padrão se não existir (Self-Healing)
+     */
+    public async getConfig(storeId: string): Promise<ZeAssistantConfig | null> {
+        const { data, error } = await supabaseAdmin
+            .from('ze_assistant_config')
+            .select('*')
+            .eq('store_id', storeId)
+            .single();
+
+        if (error && error.code === 'PGRST116') { // Not found
+            console.log(`[ZeAssistant] Config não encontrada para loja ${storeId}. Criando padrão...`);
+            const { data: newConfig, error: createError } = await supabaseAdmin
+                .from('ze_assistant_config')
+                .insert({
+                    store_id: storeId,
+                    is_enabled: true,
+                    ai_enabled: true,
+                    greeting_message: 'Olá! Sou o Zé, o assistente virtual da loja. Em que posso ajudar?',
+                    fallback_message: 'Desculpe, não entendi. Vou chamar um atendente.',
+                    instruction_closed_store: 'Estamos fechados no momento.',
+                })
+                .select()
+                .single();
+
+            if (createError) {
+                console.error('[ZeAssistant] Erro ao criar config padrão:', createError);
+                return null;
+            }
+            return newConfig;
         }
 
+        if (error) {
+            console.error('[ZeAssistant] Erro ao buscar config:', error);
+            return null;
+        }
+
+        return data;
+    }
+
+    /**
+     * Processa mensagem recebida via WhatsApp/Internal
+     */
+    async processMessage(payload: ProcessMessagePayload): Promise<ProcessMessageResponse> {
+        console.log(`[ZeAssistant] 🚀 Iniciando processamento para ${payload.conversationId}`);
+        const startTime = Date.now();
+
         try {
-            // 1. Buscar Configuração
+            // 1. Buscar ou Criar Configuração
             const config = await this.getConfig(payload.storeId);
-            if (!config) return { success: false, responseText: '', responseType: 'HUMAN', shouldHandoff: true };
+            if (!config) {
+                console.error('[ZeAssistant] Falha crítica: Config nula após tentativa de criação.');
+                return { success: false, responseText: '', responseType: 'HUMAN', shouldHandoff: true };
+            }
 
-            // 2. Verificar se a loja está aberta
-            const storeContext = await this.getStoreContext(payload.storeId);
-            const isOpen = this.checkIfStoreIsOpen(storeContext?.openingHours);
+            // 2. Verificar Status da Loja
+            // NOTA: Se o bot estiver habilitado, ele deve responder mesmo com loja fechada (ex: avisando horário)
+            // A lógica de "silêncio" deve ser controlada pela configuração is_enabled global
 
-            // 3. Se estiver aberta, verificar se assistente está ativo
-            if (isOpen && !config.is_enabled) {
+            if (!config.is_enabled) {
+                console.log(`[ZeAssistant] Bot desativado globalmente para loja ${payload.storeId}`);
                 return {
                     success: false,
                     responseText: '',
@@ -51,6 +90,16 @@ export class ZeAssistantService {
                 };
             }
 
+            // 3. Verificar Abertura (Manual e Automática)
+            const storeContext = await this.getStoreContext(payload.storeId);
+            const isManualOpen = storeContext?.isCurrentlyOpen === true;
+            const isAutoOpen = this.checkIfStoreIsOpen(storeContext?.openingHours);
+            const isOpen = isManualOpen && isAutoOpen;
+
+            console.log(`[ZeAssistant] 🏥 Status Loja (${payload.storeId}): Manual=${isManualOpen}, Auto=${isAutoOpen} -> FINAL=${isOpen}`);
+
+            // ... resto do código
+
             // 4. Buscar ou criar conversa
             const conversation = await this.getOrCreateConversation(
                 payload.conversationId,
@@ -58,6 +107,48 @@ export class ZeAssistantService {
                 payload.customerPhone,
                 payload.customerName
             );
+
+            // 4.1 Verificar se o assistente está explicitamente desativado para esta conversa
+            if (conversation && conversation.is_assistant_active === false) {
+                console.log(`[ZeAssistant] Assistente desativado para a conversa ${payload.conversationId}`);
+                return {
+                    success: false,
+                    responseText: '',
+                    responseType: 'HUMAN',
+                    shouldHandoff: true,
+                    handoffReason: 'Assistente desativado nesta conversa'
+                };
+            }
+
+            // 4.2 Verificar se o contato está bloqueado no chat principal
+            const { data: mainConv } = await supabaseAdmin
+                .from('chat_conversations')
+                .select('is_blocked')
+                .eq('store_id', payload.storeId)
+                .eq('conversation_id', payload.conversationId)
+                .maybeSingle();
+
+            if (mainConv?.is_blocked) {
+                console.log(`[ZeAssistant] 🚫 Contato bloqueado, enviando mensagem de redirecionamento: ${payload.conversationId}`);
+
+                return {
+                    success: true,
+                    // Formato JSON para o frontend renderizar botões
+                    responseText: `BUTTONS: ${JSON.stringify({
+                        message: "🚫 *Atendimento Indisponível*\n\nIdentificamos que seu acesso a este canal está temporariamente suspenso.",
+                        buttons: [
+                            {
+                                text: "Falar com Suporte",
+                                url: "/suporte",
+                                type: "url"
+                            }
+                        ]
+                    })}`,
+                    responseType: 'RULE',
+                    shouldHandoff: false,
+                    handoffReason: ''
+                };
+            }
 
             // Se conversa foi transferida para humano e LOJA ESTÁ ABERTA, não processar
             // (Se loja fechada, o bot assume sempre)
@@ -85,11 +176,24 @@ export class ZeAssistantService {
             if (!isOpen) {
                 const geminiKey = await this.getGeminiApiKey(payload.storeId);
                 if (geminiKey) {
+                    // Buscar histórico para IA (últimas 10 mensagens)
+                    const history = await this.getConversationHistory(conversation.id);
+
+                    // Se o histórico estiver vazio e o contexto tiver dados de pedido, reseta o contexto
+                    if (history.length === 0 && (context.currentFlow || context.flowStep)) {
+                        console.log(`[ZeAssistant] 🧹 Limpando contexto residual (Closed Store) para ${conversation.id}`);
+                        context.currentFlow = null;
+                        context.flowStep = null;
+                        context.variables = {};
+                        context.lastIntent = null;
+                    }
+
                     response = await zeAssistantAIService.processMessage(
                         payload.messageText,
                         { ...storeContext, isClosed: true, closedInstruction: config.instruction_closed_store },
                         context,
-                        geminiKey
+                        geminiKey,
+                        history
                     );
                     response.responseType = 'AI';
                 }
@@ -128,19 +232,58 @@ export class ZeAssistantService {
                 // Se nada funcionou e IA está ativada, usar IA
                 if (!response && config.ai_enabled) {
                     const geminiKey = await this.getGeminiApiKey(payload.storeId) || '';
+
+                    // Buscar histórico para IA (últimas 10 mensagens)
+                    const history = await this.getConversationHistory(conversation.id);
+
+                    // Se o histórico estiver vazio e o contexto tiver dados de pedido, reseta o contexto
+                    if (history.length === 0 && (context.currentFlow || context.flowStep)) {
+                        console.log(`[ZeAssistant] 🧹 Limpando contexto residual (AI) para ${conversation.id}`);
+                        context.currentFlow = null;
+                        context.flowStep = null;
+                        context.variables = {};
+                        context.lastIntent = null;
+                    }
+
                     response = await zeAssistantAIService.processMessage(
                         payload.messageText,
-                        storeContext,
+                        { ...storeContext, isClosed: !isOpen },
                         context,
-                        geminiKey
+                        geminiKey,
+                        history
                     );
                     response.responseType = 'AI';
+
+                    // Detectar gatilho de pedido vindo da IA
+                    if (response.success && response.responseText.includes('[INICIAR_PEDIDO]')) {
+                        console.log('[ZeAssistant] 🛒 IA solicitou início de pedido!');
+                        response.responseText = response.responseText.replace('[INICIAR_PEDIDO]', '').trim();
+
+                        // Iniciar fluxo de pedido
+                        context.currentFlow = 'ORDER';
+                        context.flowStep = 'ADDRESS';
+
+                        // Opcional: Adicionar mensagem extra instruindo sobre o endereço?
+                        // O próprio fluxo ORDER espera o endereço na próxima mensagem, 
+                        // mas talvez devêssemos já perguntar? 
+                        // A próxima interação do usuário entrará no processOrderFlow.
+                        // Mas a resposta ATUAL é apenas o texto da IA.
+                        // Vamos adicionar uma pergunta ao final se a IA não tiver feito.
+                        const hasAddressRequest = response.responseText.toLowerCase().includes('endereço') ||
+                            response.responseText.toLowerCase().includes('onde entrega');
+
+                        if (!hasAddressRequest) {
+                            response.responseText += '\n\nPara começarmos, você prefere *Entrega* ou vai *Retirar* aqui na loja?';
+                        }
+                    }
                 }
             }
 
             // 8. Se nem regra nem IA funcionaram, usar fallback
             if (!response || !response.success) {
                 context.confusionCount++;
+
+                const errorMessage = response?.responseText || 'IA indisponível no momento';
 
                 // Verificar se deve transferir para humano
                 if (config.auto_handoff_on_confusion &&
@@ -149,7 +292,7 @@ export class ZeAssistantService {
 
                     return {
                         success: true,
-                        responseText: config.fallback_message,
+                        responseText: `🤖 *Zé Informa:* Notei que estamos com dificuldades. Transferi você para um humano. (Motivo: ${errorMessage.substring(0, 50)})`,
                         responseType: 'HUMAN',
                         shouldHandoff: true,
                         handoffReason: 'Limite de confusões atingido'
@@ -158,7 +301,7 @@ export class ZeAssistantService {
 
                 response = {
                     success: true,
-                    responseText: 'Desculpe, não entendi. Pode reformular?',
+                    responseText: `🤖 *Zé Informa:* No momento estou com uma instabilidade técnica (${errorMessage.substring(0, 100) || 'Sem resposta da IA'}). Pode tentar novamente em alguns segundos ou chamar um humano?`,
                     responseType: 'HYBRID',
                     shouldHandoff: false
                 };
@@ -212,12 +355,44 @@ export class ZeAssistantService {
     ): Promise<ProcessMessageResponse | null> {
         const step = context.flowStep;
 
+        // VALIDAÇÃO DE INTENÇÃO: Se o usuário mudar de assunto drasticamente, pausamos o fluxo
+        const intent = await zeAssistantAIService.extractIntent(messageText);
+        // REMOVIDO 'INFO' da lista de distractors para não travar em frases de retirada/informação do pedido
+        const distractors = ['MENU', 'GREETING', 'HUMAN'];
+        if (intent && distractors.includes(intent) && step !== 'CONFIRMATION') {
+            console.log(`[ZeAssistant] 🔀 Usuário mudou de assunto (Intenção: ${intent}). Pausando fluxo de pedido.`);
+            context.currentFlow = null;
+            context.flowStep = null;
+            return null; // Deixa a IA tratar a nova intenção
+        }
+
         if (step === 'ADDRESS') {
+            const lowerText = messageText.toLowerCase();
+            const isPickup = lowerText.includes('retirar') ||
+                lowerText.includes('buscar') ||
+                lowerText.includes('balcão') ||
+                lowerText.includes('retira') ||
+                lowerText.includes('vou aí') ||
+                lowerText.includes('vou ai') ||
+                lowerText.includes('pegar');
+
+            if (isPickup) {
+                context.variables.deliveryAddress = 'RETIRADA NO LOCAL';
+                context.flowStep = 'ITEMS';
+                return {
+                    success: true,
+                    responseText: 'Perfeito! Você vai retirar aqui com a gente. 🏃💨\n\nQual seria o seu pedido? (Pode listar os itens e quantidades, ou se já falou, manda um "OK")',
+                    responseType: 'RULE',
+                    shouldHandoff: false
+                };
+            }
+
+            // Se não for retirada, assumimos que é endereço de entrega
             context.variables.deliveryAddress = messageText;
             context.flowStep = 'ITEMS';
             return {
                 success: true,
-                responseText: 'Entendido! Agora, o que você gostaria de pedir? (Pode listar os itens e quantidades)',
+                responseText: 'Entendido! Anotei o endereço de entrega. ✅\n\nQual seria o seu pedido? (Pode listar os itens e quantidades, ou se já falou, manda um "OK")',
                 responseType: 'RULE',
                 shouldHandoff: false
             };
@@ -322,21 +497,7 @@ export class ZeAssistantService {
         };
     }
 
-    /**
-     * Busca configuração do assistente para a loja
-     */
-    private async getConfig(storeId: string): Promise<ZeAssistantConfig | null> {
-        const supabase = supabaseAdmin;
-        if (!supabase) return null;
 
-        const { data } = await supabase
-            .from('ze_assistant_config')
-            .select('*')
-            .eq('store_id', storeId)
-            .single();
-
-        return data;
-    }
 
     /**
      * Busca ou cria conversa
@@ -392,32 +553,58 @@ export class ZeAssistantService {
      * Busca contexto da loja para IA
      */
     private async getStoreContext(storeId: string): Promise<any> {
-        const supabase = supabaseAdmin;
-        if (!supabase) return null;
+        const supabase = supabaseAdmin; // Para perfis costuma funcionar
+        const anonSb = cloud.getClient(); // Para produtos (fix erro 42501)
+        if (!supabase || !anonSb) return null;
 
         // Buscar dados da loja
         const { data: store } = await supabase
             .from('user_profiles')
-            .select('store_name, phone_number, opening_hours, store_address_street, store_address_number, store_address_city, store_address_state')
+            .select('store_name, phone_number, opening_hours, is_currently_open, is_open, store_address_street, store_address_number, store_address_city, store_address_state')
             .eq('id', storeId)
             .single();
 
-        // Buscar produtos ativos
-        const { data: products } = await supabase
-            .from('products')
-            .select('id, name, price, description')
+        // Buscar config do assistente (novo)
+        const { data: assistantConfig } = await supabase
+            .from('ze_assistant_config')
+            .select('assistant_name, instruction_closed_store')
             .eq('store_id', storeId)
-            .eq('is_active', true)
+            .single();
+
+        // Buscar produtos ativos (Usando Anon Key para evitar erro de permissão 42501 do service_role)
+        const { data: products, error: productsError } = await anonSb
+            .from('products')
+            .select('id, name, price, description, store_id, is_active')
+            .eq('store_id', storeId)
             .limit(100);
+
+        if (productsError) {
+            console.error('[ZeAssistant] ERRO AO BUSCAR PRODUTOS:', productsError);
+        }
+
+        const count = products?.length || 0;
+        console.log(`[ZeAssistant] DEBUG NUCLEAR: ${count} produtos encontrados no TOTAL.`);
+
+        if (count > 0) {
+            console.log(`[ZeAssistant] Exemplos Globais: ${products?.slice(0, 5).map(p => `${p.name} (Store: ${p.store_id})`).join(', ')}`);
+            const matched = products?.filter(p => p.store_id === storeId);
+            console.log(`[ZeAssistant] Produtos desta loja (${storeId}): ${matched?.length || 0}`);
+        } else {
+            console.warn('[ZeAssistant] NENHUM PRODUTO ENCONTRADO NO BANCO (QUERY ATUAL).');
+        }
+
+        const isManualOpen = store?.is_open !== false && store?.is_currently_open !== false;
+        const activeProducts = products?.filter(p => p.is_active) || [];
 
         return {
             storeName: store?.store_name || 'Loja',
+            assistantName: assistantConfig?.assistant_name || 'Zé',
             phone: store?.phone_number,
             openingHours: store?.opening_hours,
-            address: store?.store_address_street
-                ? `${store.store_address_street}, ${store.store_address_number} - ${store.store_address_city}/${store.store_address_state}`
-                : null,
-            products: products || []
+            isCurrentlyOpen: isManualOpen, // Consolidado: se qualquer um for false, está fechado
+            address: `${store?.store_address_street || ''}, ${store?.store_address_number || ''} - ${store?.store_address_city || ''}`,
+            products: activeProducts,
+            closedInstruction: assistantConfig?.instruction_closed_store
         };
     }
 
@@ -483,6 +670,31 @@ export class ZeAssistantService {
                 processing_time_ms: processingTimeMs,
                 was_successful: true
             });
+    }
+
+    /**
+     * Busca histórico recente da conversa para enviar à IA
+     */
+    private async getConversationHistory(conversationId: string, limit: number = 10): Promise<Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>> {
+        const supabase = supabaseAdmin;
+        if (!supabase) return [];
+
+        const { data, error } = await supabase
+            .from('ze_assistant_messages')
+            .select('message_text, response_text')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (error || !data) return [];
+
+        // Inverter para ordem cronológica (Gemini espera do mais antigo para o mais novo)
+        const history = data.reverse().flatMap(msg => [
+            { role: 'user' as const, parts: [{ text: msg.message_text }] },
+            { role: 'model' as const, parts: [{ text: msg.response_text }] }
+        ]);
+
+        return history;
     }
 
     /**
@@ -558,40 +770,64 @@ export class ZeAssistantService {
     /**
      * Busca API Key do Gemini para a loja
      */
+    /**
+     * Busca API Key do Gemini com estratégia robusta de Fallback
+     */
     private async getGeminiApiKey(storeId: string): Promise<string | null> {
         const supabase = supabaseAdmin;
         if (!supabase) return null;
 
         try {
-            // Tentar buscar de shop_settings (onde AdminAIConfig salva)
-            // A tabela shop_settings deve ter o campo google_gemini_api_key
-            const { data: settings } = await supabase
-                .from('shop_settings')
-                .select('google_gemini_api_key')
-                .eq('store_id', storeId)
-                .single();
+            // Nomes aceitos para a chave (legado e novo)
+            const possibleNames = ['google_gemini', 'google_gemini_api_key'];
 
-            if (settings && settings.google_gemini_api_key) {
-                return settings.google_gemini_api_key;
-            }
-
-            // Fallback: Tentar tabela api_keys (keys globais ou de sistema)
-            // Assumindo que se não está na config da loja, pode estar numa config global
-            // ou talvez salva com nome 'google_gemini'
-            const { data: apiKey } = await supabase
+            // 1. Tentar Buscar da Loja (Prioridade)
+            const { data: storeKeys } = await supabase
                 .from('api_keys')
-                .select('encrypted_key') // O cloud.ts usa esse campo, mas AdminAIConfig salva direto?
-                .eq('name', 'google_gemini')
-                .eq('user_id', storeId) // Se api_keys for por usuário/loja
-                .single();
+                .select('key_token, encrypted_key')
+                .in('name', possibleNames)
+                .eq('user_id', storeId)
+                .limit(1);
 
-            if (apiKey?.encrypted_key) {
-                return apiKey.encrypted_key;
+            if (storeKeys && storeKeys.length > 0) {
+                const k = storeKeys[0];
+                const key = k.key_token || k.encrypted_key;
+                if (key) {
+                    console.log(`[ZeAssistant] 🔑 Usando API Key da LOJA (${storeId})`);
+                    return key;
+                }
             }
+
+            // 2. Fallback: Buscar Chave Global (Sistema/Admin)
+            // ...
+            const { data: globalKeys } = await supabase
+                .from('api_keys')
+                .select('key_token, encrypted_key')
+                .in('name', possibleNames)
+                .is('user_id', null) // Tenta pegar a global (sem user_id)
+                .limit(1);
+
+            if (globalKeys && globalKeys.length > 0) {
+                const k = globalKeys[0];
+                const key = k.key_token || k.encrypted_key;
+                if (key) {
+                    console.log('[ZeAssistant] 🔑 Usando API Key GLOBAL (Fallback)');
+                    return key;
+                }
+            }
+
+            // 3. Fallback Terminal: Variável de Ambiente
+            const envKey = process.env.GEMINI_API_KEY;
+            if (envKey) {
+                console.log('[ZeAssistant] 🔑 Usando API Key do ambiente (ENV)');
+                return envKey;
+            }
+
+            console.warn('[ZeAssistant] ⚠️ Nenhuma API Key do Gemini encontrada!');
 
             return null;
         } catch (error) {
-            console.error('Erro ao buscar Gemini API Key:', error);
+            // Silencioso para não poluir logs, o erro principal será tratado pelo chamador
             return null;
         }
     }
@@ -603,20 +839,30 @@ export class ZeAssistantService {
         if (!openingHours) return true; // Se não tem horário, assume aberto
 
         try {
+            // Ajustar para Fuso Horário Brasil (UTC-3)
+            // Agora usa toLocaleString para garantir o horário correto independentemente do servidor
             const now = new Date();
-            const days = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-            const currentDay = days[now.getDay()];
-            const currentTime = now.getHours() * 100 + now.getMinutes();
+            const brTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 
-            // Exemplo esperado: "segunda: 08:00-18:00, terça: 08:00-18:00..."
+            const days = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+            const currentDay = days[brTime.getDay()];
+            const currentTime = brTime.getHours() * 100 + brTime.getMinutes();
+
+            console.log(`[ZeAssistant] 🕒 Verificando Horário: Hoje=${currentDay}, Agora=${currentTime}, Config=${openingHours}`);
+
             const dayConfigs = openingHours.toLowerCase().split(',').map(s => s.trim());
             const todayConfig = dayConfigs.find(c => c.startsWith(currentDay));
 
-            if (!todayConfig) return true;
+            if (!todayConfig) {
+                console.log(`[ZeAssistant] 🕒 Sem config para hoje (${currentDay}), assumindo ABERTO.`);
+                return true;
+            }
 
             const timeRange = todayConfig.split(':')[1]?.trim();
             if (!timeRange || timeRange === 'fechado' || timeRange === '24h') {
-                return timeRange !== 'fechado';
+                const isOpenStatus = timeRange !== 'fechado';
+                console.log(`[ZeAssistant] 🕒 Status Especial: ${timeRange} -> Aberto=${isOpenStatus}`);
+                return isOpenStatus;
             }
 
             const [start, end] = timeRange.split('-').map(t => {
@@ -624,19 +870,14 @@ export class ZeAssistantService {
                 return h * 100 + m;
             });
 
-            // Lógica simples (não trata horários que passam da meia-noite)
-            if (end < start) {
-                // Horário atravessa meia-noite (ex: 18:00 - 02:00)
-                return currentTime >= start || currentTime <= end;
-            }
-
-            return currentTime >= start && currentTime <= end;
-        } catch (e) {
-            console.error('[ZeAssistant] Erro ao validar horário:', e);
+            const isInRange = currentTime >= start && currentTime <= end;
+            console.log(`[ZeAssistant] 🕒 Faixa Horária: ${start} até ${end} -> Dentro=${isInRange}`);
+            return isInRange;
+        } catch (error) {
+            console.error('[ZeAssistant] Erro ao validar horário:', error);
             return true;
         }
     }
 }
 
 export const zeAssistantService = new ZeAssistantService();
-

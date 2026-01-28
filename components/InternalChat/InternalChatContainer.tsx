@@ -60,12 +60,15 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   const [showContactDetails, setShowContactDetails] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState<'block' | 'report' | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false); // New State
+  const [showDeleteMessageConfirm, setShowDeleteMessageConfirm] = useState<string | null>(null); // New State
   const [showQrModal, setShowQrModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAssistantModal, setShowAssistantModal] = useState(false);
   const [showBroadcastModal, setShowBroadcastModal] = useState(false); // Novo state
   const [isAssistantActive, setIsAssistantActive] = useState(true);
   const [pixKey, setPixKey] = useState<string>("");
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const scrollFilters = (direction: 'left' | 'right') => {
@@ -104,6 +107,14 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Auto-clear Toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -166,9 +177,13 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   const fetchMessages = useCallback(async (conversationId: string) => {
     setIsLoadingMessages(true);
     try {
-      const response = await axios.get<ChatMessage[]>(`${API_BASE_URL}/messages/${conversationId}?storeId=${storeId}`);
-      setMessages(response.data);
-      await chatOfflineService.saveMessages(storeId, conversationId, response.data);
+      const response = await axios.get<any[]>(`${API_BASE_URL}/messages/${conversationId}?storeId=${storeId}`);
+      const normalizedMessages = response.data.map(msg => ({
+        ...msg,
+        is_from_me: msg.from_me ?? msg.is_from_me
+      }));
+      setMessages(normalizedMessages);
+      await chatOfflineService.saveMessages(storeId, conversationId, normalizedMessages);
     } catch (error) {
       console.error('Erro ao buscar mensagens:', error);
       // Fallback offline
@@ -318,6 +333,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     let sorted = [...conversations];
 
     // Aplicar Filtro de Busca primeiro
+    // 1. Filtrar por busca (se houver)
     if (searchQuery.trim()) {
       sorted = sorted.filter(c =>
         (c.contact_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -325,33 +341,48 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       );
     }
 
+    // 2. Aplicar Filtro de Categoria (Abas)
+    if (sortCriteria === 'blocked') {
+      sorted = sorted.filter(c => c.is_blocked === true);
+    } else {
+      // Fora da aba de bloqueados, nunca mostrar contatos bloqueados
+      sorted = sorted.filter(c => c.is_blocked !== true);
+
+      if (sortCriteria === 'unread') {
+        sorted = sorted.filter(c => (c.unread_count || 0) > 0);
+      } else if (sortCriteria === 'inprogress') {
+        sorted = sorted.filter(c => c.status === 'open');
+      } else if (sortCriteria === 'closed') {
+        sorted = sorted.filter(c => c.status === 'closed');
+      } else if (sortCriteria === 'priority') {
+        sorted = sorted.filter(c => c.priority === 'high' || c.priority === 'critical');
+      }
+    }
+
+    // 3. Aplicar Ordenação
+    // Se for manual, usamos o mapa de ordens. Se não, usamos o timestamp mais recente.
+    // Algumas abas específicas podem ter sua própria ordenação (opcional)
     if (sortCriteria === 'manual') {
       sorted.sort((a, b) => {
         const posA = manualOrder[a.conversation_id] ?? 999999;
         const posB = manualOrder[b.conversation_id] ?? 999999;
         return posA - posB;
       });
-    } else if (sortCriteria === 'recent') {
-      sorted.sort((a, b) => {
-        const timeA = new Date(a.last_message_timestamp || 0).getTime();
-        const timeB = new Date(b.last_message_timestamp || 0).getTime();
-        return timeB - timeA;
-      });
     } else if (sortCriteria === 'unread') {
-      sorted = sorted.filter(c => (c.unread_count || 0) > 0);
       sorted.sort((a, b) => (b.unread_count || 0) - (a.unread_count || 0));
-    } else if (sortCriteria === 'inprogress') {
-      sorted = sorted.filter(c => c.status === 'open');
-    } else if (sortCriteria === 'closed') {
-      sorted = sorted.filter(c => c.status === 'closed');
     } else if (sortCriteria === 'priority') {
       const priorityScore = { critical: 4, high: 3, normal: 2, low: 1, undefined: 0 };
-      // Filtrar apenas as marcadas como importantes (high ou critical)
-      sorted = sorted.filter(c => c.priority === 'high' || c.priority === 'critical');
       sorted.sort((a, b) => {
         const scoreA = priorityScore[a.priority || 'undefined'] || 0;
         const scoreB = priorityScore[b.priority || 'undefined'] || 0;
         return scoreB - scoreA;
+      });
+    } else {
+      // Ordenação padrão por tempo
+      sorted.sort((a, b) => {
+        const timeA = new Date(a.last_message_timestamp || 0).getTime();
+        const timeB = new Date(b.last_message_timestamp || 0).getTime();
+        return timeB - timeA;
       });
     }
 
@@ -376,12 +407,15 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     setIsAssistantActive(newState);
 
     try {
-      await axios.patch(`${API_BASE_URL.replace('/chat', '/ze-assistant')}/conversations/${storeId}/${encodeURIComponent(selectedConversation.conversation_id)}/toggle-assistant`, {
+      // A rota é: /api/ze-assistant/conversations/:storeId/:conversationId/toggle-assistant
+      // O encodeURIComponent é importante para IDs que contêm @ ou :
+      await axios.patch(`${getApiBaseUrl().replace('/chat', '/ze-assistant')}/conversations/${storeId}/${encodeURIComponent(selectedConversation.conversation_id)}/toggle-assistant`, {
         active: newState
       });
+      setToast({ message: `Zé Assistente ${newState ? 'ativado' : 'desativado'}`, type: 'info' });
     } catch (error) {
       console.error('Erro ao alternar assistente:', error);
-      alert('Erro ao alternar estado do assistente.');
+      setToast({ message: 'Erro ao alternar estado do assistente.', type: 'error' });
       setIsAssistantActive(!newState); // Revert
     }
   };
@@ -416,7 +450,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       await axios.patch(`${API_BASE_URL}/conversations/${encodeURIComponent(conversationId)}/priority`, { priority, storeId });
     } catch (error) {
       console.error('Erro ao atualizar prioridade:', error);
-      alert('Erro ao salvar prioridade.');
+      setToast({ message: 'Erro ao salvar prioridade.', type: 'error' });
     }
   };
 
@@ -450,6 +484,72 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       msg.content?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [messages, searchQuery]);
+
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    if (!messageId || !newContent) return;
+    try {
+      // Optimistic update
+      setMessages(prev => prev.map(m => m.message_id === messageId ? { ...m, content: newContent, is_edited: true } : m));
+
+      await axios.patch(`${API_BASE_URL}/messages/${messageId}`, {
+        content: newContent,
+        storeId
+      });
+    } catch (e: any) {
+      console.error('Erro ao editar mensagem:', e);
+      alert('Erro ao editar mensagem: ' + (e.response?.data?.message || e.message));
+      fetchMessages(selectedConversation?.conversation_id || ''); // Revert on error
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    setShowDeleteMessageConfirm(messageId);
+  };
+
+  const confirmDeleteMessage = async () => {
+    if (!showDeleteMessageConfirm) return;
+    const messageId = showDeleteMessageConfirm;
+
+    try {
+      // Optimistic update
+      setMessages(prev => prev.filter(m => m.message_id !== messageId));
+
+      await axios.delete(`${API_BASE_URL}/messages/${messageId}?storeId=${storeId}`);
+      setShowDeleteMessageConfirm(null);
+    } catch (e: any) {
+      console.error('Erro ao apagar mensagem:', e);
+      alert('Erro ao apagar mensagem.');
+      fetchMessages(selectedConversation?.conversation_id || ''); // Revert
+    }
+  };
+
+  const handleFinalizeConversation = async () => {
+    setShowFinalizeConfirm(true);
+  };
+
+  const confirmFinalizeConversation = async () => {
+    if (!selectedConversation) return;
+
+    try {
+      // Optimistic
+      setConversations(prev => prev.map(c =>
+        c.conversation_id === selectedConversation.conversation_id ? { ...c, status: 'closed' } : c
+      ));
+      setSelectedConversation(prev => prev ? { ...prev, status: 'closed' } : null);
+      setShowFinalizeConfirm(false);
+
+      // Fix URL: Using API_BASE_URL directly. If API_BASE_URL includes /api/chat, we are good.
+      // If error 404 persisted, check if double encoded or bad path.
+      // We decoded encodingURIComponent because axios handles params well, but for path params we need it.
+      await axios.patch(`${API_BASE_URL}/conversations/${encodeURIComponent(selectedConversation.conversation_id)}/status`, {
+        status: 'closed',
+        storeId
+      });
+    } catch (e: any) {
+      console.error('Erro ao finalizar conversa:', e);
+      alert('Erro ao finalizar conversa: ' + (e.response?.data?.message || e.message));
+    }
+  };
 
   const handleSendMessage = async (text: string) => {
     if (!selectedConversation) return;
@@ -527,7 +627,34 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
 
   const handleContactAction = async (action: 'block' | 'report') => {
     if (!selectedConversation) return;
-    alert(`Ação "${action === 'block' ? 'Bloquear' : 'Denunciar'}" realizada para: ${selectedConversation.conversation_id} (Simulado)`);
+
+    // Se for denúncia, manter simulação por enquanto ou implementar depois
+    if (action === 'report') {
+      alert(`Ação "Denunciar" realizada para: ${selectedConversation.conversation_id} (Simulado)`);
+      return;
+    }
+
+    try {
+      const contactName = selectedConversation.contact_name || selectedConversation.phone_number || selectedConversation.conversation_id;
+      const displayName = contactName === 'Visitante' ? `Visitante (${selectedConversation.conversation_id.substring(0, 8)})` : contactName;
+
+      await axios.post(`${API_BASE_URL}/contacts/block`, {
+        conversationId: selectedConversation.conversation_id,
+        action: 'block',
+        storeId
+      });
+
+      // Atualizar localmente
+      setConversations(prev => prev.map(c =>
+        c.conversation_id === selectedConversation.conversation_id ? { ...c, is_blocked: true } : c
+      ));
+
+      setToast({ message: `Contato ${displayName} bloqueado com sucesso.`, type: 'success' });
+      setSelectedConversation(null);
+    } catch (error: any) {
+      console.error('Erro ao bloquear contato:', error);
+      setToast({ message: 'Erro ao bloquear contato. Verifique a conexão.', type: 'error' });
+    }
     setShowBlockConfirm(null);
   };
 
@@ -711,6 +838,12 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
         // Verificar se a mensagem já existe
         const exists = messages.some(m => m.message_id === (lastMessage as any).messageId);
         if (!exists) {
+          // Normalizar is_from_me se vier do WebSocket como fromMe ou from_me
+          const normalizedNewMsg = {
+            ...(lastMessage as any),
+            is_from_me: (lastMessage as any).fromMe ?? (lastMessage as any).from_me ?? (lastMessage as any).is_from_me
+          };
+
           // Se for uma mensagem que acabamos de enviar (ja adicionada otimisticamente), podemos ignorar ou atualizar status
           // Por simplicidade, vamos dar fetchMessages
           fetchMessages(selectedConversation.conversation_id);
@@ -895,7 +1028,8 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                     { id: 'manual', label: 'Manual' },
                     { id: 'inprogress', label: 'Em aberto' },
                     { id: 'priority', label: 'Prioridade' },
-                    { id: 'closed', label: 'Encerradas' }
+                    { id: 'closed', label: 'Encerradas' },
+                    { id: 'blocked', label: 'Bloqueados' }
                   ].map((crit) => (
                     <button
                       key={crit.id}
@@ -932,7 +1066,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
               selectedId={selectedConversation?.conversation_id}
               onSelectConversation={handleSelectConversation}
               profilePictures={profilePictures}
-              isManualOrder={sortCriteria === 'manual'}
+              isManualOrder={true}
               onReorder={handleReorder}
               onUpdatePriority={handleUpdatePriority}
               onDeleteConversation={handleDeleteConversation}
@@ -1004,6 +1138,14 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                     )}
                   </button>
 
+                  <button
+                    onClick={handleFinalizeConversation}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    title="Finalizar Conversa"
+                  >
+                    <CheckCheck size={14} /> FINALIZAR
+                  </button>
+
                   <button onClick={() => setShowContactDetails(true)} className="p-2 hover:bg-gray-200 rounded-full" title="Ver Detalhes"><Users size={20} /></button>
                   <button onClick={() => setShowBlockConfirm('block')} className="p-2 hover:bg-gray-200 rounded-full" title="Bloquear Contato"><AlertTriangle size={20} /></button>
                 </div>
@@ -1019,7 +1161,11 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                 }}
               >
                 <div className="absolute inset-0 bg-[#E5DDD5] opacity-90 -z-10"></div>
-                <MessageArea messages={filteredMessages} />
+                <MessageArea
+                  messages={filteredMessages}
+                  onDeleteMessage={handleDeleteMessage}
+                  onEditMessage={handleEditMessage}
+                />
               </div>
 
               {/* Input Area */}
@@ -1210,6 +1356,58 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
         </div>
       )}
 
+      {/* Modal: Finalizar Conversa */}
+      {showFinalizeConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
+            <h3 className="text-lg font-bold mb-2">Finalizar Conversa?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Esta conversa será movida para a aba "Encerradas".
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowFinalizeConfirm(false)}
+                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmFinalizeConversation}
+                className="px-4 py-2 bg-brand-600 text-white rounded hover:bg-brand-700 font-medium"
+              >
+                Finalizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Apagar Mensagem */}
+      {showDeleteMessageConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
+            <h3 className="text-lg font-bold mb-2">Apagar Mensagem?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Esta mensagem será apagada para todos os participantes.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteMessageConfirm(null)}
+                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDeleteMessage}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium"
+              >
+                Apagar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Zé Assistente */}
       {showAssistantModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-300">
@@ -1257,6 +1455,20 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
           attendantId={attendantId}
           onClose={() => setShowBroadcastModal(false)}
         />
+      )}
+
+      {/* Notificação Toast */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 ${toast.type === 'success' ? 'bg-[#00A884] text-white' :
+          toast.type === 'error' ? 'bg-red-500 text-white' :
+            'bg-[#111B21] text-white'
+          }`}>
+          {toast.type === 'success' ? <Check size={18} /> : toast.type === 'error' ? <AlertTriangle size={18} /> : <MessageSquare size={18} />}
+          <span className="text-sm font-medium">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 hover:opacity-70">
+            <X size={16} />
+          </button>
+        </div>
       )}
     </div>
   );

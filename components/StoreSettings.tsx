@@ -467,7 +467,12 @@ export const StoreSettings: React.FC = () => {
 
                             <label className="absolute bottom-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full cursor-pointer transition-all backdrop-blur-sm">
                                 {uploadingAsset === 'cover' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
-                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAssetUpload(e, 'cover')} />
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept="image/png, image/jpeg, image/jpg, image/webp, image/gif, image/bmp, image/tiff"
+                                    onChange={(e) => handleAssetUpload(e, 'cover')}
+                                />
                             </label>
                         </div>
 
@@ -483,7 +488,12 @@ export const StoreSettings: React.FC = () => {
                                 </div>
                                 <label className="absolute bottom-0 right-0 bg-brand-600 hover:bg-brand-700 text-white p-2 rounded-full cursor-pointer shadow-md transition-all border-2 border-white dark:border-gray-800">
                                     {uploadingAsset === 'logo' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAssetUpload(e, 'logo')} />
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/png, image/jpeg, image/jpg, image/webp, image/gif, image/bmp, image/tiff"
+                                        onChange={(e) => handleAssetUpload(e, 'logo')}
+                                    />
                                 </label>
                             </div>
                         </div>
@@ -706,7 +716,8 @@ export const StoreSettings: React.FC = () => {
                                                 setForm(prev => ({
                                                     ...prev,
                                                     receive_orders_via_platform: !prev.receive_orders_via_platform,
-                                                    receive_orders_via_chat: prev.receive_orders_via_platform ? prev.receive_orders_via_chat : false
+                                                    // Se ativar plataforma, desativa WhatsApp
+                                                    receive_orders_via_chat: !prev.receive_orders_via_platform ? false : prev.receive_orders_via_chat
                                                 }));
                                             }}
                                         />
@@ -715,7 +726,7 @@ export const StoreSettings: React.FC = () => {
                                         <div>
                                             <h4 className="font-bold text-gray-900 dark:text-white">Receber via WhatsApp</h4>
                                             <p className="text-xs text-gray-500 leading-relaxed">
-                                                Atendimento manual. O cliente envia o carrinho para o seu WhatsApp. <strong>Nota:</strong> Desativa o rastreamento automático e o PIX da plataforma.
+                                                Atendimento manual. O cliente envia o carrinho para o seu WhatsApp. <strong>Nota:</strong> Se ativo, pedidos em dinheiro/cartão irão para o WhatsApp. Pedidos PIX continuam na plataforma.
                                             </p>
                                         </div>
                                         <Switch
@@ -724,7 +735,8 @@ export const StoreSettings: React.FC = () => {
                                                 setForm(prev => ({
                                                     ...prev,
                                                     receive_orders_via_chat: !prev.receive_orders_via_chat,
-                                                    receive_orders_via_platform: prev.receive_orders_via_chat ? prev.receive_orders_via_platform : false
+                                                    // Se ativar WhatsApp, desativa plataforma
+                                                    receive_orders_via_platform: !prev.receive_orders_via_chat ? false : prev.receive_orders_via_platform
                                                 }));
                                             }}
                                         />

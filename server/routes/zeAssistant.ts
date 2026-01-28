@@ -16,8 +16,8 @@ router.patch('/config/:storeId', zeAssistantController.updateConfig);
 
 // Regras
 router.get('/rules/:storeId', zeAssistantController.getRules);
-router.post('/rules/:storeId', zeAssistantController.createRule);
-router.patch('/rules/:ruleId', zeAssistantController.updateRule);
+router.post('/rules/:storeId', zeAssistantController.upsertRule);
+router.patch('/rules/:ruleId', zeAssistantController.upsertRule);
 router.delete('/rules/:ruleId', zeAssistantController.deleteRule);
 
 // Base de Conhecimento

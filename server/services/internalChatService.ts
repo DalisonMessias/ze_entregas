@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { supabaseAdmin } from './supabaseClient.js';
+import { zeAssistantService } from './zeAssistantService.js';
 
 type MessageType = 'chat' | 'image' | 'audio' | 'video' | 'document';
 
@@ -118,7 +119,8 @@ class InternalChatService extends EventEmitter {
                 last_message_content: content.substring(0, 500),
                 last_message_timestamp: timestamp,
                 updated_at: timestamp,
-                customer_type: customerType
+                customer_type: customerType,
+                contact_name: !fromMe && senderName !== 'Visitante' ? senderName : undefined
             }, { onConflict: 'store_id,conversation_id' });
 
             if (convError) {
@@ -145,6 +147,61 @@ class InternalChatService extends EventEmitter {
 
             this.emit('messages.upsert', { storeId, msg: msgPayload });
 
+
+
+            // 4. Acionar Zé Assistente (Se for mensagem de visitante e texto)
+            if (!fromMe && type === 'chat') {
+                console.log(`[InternalChat] 🤖 Acionando Zé Assistente para conversa ${conversationId} (Loja ${storeId})`);
+
+                // Enviar presença "digitando..."
+                this.sendPresence(storeId, conversationId, 'composing');
+
+                // Não await para não bloquear a resposta da API
+                zeAssistantService.processMessage({
+                    storeId,
+                    conversationId,
+                    customerPhone: conversationId,
+                    customerName: senderName || 'Visitante',
+                    messageText: content
+                })
+                    .then(async response => {
+                        console.log(`[InternalChat] ✅ Zé Assistente processou (DEBUG):`, {
+                            success: response.success,
+                            hasText: !!response.responseText,
+                            textPreview: response.responseText ? response.responseText.substring(0, 20) : 'N/A'
+                        });
+
+                        // Parar "digitando..."
+                        this.sendPresence(storeId, conversationId, 'paused');
+
+                        // Se houver resposta para enviar, envia de volta como mensagem da loja
+                        if (response.success && response.responseText) {
+                            console.log('[InternalChat] 🚀 Tentando enviar resposta da IA para o chat...');
+                            try {
+                                await this.sendMessage({
+                                    storeId,
+                                    conversationId,
+                                    content: response.responseText,
+                                    senderId: storeId, // Zé fala em nome da loja
+                                    senderName: 'Zé',
+                                    fromMe: true,
+                                    type: 'chat'
+                                });
+                                console.log('[InternalChat] 🏁 Resposta da IA enviada para sendMessage com sucesso.');
+                            } catch (sendErr) {
+                                console.error('[InternalChat] ❌ Falha ao invocar this.sendMessage:', sendErr);
+                            }
+                        } else {
+                            console.warn('[InternalChat] ⚠️ Resposta da IA vazia ou sem sucesso, nada enviado.');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('[InternalChat] ❌ ERRO CRÍTICO ao processar mensagem com IA:', err);
+                    });
+            } else {
+                console.log(`[InternalChat] ⏭️ Ignorando Zé Assistente: fromMe=${fromMe}, type=${type}`);
+            }
+
             return { success: true, messageId };
         } catch (error: any) {
             console.error('[InternalChat] Erro ao enviar mensagem:', {
@@ -157,6 +214,20 @@ class InternalChatService extends EventEmitter {
             });
             return { success: false, error };
         }
+    }
+
+    /**
+     * Envia atualização de presença (composing/paused)
+     */
+    sendPresence(storeId: string, conversationId: string, presence: 'composing' | 'paused' | 'recording') {
+        // Emite evento para o WebSocket transmitir
+        this.emit('presence.update', {
+            storeId,
+            presence: {
+                id: conversationId,
+                presence
+            }
+        });
     }
 
     /**

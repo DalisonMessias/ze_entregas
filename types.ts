@@ -405,6 +405,7 @@ export interface Order {
     delivery_mode?: 'OWN' | 'PLATFORM' | 'ASSOCIATE';
     delivery_location_reference?: string;
     driver_id?: string;
+    payment_status?: string;
 
     store?: any;
     partner?: any;
@@ -597,6 +598,7 @@ export interface PartnerProfile {
     phone_number?: string;
     is_active: boolean;
     is_available?: boolean;
+    is_currently_open?: boolean; // Manual Toggle
     city?: string;
     verification_status: 'NOT_SUBMITTED' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
     vehicle_type: VehicleType;
@@ -638,6 +640,7 @@ export interface PartnerProfile {
     preparation_time_max?: number;
     super_store_expiration?: string;
     pix_key?: string;
+    pix_key_type?: string;
     city_slug?: string;
     store_slug?: string;
     description?: string;

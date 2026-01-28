@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import type { ProcessMessageResponse, ConversationContext } from '../../types/zeAssistant.js';
 
 /**
@@ -6,7 +5,7 @@ import type { ProcessMessageResponse, ConversationContext } from '../../types/ze
  * Processa mensagens usando inteligência artificial do Google Gemini
  */
 export class ZeAssistantAIService {
-    private modelName: string = 'gemini-1.5-flash';
+
 
     constructor() {
         console.log('🤖 ZeAssistantAIService inicializado');
@@ -19,7 +18,8 @@ export class ZeAssistantAIService {
         messageText: string,
         storeContext: any,
         conversationContext: ConversationContext,
-        apiKey: string
+        apiKey: string,
+        history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
     ): Promise<ProcessMessageResponse> {
 
         // Verificar se IA está configurada
@@ -43,8 +43,8 @@ export class ZeAssistantAIService {
             // Montar prompt do usuário
             const userPrompt = this.buildUserPrompt(messageText, conversationContext);
 
-            // Chamar API do Gemini
-            const response = await this.callAIAPI(apiKey, systemPrompt, userPrompt);
+            // Chamar API do Gemini com Histórico
+            const response = await this.callAIAPI(apiKey, systemPrompt, userPrompt, history);
 
             const processingTime = Date.now() - startTime;
 
@@ -56,7 +56,7 @@ export class ZeAssistantAIService {
                 handoffReason: response.handoffReason,
                 confidenceScore: response.confidence,
                 metadata: {
-                    model: this.modelName,
+                    model: response.model || 'unknown',
                     processingTimeMs: processingTime,
                     tokens: response.tokens
                 }
@@ -66,7 +66,7 @@ export class ZeAssistantAIService {
             console.error('Erro ao processar com Gemini:', error);
             return {
                 success: false,
-                responseText: 'Desculpe, tive um problema ao processar sua mensagem.',
+                responseText: `Opa! Tive um problema técnico: ${error instanceof Error ? error.message : 'Erro na IA'}. Vou chamar alguém pra te ajudar!`,
                 responseType: 'AI',
                 shouldHandoff: true,
                 handoffReason: 'Erro na IA'
@@ -80,8 +80,9 @@ export class ZeAssistantAIService {
     private buildSystemPrompt(storeContext: any): string {
         const isClosed = storeContext.isClosed === true;
         const closedInstruction = storeContext.closedInstruction || 'No momento estamos fechados, mas posso te ajudar com dúvidas sobre o nosso cardápio!';
+        const botName = storeContext.assistantName || 'Zé';
 
-        let prompt = `Você é o Zé, o assistente virtual super inteligente e gente boa da loja "${storeContext.storeName}". 
+        let prompt = `Você é o ${botName}, o assistente virtual super inteligente e gente boa da loja "${storeContext.storeName}". 
 Sua missão é ser prestativo, engraçado e eficiente.
 
 STATUS ATUAL DA LOJA: ${isClosed ? '🔴 FECHADA' : '🟢 ABERTA'}
@@ -102,17 +103,33 @@ SEU PAPEL:
 INFORMAÇÕES DA LOJA:
 Nome: ${storeContext.storeName}
 Endereço: ${storeContext.address || 'Não informado'}
-Horário Original: ${storeContext.openingHours || 'Não informado'}
+Status Atual: ${isClosed ? '🔴 FECHADA (NÃO ACEITA PEDIDOS AGORA)' : '🟢 ABERTA'}
 Telefone: ${storeContext.phone || 'Não informado'}
 
-CATÁLOGO DE PRODUTOS:
-${this.formatProducts(storeContext.products)}
+${isClosed ? '⚠️ AVISO: A loja está fechada. Ignore o catálogo abaixo para vendas agora.' : 'CATÁLOGO DE PRODUTOS:\n' + this.formatProducts(storeContext.products)}
 
 REGRAS DE OURO:
 - NUNCA invente preços ou produtos. Se não tem no catálogo, não existe (por enquanto!).
 - Se não souber algo, use o seu charme: "Rapaz, essa aí você me pegou! Vou chamar um humano pra te salvar."
 - Se o cliente quiser pedir enquanto a loja está fechada, diga que ele pode deixar o pedido anotado ou voltar assim que abrirmos.
-- Seja o assistente que você gostaria de ter: rápido, inteligente e engraçado.`;
+- PROATIVIDADE EM RECOMENDAÇÕES: Se o cliente pedir uma indicação, sugestão ou perguntar "o que é bom?", NÃO FAÇA PERGUNTAS DE VOLTA. Recomende IMEDIATAMENTE 2 ou 3 opções variadas do cardápio (ex: o mais vendido, uma opção econômica e uma novidade) e venda o peixe! Diga por que são bons.
+- FORMATAÇÃO VISUAL: Seus outputs são lidos diretamente no WhatsApp. NUNCA envie blocos de código, JSON ou XML. Use listas com emojis e quebras de linha (ex: "🍔 *Hamburguer* - R$ 20,00"). Use negritos (*texto*) para nomes de produtos e preços.
+- PROIBIÇÃO DE JSON: NUNCA responda com chaves {}, colchetes [] ou formatos estruturados. Suas respostas devem ser 100% texto legível para humanos.
+- PARA FECHAR PEDIDO: Se o cliente demonstrar intenção de comprar (mesmo com gírias ou erros de digitação como "vpu querer", "fazer um peido", "manda ai", "quero levar" ou confirmar os itens), você DEVE responder com a tag "[INICIAR_PEDIDO]" no final da mensagem. Isso é crucial para abrir o formulário.
+- CONTEXTO: Você tem acesso às últimas mensagens da conversa. Use isso para ser inteligente e não perguntar o que já foi dito.
+- HORÁRIOS: Use os horários reais da loja fornecidos acima. NUNCA, em hipótese alguma, responda com "[HORÁRIO ORIGINAL DA LOJA]" ou algo entre colchetes. Se não houver horário, diga o que sabe ou sugira falar com um humano.
+- STATUS: O status atual da loja é ${isClosed ? '🔴 FECHADA' : '🟢 ABERTA'}. Respeite isso acima de tudo. Se estiver fechada, você não pode fechar pedidos para agora.
+- Seja o assistente que você gostaria de ter: rápido, inteligente, vendedor e engraçado.`;
+
+        // Se estiver fechado, damos uma instrução muito mais forte e curta
+        if (isClosed) {
+            prompt = `Você é o ${botName}, assistente da loja "${storeContext.storeName}". 
+⚠️ A LOJA ESTÁ FECHADA AGORA. 
+Sua ÚNICA missão é informar que a loja está fechada e não pode processar pedidos agora.
+Instrução do lojista: "${closedInstruction || 'Estamos fechados no momento.'}"
+Seja educado, mas firme de que não é possível pedir nada agora.
+SEMPRE diga que a loja está 🔴 FECHADA.`;
+        }
 
         return prompt;
     }
@@ -163,75 +180,110 @@ REGRAS DE OURO:
     /**
      * Chama API do Google Gemini
      */
-    private async callAIAPI(apiKey: string, systemPrompt: string, userPrompt: string): Promise<{
+    /**
+     * Chama API do Google Gemini via REST com Fallback de Modelos
+     */
+    private async callAIAPI(
+        apiKey: string,
+        systemPrompt: string,
+        userPrompt: string,
+        history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
+    ): Promise<{
         text: string;
         confidence: number;
         shouldHandoff: boolean;
         handoffReason?: string;
         tokens?: number;
+        model?: string;
     }> {
-        // @ts-ignore
-        const ai = new GoogleGenAI({ apiKey });
+        // Ordem de preferência de modelos (REST API v1) - Sincronizado conforme pedido
+        const modelOrder = [
+            'gemini-2.5-flash-lite',
+            'gemini-2.0-flash'
+        ];
 
-        try {
-            // @ts-ignore
-            const result = await ai.models.generateContent({
-                model: this.modelName,
-                contents: [
-                    { role: 'user', parts: [{ text: userPrompt }] }
-                ],
-                config: {
-                    systemInstruction: { parts: [{ text: systemPrompt }] },
-                    temperature: 0.7,
-                    maxOutputTokens: 150,
+        let lastError: any = null;
+
+        for (const model of modelOrder) {
+            try {
+                console.log(`[ZeAssistantAI] Tentando modelo: ${model}`);
+
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+                const bodyPayload: any = {
+                    contents: [
+                        ...history,
+                        {
+                            role: 'user',
+                            parts: [{ text: userPrompt }]
+                        }
+                    ],
+                    generationConfig: {
+                        temperature: 0.7,
+                        maxOutputTokens: 500
+                    }
+                };
+
+                if (systemPrompt) {
+                    bodyPayload.system_instruction = {
+                        parts: [{ text: systemPrompt }]
+                    };
                 }
-            });
 
-            // Tratamento de resposta da nova SDK
-            let messageContent = '';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyPayload)
+                });
 
-            // Tenta acessar .text (getter) ou .text() dependendo da versão
-            // @ts-ignore
-            if (result && result.text) {
-                // @ts-ignore
-                try { messageContent = typeof result.text === 'function' ? result.text() : result.text; } catch (e) { messageContent = result.text || ''; }
-            } else if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
-                messageContent = result.candidates[0].content.parts[0].text;
-            } else {
-                // Fallback genérico com cast any para evitar erro de 'Property response does not exist'
-                const anyResult = result as any;
-                if (anyResult.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-                    messageContent = anyResult.response.candidates[0].content.parts[0].text;
-                } else if (anyResult.response?.text) {
-                    try { messageContent = typeof anyResult.response.text === 'function' ? anyResult.response.text() : anyResult.response.text; } catch (e) { }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorJson;
+                    try { errorJson = JSON.parse(errorText); } catch { }
+                    const errorMessage = errorJson?.error?.message || errorText || response.statusText;
+
+                    console.warn(`[ZeAssistantAI] Falha no modelo ${model} (HTTP ${response.status}):`, errorMessage);
+                    throw new Error(errorMessage);
                 }
+
+                const data = await response.json();
+
+                // Extração resiliente de texto conforme cloud.ts
+                let aiText = "";
+                if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+                    aiText = data.candidates[0].content.parts[0].text || "";
+                }
+
+                if (!aiText) {
+                    throw new Error("Resposta Vazia da IA");
+                }
+
+                // Detectar se IA sugere handoff
+                const shouldHandoff = aiText.toLowerCase().includes('[transferir]') ||
+                    aiText.toLowerCase().includes('[humano]');
+
+                const tokenCount = data?.usageMetadata?.totalTokenCount || 0;
+
+                console.log(`[ZeAssistantAI] Sucesso com modelo ${model}`);
+
+                return {
+                    text: aiText.replace(/\[(transferir|humano)\]/gi, '').trim(),
+                    confidence: 0.9,
+                    shouldHandoff,
+                    handoffReason: shouldHandoff ? 'IA sugeriu transferência' : undefined,
+                    tokens: tokenCount,
+                    model: model
+                };
+
+            } catch (e: any) {
+                console.warn(`[ZeAssistantAI] Erro ao processar ${model}:`, e.message);
+                lastError = e;
+                // Continua para o próximo loop
             }
-
-            let tokenCount = 0;
-            if (result?.usageMetadata?.totalTokenCount) {
-                tokenCount = result.usageMetadata.totalTokenCount;
-            } else {
-                const anyResult = result as any;
-                if (anyResult.response?.usageMetadata?.totalTokenCount) {
-                    tokenCount = anyResult.response.usageMetadata.totalTokenCount;
-                }
-            }
-
-            // Detectar se IA sugere handoff
-            const shouldHandoff = messageContent.toLowerCase().includes('[transferir]') ||
-                messageContent.toLowerCase().includes('[humano]');
-
-            return {
-                text: messageContent.replace(/\[(transferir|humano)\]/gi, '').trim(),
-                confidence: 0.9,
-                shouldHandoff,
-                handoffReason: shouldHandoff ? 'IA sugeriu transferência' : undefined,
-                tokens: tokenCount
-            };
-        } catch (e: any) {
-            console.error('Erro na chamada do Gemini:', e);
-            throw e;
         }
+
+        console.error('[ZeAssistantAI] Todos os modelos falharam.');
+        throw lastError || new Error("Falha em todos os modelos de IA");
     }
 
     /**

@@ -50,15 +50,18 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
     const value = e.target.value;
     setText(value);
 
-    // Ajusta altura
-    const target = e.target;
-    target.style.height = 'auto';
-    target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+    // Auto-resize similar ao Menu Digital
+    e.target.style.height = 'auto';
+    const newHeight = Math.min(e.target.scrollHeight, 150);
+    e.target.style.height = newHeight + 'px';
 
     // Lógica de Respostas Rápidas
-    if (value.startsWith('/') && value.length > 1) {
-      const query = value.toLowerCase();
-      const matches = replies.filter(r => r.trigger.startsWith(query));
+    if (value.startsWith('/')) {
+      const searchTerm = value.substring(1).toLowerCase();
+      const matches = replies.filter(r =>
+        r.trigger.toLowerCase().startsWith(searchTerm)
+      );
+
       if (matches.length > 0) {
         setFilteredReplies(matches);
         setShowQuickReplies(true);
@@ -240,6 +243,49 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showQuickReplies) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedReplyIndex(prev => (prev + 1) % filteredReplies.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedReplyIndex(prev => (prev - 1 + filteredReplies.length) % filteredReplies.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        applyQuickReply(filteredReplies[selectedReplyIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowQuickReplies(false);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const trimmedText = text.trim();
+      if (trimmedText) {
+        onSend(trimmedText);
+        setText('');
+        setShowEmojiPicker(false);
+
+        // Reset height similar ao Menu Digital
+        const target = e.currentTarget;
+        setTimeout(() => {
+          target.style.height = 'auto';
+        }, 0);
+      }
+    }
+  };
+
   return (
     <div className="w-full relative">
       <AttachmentMenu
@@ -373,47 +419,11 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
           ) : (
             <textarea
               placeholder="Digite uma mensagem"
-              className="flex-1 px-4 py-1.5 bg-transparent outline-none text-[#111B21] placeholder:text-gray-500 text-[15px] resize-none max-h-32 custom-scrollbar"
+              className="flex-1 px-4 py-1.5 bg-transparent outline-none text-[#111B21] placeholder:text-gray-500 text-[15px] resize-none max-h-[150px] overflow-hidden custom-scrollbar leading-relaxed"
               rows={1}
               value={text}
               onChange={handleTextChange}
-              onKeyDown={(e) => {
-                if (showQuickReplies) {
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    setSelectedReplyIndex(prev => (prev + 1) % filteredReplies.length);
-                    return;
-                  }
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setSelectedReplyIndex(prev => (prev - 1 + filteredReplies.length) % filteredReplies.length);
-                    return;
-                  }
-                  if (e.key === 'Enter' || e.key === 'Tab') {
-                    e.preventDefault();
-                    applyQuickReply(filteredReplies[selectedReplyIndex]);
-                    return;
-                  }
-                  if (e.key === 'Escape') {
-                    setShowQuickReplies(false);
-                    return;
-                  }
-                }
-
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  e.stopPropagation();
-
-                  const trimmedText = text.trim();
-                  if (trimmedText) {
-                    onSend(trimmedText);
-                    setText('');
-                    setShowEmojiPicker(false);
-                    const target = e.target as HTMLTextAreaElement;
-                    target.style.height = '36px';
-                  }
-                }
-              }}
+              onKeyDown={handleKeyDown}
               style={{ minHeight: '36px' }}
             />
           )}

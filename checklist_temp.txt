@@ -1,4 +1,0 @@
-[18/01/2026] - Correção Crítica 42703: Coluna oc.items não existia na função RPC get_unified_active_orders. Corrigido via subquery.
-[18/01/2026] - Correção 22P02 (Leitura): Cast explícito ::TEXT adicionado nas consultas de status para evitar falha no ENUM.
-[18/01/2026] - Ajuste de Filtros: Filtro de origem removido e status lowercase incluídos para garantir que todos os pedidos (APP/INTERNAL) apareçam na comanda.
-[18/01/2026] - Resolução do Erro 22P02 (Inserção): Alinhamento do ENUM order_status no banco para aceitar rótulos como 'CONFIRMED' e versões lowercase, sincronizando com a lógica do frontend e das RPCs.

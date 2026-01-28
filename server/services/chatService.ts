@@ -625,6 +625,22 @@ export class ChatInstance extends EventEmitter {
     }
   }
 
+  public async blockContact(conversationId: string, action: 'block' | 'unblock') {
+    if (this.status !== 'CONNECTED' || !this.sock) throw new Error('WhatsApp não está conectado.');
+
+    try {
+      const baseJid = conversationId.includes('@g.us')
+        ? conversationId
+        : conversationId.split('@')[0].split(':')[0] + '@s.whatsapp.net';
+
+      await this.sock.updateBlockStatus(baseJid, action);
+      console.log(`[Loja ${this.storeId}] 🚫 Contato ${baseJid} ${action === 'block' ? 'Bloqueado' : 'Desbloqueado'}.`);
+    } catch (error: any) {
+      console.error(`[Loja ${this.storeId}] Erro ao ${action} contato:`, error.message);
+      throw error;
+    }
+  }
+
   async disconnect() {
     console.log(`[Loja ${this.storeId}] 🚪 Desconectando e limpando sessão...`);
     this.isConnecting = false; // Interrompe qualquer tentativa pendente
@@ -725,6 +741,11 @@ class ChatServiceManager extends EventEmitter {
   public async deleteConversation(conversationId: string, storeId: string) {
     const instance = this.getInstance(storeId);
     return instance.deleteChat(conversationId);
+  }
+
+  public async blockContact(conversationId: string, action: 'block' | 'unblock', storeId: string) {
+    const instance = this.getInstance(storeId);
+    return instance.blockContact(conversationId, action);
   }
 
   public getStatus(storeId: string) {
