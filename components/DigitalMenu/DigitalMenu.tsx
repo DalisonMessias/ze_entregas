@@ -1299,9 +1299,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     <button
                                         key={id}
                                         onClick={() => {
-                                            setIsRecentOrdersModalOpen(false);
-                                            window.history.pushState({}, '', `/track/${id}`);
-                                            window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                                            // Force full navigation to ensure tracking page loads correctly for visitors
+                                            window.location.assign(`/track/${id}`);
                                         }}
                                         className="w-full p-4 bg-gray-50 dark:bg-gray-800 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between transition-all group"
                                     >

@@ -7,5 +7,9 @@
 [x] Corrigida listagem de entregadores fixos vazia na tela de Comanda (InternalOrders.tsx) e Nova Entrega (StoreRequest.tsx) pela implementação de getStoreAssociatedPartners() no cloud.ts e integração correta
 [x] Corrigida duplicidade de funções getStoreAssociatedPartners e getStoreDeliveryPartners no arquivo cloud.ts
 [x] Corrigido erro "Cannot read properties of undefined (reading 'charAt')" em InternalOrders.tsx adicionando validação para nomes de entregadores vazios
-[x] Corrigido mapeamento de propriedades em InternalOrders.tsx e cloud.ts para exibir corretamente nome, telefone, veículo e avatar do entregador fixo (anteriormente campos estavam vindo vazios ou undefined)
-[x] Atualizado StoreRequest.tsx para incluir avatar e telefone na listagem de seleção, mantendo consistência visual com a Comanda
+[x] Corrigido mapeamento de propriedades em InternalOrders.tsx e cloud.ts para exibir corretamente nome, telefone, veículo e avatar do entregador fixo
+[x] Atualizado StoreRequest.tsx para incluir avatar e telefone na listagem de seleção
+[x] Corrigido erro de TypeScript 'Property partner_avatar does not exist' adicionando o campo na interface StoreDeliveryPartner em types.ts
+[x] Adicionado comando ALTER TABLE no supabase_global.sql para criar a coluna delivery_location_reference na tabela orders
+[x] Corrigida navegação no modal "Meus Pedidos" do Menu Digital (DigitalMenu.tsx) substituindo a lógica de Single Page Application por window.location.assign() para garantir que visitantes sejam redirecionados corretamente para a página de rastreio
+[x] Corrigido bug de redirecionamento no App.tsx onde rotas de rastreio (/track/:id) eram enviadas para a Home para usuários não logados. Adicionada 'order_tracking' à lista de abas públicas permitidas.

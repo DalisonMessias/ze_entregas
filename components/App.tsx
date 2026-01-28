@@ -580,7 +580,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         const path = window.location.pathname;
         const tabFromUrl = getTabFromUrl(path);
         const authTabs = ['login', 'signup', 'forgot_password'];
-        const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu'];
+        const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
         const isAuthenticated = userId && userId !== 'guest';
 
         // REDIRECIONAMENTO: Se o usuário estiver logado, não pode acessar as páginas de autenticação

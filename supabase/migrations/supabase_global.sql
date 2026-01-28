@@ -1401,6 +1401,14 @@ CREATE TRIGGER tr_restrict_orders
 BEFORE INSERT OR UPDATE OR DELETE ON public.orders
 FOR EACH ROW EXECUTE FUNCTION public.check_not_restricted_trigger();
 
+-- Adicionar coluna delivery_location_reference se não existir
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'delivery_location_reference') THEN
+        ALTER TABLE public.orders ADD COLUMN delivery_location_reference TEXT;
+    END IF;
+END $$;
+
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Store owners can manage their own orders" ON public.orders;
 DO $$

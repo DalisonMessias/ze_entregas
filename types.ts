@@ -735,6 +735,7 @@ export interface StoreDeliveryPartner {
     partner_name: string;
     partner_phone: string;
     partner_vehicle: string;
+    partner_avatar?: string | null;
     created_at: string;
 }
 
