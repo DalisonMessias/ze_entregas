@@ -48,37 +48,17 @@ export function normalizarCidadePix(cidade: string): string {
     // 4. Remover espaços extras
     normalized = normalized.trim().replace(/\s+/g, " ");
 
-    // 5. Se já couber, retorna
-    if (normalized.length <= 15) return normalized;
+    // 5. Corte simples em 15 caracteres (conforme solicitado: "não abreviar, deixar completa")
+    if (normalized.length > 15) {
+        normalized = normalized.substring(0, 15).trim();
+    }
 
-    // 6. Abreviação inteligente
-
-    // A. Remover preposições comuns
-    const preposicoes = ['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'na', 'no'];
-    let words = normalized.split(" ");
-    words = words.filter(w => !preposicoes.includes(w.toLowerCase()));
-    normalized = words.join(" ");
-
-    if (normalized.length <= 15) return normalized;
-
-    // B. Abreviar títulos e nomes comuns
-    const mapAbbr: Record<string, string> = {
-        'Santo': 'Sto', 'Santa': 'Sta', 'Sao': 'S', 'Nossa': 'N', 'Nosso': 'N',
-        'Doutor': 'Dr', 'Presidente': 'Pres', 'Coronel': 'Cel', 'General': 'Gen',
-        'Professor': 'Prof', 'Jardim': 'Jd', 'Vila': 'Vl', 'Parque': 'Pq'
-    };
-
-    words = words.map(w => mapAbbr[w] || w);
-    normalized = words.join(" ");
-
-    if (normalized.length <= 15) return normalized;
-
-    // C. Corte final se ainda exceder
-    return normalized.substring(0, 15).trim();
+    return normalized || "BRASILIA";
 }
 
 export const generatePixPayload = ({ key, name, city, amount, description }: PixData): string => {
     const ID_PAYLOAD_FORMAT_INDICATOR = "00";
+    const ID_POINT_OF_INITIATION_METHOD = "01";
     const ID_MERCHANT_ACCOUNT_INFORMATION = "26";
     const ID_MERCHANT_ACCOUNT_INFORMATION_GUI = "00";
     const ID_MERCHANT_ACCOUNT_INFORMATION_KEY = "01";
@@ -99,10 +79,13 @@ export const generatePixPayload = ({ key, name, city, amount, description }: Pix
 
     function getMerchantAccountInfo() {
         const gui = getValue(ID_MERCHANT_ACCOUNT_INFORMATION_GUI, "br.gov.bcb.pix");
-        // A chave também não deve ter espaços ou caracteres estranhos, mas geralmente validamos antes
-        // Aqui assumimos que a chave vem correta, mas podemos remover espaços por segurança
+        // A chave também não deve ter espaços ou caracteres estranhos
         const cleanKey = key.trim();
         const k = getValue(ID_MERCHANT_ACCOUNT_INFORMATION_KEY, cleanKey);
+
+        // TODO: Se tiver description para campo 02 dentro do 26, adicionaria aqui.
+        // Por hora, apenas GUI e Key.
+
         return getValue(ID_MERCHANT_ACCOUNT_INFORMATION, gui + k);
     }
 
@@ -110,19 +93,20 @@ export const generatePixPayload = ({ key, name, city, amount, description }: Pix
         // Se description (TXID) não for passado, gera um aleatório
         let txid = description || '';
 
-        // Remove caracteres especiais do TXID e limita a 25 caracteres (padrão preferencial)
-        // O padrão EMV permite caracteres alfanuméricos
+        // Remove caracteres especiais do TXID
         txid = txid.replace(/[^a-zA-Z0-9]/g, '');
 
         if (!txid) {
             // TXID gerado deve respeitar regex [a-zA-Z0-9]{1,25}
-            // Gerar ID único simples
             const now = Date.now().toString(36).toUpperCase();
             const random = Math.floor(Math.random() * 1000).toString(36).toUpperCase();
             txid = (now + random).substring(0, 25);
         } else {
             txid = txid.substring(0, 25);
         }
+
+        // Se txid ficar vazio, ***
+        if (!txid) txid = "***";
 
         const val = getValue(ID_ADDITIONAL_DATA_FIELD_TEMPLATE_TXID, txid);
         return getValue(ID_ADDITIONAL_DATA_FIELD_TEMPLATE, val);
@@ -147,6 +131,7 @@ export const generatePixPayload = ({ key, name, city, amount, description }: Pix
 
     let payload =
         getValue(ID_PAYLOAD_FORMAT_INDICATOR, "01") +
+        getValue(ID_POINT_OF_INITIATION_METHOD, "12") + // Valor 12 conforme exemplo funcional
         getMerchantAccountInfo() +
         getValue(ID_MERCHANT_CATEGORY_CODE, "0000") +
         getValue(ID_TRANSACTION_CURRENCY, "986") +

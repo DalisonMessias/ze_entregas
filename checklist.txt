@@ -38,3 +38,8 @@
 - [x] Corrigida tipagem do estado showBlockConfirm no componente InternalChatContainer para suportar 'unblock' e resolver erro de comparação.
 
 [29/01/2026] Corrigido erro 500 no toggle-assistant (backend) e substituídos alertas nativos por Toasts e modais customizados no Chat.
+- [x] Ajuste de conformidade PIX: normalização de nome e cidade (BCB).
+- [x] Refatoração de PixPaymentModal para garantir payload único por sessão.
+- [x] Ajuste PIX: Removida abreviação de cidade (mantendo apenas remoção de UF e corte).
+- [x] Ajuste PIX: Adicionado campo Point of Initiation Method (01) com valor 12.
+- [x] Correção do nome do beneficiário PIX na tela de rastreamento (priorizando nome do gestor).

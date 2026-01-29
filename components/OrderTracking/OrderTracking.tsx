@@ -72,7 +72,7 @@ export const OrderTracking: React.FC = () => {
             if (orderData?.store_id && !store) {
                 const { data: storeData } = await sb
                     .from('user_profiles')
-                    .select('store_name, phone_number, store_logo_url, cover_url, store_address_street, store_address_number, store_address_district, store_address_city, store_address_state, config, pix_key, pix_key_type')
+                    .select('name, store_name, phone_number, store_logo_url, cover_url, store_address_street, store_address_number, store_address_district, store_address_city, store_address_state, config, pix_key, pix_key_type')
                     .eq('id', orderData.store_id)
                     .single();
                 setStore(storeData);
@@ -318,7 +318,7 @@ export const OrderTracking: React.FC = () => {
                             key_type: store?.pix_key_type || 'CPF',
                             bank_name: 'Banco'
                         }),
-                        name: store?.config?.pixdata?.name || store?.store_name || 'LOJA',
+                        name: store?.config?.pixdata?.name || store?.name || store?.store_name || 'LOJA',
                         city: store?.config?.pixdata?.city || store?.store_address_city || 'CIDADE'
                     }}
                     amount={order.total_price}

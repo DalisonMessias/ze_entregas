@@ -1,9 +1,13 @@
 # Lista de Tarefas - Ajuste de Conformidade PIX
 
-- [ ] Analisar `utils/pixPayloadGenerator.ts` para entender a geração atual.
-- [ ] Analisar `components/PixPaymentModal.tsx` para entender o uso atual.
-- [ ] Implementar `normalizarNomePix` em `utils/pixPayloadGenerator.ts` (Max 25 chars, sem acentos, chars especiais).
-- [ ] Implementar `normalizarCidadePix` em `utils/pixPayloadGenerator.ts` (Max 15 chars, sem UF, sem acentos, abreviação inteligente).
-- [ ] Atualizar `gerarPayloadPix` para usar as funções de normalização.
-- [ ] Refatorar `components/PixPaymentModal.tsx` para usar `useMemo` e garantir payload único e imutável por sessão.
-- [ ] Garantir que o botão "Copiar PIX" usa o mesmo payload do QR Code.
+- [x] Analisar `utils/pixPayloadGenerator.ts` para entender a geração atual.
+- [x] Analisar `components/PixPaymentModal.tsx` para entender o uso atual.
+- [x] Implementar `normalizarNomePix` em `utils/pixPayloadGenerator.ts`.
+- [x] Implementar `normalizarCidadePix` em `utils/pixPayloadGenerator.ts`.
+- [x] Atualizar `gerarPayloadPix`.
+- [x] Refatorar `components/PixPaymentModal.tsx`.
+- [x] Garantir consistência do botão copiar.
+- [x] Ajustar `normalizarCidadePix`: Remover abreviação inteligente, manter simplificação de UF e corte em 15 chars.
+- [x] Adicionar campo "01" (Point of Initiation Method) com valor "12" no payload.
+- [x] Atualizar `OrderTracking.tsx`: Incluir campo `name` na query do Supabase.
+- [x] Atualizar `OrderTracking.tsx`: Usar `store.name` como prioritário no modal PIX.
