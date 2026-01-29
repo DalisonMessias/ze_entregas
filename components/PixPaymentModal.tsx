@@ -13,6 +13,7 @@ interface PixPaymentModalProps {
     onClose: () => void;
     pixData: {
         key: string;
+        key_type?: 'CPF' | 'CNPJ' | 'EMAIL' | 'PHONE' | 'EVP';
         name?: string;
         city?: string;
     };
@@ -40,6 +41,7 @@ export const PixPaymentModal: React.FC<PixPaymentModalProps> = ({
         if (isOpen && !generatedRef.current) {
             const payload = generatePixPayload({
                 key: pixData.key,
+                keyType: pixData.key_type, // Passando o tipo para ajudar na normalização
                 name: pixData.name || '',
                 city: pixData.city || '',
                 amount: amount,

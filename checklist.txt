@@ -43,3 +43,5 @@
 - [x] Ajuste PIX: Removida abreviação de cidade (mantendo apenas remoção de UF e corte).
 - [x] Ajuste PIX: Adicionado campo Point of Initiation Method (01) com valor 12.
 - [x] Correção do nome do beneficiário PIX na tela de rastreamento (priorizando nome do gestor).
+- [x] Implementada normalização robusta de chaves PIX (CPF, CNPJ, Telefone, Email).
+- [x] Restaurada abreviação inteligente de cidade no PIX.

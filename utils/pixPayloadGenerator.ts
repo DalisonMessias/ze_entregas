@@ -4,13 +4,90 @@
 
 interface PixData {
     key: string;
-    name: string;
     city: string;
+    name: string;
     amount: number;
     description?: string; // TXID
+    keyType?: 'CPF' | 'CNPJ' | 'EMAIL' | 'PHONE' | 'EVP'; // Opcional para ajudar na normalização
 }
 
 // Funções de normalização exportadas para uso geral e testes
+
+export function normalizarChavePix(chave: string, tipoSugrido?: string): string {
+    if (!chave) return "";
+
+    const chaveLimpa = chave.trim();
+
+    // 1. Identificação por tipo sugerido ou detecção automática
+    let tipo = tipoSugrido?.toUpperCase() || '';
+
+    // Remove caracteres especiais para anáise de dígitos
+    const apenasNumeros = chaveLimpa.replace(/\D/g, "");
+
+    // Detecção Automática se não informado
+    if (!tipo) {
+        if (chaveLimpa.includes('@')) {
+            tipo = 'EMAIL';
+        } else if (chaveLimpa.startsWith('+') || (apenasNumeros.length > 11 && apenasNumeros.length < 14)) {
+            // Assume telefone se começar com + ou tiver tamanho típico de cel (ex: 5511999999999 = 13 digitos)
+            tipo = 'PHONE';
+        } else if (apenasNumeros.length === 11) {
+            tipo = 'CPF';
+        } else if (apenasNumeros.length === 14) {
+            tipo = 'CNPJ';
+        } else if (chaveLimpa.length >= 32) {
+            tipo = 'EVP';
+        } else {
+            // Fallback: Tenta adivinhar pelo formato
+            if (apenasNumeros.length > 0) tipo = 'PHONE'; // Default numeral
+            else tipo = 'EMAIL'; // Default texto
+        }
+    }
+
+    // 2. Normalização por regra
+    switch (tipo) {
+        case 'CPF':
+            // Apenas números, 11 dígitos
+            return apenasNumeros.padStart(11, '0');
+
+        case 'CNPJ':
+            // Apenas números, 14 dígitos
+            return apenasNumeros.padStart(14, '0');
+
+        case 'PHONE':
+        case 'TELEFONE':
+        case 'CELULAR':
+            // Formato +5511999999999
+            // Se já tem +, começamos a limpar
+            if (chaveLimpa.startsWith('+')) {
+                return '+' + chaveLimpa.replace(/\D/g, "");
+            }
+            // Se não tem +, e parece ser local (11999999999), adiciona +55
+            if (apenasNumeros.length >= 10 && apenasNumeros.length <= 11) {
+                return '+55' + apenasNumeros;
+            }
+            // Se já parece ter DDI (5511999999999)
+            if (apenasNumeros.length > 11) {
+                return '+' + apenasNumeros;
+            }
+            return '+' + apenasNumeros; // Fallback
+
+        case 'EMAIL':
+        case 'E-MAIL':
+            // Lowercase, trim
+            return chaveLimpa.toLowerCase();
+
+        case 'EVP':
+        case 'CHAVE_ALEATORIA':
+            // Manter como está (case sensitive?), geralmente lowercase ou hífens são importantes?
+            // EVP: geralmente 32 chars hexa com hífens 8-4-4-4-12.
+            // O padrão DIZ que deve ser a string original. Não vamos remover hífens do EVP se eles existirem.
+            return chaveLimpa;
+
+        default:
+            return chaveLimpa;
+    }
+}
 
 export function normalizarNomePix(nome: string): string {
     if (!nome) return "RECEBEDOR";
@@ -36,7 +113,6 @@ export function normalizarCidadePix(cidade: string): string {
     if (!cidade) return "BRASILIA";
 
     // 1. Remover UF no final (ex: "- MG", " - SP", "/RJ", " (PR)")
-    // Regex procura por hífen, barra ou parenteses seguido de 2 letras maiúsculas no final
     let normalized = cidade.replace(/[\s\-\/\(]+[A-Za-z]{2}[\)]?\s*$/, "");
 
     // 2. Remover acentos
@@ -48,15 +124,32 @@ export function normalizarCidadePix(cidade: string): string {
     // 4. Remover espaços extras
     normalized = normalized.trim().replace(/\s+/g, " ");
 
-    // 5. Corte simples em 15 caracteres (conforme solicitado: "não abreviar, deixar completa")
-    if (normalized.length > 15) {
-        normalized = normalized.substring(0, 15).trim();
-    }
+    // 5. Se já couber, retorna
+    if (normalized.length <= 15) return normalized;
 
-    return normalized || "BRASILIA";
+    // 6. Abreviação inteligente (Restaurada)
+    const preposicoes = ['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'na', 'no'];
+    let words = normalized.split(" ");
+    words = words.filter(w => !preposicoes.includes(w.toLowerCase()));
+    normalized = words.join(" ");
+
+    if (normalized.length <= 15) return normalized;
+
+    const mapAbbr: Record<string, string> = {
+        'Santo': 'Sto', 'Santa': 'Sta', 'Sao': 'S', 'Nossa': 'N', 'Nosso': 'N',
+        'Doutor': 'Dr', 'Presidente': 'Pres', 'Coronel': 'Cel', 'General': 'Gen',
+        'Professor': 'Prof', 'Jardim': 'Jd', 'Vila': 'Vl', 'Parque': 'Pq', 'Ferreira': 'Ferr',
+        'Antonio': 'Ant', 'Aparecida': 'Ap', 'Rodrigues': 'Rod'
+    };
+
+    words = words.map(w => mapAbbr[w] || w);
+    normalized = words.join(" ");
+
+    // 7. Corte final mandatório se ainda exceder
+    return normalized.substring(0, 15).trim();
 }
 
-export const generatePixPayload = ({ key, name, city, amount, description }: PixData): string => {
+export const generatePixPayload = ({ key, name, city, amount, description, keyType }: PixData): string => {
     const ID_PAYLOAD_FORMAT_INDICATOR = "00";
     const ID_POINT_OF_INITIATION_METHOD = "01";
     const ID_MERCHANT_ACCOUNT_INFORMATION = "26";
@@ -79,25 +172,21 @@ export const generatePixPayload = ({ key, name, city, amount, description }: Pix
 
     function getMerchantAccountInfo() {
         const gui = getValue(ID_MERCHANT_ACCOUNT_INFORMATION_GUI, "br.gov.bcb.pix");
-        // A chave também não deve ter espaços ou caracteres estranhos
-        const cleanKey = key.trim();
+
+        // Aplica normalização robusta da chave
+        const cleanKey = normalizarChavePix(key, keyType);
+
         const k = getValue(ID_MERCHANT_ACCOUNT_INFORMATION_KEY, cleanKey);
-
-        // TODO: Se tiver description para campo 02 dentro do 26, adicionaria aqui.
-        // Por hora, apenas GUI e Key.
-
         return getValue(ID_MERCHANT_ACCOUNT_INFORMATION, gui + k);
     }
 
     function getAdditionalDataFieldTemplate() {
-        // Se description (TXID) não for passado, gera um aleatório
         let txid = description || '';
-
-        // Remove caracteres especiais do TXID
+        // Remove caracteres especiais, permite apenas A-Z a-z 0-9
         txid = txid.replace(/[^a-zA-Z0-9]/g, '');
 
         if (!txid) {
-            // TXID gerado deve respeitar regex [a-zA-Z0-9]{1,25}
+            // Gera TXID aleatório se vazio
             const now = Date.now().toString(36).toUpperCase();
             const random = Math.floor(Math.random() * 1000).toString(36).toUpperCase();
             txid = (now + random).substring(0, 25);
@@ -105,7 +194,6 @@ export const generatePixPayload = ({ key, name, city, amount, description }: Pix
             txid = txid.substring(0, 25);
         }
 
-        // Se txid ficar vazio, ***
         if (!txid) txid = "***";
 
         const val = getValue(ID_ADDITIONAL_DATA_FIELD_TEMPLATE_TXID, txid);
@@ -131,7 +219,7 @@ export const generatePixPayload = ({ key, name, city, amount, description }: Pix
 
     let payload =
         getValue(ID_PAYLOAD_FORMAT_INDICATOR, "01") +
-        getValue(ID_POINT_OF_INITIATION_METHOD, "12") + // Valor 12 conforme exemplo funcional
+        getValue(ID_POINT_OF_INITIATION_METHOD, "12") +
         getMerchantAccountInfo() +
         getValue(ID_MERCHANT_CATEGORY_CODE, "0000") +
         getValue(ID_TRANSACTION_CURRENCY, "986") +
