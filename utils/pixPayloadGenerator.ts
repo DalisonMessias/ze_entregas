@@ -124,29 +124,12 @@ export function normalizarCidadePix(cidade: string): string {
     // 4. Remover espaços extras
     normalized = normalized.trim().replace(/\s+/g, " ");
 
-    // 5. Se já couber, retorna
-    if (normalized.length <= 15) return normalized;
+    // 5. Corte simples em 15 caracteres
+    if (normalized.length > 15) {
+        normalized = normalized.substring(0, 15).trim();
+    }
 
-    // 6. Abreviação inteligente (Restaurada)
-    const preposicoes = ['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'na', 'no'];
-    let words = normalized.split(" ");
-    words = words.filter(w => !preposicoes.includes(w.toLowerCase()));
-    normalized = words.join(" ");
-
-    if (normalized.length <= 15) return normalized;
-
-    const mapAbbr: Record<string, string> = {
-        'Santo': 'Sto', 'Santa': 'Sta', 'Sao': 'S', 'Nossa': 'N', 'Nosso': 'N',
-        'Doutor': 'Dr', 'Presidente': 'Pres', 'Coronel': 'Cel', 'General': 'Gen',
-        'Professor': 'Prof', 'Jardim': 'Jd', 'Vila': 'Vl', 'Parque': 'Pq', 'Ferreira': 'Ferr',
-        'Antonio': 'Ant', 'Aparecida': 'Ap', 'Rodrigues': 'Rod'
-    };
-
-    words = words.map(w => mapAbbr[w] || w);
-    normalized = words.join(" ");
-
-    // 7. Corte final mandatório se ainda exceder
-    return normalized.substring(0, 15).trim();
+    return normalized || "BRASILIA";
 }
 
 export const generatePixPayload = ({ key, name, city, amount, description, keyType }: PixData): string => {

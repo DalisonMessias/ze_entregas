@@ -132,7 +132,8 @@ export const AdminPaymentGateways = () => {
                             <div className="flex items-center gap-2">
                                 <Settings className="w-6 h-6 text-brand-600" />
                                 <h3 className="text-lg font-bold dark:text-white capitalize">
-                                    {gateway.gateway_name === 'infinitepay' ? 'InfinitePay' : 'Mercado Pago'}
+                                    {gateway.gateway_name === 'infinitepay' ? 'InfinitePay' :
+                                        gateway.gateway_name === 'mercadopago' ? 'Mercado Pago' : 'PIX Estático'}
                                 </h3>
                             </div>
                             {gateway.is_primary && (
@@ -160,7 +161,9 @@ export const AdminPaymentGateways = () => {
                         <div className="mb-4">
                             <Button
                                 onClick={() => {
-                                    const tab = gateway.gateway_name === 'infinitepay' ? 'admin_infinitepay' : 'admin_mercadopago';
+                                    let tab = 'admin_mercadopago';
+                                    if (gateway.gateway_name === 'infinitepay') tab = 'admin_infinitepay';
+                                    if (gateway.gateway_name === 'pix') tab = 'admin_pix_config';
                                     window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
                                 }}
                                 variant="ghost"

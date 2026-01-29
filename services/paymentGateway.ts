@@ -130,6 +130,10 @@ const attemptWithFallback = async <T>(
 /**
  * Gera QR Code PIX para pagamento
  */
+import { generatePixPayload } from '../utils/pixPayloadGenerator';
+
+// ... existing code ...
+
 export const generatePaymentQRCode = async (
     amount: number,
     metadata: Record<string, any>
@@ -146,6 +150,18 @@ export const generatePaymentQRCode = async (
             const result = await mercadoPagoCreatePayment(amount, metadata, gateway.credentials as any);
             qrCode = result.qrCode;
             txId = result.txId;
+        } else if (gateway.gateway_name === 'pix') {
+            // PIX Estático (Manual)
+            const creds = gateway.credentials as any;
+            qrCode = generatePixPayload({
+                key: creds.pixKey,
+                keyType: creds.pixKeyType,
+                name: creds.merchantName || 'Zé Entregas',
+                city: creds.merchantCity || 'Brasília',
+                amount: amount,
+                description: metadata.description || 'Recarga Carteira'
+            });
+            txId = 'MANUAL_OFFLINE_' + Date.now();
         } else {
             throw new Error(`Gateway ${gateway.gateway_name} não suportado.`);
         }
@@ -162,11 +178,20 @@ export const generatePaymentQRCode = async (
  * Verifica status de um pagamento
  */
 export const checkPaymentStatus = async (txId: string): Promise<PaymentStatus> => {
+    if (txId.startsWith('MANUAL_OFFLINE_')) {
+        // Para PIX estático, não há verificação automática via API
+        // Retornamos 'pending' para que a UI aguarde confirmação manual (upload de comprovante ou admin)
+        return { txId, status: 'pending' };
+    }
+
     return attemptWithFallback(async (gateway) => {
         if (gateway.gateway_name === 'infinitepay') {
             return await infinitePayCheckStatus(txId, gateway.credentials as any);
         } else if (gateway.gateway_name === 'mercadopago') {
             return await mercadoPagoCheckStatus(txId, gateway.credentials as any);
+        } else if (gateway.gateway_name === 'pix') {
+            // Fallback para PIX se cair aqui sem prefixo manual (improvável)
+            return { txId, status: 'pending' };
         } else {
             throw new Error(`Gateway ${gateway.gateway_name} não suportado.`);
         }

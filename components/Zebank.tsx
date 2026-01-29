@@ -12,6 +12,7 @@ import { MerchantPOS } from './MerchantPOS';
 import { useDialog } from '../utils/dialogService';
 import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
+import { PixChargeModal } from './PixChargeModal';
 
 // Declare globals from CDN scripts
 declare const QRious: any;
@@ -373,6 +374,7 @@ interface ZebankProps {
 
 export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [data, setData] = useState<ZebankData | null>(null);
+    const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const { alert, confirm } = useDialog();
     const [activeTab, setActiveTab] = useState<'home' | 'savings' | 'cards' | 'history'>('home');
@@ -387,6 +389,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [showTestConfirm, setShowTestConfirm] = useState<ZebankCard | null>(null);
     const [showLimitModal, setShowLimitModal] = useState<ZebankCard | null>(null);
     const [showMerchantPOS, setShowMerchantPOS] = useState(false);
+    const [showPixCharge, setShowPixCharge] = useState(false);
 
     // Forms state
     const [p2pForm, setP2pForm] = useState({ code: '', amount: '' });
@@ -443,7 +446,9 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         if (!data) setLoading(true);
         try {
             const d = await cloud.getZebankDashboardData();
+            const p = await cloud.getMyPartnerProfile();
             setData(d);
+            setProfile(p);
         } catch (e: any) {
             // console.error('[Zebank] Load Error:', e);
             await alert({ title: 'Erro', message: 'Falha ao carregar dados do banco.' });
@@ -645,6 +650,10 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                     <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400"><PiggyBank className="w-5 h-5" /></div>
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Depositar no Cofrinho</span>
                 </button>
+                <button onClick={() => setShowPixCharge(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <div className="p-3 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400"><ArrowDownLeft className="w-5 h-5" /></div>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Cobrar</span>
+                </button>
                 <button onClick={() => setShowNewCard(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                     <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400"><CreditCard className="w-5 h-5" /></div>
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Novo Cartão</span>
@@ -746,123 +755,153 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
             </div>
 
             {/* MODALS */}
-            {showP2P && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
-                        <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Transferir para Parceiro</h3><button onClick={() => setShowP2P(false)}><X /></button></div>
-                        <CustomInput type="text" placeholder="Código do Parceiro" value={p2pForm.code} onChange={e => setP2pForm({ ...p2pForm, code: e.target.value })} />
-                        <CustomInput mask="currency" placeholder="Valor (R$)" value={p2pForm.amount} onChange={e => setP2pForm({ ...p2pForm, amount: e.target.value })} />
-                        <Button fullWidth onClick={handleP2PTransfer} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Confirmar'}</Button>
-                    </div>
-                </div>
-            )}
-            {showSavings && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
-                        <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Guardar / Resgatar</h3><button onClick={() => setShowSavings(false)}><X /></button></div>
-                        <CustomSelect
-                            value={savingsForm.action}
-                            onChange={val => setSavingsForm({ ...savingsForm, action: val })}
-                            options={[
-                                { label: 'Guardar', value: 'DEPOSIT' },
-                                { label: 'Resgatar', value: 'RETRIEVE' }
-                            ]}
-                        />
-                        <CustomInput mask="currency" placeholder="Valor (R$)" value={savingsForm.amount} onChange={e => setSavingsForm({ ...savingsForm, amount: e.target.value })} />
-                        <Button fullWidth onClick={handleSavings} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Confirmar'}</Button>
-                    </div>
-                </div>
-            )}
-            {showNewCard && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
-                        <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Criar Cartão Virtual</h3><button onClick={() => setShowNewCard(false)}><X /></button></div>
-                        <CustomInput type="text" placeholder="Nome no Cartão" value={newCardForm.name} onChange={e => setNewCardForm({ name: e.target.value })} />
-                        <Button fullWidth onClick={handleCreateCard} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Gerar Cartão'}</Button>
-                    </div>
-                </div>
-            )}
-            {showCardOptions && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-4 shadow-2xl space-y-3">
-                        <button onClick={() => handleToggleCardLock(showCardOptions)} className="w-full p-3 text-sm font-bold flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">{showCardOptions.status === 'ACTIVE' ? <LockKeyhole size={16} /> : <Unlock size={16} />} {showCardOptions.status === 'ACTIVE' ? 'Bloquear' : 'Desbloquear'}</button>
-                        <button onClick={() => handleOpenLimitModal(showCardOptions)} className="w-full p-3 text-sm font-bold flex items-center gap-2 hover:bg-blue-50 text-blue-600 dark:hover:bg-blue-900/20 rounded-lg"><Sliders size={16} /> Ajustar Limite</button>
-                        <button onClick={() => { setShowCardOptions(null); setShowTestConfirm(showCardOptions); }} className="w-full p-3 text-sm font-bold flex items-center gap-2 hover:bg-yellow-50 text-yellow-600 dark:hover:bg-yellow-900/20 rounded-lg"><Siren size={16} /> Testar Cartão</button>
-                        <button onClick={() => handleDeleteCard(showCardOptions.id)} className="w-full p-3 text-sm font-bold flex items-center gap-2 hover:bg-red-50 text-red-500 dark:hover:bg-red-900/20 rounded-lg"><Trash2 size={16} /> Excluir Cartão</button>
-                        <Button fullWidth variant="outline" onClick={() => setShowCardOptions(null)} className="mt-2">Fechar</Button>
-                    </div>
-                </div>
-            )}
-            {showTestConfirm && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6 text-center">
-                        <Siren className="w-12 h-12 text-yellow-500 mx-auto" />
-                        <h3 className="font-bold text-lg dark:text-white">Testar Validação do Cartão?</h3>
-                        <p className="text-sm text-gray-500">Uma transação de R$ 0,50 será simulada para o "Teste de Validação". <strong className="dark:text-white">Este valor NÃO será debitado do seu saldo.</strong></p>
-                        <div className="flex gap-2">
-                            <Button variant="outline" fullWidth onClick={() => setShowTestConfirm(null)}>Cancelar</Button>
-                            <Button fullWidth onClick={handleTestCard} disabled={processing} className="bg-yellow-500 hover:bg-yellow-600">
-                                {processing ? <Loader2 className="animate-spin" /> : 'Confirmar Teste'}
-                            </Button>
+            {
+                showP2P && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
+                            <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Transferir para Parceiro</h3><button onClick={() => setShowP2P(false)}><X /></button></div>
+                            <CustomInput type="text" placeholder="Código do Parceiro" value={p2pForm.code} onChange={e => setP2pForm({ ...p2pForm, code: e.target.value })} />
+                            <CustomInput mask="currency" placeholder="Valor (R$)" value={p2pForm.amount} onChange={e => setP2pForm({ ...p2pForm, amount: e.target.value })} />
+                            <Button fullWidth onClick={handleP2PTransfer} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Confirmar'}</Button>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {showLimitModal && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
-                        <div className="flex justify-between items-center mb-2">
-                            <h3 className="font-bold text-lg dark:text-white">Limite do Cartão</h3>
-                            <button onClick={() => setShowLimitModal(null)}><X className="w-5 h-5" /></button>
+                )
+            }
+            {
+                showSavings && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
+                            <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Guardar / Resgatar</h3><button onClick={() => setShowSavings(false)}><X /></button></div>
+                            <CustomSelect
+                                value={savingsForm.action}
+                                onChange={val => setSavingsForm({ ...savingsForm, action: val })}
+                                options={[
+                                    { label: 'Guardar', value: 'DEPOSIT' },
+                                    { label: 'Resgatar', value: 'RETRIEVE' }
+                                ]}
+                            />
+                            <CustomInput mask="currency" placeholder="Valor (R$)" value={savingsForm.amount} onChange={e => setSavingsForm({ ...savingsForm, amount: e.target.value })} />
+                            <Button fullWidth onClick={handleSavings} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Confirmar'}</Button>
                         </div>
+                    </div>
+                )
+            }
+            {
+                showNewCard && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
+                            <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Criar Cartão Virtual</h3><button onClick={() => setShowNewCard(false)}><X /></button></div>
+                            <CustomInput type="text" placeholder="Nome no Cartão" value={newCardForm.name} onChange={e => setNewCardForm({ name: e.target.value })} />
+                            <Button fullWidth onClick={handleCreateCard} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Gerar Cartão'}</Button>
+                        </div>
+                    </div>
+                )
+            }
+            {
+                showCardOptions && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-4 shadow-2xl space-y-3">
+                            <button onClick={() => handleToggleCardLock(showCardOptions)} className="w-full p-3 text-sm font-bold flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">{showCardOptions.status === 'ACTIVE' ? <LockKeyhole size={16} /> : <Unlock size={16} />} {showCardOptions.status === 'ACTIVE' ? 'Bloquear' : 'Desbloquear'}</button>
+                            <button onClick={() => handleOpenLimitModal(showCardOptions)} className="w-full p-3 text-sm font-bold flex items-center gap-2 hover:bg-blue-50 text-blue-600 dark:hover:bg-blue-900/20 rounded-lg"><Sliders size={16} /> Ajustar Limite</button>
+                            <button onClick={() => { setShowCardOptions(null); setShowTestConfirm(showCardOptions); }} className="w-full p-3 text-sm font-bold flex items-center gap-2 hover:bg-yellow-50 text-yellow-600 dark:hover:bg-yellow-900/20 rounded-lg"><Siren size={16} /> Testar Cartão</button>
+                            <button onClick={() => handleDeleteCard(showCardOptions.id)} className="w-full p-3 text-sm font-bold flex items-center gap-2 hover:bg-red-50 text-red-500 dark:hover:bg-red-900/20 rounded-lg"><Trash2 size={16} /> Excluir Cartão</button>
+                            <Button fullWidth variant="outline" onClick={() => setShowCardOptions(null)} className="mt-2">Fechar</Button>
+                        </div>
+                    </div>
+                )
+            }
+            {
+                showTestConfirm && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6 text-center">
+                            <Siren className="w-12 h-12 text-yellow-500 mx-auto" />
+                            <h3 className="font-bold text-lg dark:text-white">Testar Validação do Cartão?</h3>
+                            <p className="text-sm text-gray-500">Uma transação de R$ 0,50 será simulada para o "Teste de Validação". <strong className="dark:text-white">Este valor NÃO será debitado do seu saldo.</strong></p>
+                            <div className="flex gap-2">
+                                <Button variant="outline" fullWidth onClick={() => setShowTestConfirm(null)}>Cancelar</Button>
+                                <Button fullWidth onClick={handleTestCard} disabled={processing} className="bg-yellow-500 hover:bg-yellow-600">
+                                    {processing ? <Loader2 className="animate-spin" /> : 'Confirmar Teste'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
-                        <p className="text-sm text-gray-500 mb-4">
-                            Defina qual porcentagem do seu saldo atual pode ser usada por este cartão.
-                        </p>
+            {
+                showLimitModal && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+                        <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="font-bold text-lg dark:text-white">Limite do Cartão</h3>
+                                <button onClick={() => setShowLimitModal(null)}><X className="w-5 h-5" /></button>
+                            </div>
 
-                        <div className="space-y-6">
-                            <div className="relative pt-6 pb-2">
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={limitForm}
-                                    onChange={(e) => setLimitForm(Number(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-brand-600"
-                                />
-                                <div className="flex justify-between text-xs text-gray-400 mt-2 font-bold">
-                                    <span>0%</span>
-                                    <span>50%</span>
-                                    <span>100%</span>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Defina qual porcentagem do seu saldo atual pode ser usada por este cartão.
+                            </p>
+
+                            <div className="space-y-6">
+                                <div className="relative pt-6 pb-2">
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={limitForm}
+                                        onChange={(e) => setLimitForm(Number(e.target.value))}
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-brand-600"
+                                    />
+                                    <div className="flex justify-between text-xs text-gray-400 mt-2 font-bold">
+                                        <span>0%</span>
+                                        <span>50%</span>
+                                        <span>100%</span>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl text-center border border-gray-200 dark:border-gray-600">
-                                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Limite Atual Calculado</p>
-                                <p className="text-2xl font-black text-gray-900 dark:text-white">
-                                    {formatCurrency((data?.balance || 0) * (limitForm / 100))}
-                                </p>
-                                <p className="text-xs text-brand-600 font-bold mt-1">({limitForm}% do Saldo)</p>
-                            </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl text-center border border-gray-200 dark:border-gray-600">
+                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Limite Atual Calculado</p>
+                                    <p className="text-2xl font-black text-gray-900 dark:text-white">
+                                        {formatCurrency((data?.balance || 0) * (limitForm / 100))}
+                                    </p>
+                                    <p className="text-xs text-brand-600 font-bold mt-1">({limitForm}% do Saldo)</p>
+                                </div>
 
-                            <Button fullWidth onClick={handleUpdateLimit} disabled={processing}>
-                                {processing ? <Loader2 className="animate-spin" /> : 'Salvar Limite'}
-                            </Button>
+                                <Button fullWidth onClick={handleUpdateLimit} disabled={processing}>
+                                    {processing ? <Loader2 className="animate-spin" /> : 'Salvar Limite'}
+                                </Button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Merchant POS Modal */}
-            {showMerchantPOS && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="relative w-full max-w-md">
-                        <button onClick={() => setShowMerchantPOS(false)} className="absolute -top-12 right-0 text-white"><X className="w-8 h-8" /></button>
-                        <MerchantPOS onClose={() => setShowMerchantPOS(false)} />
+            {
+                showMerchantPOS && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+                        <div className="relative w-full max-w-md">
+                            <button onClick={() => setShowMerchantPOS(false)} className="absolute -top-12 right-0 text-white"><X className="w-8 h-8" /></button>
+                            <MerchantPOS onClose={() => setShowMerchantPOS(false)} />
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+
+
+            <PixChargeModal
+                isOpen={showPixCharge}
+                onClose={() => setShowPixCharge(false)}
+                pixKey={profile?.pix_key || profile?.cpf || ''}
+                pixKeyType={profile?.pix_key_type}
+                storeName={profile?.name || profile?.store_name || 'USUARIO'}
+                storeCity={profile?.city || profile?.store_address_city || 'CIDADE'}
+                // Integração Gateway
+                userId={profile?.id}
+                onPaymentSuccess={async (val) => {
+                    await alert({ title: 'Recebido!', message: `Você recebeu R$ ${val.toFixed(2)}` });
+                    loadData();
+                }}
+            />
         </div>
     );
 };

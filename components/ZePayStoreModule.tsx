@@ -12,6 +12,7 @@ import { FinancialPanel } from './FinancialPanel';
 import { MerchantPOS } from './MerchantPOS';
 import { useDialog } from '../utils/dialogService';
 import { CustomInput } from './CustomInput';
+import { PixChargeModal } from './PixChargeModal';
 declare const QRious: any;
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -41,6 +42,7 @@ const handleCurrencyMask = (e: React.ChangeEvent<HTMLInputElement>, setter: (val
 
 export const ZePayStore: React.FC = () => {
     const [data, setData] = useState<ZePayData | null>(null);
+    const [profile, setProfile] = useState<any | null>(null);
     const [isSuperStore, setIsSuperStore] = useState<boolean | null>(null); // Null = loading check
     const [loading, setLoading] = useState(true);
     const { alert } = useDialog();
@@ -63,6 +65,7 @@ export const ZePayStore: React.FC = () => {
     const [showTransfer, setShowTransfer] = useState(false);
     const [showNewCard, setShowNewCard] = useState(false);
     const [showLimitModal, setShowLimitModal] = useState<StoreVirtualCard | null>(null);
+    const [showPixCharge, setShowPixCharge] = useState(false);
 
     // Forms
     const [transferForm, setTransferForm] = useState({ code: '', amount: '' });
@@ -109,9 +112,10 @@ export const ZePayStore: React.FC = () => {
         if (!data) setLoading(true);
         try {
             // 1. Check Profile (Exclusive Lock)
-            const profile = await cloud.getMyPartnerProfile();
+            const profileData = await cloud.getMyPartnerProfile();
+            setProfile(profileData);
 
-            const isSuper = !!profile?.is_super_store;
+            const isSuper = !!profileData?.is_super_store;
             setIsSuperStore(isSuper);
             if (isSuper) {
                 const dashboardData = await cloud.getZebankDashboardData();
@@ -301,6 +305,15 @@ export const ZePayStore: React.FC = () => {
                                     <Wallet className="w-6 h-6" />
                                 </div>
                                 <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Adicionar Saldo</span>
+                            </button>
+                            <button
+                                onClick={() => setShowPixCharge(true)}
+                                className="flex flex-col items-center justify-center p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-95"
+                            >
+                                <div className="p-3 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 mb-2">
+                                    <ArrowDownLeft className="w-6 h-6" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Receber PIX</span>
                             </button>
                             <button
                                 onClick={() => setShowPOS(true)}
@@ -531,6 +544,15 @@ export const ZePayStore: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            <PixChargeModal
+                isOpen={showPixCharge}
+                onClose={() => setShowPixCharge(false)}
+                pixKey={profile?.pix_key || profile?.cpf || ''}
+                pixKeyType={profile?.pix_key_type}
+                storeName={profile?.store_name || 'LOJA'}
+                storeCity={profile?.store_address_city || 'CIDADE'}
+            />
         </div>
     );
 };

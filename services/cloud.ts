@@ -4708,15 +4708,28 @@ export const getPaymentGateways = async (): Promise<PaymentGatewayConfig[]> => {
         .select('*')
         .order('created_at', { ascending: true });
 
-    // Auto-initialize if empty
-    if (!error && (!data || data.length === 0)) {
-        await sb.from('payment_gateway_settings').insert([
-            { gateway_name: 'infinitepay', is_active: true, is_primary: true },
-            { gateway_name: 'mercadopago', is_active: false, is_primary: false }
-        ]);
-        const result = await sb.from('payment_gateway_settings').select('*').order('created_at', { ascending: true });
-        data = result.data;
-        error = result.error;
+    // Auto-initialize missing gateways
+    const requiredGateways = ['infinitepay', 'mercadopago', 'pix'];
+    const existingNames = data?.map((g: any) => g.gateway_name) || [];
+    const missing = requiredGateways.filter(name => !existingNames.includes(name));
+
+    if (missing.length > 0) {
+        const toInsert = missing.map(name => ({
+            gateway_name: name,
+            is_active: name === 'pix', // Pix starts active by default if new
+            is_primary: name === 'pix' // Pix starts primary by default if new
+        }));
+
+        const { error: insertError } = await sb.from('payment_gateway_settings').insert(toInsert);
+
+        if (!insertError) {
+            // Reload data to include new gateways
+            const result = await sb.from('payment_gateway_settings').select('*').order('created_at', { ascending: true });
+            data = result.data;
+            error = result.error;
+        } else {
+            console.error('Error auto-creating gateways:', insertError);
+        }
     }
 
     if (error) {

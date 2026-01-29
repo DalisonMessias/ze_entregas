@@ -45,6 +45,7 @@ import { AdminInstitutionalContent } from './AdminInstitutionalContent';
 import { AdminPlatformNews } from './AdminPlatformNews';
 import { AdminStoreFinance } from './AdminStoreFinance';
 import { AdminMercadoPagoConfig } from './AdminMercadoPagoConfig';
+import { AdminPixConfig } from './AdminPixConfig';
 import { AdminInfinitePayConfig } from './AdminInfinitePayConfig';
 import { AdminApiKeysUnified } from './AdminApiKeysUnified';
 import { AdminAIConfig } from './AdminAIConfig';
@@ -1184,6 +1185,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'score_config': return <AdminScoreConfig />;
             case 'payment_gateways': return <AdminPaymentGateways />;
             case 'mercadopago': return <AdminMercadoPagoConfig />;
+            case 'pix_config': return <AdminPixConfig />;
             case 'location_map': return <MapaLocalizacao />;
             case 'base_catalog': return <AdminBaseCatalog />;
             case 'store_categories': return <AdminStoreCategories />;

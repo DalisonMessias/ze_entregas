@@ -16,6 +16,7 @@ import { useDialog } from '../utils/dialogService';
 import { TipOfTheDay } from './TipOfTheDay';
 import { ProfileValidationAlert } from './ProfileValidationAlert';
 import { validateStoreProfile } from '../utils/profileValidation';
+import { PixChargeModal } from './PixChargeModal';
 
 declare const QRious: any;
 
@@ -34,61 +35,6 @@ const getStatusChip = (status: PartnerRequestStatus) => {
         case 'EXPIRED': return <span className={`${baseClasses} bg-red-100 text-red-700`}>{status === 'CANCELLED' ? 'Cancelado' : 'Expirado'}</span>;
         default: return <span className={`${baseClasses} bg-gray-100 text-gray-500`}>{status}</span>;
     }
-};
-
-const RechargeModal = ({ onClose, onRecharge }: { onClose: () => void, onRecharge: (amount: number, method: 'PIX') => Promise<any> }) => {
-    const [amount, setAmount] = useState('');
-    const [processing, setProcessing] = useState(false);
-    const [pixDetails, setPixDetails] = useState<{ copyPaste: string } | null>(null);
-    const qrCanvasRef = useRef<HTMLCanvasElement>(null);
-    const { alert } = useDialog();
-
-    useEffect(() => {
-        if (pixDetails?.copyPaste && qrCanvasRef.current) {
-            new QRious({ element: qrCanvasRef.current, value: pixDetails.copyPaste, size: 200, level: 'H' });
-        }
-    }, [pixDetails]);
-
-    const handleGeneratePix = async () => {
-        const value = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
-        if (!value || value <= 0) {
-            await alert({ title: "Valor Inválido", message: "Valor inválido." });
-            return;
-        }
-        setProcessing(true);
-        try {
-
-        } catch (e: any) {
-            await alert({ title: "Erro ao Gerar PIX", message: "Erro: " + e.message });
-        } finally {
-            setProcessing(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <h3 className="font-bold text-lg dark:text-white mb-4">Adicionar Saldo</h3>
-                {pixDetails ? (
-                    <div className="text-center space-y-4">
-                        <p className="text-xs text-gray-500">Escaneie ou copie o código para pagar.</p>
-                        <canvas ref={qrCanvasRef} className="mx-auto border-4 border-gray-100 rounded-lg" />
-                        <div className="relative">
-                            <CustomInput readOnly value={pixDetails.copyPaste} className="text-xs truncate" />
-                            <button onClick={() => navigator.clipboard.writeText(pixDetails.copyPaste)} className="absolute right-2 top-2 p-1"><Copy className="w-4 h-4" /></button>
-                        </div>
-                        <p className="text-xs text-green-600 font-bold">Após o pagamento, o saldo será creditado automaticamente.</p>
-                        <Button variant="outline" onClick={onClose}>Fechar</Button>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        <CustomInput mask="currency" value={amount} onChange={e => setAmount(e.target.value)} className="font-bold text-xl text-center" placeholder="R$ 0,00" autoFocus />
-                        <Button fullWidth onClick={handleGeneratePix} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Gerar Cobrança PIX'}</Button>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
 };
 
 const WalletSkeleton = () => (
@@ -113,6 +59,7 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [isSuperStore, setIsSuperStore] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [userId, setUserId] = useState<string>('');
 
     // Profile Validation State
     const [profileValid, setProfileValid] = useState<boolean | null>(null);
@@ -136,6 +83,14 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
     const [errorWallet, setErrorWallet] = useState<string | null>(null);
 
     const { alert, confirm } = useDialog();
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            const { data } = await cloud.getClient().auth.getUser();
+            if (data.user) setUserId(data.user.id);
+        };
+        fetchUser();
+    }, []);
 
     useEffect(() => {
         try {
@@ -304,11 +259,9 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                             <Plus className="w-4 h-4 mr-2" /> Abrir ZéPay
                         </Button>
                         <div className="flex gap-3 mt-4">
-                            {/* Recharge button temporarily hidden due to migration
                             <button onClick={() => setShowRecharge(true)} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
                                 <Plus className="w-4 h-4" /> Recarregar
                             </button>
-                            */}
                             {/* Transfer button functionality could be clearer, but keeping UI consistent */}
                         </div>
                     </div>
@@ -451,6 +404,20 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
             {ratingRequest && <RatingModal isOpen={!!ratingRequest} onClose={() => setRatingRequest(null)} onSubmit={handleRatePartner} targetName={ratingRequest.partner?.name || 'Entregador'} title="Avaliar Entregador" />}
             {showChat && <ChatWindow orderId={showChat} type="ORDER" onClose={() => setShowChat(null)} title={requests.find(r => r.id === showChat)?.partner?.name || "Chat"} />}
             {showUpgradeModal && <SuperStoreModal onClose={() => setShowUpgradeModal(false)} onSuccess={() => { setShowUpgradeModal(false); loadAllData(); }} />}
+            {showRecharge && (
+                <PixChargeModal
+                    isOpen={showRecharge}
+                    onClose={() => setShowRecharge(false)}
+                    pixKey="SYSTEM"
+                    storeName="Zé Entregas"
+                    storeCity="Online"
+                    userId={userId}
+                    onPaymentSuccess={() => {
+                        loadAllData();
+                        setShowRecharge(false);
+                    }}
+                />
+            )}
         </div>
     );
 };

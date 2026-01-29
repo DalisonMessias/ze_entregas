@@ -8784,13 +8784,30 @@ BEGIN
     -- ==================================================================
     CREATE TABLE IF NOT EXISTS public.payment_gateway_settings (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        gateway_name TEXT UNIQUE NOT NULL CHECK (gateway_name IN ('infinitepay', 'mercadopago')),
+        gateway_name TEXT UNIQUE NOT NULL CHECK (gateway_name IN ('infinitepay', 'mercadopago', 'pix')),
         is_active BOOLEAN DEFAULT FALSE,
         is_primary BOOLEAN DEFAULT FALSE,
         credentials JSONB DEFAULT '{}'::jsonb,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Garantir que o gateway 'pix' possa ser inserido se a tabela já existir (caso a constraint precise ser atualizada)
+    BEGIN 
+        -- Tentar atualizar a constraint se ela for restritiva
+        ALTER TABLE public.payment_gateway_settings DROP CONSTRAINT IF EXISTS payment_gateway_settings_gateway_name_check;
+        ALTER TABLE public.payment_gateway_settings ADD CONSTRAINT payment_gateway_settings_gateway_name_check CHECK (gateway_name IN ('infinitepay', 'mercadopago', 'pix'));
+    EXCEPTION WHEN others THEN
+        NULL;
+    END;
+
+    -- Inserir gateways padrão se não existirem
+    INSERT INTO public.payment_gateway_settings (gateway_name, is_active, is_primary)
+    VALUES 
+        ('infinitepay', false, false),
+        ('mercadopago', false, false),
+        ('pix', false, false)
+    ON CONFLICT (gateway_name) DO NOTHING;
 
     -- Índices
     -- ==================================================================
