@@ -298,8 +298,9 @@ export async function toggleAssistant(req: Request, res: Response) {
             .upsert({
                 store_id: storeId,
                 conversation_id: conversationId,
+                customer_phone: conversationId.split('@')[0], // Garantir telefone para versões da tabela que exigem
                 is_assistant_active: active,
-                updated_at: new Date()
+                updated_at: new Date().toISOString()
             }, { onConflict: 'store_id,conversation_id' });
 
         if (error) throw error;

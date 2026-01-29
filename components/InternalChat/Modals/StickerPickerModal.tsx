@@ -8,9 +8,13 @@ interface StickerPickerModalProps {
     onClose: () => void;
     onSelect: (url: string) => void;
     storeId: string;
+    setToast?: (toast: { message: string, type: 'success' | 'error' | 'info' } | null) => void;
 }
 
-export const StickerPickerModal: React.FC<StickerPickerModalProps> = ({ isOpen, onClose, onSelect, storeId }) => {
+import { useDialog } from '../../../utils/dialogService';
+
+export const StickerPickerModal: React.FC<StickerPickerModalProps> = ({ isOpen, onClose, onSelect, storeId, setToast }) => {
+    const { confirm } = useDialog();
     const [stickers, setStickers] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -33,7 +37,7 @@ export const StickerPickerModal: React.FC<StickerPickerModalProps> = ({ isOpen, 
         if (!file) return;
 
         if (file.size > 500 * 1024) { // 500KB limit for stickers recommendations
-            alert('A figurinha deve ter menos de 500KB.');
+            if (setToast) setToast({ message: 'A figurinha deve ter menos de 500KB.', type: 'error' });
             return;
         }
 
@@ -42,14 +46,15 @@ export const StickerPickerModal: React.FC<StickerPickerModalProps> = ({ isOpen, 
         if (url) {
             loadStickers();
         } else {
-            alert('Falha no upload.');
+            if (setToast) setToast({ message: 'Falha no upload.', type: 'error' });
         }
         setUploading(false);
     };
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (confirm('Deletar figurinha?')) {
+        const confirmed = await confirm({ title: 'Excluir Figurinha', message: 'Deseja realmente deletar esta figurinha?' });
+        if (confirmed) {
             await cloud.deleteSticker(id);
             loadStickers();
         }

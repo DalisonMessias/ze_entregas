@@ -13,3 +13,28 @@
 [x] Adicionado comando ALTER TABLE no supabase_global.sql para criar a coluna delivery_location_reference na tabela orders
 [x] Corrigida navegação no modal "Meus Pedidos" do Menu Digital (DigitalMenu.tsx) substituindo a lógica de Single Page Application por window.location.assign() para garantir que visitantes sejam redirecionados corretamente para a página de rastreio
 [x] Corrigido bug de redirecionamento no App.tsx onde rotas de rastreio (/track/:id) eram enviadas para a Home para usuários não logados. Adicionada 'order_tracking' à lista de abas públicas permitidas.
+[x] Implementada lógica no AuthWrapper.tsx para permitir que a rota pública de rastreio (/track/) renderize o componente App em modo 'guest', evitando que visitantes sejam bloqueados na tela de Landing Page.
+[x] Adicionada política de Row Level Security (RLS) 'Public can view orders by id' na tabela orders em supabase_global.sql para permitir que usuários anônimos visualizem detalhes do pedido ao fornecerem um ID válido. Isso corrige o erro de permissão (PGRST116) na tela de rastreamento.
+[x] Corrigido erro de sintaxe SQL (42601) no arquivo supabase_global.sql, removendo blocos END IF duplicados que causavam falha na execução do script.
+[x] Atualizada a interface de rastreamento (OrderTracking.tsx) para diferenciar visualmente pedidos de entrega e retirada. Para 'PICKUP', exibe passos adequados (Pronto para Retirada, Retirado) e o endereço da loja. Para 'DELIVERY', mostra passos de logística e endereço do cliente.
+[x] Adicionada política de RLS em supabase_global.sql ('Public can view store profiles') permitindo que usuários anônimos visualizem dados de perfis de lojas (role = 'store_partner'). Isso soluciona o erro 400 (Bad Request) que impedia a exibição do endereço da loja no rastreamento de retiradas.
+[x] Corrigida a query SQL no arquivo OrderTracking.tsx para buscar as colunas corretas de endereço da loja (prefixo 'store_address_'), alinhando com o esquema do banco de dados e garantindo a exibição correta do endereço de retirada.
+[x] Aumentado o tamanho do ícone de chat no botão flutuante da tela de rastreamento (OrderTracking.tsx) para w-9 h-9 (36px).
+[x] Substituído o ícone padrão de chat (MessageCircle) pelo SVG branco solicitado no botão flutuante da tela de rastreamento (OrderTracking.tsx).
+- [x] Corrigido erro 400 Bad Request no rastreio adicionando pix_key_type em user_profiles.
+- [x] Corrigido botão de Pix no rastreio para aceitar status parcial ou 'accepted'.
+- [x] Aumentado ícone de chat no rastreio para 42px.
+- [x] Sincronizado status 'PREPARING' no rastreio via RPC update_ticket_status.
+- [x] Ajustado OrderTracking para status case-insensitive e suporte a 'preparing'.
+- [x] Aumentado botão de chat para w-16 h-16 e ícone para 48x48.
+- [x] Corrigida a RPC update_ticket_status para usar status em MAIÚSCULAS ('READY', 'IN_DELIVERY', 'COMPLETED'), resolvendo a falha de sincronização com o banco de dados.
+- [x] Adicionado mapeamento automático de 'producing' para 'PREPARING' na RPC para pedidos em produção.
+- [x] Ampliado o ícone de chat no rastreio para w-full h-full com traço mais grosso e padding estratégico, atendendo à solicitação visual.
+[x] Corrigido erro 400 na página de rastreio adicionando a coluna 'pix_key_type' à tabela 'user_profiles' via supabase_global.sql.
+[x] Ajustada lógica de exibição do botão Pix para suportar status em formato de texto legível (ex: 'Aguardando pagamento (PIX)').
+[x] Escala final do ícone de chat aumentada para 42px para máxima visibilidade.
+37: [x] Corrigida funcionalidade de bloqueio/desbloqueio no chat da loja (/loja/chat): implementada lógica dinâmica, atualização imediata da UI e ajuste de modais de confirmação.
+[x] Corrigida funcionalidade de bloqueio/desbloqueio no chat da loja (/loja/chat): implementada l�gica din�mica, feedback visual bloqueado e sincroniza��o real de estado.
+- [x] Corrigida tipagem do estado showBlockConfirm no componente InternalChatContainer para suportar 'unblock' e resolver erro de compara��o.
+
+[29/01/2026] Corrigido erro 500 no toggle-assistant (backend) e substitu�dos alertas nativos por Toasts e modais customizados no Chat.

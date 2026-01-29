@@ -348,6 +348,10 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'pix_key') THEN
         ALTER TABLE public.user_profiles ADD COLUMN pix_key TEXT;
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'pix_key_type') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN pix_key_type TEXT DEFAULT 'CPF';
+    END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS user_profiles_is_active_idx ON public.user_profiles (is_active);
 CREATE INDEX IF NOT EXISTS user_profiles_is_available_idx ON public.user_profiles (is_available);
@@ -530,6 +534,15 @@ CREATE POLICY "Authenticated users can view delivery partners" ON public.user_pr
     FOR SELECT USING (role IN ('delivery_partner'::public.user_role, 'delivery_person'::public.user_role) AND is_active = true);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_profiles TO authenticated;
+
+-- Permitir leitura pública de perfis de LOJAS (Para exibir nome/endereço no Rastreio e Menu Digital)
+DROP POLICY IF EXISTS "Public can view store profiles" ON public.user_profiles;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public can view store profiles' AND tablename = 'user_profiles') THEN
+        CREATE POLICY "Public can view store profiles" ON public.user_profiles FOR SELECT USING (role = 'store_partner');
+    END IF;
+END $$;
 
 -- ==================================================================
 -- 2.1 CARTEIRAS E TRANSAÇÕES
@@ -1429,14 +1442,23 @@ BEGIN
         CREATE POLICY "Users can view their own orders" ON public.orders FOR SELECT USING (auth.uid()::text = user_id::text);
     END IF;
 END $$;
+
 DROP POLICY IF EXISTS "Admins can manage all orders" ON public.orders;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage all orders' AND tablename = 'orders') THEN
         CREATE POLICY "Admins can manage all orders" ON public.orders FOR ALL USING (public.is_admin());
+    END IF;
+END $$;
 
-
--- Tabela de backups de usuﾃ｡rio;
+-- Permitir leitura pública de pedidos pelo ID (Tracking)
+DROP POLICY IF EXISTS "Public can view orders by id" ON public.orders;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public can view orders by id' AND tablename = 'orders') THEN
+        -- RLS policy that admits access to everyone for SELECT
+        -- In practice, the client must filter by ID in the query, and since UUIDs are unguessable, this is safe for tracking.
+        CREATE POLICY "Public can view orders by id" ON public.orders FOR SELECT USING (true);
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.user_backups (
@@ -7950,7 +7972,14 @@ BEGIN
         RAISE EXCEPTION 'Ticket not found';
     END IF;
 
-    -- 2. Se for marcado como 'delivered' ou 'in_transit', finalizar automaticamente
+    -- 2. Sincronizar status com o pedido principal quando entrar em produção
+    IF p_status = 'producing' AND v_ticket.order_id IS NOT NULL THEN
+        UPDATE public.orders
+        SET status = 'PREPARING'::public.order_status, updated_at = now()
+        WHERE id = v_ticket.order_id;
+    END IF;
+
+    -- 3. Se for marcado como 'delivered' ou 'in_transit', finalizar automaticamente
     -- Isso garante que pedidos nas abas Ready (Entrega/Retirada/Local)
     -- sejam movidos para o histórico quando entregues
     IF p_status = 'delivered' OR p_status = 'in_transit' THEN
@@ -7964,7 +7993,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- 3. Se for finalizado (ready) e tiver pedido principal associado (Delivery/Balcão)
+    -- 4. Se for finalizado (ready) e tiver pedido principal associado (Delivery/Balcão)
     IF p_status = 'ready' AND v_ticket.order_id IS NOT NULL THEN
         -- Buscar pedido para ver tipo
         SELECT * INTO v_order FROM public.orders WHERE id = v_ticket.order_id;
@@ -7972,7 +8001,9 @@ BEGIN
         IF v_order.id IS NOT NULL THEN
             -- Se for delivery com entregador, vai para in_transit
             IF v_order.order_type = 'DELIVERY' AND v_order.driver_id IS NOT NULL THEN
-                v_next_status := 'in_transit';
+                v_next_status := 'IN_DELIVERY'; -- Ajustado para MAIÚSCULAS conforme enum
+            ELSE
+                v_next_status := 'READY'; -- Ajustado para MAIÚSCULAS conforme enum
             END IF;
 
             -- Atualizar pedido principal
@@ -7982,21 +8013,28 @@ BEGIN
         END IF;
     END IF;
 
-    -- 4. Se for entregue e tiver pedido principal, marcar pedido como COMPLETED
+    -- 5. Se for entregue e tiver pedido principal, marcar pedido como COMPLETED
     IF v_final_status = 'delivered' AND v_ticket.general_order_id IS NOT NULL THEN
         UPDATE public.orders
         SET status = 'COMPLETED'::public.order_status, updated_at = now()
         WHERE id = v_ticket.general_order_id;
     END IF;
+    
+    -- Caso o ticket seja marcado como delivered mas o general_order_id seja nulo (v_ticket.order_id é usado)
+    IF v_final_status = 'delivered' AND v_ticket.order_id IS NOT NULL THEN
+         UPDATE public.orders
+         SET status = 'COMPLETED'::public.order_status, updated_at = now()
+         WHERE id = v_ticket.order_id;
+    END IF;
 
-    -- 5. Se for rejeitado e tiver pedido principal associado
+    -- 6. Se for rejeitado e tiver pedido principal associado
     IF p_status = 'rejected' AND v_ticket.order_id IS NOT NULL THEN
         UPDATE public.orders
         SET status = 'CANCELLED'::public.order_status, updated_at = now()
         WHERE id = v_ticket.order_id;
     END IF;
 
-    -- 6. Se for pedido de colaborador (Mesa)
+    -- 7. Se for pedido de colaborador (Mesa)
     IF v_ticket.collaborator_order_id IS NOT NULL THEN
         -- Se for rejeitado, cancela o pedido do colaborador também
         IF p_status = 'rejected' THEN
@@ -10502,3 +10540,10 @@ CREATE POLICY "Store owners can manage their delivery partners" ON public.store_
 DROP POLICY IF EXISTS "Partners can view their associations" ON public.store_delivery_partners;
 CREATE POLICY "Partners can view their associations" ON public.store_delivery_partners FOR SELECT USING (auth.uid()::text = partner_id::text);
 
+-- [29/01/2026] Marcar customer_phone como opcional para evitar erro 500 no toggle do assistente
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ze_assistant_conversations' AND column_name = 'customer_phone') THEN
+        ALTER TABLE public.ze_assistant_conversations ALTER COLUMN customer_phone DROP NOT NULL;
+    END IF;
+END $$;

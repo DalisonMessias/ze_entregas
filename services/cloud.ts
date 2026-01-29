@@ -5771,3 +5771,70 @@ export const sendDeliveryToAssociatePartner = async (
     return data;
 };
 
+/**
+ * Busca dados completos de uma loja pelo ID.
+ */
+export const getStoreById = async (storeId: string): Promise<PartnerProfile | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data: userData, error } = await sb
+        .from('user_profiles')
+        .select('*')
+        .eq('id', storeId)
+        .single();
+
+    if (error) {
+        console.error('Error fetching store by id:', error);
+        return null;
+    }
+
+    if (!userData) return null;
+
+    // Map user_profiles data to PartnerProfile interface
+    const profile: PartnerProfile = {
+        id: userData.id,
+        user_id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        phone_number: userData.phone_number,
+        is_active: userData.is_active,
+        is_available: userData.is_available,
+        city: userData.city,
+        verification_status: userData.verification_status,
+        vehicle_type: userData.vehicle_type,
+        vehicle_plate: userData.vehicle_plate,
+        vehicle_model: userData.vehicle_model,
+        vehicle_year: userData.vehicle_year,
+        association_code: userData.association_code,
+        share_phone_offline: userData.share_phone_offline,
+        contact_email: userData.contact_email,
+        opening_hours: userData.opening_hours,
+        address_zip: userData.address_zip,
+        address_street: userData.address_street,
+        address_number: userData.address_number,
+        address_district: userData.address_district,
+        address_state: userData.address_state,
+
+        // Mapeamento de novos campos de loja
+        cover_url: userData.cover_url,
+        store_logo_url: userData.store_logo_url,
+        store_address_zip: userData.store_address_zip,
+        store_address_street: userData.store_address_street,
+        store_address_number: userData.store_address_number,
+        store_address_district: userData.store_address_district,
+        store_address_city: userData.store_address_city,
+        store_address_state: userData.store_address_state,
+        store_address_complement: userData.store_address_complement,
+
+        is_super_store: userData.is_super_store,
+        store_name: userData.store_name,
+        is_open: userData.is_open,
+        pix_key: userData.pix_key,
+        city_slug: userData.city_slug,
+        store_slug: userData.store_slug
+    };
+
+    return profile;
+};
+

@@ -1,23 +1,9 @@
-# Lista de Tarefas - Correções de Sistema
+# Lista de Tarefas - Ajuste de Conformidade PIX
 
-## Backend
-- [x] Corrigir funções de parceiros em `cloud.ts`
-- [x] Adicionar `partner_avatar`
-
-## Frontend
-- [x] **StoreRequest.tsx**: Fix de endereço e listagem
-- [x] **InternalOrders.tsx**: Fix de display e endereço
-- [x] **App.tsx**: 
-    - [x] Realtime Badge
-    - [x] **FIX**: Whitelist de rotas públicas (`order_tracking`)
-- [x] **DigitalMenu.tsx**:
-    - [x] **FIX**: Corrigir navegação no modal "Meus Pedidos" (Forçando reload)
-
-## Banco de Dados
-- [x] Tabela `store_delivery_partners`
-- [x] Coluna `delivery_location_reference`
-
-## Testes
-- [x] Testar fluxo completo de envio para entregador fixo
-- [x] Testar badge
-- [x] Validar navegação do menu digital aprimorada
+- [ ] Analisar `utils/pixPayloadGenerator.ts` para entender a geração atual.
+- [ ] Analisar `components/PixPaymentModal.tsx` para entender o uso atual.
+- [ ] Implementar `normalizarNomePix` em `utils/pixPayloadGenerator.ts` (Max 25 chars, sem acentos, chars especiais).
+- [ ] Implementar `normalizarCidadePix` em `utils/pixPayloadGenerator.ts` (Max 15 chars, sem UF, sem acentos, abreviação inteligente).
+- [ ] Atualizar `gerarPayloadPix` para usar as funções de normalização.
+- [ ] Refatorar `components/PixPaymentModal.tsx` para usar `useMemo` e garantir payload único e imutável por sessão.
+- [ ] Garantir que o botão "Copiar PIX" usa o mesmo payload do QR Code.

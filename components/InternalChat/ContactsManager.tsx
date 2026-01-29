@@ -18,9 +18,10 @@ interface ContactsManagerProps {
     storeId: string;
     onStartChat: (phoneNumber: string, contactName: string) => void;
     onClose?: () => void;
+    setToast?: (toast: { message: string, type: 'success' | 'error' | 'info' } | null) => void;
 }
 
-const ContactsManager: React.FC<ContactsManagerProps> = ({ storeId, onStartChat }) => {
+const ContactsManager: React.FC<ContactsManagerProps> = ({ storeId, onStartChat, setToast }) => {
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -97,7 +98,7 @@ const ContactsManager: React.FC<ContactsManagerProps> = ({ storeId, onStartChat 
             fetchContacts();
             handleCloseModal();
         } catch (error: any) {
-            await alert({ title: 'Erro', message: error.response?.data?.error || 'Erro ao salvar contato' });
+            if (setToast) setToast({ message: error.response?.data?.error || 'Erro ao salvar contato', type: 'error' });
         }
     };
 

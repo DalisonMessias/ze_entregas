@@ -638,6 +638,20 @@ export const AuthWrapper: React.FC = () => {
     );
   }
 
+  // PUBLIC TRACKING ROUTE
+  const isTrackingRoute = currentPath.startsWith('/track/');
+  if (isTrackingRoute) {
+    return (
+      <TourProvider>
+        <App
+          userId="guest"
+          userRole="delivery_person" // Default role for guest viewing tracking
+          initialUserStatus="active"
+        />
+      </TourProvider>
+    );
+  }
+
   if (session && userId) {
     return (
       <TourProvider>

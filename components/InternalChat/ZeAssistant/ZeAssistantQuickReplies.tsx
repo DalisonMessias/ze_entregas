@@ -8,9 +8,10 @@ import { useDialog } from '../../../utils/dialogService';
 
 interface ZeAssistantQuickRepliesProps {
     storeId: string;
+    setToast?: (toast: { message: string, type: 'success' | 'error' | 'info' } | null) => void;
 }
 
-export const ZeAssistantQuickReplies: React.FC<ZeAssistantQuickRepliesProps> = ({ storeId }) => {
+export const ZeAssistantQuickReplies: React.FC<ZeAssistantQuickRepliesProps> = ({ storeId, setToast }) => {
     const [replies, setReplies] = useState<QuickReply[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -41,12 +42,12 @@ export const ZeAssistantQuickReplies: React.FC<ZeAssistantQuickRepliesProps> = (
 
     const handleCreate = async () => {
         if (!trigger.trim() || !message.trim()) {
-            alert({ title: 'Atenção', message: 'Preencha o gatilho (ex: /pix) e a mensagem.' });
+            if (setToast) setToast({ message: 'Preencha o gatilho (ex: /pix) e a mensagem.', type: 'info' });
             return;
         }
 
         if (!trigger.startsWith('/')) {
-            alert({ title: 'Formato Inválido', message: 'O gatilho deve começar com "/" (ex: /ola).' });
+            if (setToast) setToast({ message: 'O gatilho deve começar com "/" (ex: /ola).', type: 'info' });
             return;
         }
 
@@ -60,7 +61,7 @@ export const ZeAssistantQuickReplies: React.FC<ZeAssistantQuickRepliesProps> = (
             }
         } catch (err) {
             console.error(err);
-            alert({ title: 'Erro', message: 'Não foi possível salvar a resposta rápida. Verifique se o gatilho já existe.' });
+            if (setToast) setToast({ message: 'Não foi possível salvar a resposta rápida. Verifique se o gatilho já existe.', type: 'error' });
         } finally {
             setIsSaving(false);
         }
@@ -82,7 +83,7 @@ export const ZeAssistantQuickReplies: React.FC<ZeAssistantQuickRepliesProps> = (
                 }
             } catch (err) {
                 console.error(err);
-                alert({ title: 'Erro', message: 'Erro ao excluir resposta rápida.' });
+                if (setToast) setToast({ message: 'Erro ao excluir resposta rápida.', type: 'error' });
             }
         }
     };

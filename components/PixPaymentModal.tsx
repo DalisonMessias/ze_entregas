@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { QrCode, Copy, Check, Info, Smartphone, ExternalLink, MessageCircle, X } from 'lucide-react';
 import { BaseModal } from './BaseModal';
 import { Button } from './Button';
+import { generatePixPayload } from '../utils/pixPayloadGenerator';
 
 // Nota: O usuário solicitou o uso da biblioteca QRious. 
 // Como ela é uma biblioteca externa que gera em um canvas, usaremos um ref.
@@ -30,84 +31,32 @@ export const PixPaymentModal: React.FC<PixPaymentModalProps> = ({
 }) => {
     const [copied, setCopied] = useState(false);
     const [qrError, setQrError] = useState(false);
+    const [pixPayload, setPixPayload] = useState('');
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const generatedRef = useRef(false);
 
-    // Função de geração de payload PIX seguindo padrões do Banco Central
-    const gerarPayloadPix = (valor: number) => {
-        const keyPix = pixData.key;
-        const citypix = pixData.city || 'Brazil';
-        const name = pixData.name || 'LOJA';
-
-        const ID_PAYLOAD_FORMAT_INDICATOR = "00";
-        const ID_MERCHANT_ACCOUNT_INFORMATION = "26";
-        const ID_MERCHANT_ACCOUNT_INFORMATION_GUI = "00";
-        const ID_MERCHANT_ACCOUNT_INFORMATION_KEY = "01";
-        const ID_MERCHANT_CATEGORY_CODE = "52";
-        const ID_TRANSACTION_CURRENCY = "53";
-        const ID_TRANSACTION_AMOUNT = "54";
-        const ID_COUNTRY_CODE = "58";
-        const ID_MERCHANT_NAME = "59";
-        const ID_MERCHANT_CITY = "60";
-        const ID_ADDITIONAL_DATA_FIELD_TEMPLATE = "62";
-        const ID_ADDITIONAL_DATA_FIELD_TEMPLATE_TXID = "05";
-        const ID_CRC16 = "63";
-
-        function removerCaracteresEspeciais(str: string) {
-            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "");
-        }
-
-        function _getValue(id: string, value: string) {
-            const size = String(value.length).padStart(2, "0");
-            return id + size + value;
-        }
-
-        function _getMechantAccountInfo() {
-            const gui = _getValue(ID_MERCHANT_ACCOUNT_INFORMATION_GUI, "br.gov.bcb.pix");
-            const key = _getValue(ID_MERCHANT_ACCOUNT_INFORMATION_KEY, keyPix);
-            return _getValue(ID_MERCHANT_ACCOUNT_INFORMATION, gui + key);
-        }
-
-        function _getAdditionalDataFieldTemplate() {
-            const randomDigits = Math.floor(10000 + Math.random() * 90000);
-            const txid = _getValue(ID_ADDITIONAL_DATA_FIELD_TEMPLATE_TXID, "TX" + String(randomDigits).padStart(5, '0'));
-            return _getValue(ID_ADDITIONAL_DATA_FIELD_TEMPLATE, txid);
-        }
-
-        function calcularCRC16(payload: string) {
-            let crc = 0xFFFF;
-            let poly = 0x1021;
-            let str = payload + "6304";
-            for (let i = 0; i < str.length; i++) {
-                crc ^= str.charCodeAt(i) << 8;
-                for (let j = 0; j < 8; j++) {
-                    crc = (crc & 0x8000) ? ((crc << 1) ^ poly) : (crc << 1);
-                }
-            }
-            return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-        }
-
-        const cleanedName = removerCaracteresEspeciais(name).substring(0, 25);
-        const cleanedCity = removerCaracteresEspeciais(citypix).substring(0, 15);
-
-        let payload =
-            _getValue(ID_PAYLOAD_FORMAT_INDICATOR, "01") +
-            _getMechantAccountInfo() +
-            _getValue(ID_MERCHANT_CATEGORY_CODE, "0000") +
-            _getValue(ID_TRANSACTION_CURRENCY, "986") +
-            _getValue(ID_TRANSACTION_AMOUNT, valor.toFixed(2)) +
-            _getValue(ID_COUNTRY_CODE, "BR") +
-            _getValue(ID_MERCHANT_NAME, cleanedName) +
-            _getValue(ID_MERCHANT_CITY, cleanedCity) +
-            _getAdditionalDataFieldTemplate();
-
-        const crc16 = calcularCRC16(payload);
-        return payload + ID_CRC16 + "04" + crc16;
-    };
-
-    const pixPayload = gerarPayloadPix(amount);
-
+    // Garantir que o payload seja gerado apenas uma vez quando o modal abrir
     useEffect(() => {
-        if (isOpen && canvasRef.current) {
+        if (isOpen && !generatedRef.current) {
+            const payload = generatePixPayload({
+                key: pixData.key,
+                name: pixData.name || '',
+                city: pixData.city || '',
+                amount: amount,
+                description: orderId ? `PEDIDO ${orderId.slice(0, 5)}` : ''
+            });
+            setPixPayload(payload);
+            generatedRef.current = true;
+        } else if (!isOpen) {
+            setPixPayload('');
+            generatedRef.current = false;
+            setCopied(false); // Resetar estado de cópia ao fechar
+        }
+    }, [isOpen, pixData, amount, orderId]);
+
+    // Efeito para gerar o QR Code no canvas
+    useEffect(() => {
+        if (isOpen && pixPayload && canvasRef.current) {
             try {
                 // Carregar script QRious se necessário ou assumir que está disponível
                 const generateQR = () => {
@@ -136,6 +85,7 @@ export const PixPaymentModal: React.FC<PixPaymentModalProps> = ({
     }, [isOpen, pixPayload]);
 
     const handleCopy = () => {
+        if (!pixPayload) return;
         navigator.clipboard.writeText(pixPayload);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);

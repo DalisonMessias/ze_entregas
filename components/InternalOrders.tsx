@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StoreProduct, Order, CartItem, Product, PaymentMethod, StoreDeliverySettings, StoreNeighborhoodFee } from '../types';
 import * as cloud from '../services/cloud';
-import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator, Truck, ShoppingCart, Utensils, ClipboardList, Settings, Eye } from 'lucide-react';
+import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator, Truck, ShoppingCart, Utensils, ClipboardList, Settings, Eye, ClockArrowDown } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { useDialog } from '../utils/dialogService';
@@ -34,7 +34,7 @@ const parseCurrency = (val: string): number => {
 
 export const InternalOrders: React.FC = () => {
     // View State
-    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'DELIVERY_READY' | 'PICKUP_READY' | 'LOCAL_READY' | 'COMPLETED' | 'TABLES_MANAGE'>('NEW_ORDER');
+    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'DELIVERY_READY' | 'PICKUP_READY' | 'LOCAL_READY' | 'COMPLETED' | 'TABLES_MANAGE'>('PRODUCTION');
     const [productionTab, setProductionTab] = useState<'QUEUE' | 'DELIVERY' | 'PICKUP' | 'LOCAL' | 'HISTORY' | 'CANCELLED'>('QUEUE');
 
     // Filtros de data para aba HISTORY
@@ -988,6 +988,13 @@ export const InternalOrders: React.FC = () => {
             {/* Header Tabs */}
             <div className="flex gap-2 mb-4">
                 <button
+                    onClick={() => { setView('PRODUCTION'); loadTickets(); }}
+                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'PRODUCTION' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
+                >
+                    <Printer className="w-4 h-4" />
+                    Produção
+                </button>
+                <button
                     onClick={() => setView('NEW_ORDER')}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'NEW_ORDER' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
                 >
@@ -1008,13 +1015,7 @@ export const InternalOrders: React.FC = () => {
                     <HistoryIcon className="w-4 h-4" />
                     Histórico
                 </button>
-                <button
-                    onClick={() => { setView('PRODUCTION'); loadTickets(); }}
-                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'PRODUCTION' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
-                >
-                    <Printer className="w-4 h-4" />
-                    Produção
-                </button>
+
                 <button
                     onClick={() => setView('TABLES_MANAGE')}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'TABLES_MANAGE' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
@@ -1812,7 +1813,7 @@ export const InternalOrders: React.FC = () => {
                                     onClick={() => setProductionTab('QUEUE')}
                                     className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex items-center gap-2 ${productionTab === 'QUEUE' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
                                 >
-                                    <Settings className="w-4 h-4" /> Fila de Produção
+                                    <ClockArrowDown className="w-4 h-4" /> Fila de Produção
                                 </button>
                                 <button
                                     onClick={() => setProductionTab('DELIVERY')}

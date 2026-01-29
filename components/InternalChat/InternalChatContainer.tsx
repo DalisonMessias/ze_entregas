@@ -58,7 +58,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
 
   // Estados para Modais de Funcionalidade
   const [showContactDetails, setShowContactDetails] = useState(false);
-  const [showBlockConfirm, setShowBlockConfirm] = useState<'block' | 'report' | null>(null);
+  const [showBlockConfirm, setShowBlockConfirm] = useState<'block' | 'unblock' | 'report' | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false); // New State
   const [showDeleteMessageConfirm, setShowDeleteMessageConfirm] = useState<string | null>(null); // New State
@@ -471,7 +471,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       setShowDeleteConfirm(null);
     } catch (error: any) {
       console.error('Erro detalhado ao deletar conversa:', error.response?.data || error.message);
-      alert(`Erro ao deletar conversa: ${error.response?.data?.error || error.message}. Verifique sua conexão.`);
+      setToast({ message: `Erro ao deletar conversa: ${error.response?.data?.error || error.message}. Verifique sua conexão.`, type: 'error' });
     } finally {
       setIsDeleting(false);
     }
@@ -497,7 +497,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       });
     } catch (e: any) {
       console.error('Erro ao editar mensagem:', e);
-      alert('Erro ao editar mensagem: ' + (e.response?.data?.message || e.message));
+      setToast({ message: 'Erro ao editar mensagem: ' + (e.response?.data?.message || e.message), type: 'error' });
       fetchMessages(selectedConversation?.conversation_id || ''); // Revert on error
     }
   };
@@ -518,7 +518,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       setShowDeleteMessageConfirm(null);
     } catch (e: any) {
       console.error('Erro ao apagar mensagem:', e);
-      alert('Erro ao apagar mensagem.');
+      setToast({ message: 'Erro ao apagar mensagem.', type: 'error' });
       fetchMessages(selectedConversation?.conversation_id || ''); // Revert
     }
   };
@@ -547,7 +547,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       });
     } catch (e: any) {
       console.error('Erro ao finalizar conversa:', e);
-      alert('Erro ao finalizar conversa: ' + (e.response?.data?.message || e.message));
+      setToast({ message: 'Erro ao finalizar conversa: ' + (e.response?.data?.message || e.message), type: 'error' });
     }
   };
 
@@ -625,12 +625,12 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   };
 
 
-  const handleContactAction = async (action: 'block' | 'report') => {
+  const handleContactAction = async (action: 'block' | 'unblock' | 'report') => {
     if (!selectedConversation) return;
 
     // Se for denúncia, manter simulação por enquanto ou implementar depois
     if (action === 'report') {
-      alert(`Ação "Denunciar" realizada para: ${selectedConversation.conversation_id} (Simulado)`);
+      setToast({ message: `Ação "Denunciar" realizada para: ${selectedConversation.conversation_id} (Simulado)`, type: 'info' });
       return;
     }
 
@@ -640,20 +640,29 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
 
       await axios.post(`${API_BASE_URL}/contacts/block`, {
         conversationId: selectedConversation.conversation_id,
-        action: 'block',
+        action: action,
         storeId
       });
 
-      // Atualizar localmente
+      // Atualizar localmente de forma consistente
+      const isBlocked = action === 'block';
+
       setConversations(prev => prev.map(c =>
-        c.conversation_id === selectedConversation.conversation_id ? { ...c, is_blocked: true } : c
+        c.conversation_id === selectedConversation.conversation_id ? { ...c, is_blocked: isBlocked } : c
       ));
 
-      setToast({ message: `Contato ${displayName} bloqueado com sucesso.`, type: 'success' });
-      setSelectedConversation(null);
+      setSelectedConversation(prev => prev ? { ...prev, is_blocked: isBlocked } : null);
+
+      setToast({
+        message: `Contato ${displayName} ${isBlocked ? 'bloqueado' : 'desbloqueado'} com sucesso.`,
+        type: 'success'
+      });
+
+      // NOVO: Não deselecionar automaticamente ao bloquear, para permitir desbloqueio imediato se necessário
+      // mas podemos querer fechar o chat se for a preferência. O requisito diz que após a ação o estado deve ser refletido imediatamente.
     } catch (error: any) {
-      console.error('Erro ao bloquear contato:', error);
-      setToast({ message: 'Erro ao bloquear contato. Verifique a conexão.', type: 'error' });
+      console.error(`Erro ao ${action === 'block' ? 'bloquear' : 'desbloquear'} contato:`, error);
+      setToast({ message: `Erro ao realizar ação. Verifique a conexão.`, type: 'error' });
     }
     setShowBlockConfirm(null);
   };
@@ -675,7 +684,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       }
     } catch (error) {
       console.error('Erro ao salvar nome do contato:', error);
-      alert('Erro ao salvar nome do contato.');
+      setToast({ message: 'Erro ao salvar nome do contato.', type: 'error' });
     }
   };
 
@@ -683,7 +692,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     if (!selectedConversation) return;
 
     if (!isOnline || status.status !== 'CONNECTED') {
-      alert('O envio de arquivos não é suportado no modo offline.');
+      setToast({ message: 'O envio de arquivos não é suportado no modo offline.', type: 'info' });
       return;
     }
 
@@ -712,7 +721,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       fetchMessages(selectedConversation.conversation_id);
     } catch (error) {
       console.error('Erro ao enviar mídia:', error);
-      alert('Erro ao enviar mídia: ' + (error as any).message);
+      setToast({ message: 'Erro ao enviar mídia: ' + (error as any).message, type: 'error' });
     }
   };
 
@@ -735,7 +744,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       console.error('Erro ao reiniciar serviço:', error);
       setStatus({ status: 'DISCONNECTED' });
       const errorMessage = error.response?.data?.message || error.message || 'Erro desconhecido';
-      alert(`Não foi possível iniciar a conexão.\n\nDetalhe técnico: ${errorMessage}\n\nVerifique se o seu servidor backend está rodando na porta correta (4000) e se o Supabase está acessível.`);
+      setToast({ message: `Não foi possível iniciar a conexão.\n\nDetalhe técnico: ${errorMessage}`, type: 'error' });
     }
   };
 
@@ -998,6 +1007,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
               storeId={storeId}
               onStartChat={handleStartChatFromContact}
               onClose={() => setActiveTab('conversations')}
+              setToast={setToast}
             />
           )}
 
@@ -1147,7 +1157,13 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                   </button>
 
                   <button onClick={() => setShowContactDetails(true)} className="p-2 hover:bg-gray-200 rounded-full" title="Ver Detalhes"><Users size={20} /></button>
-                  <button onClick={() => setShowBlockConfirm('block')} className="p-2 hover:bg-gray-200 rounded-full" title="Bloquear Contato"><AlertTriangle size={20} /></button>
+                  <button
+                    onClick={() => setShowBlockConfirm(selectedConversation.is_blocked ? 'unblock' : 'block')}
+                    className={`p-2 hover:bg-gray-200 rounded-full ${selectedConversation.is_blocked ? 'text-brand-600' : ''}`}
+                    title={selectedConversation.is_blocked ? "Desbloquear Contato" : "Bloquear Contato"}
+                  >
+                    <AlertTriangle size={20} />
+                  </button>
                 </div>
               </div>
 
@@ -1170,13 +1186,23 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
 
               {/* Input Area */}
               <div className="bg-[#F0F2F5] p-0 z-20 min-h-[62px] flex-shrink-0 border-t border-gray-200">
-                <MessageInput
-                  onSend={handleSendMessage}
-                  onSendMedia={handleSendMedia}
-                  onSendAudio={handleSendAudio}
-                  pixKey={pixKey}
-                  storeId={storeId}
-                />
+                {selectedConversation.is_blocked ? (
+                  <div className="flex items-center justify-center h-full py-4 px-6 bg-red-50/50">
+                    <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
+                      <Shield size={18} />
+                      ESTE CONTATO ESTÁ BLOQUEADO. DESBLOQUEIE PARA ENVIAR MENSAGENS.
+                    </div>
+                  </div>
+                ) : (
+                  <MessageInput
+                    onSend={handleSendMessage}
+                    onSendMedia={handleSendMedia}
+                    onSendAudio={handleSendAudio}
+                    pixKey={pixKey}
+                    storeId={storeId}
+                    setToast={setToast}
+                  />
+                )}
               </div>
             </>
           ) : (
@@ -1287,10 +1313,10 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
               </div>
               <div className="mt-8 grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => { setShowContactDetails(false); setShowBlockConfirm('block'); }}
-                  className="px-4 py-2 border border-red-200 text-red-600 rounded hover:bg-red-50 font-medium transition-colors"
+                  onClick={() => { setShowContactDetails(false); setShowBlockConfirm(selectedConversation.is_blocked ? 'unblock' : 'block'); }}
+                  className={`px-4 py-2 border rounded font-medium transition-colors ${selectedConversation.is_blocked ? 'border-brand-200 text-brand-600 hover:bg-brand-50' : 'border-red-200 text-red-600 hover:bg-red-50'}`}
                 >
-                  Bloquear
+                  {selectedConversation.is_blocked ? 'Desbloquear' : 'Bloquear'}
                 </button>
                 <button
                   onClick={() => setShowContactDetails(false)}
@@ -1310,7 +1336,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
           <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
             <h3 className="text-lg font-bold mb-2">Confirmar ação?</h3>
             <p className="text-sm text-gray-600 mb-6">
-              Você deseja realmente {showBlockConfirm === 'block' ? 'bloquear' : 'denunciar'} este contato? Esta ação não pode ser desfeita.
+              Você deseja realmente {showBlockConfirm === 'block' ? 'bloquear' : showBlockConfirm === 'unblock' ? 'desbloquear' : 'denunciar'} este contato?
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -1432,7 +1458,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
               <ZeAssistantDashboard storeId={storeId} />
-              <ZeAssistantQuickReplies storeId={storeId} />
+              <ZeAssistantQuickReplies storeId={storeId} setToast={setToast} />
               <ZeAssistantConfig storeId={storeId} />
               <ZeAssistantRulesManager storeId={storeId} />
             </div>

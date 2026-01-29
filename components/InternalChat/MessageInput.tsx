@@ -12,12 +12,13 @@ interface MessageInputProps {
   onSendAudio?: (blob: Blob) => void;
   pixKey?: string;
   storeId?: string;
+  setToast?: (toast: { message: string, type: 'success' | 'error' | 'info' } | null) => void;
 }
 
 import * as cloud from '../../services/cloud';
 import { QuickReply } from '../../types';
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSendAudio, pixKey, storeId }) => {
+const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSendAudio, pixKey, storeId, setToast }) => {
   const [text, setText] = useState('');
   const [replies, setReplies] = useState<QuickReply[]>([]);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
@@ -140,7 +141,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
       }, 1000);
     } catch (err) {
       console.error('Erro ao acessar microfone:', err);
-      alert('Não foi possível acessar o microfone.');
+      if (setToast) setToast({ message: 'Não foi possível acessar o microfone.', type: 'error' });
     }
   };
 
@@ -204,7 +205,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
     } else if (type === 'pix') {
       const keyToUse = pixKey || "";
       if (!keyToUse) {
-        alert("Nenhuma chave PIX configurada.");
+        if (setToast) setToast({ message: "Nenhuma chave PIX configurada.", type: 'info' });
         return;
       }
       onSend(`Chave PIX da Loja:\n${keyToUse}\n\nPor favor, envie o comprovante após o pagamento.`);
@@ -452,7 +453,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
       <CameraModal isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
       <PollModal isOpen={showPoll} onClose={() => setShowPoll(false)} onSend={handlePollSend} />
       <ContactPickerModal isOpen={showContact} onClose={() => setShowContact(false)} onSelect={handleContactSelect} storeId={storeId} />
-      {storeId && <StickerPickerModal isOpen={showSticker} onClose={() => setShowSticker(false)} onSelect={handleStickerSelect} storeId={storeId} />}
+      {storeId && <StickerPickerModal isOpen={showSticker} onClose={() => setShowSticker(false)} onSelect={handleStickerSelect} storeId={storeId} setToast={setToast} />}
     </div>
   );
 };

@@ -3,7 +3,8 @@ import { Smartphone, Lock, User, QrCode, CheckCircle, AlertTriangle, X, DollarSi
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
-import { UserTerminal, UserTerminalHistoryItem, PartnerFeeSettings, FinancialStatementItem, ShopSettings, ShopCoupon, SalesSimulation, UserRole, AssociatedStore, Order } from '../types';
+import { UserTerminal, UserTerminalHistoryItem, PartnerFeeSettings, FinancialStatementItem, ShopSettings, ShopCoupon, SalesSimulation, UserRole, AssociatedStore, Order, PartnerProfile } from '../types';
+import { generatePixPayload } from '../utils/pixPayloadGenerator';
 import { generatePaymentQRCode, checkPaymentStatus } from '../services/paymentGateway';
 import { Logo } from './Logo';
 import { ReceiptModal } from './ReceiptModal';
@@ -192,7 +193,7 @@ const Key: React.FC<{ children: React.ReactNode, onClick: () => void, className?
     <button
         onClick={onClick}
         disabled={disabled}
-        className={`h-14 rounded-lg flex items-center justify-center text-2xl font-bold transition-transform duration-100 ease-in-out active:scale-95 ${className}`}
+        className={`h-12 rounded-md flex items-center justify-center text-xl font-bold transition-transform duration-100 ease-in-out active:scale-95 ${className}`}
     >
         {children}
     </button>
@@ -202,8 +203,8 @@ const Keypad: React.FC<{ onKeyPress: (key: string) => void, onConfirm?: () => vo
     const baseKeyStyle = "bg-gray-100 text-gray-900 hover:bg-gray-200 border-t border-l border-r border-gray-200 border-b-2 border-gray-300 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:border-gray-700";
 
     return (
-        <div className="flex flex-col gap-2 p-3 rounded-lg bg-white shadow-xl border-b-2 border-gray-300">
-            <div className="grid grid-cols-3 gap-2">
+        <div className="flex flex-col gap-1 p-2 rounded-lg bg-white shadow-xl border-b-2 border-gray-300">
+            <div className="grid grid-cols-3 gap-1">
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(k => (
                     <Key key={k} onClick={() => onKeyPress(k)} className={baseKeyStyle}>{k}</Key>
                 ))}
@@ -211,17 +212,17 @@ const Keypad: React.FC<{ onKeyPress: (key: string) => void, onConfirm?: () => vo
                 <Key key='0' onClick={() => onKeyPress('0')} className={baseKeyStyle}>0</Key>
                 <Key onClick={() => onKeyPress('#')} className={baseKeyStyle}>#</Key>
             </div>
-            <div className="grid grid-cols-2 gap-2 mt-2">
+            <div className="grid grid-cols-2 gap-1 mt-1">
                 <Key onClick={onClear} className={`bg-yellow-400 text-black hover:bg-yellow-500 rounded-lg border-b-2 border-yellow-600 dark:border-yellow-700`}>
-                    <ArrowLeft size={24} />
+                    <ArrowLeft size={20} />
                 </Key>
                 <Key onClick={onBackspace} className={`bg-red-600 text-white hover:bg-red-700 rounded-lg border-b-2 border-red-800 dark:border-red-900`}>
-                    <X size={24} />
+                    <X size={20} />
                 </Key>
 
             </div>
             {showConfirm && (
-                <Button onClick={onConfirm} disabled={confirmDisabled} className="w-full h-14 mt-2 text-lg bg-green-600 hover:bg-green-700 text-white rounded-lg border-b-2 border-green-800 dark:border-green-900">
+                <Button onClick={onConfirm} disabled={confirmDisabled} className="w-full h-12 mt-1 text-lg bg-green-600 hover:bg-green-700 text-white rounded-lg border-b-2 border-green-800 dark:border-green-900">
                     Confirmar
                 </Button>
             )}
@@ -371,6 +372,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const [simMessage, setSimMessage] = useState('');
     const [pendingOpId, setPendingOpId] = useState<string | null>(null);
     const [activatingMessageIndex, setActivatingMessageIndex] = useState(0); // New state for activation messages
+    const [partnerProfile, setPartnerProfile] = useState<PartnerProfile | null>(null);
 
     // New Hooks & State for Features
     const { isDemoMode, toggleDemoMode, getMockData } = useDemoMode();
@@ -687,6 +689,14 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
             return;
         }
 
+        // CONFIRMAÇÃO MANUAL DE PIX ESTÁTICO
+        if (payload === 'MANUAL_PIX_CONFIRM') {
+            setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p));
+            closePaymentOverlay();
+            await dialog.alert({ title: 'Confirmado', message: 'Pagamento Pix registrado com sucesso.' });
+            return;
+        }
+
         try {
             if (method === 'PIX') {
                 const result = await generatePaymentQRCode(activePayment?.amount || 0, {
@@ -803,11 +813,14 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                     return;
                 }
 
-                const [fees, role, stores] = await Promise.all([
+                const [fees, role, stores, profile] = await Promise.all([
                     cloud.getPublicFeeSettings(),
                     cloud.getUserRole(),
-                    cloud.getPartnerAssociatedStores()
+                    cloud.getPartnerAssociatedStores(),
+                    cloud.getMyPartnerProfile()
                 ]);
+
+                if (profile) setPartnerProfile(profile);
 
                 if (fees) {
                     setFeeSettings(fees);
@@ -1180,26 +1193,72 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         setActivePayment({ id: paymentId, method, amount });
         if (method === 'PIX') {
             try {
-                // Call real payment gateway
-                const result = await generatePaymentQRCode(amount, {
-                    description: `Pagamento ZéPoint - Terminal ${terminal?.terminal_id}`,
-                    terminal_id: terminal?.id,
-                    type: 'pos_sale'
+                // Lógica de determinação de dados Pix (Loja vs Entregador)
+                let pixData = { key: '', name: '', city: '' };
+
+                // 1. Se tem uma loja SELECIONADA (Operação para terceiros)
+                if (selectedStore) {
+                    // Tenta obter dados da loja (assumindo que selectedStore possa ter ou precise buscar)
+                    // Como selectedStore é parcial, vamos tentar usar o terminal da loja se tiver user_id, 
+                    // mas o ideal é ter os dados Pix da loja.
+                    // Vamos tentar assumir que se o usuário tem permissão na loja, ele tem acesso a esses dados
+                    // ou vamos usar o partnerProfile se for store_partner operando sua própria loja.
+
+                    // Fallback: Tentamos pegar do terminal da loja ou profile se disponível.
+                    // Para simplificar e garantir funcionamento: Se eu sou o DONO da loja selecionada (verificação simples)
+                    if (partnerProfile && partnerProfile.is_super_store) {
+                        // Se sou super store, meus dados Pix são da loja
+                        pixData = {
+                            key: partnerProfile.pix_key || partnerProfile.config?.pixdata?.key || '',
+                            name: partnerProfile.name,
+                            city: partnerProfile.city || ''
+                        };
+                    } else {
+                        // Se sou entregador operando para uma loja, PRECISARIA dos dados da loja.
+                        // O sistema atual não carrega o profile completo da loja associada aqui.
+                        // Mas vou tentar usar o que temos. Se não tiver chave da loja, alerta.
+                        // Vou buscar a loja completa via cloud se necessário?
+                        // Melhor: vou usar uma chamada rapida para pegar info da loja se não tiver.
+                        const storeFull = await cloud.getStoreById(selectedStore.id);
+                        if (storeFull) {
+                            pixData = {
+                                key: storeFull.pix_key || storeFull.config?.pixdata?.key || '',
+                                name: storeFull.name,
+                                city: storeFull.city || ''
+                            };
+                        }
+                    }
+                }
+                // 2. Se sou Entregador (venda propria/avulsa) ou Store Partner na minha visão pessoal
+                else if (partnerProfile) {
+                    pixData = {
+                        key: partnerProfile.pix_key || partnerProfile.config?.pixdata?.key || '',
+                        name: partnerProfile.name,
+                        city: partnerProfile.city || ''
+                    };
+                }
+
+                if (!pixData.key) {
+                    await dialog.alert({ title: 'Dados Pix Incompletos', message: 'Não foi encontrada uma chave Pix configurada para este recebedor.' });
+                    return;
+                }
+
+                // Geração Local (Offline-ready) do Payload Pix
+                const payload = generatePixPayload({
+                    key: pixData.key,
+                    name: pixData.name || 'RECEBEDOR',
+                    city: pixData.city || 'BRASIL',
+                    amount: amount,
+                    description: `POS-${terminal?.terminal_id?.slice(0, 4) || 'ZE'}`
                 });
-                setPixCodeData(result.qrCode);
-                setPixTxId(result.txId);
-                setIsPolling(true);
+
+                setPixCodeData(payload);
+                setPixTxId('STATIC_PIX'); // Marcador interno
+                setIsPolling(false); // Pix estático não tem polling automático de gateway
+
             } catch (e: any) {
                 const msg = e?.message || '';
-                let type: 'timeout' | 'auth' | 'validation' | 'unknown' = 'unknown';
-                if (msg.toLowerCase().includes('timeout')) type = 'timeout';
-                else if (msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('token')) type = 'auth';
-                else if (msg.toLowerCase().includes('invalid')) type = 'validation';
-                setErrorMsg('Falha ao gerar PIX: ' + msg);
-                setErrorType(type);
-                // Dont go to error step immediately, allow retry
                 await dialog.alert({ title: 'Erro no PIX', message: 'Falha ao gerar PIX: ' + msg });
-                // closePaymentOverlay();
             }
         }
     };
@@ -1353,11 +1412,56 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
                     {activePayment.method === 'PIX' && (
                         <>
-                            <p className="text-sm text-gray-500 mb-6">Peça para o cliente escanear o QR Code.</p>
-                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
+                            <p className="text-xs text-center text-gray-500 mb-4 px-4 bg-yellow-50 dark:bg-yellow-900/20 py-2 rounded-lg border border-yellow-100 dark:border-yellow-800">
+                                Aguarde o cliente realizar o pagamento e clique em confirmar.
+                            </p>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 mx-auto">
                                 <PaymentQRCode value={pixCodeData || ''} />
                             </div>
-                            <p className="text-xs text-gray-400">O status será atualizado automaticamente quando o pagamento for confirmado.</p>
+
+                            {/* Botão de Confirmação Manual para Pix Estático */}
+                            <div className="w-full px-6 mb-4">
+                                <Button
+                                    onClick={() => {
+                                        dialog.confirm({
+                                            title: 'Confirmar Pagamento',
+                                            message: 'Você confirma que visualizou o comprovante ou recebeu o valor em sua conta?',
+                                            confirmButtonText: 'Sim, Recebi',
+                                            cancelButtonText: 'Cancelar'
+                                        }).then(confirmed => {
+                                            if (confirmed) {
+                                                confirmPayment(activePayment.id, 'ZE_QR', 'MANUAL_PIX_CONFIRM');
+                                            }
+                                        });
+                                    }}
+                                    fullWidth
+                                    className="bg-green-600 hover:bg-green-700 text-white rounded-xl py-4 text-lg shadow-lg shadow-green-500/20"
+                                >
+                                    <CheckCircle className="w-6 h-6 mr-2" />
+                                    Confirmar Recebimento
+                                </Button>
+                            </div>
+
+                            {/* Código Copia e Cola */}
+                            <div className="w-full px-6 mb-2">
+                                <div className="text-center">
+                                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Copia e Cola</p>
+                                    <div className="flex gap-2">
+                                        <input
+                                            readOnly
+                                            value={pixCodeData || ''}
+                                            className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs font-mono text-gray-600 dark:text-gray-300 truncate"
+                                        />
+                                        <Button
+                                            onClick={() => handleCopyToClipboard(pixCodeData || '', 'Código PIX')}
+                                            className="shrink-0"
+                                            size="sm"
+                                        >
+                                            <Copy className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
                         </>
                     )}
 
@@ -1416,7 +1520,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                         <div className="w-32 h-32 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6 animate-pulse">
                             <Smartphone className="w-16 h-16 text-gray-400" />
                         </div>
-                        <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">ZéPoint</h2>
+                        {/* <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">ZéPoint</h2> RE MO VI DO */}
                         <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm">
                             Vamos ativar sua ZéPoint para começar a receber pagamentos de forma rápida e segura.
                         </p>
@@ -2181,12 +2285,12 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
             <div className="w-full h-full sm:max-w-sm bg-brand-600 shadow-2xl overflow-hidden relative flex flex-col p-2 sm:rounded-xl">
 
-                <img src="https://raw.githubusercontent.com/DalisonMessias/cdn.rabbit.gg/refs/heads/main/assets/64536456457.svg" alt="Logo" className="h-8 mb-2.5" />
+                {/* REMOVIDO LOGO SUPERIOR: <img src="https://raw.githubusercontent.com/DalisonMessias/cdn.rabbit.gg/refs/heads/main/assets/64536456457.svg" alt="Logo" className="h-8 mb-2.5" /> */}
                 <div className="flex-1 bg-white dark:bg-gray-900 rounded-xl shadow-inner mb-2 overflow-hidden relative flex flex-col">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-b-2xl flex justify-center items-center p-1">
+                    {/* <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-b-2xl flex justify-center items-center p-1">
                         <div className="w-12 h-1.5 bg-gray-700 rounded-full"></div>
                     </div>
-                    <StatusBar />
+                    <StatusBar /> RE MO VI DO PARA GANHAR ESPAÇO */}
                     {renderScreenContent()}
                     {renderPaymentOverlay()}
                     <WhatsAppReceiptModal

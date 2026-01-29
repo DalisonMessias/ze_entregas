@@ -583,6 +583,17 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
         const isAuthenticated = userId && userId !== 'guest';
 
+        // DEBUG ROUTING
+        console.log('[App Routing Debug]', {
+            path,
+            tabFromUrl,
+            isAuthenticated,
+            userId,
+            effectiveRole,
+            isInPublicTabs: tabFromUrl && publicTabs.includes(tabFromUrl),
+            isInAuthTabs: tabFromUrl && authTabs.includes(tabFromUrl)
+        });
+
         // REDIRECIONAMENTO: Se o usuário estiver logado, não pode acessar as páginas de autenticação
         if (isAuthenticated && tabFromUrl && authTabs.includes(tabFromUrl)) {
             logger.warn('AUTH_PAGE_ACCESS_DENIED_LOGGED_IN', { tab: tabFromUrl, user: userId });
