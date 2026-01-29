@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useRef, useState, useEffect, ReactNode } from 'react';
 import { CustomDialog } from '../components/CustomDialog';
+import { Toast } from '../components/Toast';
 
 interface DialogOptions {
     title: string;
@@ -13,6 +14,7 @@ interface DialogContextType {
     alert: (options: string | DialogOptions) => Promise<void>;
     confirm: (options: string | DialogOptions) => Promise<boolean>;
     prompt: (options: DialogOptions) => Promise<string | null>;
+    toast: (options: { message: string; type: 'success' | 'error' | 'info' | 'warning'; duration?: number }) => void;
 }
 
 const DialogContext = createContext<DialogContextType | undefined>(undefined);
@@ -35,6 +37,19 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         message: '',
         resolve: null,
         reject: null,
+        confirmButtonText: '',
+        cancelButtonText: '',
+    });
+
+    const [toastState, setToastState] = useState<{
+        isOpen: boolean;
+        message: string;
+        type: 'success' | 'error' | 'info' | 'warning';
+        duration?: number;
+    }>({
+        isOpen: false,
+        message: '',
+        type: 'info',
     });
 
     // Keep refs to the current resolver and dialog type so we can safely
@@ -139,6 +154,19 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         });
     };
 
+    const toast = (options: { message: string; type: 'success' | 'error' | 'info' | 'warning'; duration?: number }) => {
+        setToastState({
+            isOpen: true,
+            message: options.message,
+            type: options.type,
+            duration: options.duration || 3000,
+        });
+    };
+
+    const closeToast = () => {
+        setToastState(prev => ({ ...prev, isOpen: false }));
+    };
+
     // Cleanup: if the provider unmounts while a dialog is open, resolve the
     // pending promise with a safe default so callers don't hang forever.
     useEffect(() => {
@@ -156,7 +184,7 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }, []);
 
     return (
-        <DialogContext.Provider value={{ alert, confirm, prompt }}>
+        <DialogContext.Provider value={{ alert, confirm, prompt, toast }}>
             {children}
             <CustomDialog
                 isOpen={dialogState.isOpen}
@@ -170,6 +198,14 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 cancelButtonText={dialogState.cancelButtonText}
                 placeholder={dialogState.placeholder}
             />
+            {toastState.isOpen && (
+                <Toast
+                    message={toastState.message}
+                    type={toastState.type}
+                    onClose={closeToast}
+                    duration={toastState.duration}
+                />
+            )}
         </DialogContext.Provider>
     );
 };

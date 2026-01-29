@@ -1306,6 +1306,68 @@ DROP POLICY IF EXISTS "Public can read streets cache" ON public.streets_cache;
 CREATE POLICY "Public can read streets cache" ON public.streets_cache
     FOR SELECT USING (true);
 
+-- Tabela de solicitações de novas ruas (29/01/2026)
+CREATE TABLE IF NOT EXISTS public.street_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    street_name TEXT NOT NULL,
+    city TEXT NOT NULL,
+    state TEXT,
+    neighborhood TEXT,
+    reference TEXT,
+    latitude NUMERIC(9, 6),
+    longitude NUMERIC(9, 6),
+    status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.street_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view and create their own street requests" ON public.street_requests;
+CREATE POLICY "Users can view and create their own street requests" ON public.street_requests
+    FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can manage all street requests" ON public.street_requests;
+CREATE POLICY "Admins can manage all street requests" ON public.street_requests
+    FOR ALL USING (public.is_admin());
+
+DROP TRIGGER IF EXISTS handle_street_requests_updated_at ON public.street_requests;
+CREATE TRIGGER handle_street_requests_updated_at BEFORE UPDATE ON public.street_requests
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Tabela de ruas aprovadas manualmente (29/01/2026)
+CREATE TABLE IF NOT EXISTS public.approved_streets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    city TEXT NOT NULL,
+    state TEXT,
+    neighborhood TEXT,
+    latitude NUMERIC(9, 6),
+    longitude NUMERIC(9, 6),
+    request_id UUID REFERENCES public.street_requests(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS approved_streets_city_idx ON public.approved_streets (city);
+CREATE INDEX IF NOT EXISTS approved_streets_name_idx ON public.approved_streets (name);
+
+ALTER TABLE public.approved_streets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can read approved streets" ON public.approved_streets;
+CREATE POLICY "Public can read approved streets" ON public.approved_streets
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage approved streets" ON public.approved_streets;
+CREATE POLICY "Admins can manage approved streets" ON public.approved_streets
+    FOR ALL USING (public.is_admin());
+
+DROP TRIGGER IF EXISTS handle_approved_streets_updated_at ON public.approved_streets;
+CREATE TRIGGER handle_approved_streets_updated_at BEFORE UPDATE ON public.approved_streets
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
 -- Tabela de avatares (para armazenamento de arquivos, via storage.from('avatars'))
 CREATE TABLE IF NOT EXISTS public.avatars (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -2235,6 +2297,54 @@ BEGIN
     END IF;
 END $$;
 DROP POLICY IF EXISTS "Admins can manage city requests" ON public.city_requests;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage city requests' AND tablename = 'city_requests') THEN
+        CREATE POLICY "Admins can manage city requests" ON public.city_requests FOR ALL USING (public.is_admin());
+    END IF;
+END $$;
+
+-- Atualização Manual (29/01/2026): Removendo ibge_code conforme solicitado
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'available_cities' AND column_name = 'ibge_code') THEN
+        ALTER TABLE public.available_cities DROP COLUMN ibge_code;
+    END IF;
+END $$;
+
+-- Tabela de Bairros (29/01/2026): Criando tabela neighborhoods para substituir city_districts de forma consistente
+CREATE TABLE IF NOT EXISTS public.neighborhoods (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    city_id UUID NOT NULL REFERENCES public.available_cities(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    api_external_id INTEGER,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_city_neighborhood UNIQUE (city_id, name)
+);
+
+-- Índices e Trigger para neighborhoods
+CREATE INDEX IF NOT EXISTS neighborhoods_city_id_idx ON public.neighborhoods (city_id);
+CREATE INDEX IF NOT EXISTS neighborhoods_active_idx ON public.neighborhoods (active);
+
+DROP TRIGGER IF EXISTS handle_neighborhoods_updated_at ON public.neighborhoods;
+CREATE TRIGGER handle_neighborhoods_updated_at BEFORE UPDATE ON public.neighborhoods
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS para neighborhoods
+ALTER TABLE public.neighborhoods ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can read active neighborhoods" ON public.neighborhoods;
+CREATE POLICY "Public can read active neighborhoods" ON public.neighborhoods
+    FOR SELECT USING (active = TRUE OR public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can manage neighborhoods" ON public.neighborhoods;
+CREATE POLICY "Admins can manage neighborhoods" ON public.neighborhoods
+    FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.neighborhoods TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.neighborhoods TO authenticated;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage city requests' AND tablename = 'city_requests') THEN
@@ -10564,3 +10674,176 @@ BEGIN
         ALTER TABLE public.ze_assistant_conversations ALTER COLUMN customer_phone DROP NOT NULL;
     END IF;
 END $$;
+
+-- ==================================================================
+-- [29/01/2026] STREET REQUESTS & APPROVED STREETS
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.street_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.user_profiles(id),
+    street_name TEXT NOT NULL,
+    neighborhood TEXT,
+    city TEXT NOT NULL,
+    state TEXT,
+    reference TEXT,
+    latitude NUMERIC(15, 8),
+    longitude NUMERIC(15, 8),
+    status TEXT DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.approved_streets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    city TEXT NOT NULL,
+    state TEXT,
+    neighborhood TEXT,
+    latitude NUMERIC(15, 8),
+    longitude NUMERIC(15, 8),
+    request_id UUID REFERENCES public.street_requests(id),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RLS para street_requests
+ALTER TABLE public.street_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage all street requests" ON public.street_requests;
+CREATE POLICY "Admins can manage all street requests" ON public.street_requests 
+    FOR ALL USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can insert their own street requests" ON public.street_requests;
+CREATE POLICY "Users can insert their own street requests" ON public.street_requests 
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can view their own street requests" ON public.street_requests;
+CREATE POLICY "Users can view their own street requests" ON public.street_requests 
+    FOR SELECT USING (auth.uid() = user_id);
+
+-- RLS para approved_streets
+ALTER TABLE public.approved_streets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage all approved streets" ON public.approved_streets;
+CREATE POLICY "Admins can manage all approved streets" ON public.approved_streets 
+    FOR ALL USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Public/Authenticated can view approved streets" ON public.approved_streets;
+CREATE POLICY "Public/Authenticated can view approved streets" ON public.approved_streets 
+    FOR SELECT USING (true);
+
+-- Triggers para updated_at
+DROP TRIGGER IF EXISTS tr_street_requests_updated_at ON public.street_requests;
+CREATE TRIGGER tr_street_requests_updated_at BEFORE UPDATE ON public.street_requests
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP TRIGGER IF EXISTS tr_approved_streets_updated_at ON public.approved_streets;
+CREATE TRIGGER tr_approved_streets_updated_at BEFORE UPDATE ON public.approved_streets
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Grants para permitir acesso básico (o RLS filtrará o conteúdo)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.street_requests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.approved_streets TO authenticated;
+GRANT SELECT ON public.street_requests TO anon;
+GRANT SELECT ON public.approved_streets TO anon;
+
+-- Ajuste de políticas com casts de UUID para garantir compatibilidade
+DROP POLICY IF EXISTS "Users can insert their own street requests" ON public.street_requests;
+CREATE POLICY "Users can insert their own street requests" ON public.street_requests 
+    FOR INSERT WITH CHECK (auth.uid()::uuid = user_id::uuid);
+
+DROP POLICY IF EXISTS "Users can view their own street requests" ON public.street_requests;
+CREATE POLICY "Users can view their own street requests" ON public.street_requests 
+    FOR SELECT USING (auth.uid()::uuid = user_id::uuid);
+
+
+-- ==================================================================
+-- 9.x MÓDULO DE MEDIAÇÃO INTELIGENTE (SEM DESTRUIR DADOS)
+-- ==================================================================
+
+-- 1. Adicionar colunas de códigos e flag de mediação na tabela orders
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'pickup_code') THEN
+        ALTER TABLE public.orders ADD COLUMN pickup_code TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'delivery_code') THEN
+        ALTER TABLE public.orders ADD COLUMN delivery_code TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'return_code') THEN
+        ALTER TABLE public.orders ADD COLUMN return_code TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'is_mediation_active') THEN
+        ALTER TABLE public.orders ADD COLUMN is_mediation_active BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
+
+-- 2. Tabela de Sessões de Mediação
+CREATE TABLE IF NOT EXISTS public.mediation_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'ACTIVE', -- 'ACTIVE', 'RESOLVED', 'ESCALATED', 'CANCELLED'
+    current_step TEXT DEFAULT 'INIT',
+    ai_memory JSONB DEFAULT '{}'::jsonb, -- Contexto e memória da IA para essa sessão
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT unique_active_mediation_per_order UNIQUE (order_id) -- Uma mediação por pedido
+);
+
+-- RLS para mediation_sessions
+ALTER TABLE public.mediation_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage mediation sessions" ON public.mediation_sessions;
+CREATE POLICY "Admins can manage mediation sessions" ON public.mediation_sessions FOR ALL USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Participants can view mediation sessions" ON public.mediation_sessions;
+CREATE POLICY "Participants can view mediation sessions" ON public.mediation_sessions
+    FOR SELECT USING (
+        auth.uid() IN (
+            SELECT user_id FROM public.orders WHERE id = mediation_sessions.order_id
+            UNION
+            SELECT driver_id::uuid FROM public.orders WHERE id = mediation_sessions.order_id AND driver_id IS NOT NULL
+             -- Loja? store_id geralmente não é auth.uid direto se for perfil de loja, mas vamos simplificar:
+            UNION
+            SELECT id FROM public.user_profiles WHERE id = (SELECT store_id::uuid FROM public.orders WHERE id = mediation_sessions.order_id)
+        )
+    );
+
+-- Triggers para updated_at em mediation_sessions
+DROP TRIGGER IF EXISTS handle_mediation_sessions_updated_at ON public.mediation_sessions;
+CREATE TRIGGER handle_mediation_sessions_updated_at BEFORE UPDATE ON public.mediation_sessions
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+-- 3. Tabela de Ações da Mediação (Logs Auditáveis)
+CREATE TABLE IF NOT EXISTS public.mediation_actions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID NOT NULL REFERENCES public.mediation_sessions(id) ON DELETE CASCADE,
+    action_type TEXT NOT NULL, -- 'MESSAGE', 'DECISION', 'COMMAND', 'ESCALATION'
+    description TEXT,
+    payload JSONB DEFAULT '{}'::jsonb, -- Detalhes da ação (ex: código gerado, motivo)
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS para mediation_actions
+ALTER TABLE public.mediation_actions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view mediation actions" ON public.mediation_actions;
+CREATE POLICY "Admins can view mediation actions" ON public.mediation_actions FOR SELECT USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Systems can insert mediation actions" ON public.mediation_actions;
+-- Assumindo que o backend (service role) insere, mas se for via client (IA simulada), precisamos de permissão
+CREATE POLICY "Participants can view actions" ON public.mediation_actions
+    FOR SELECT USING (
+        session_id IN (SELECT id FROM public.mediation_sessions) 
+        -- Simplificado, idealmente checaria se o usuário participa da sessão
+    );
+
+-- 4. Grants
+GRANT ALL ON public.mediation_sessions TO authenticated;
+GRANT ALL ON public.mediation_actions TO authenticated;
+GRANT ALL ON public.mediation_sessions TO service_role;
+GRANT ALL ON public.mediation_actions TO service_role;
+

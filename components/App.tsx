@@ -85,6 +85,8 @@ const PartnerDelivery = React.lazy(() => import('./PartnerDelivery').then(m => (
 const OrderTracking = React.lazy(() => import('./OrderTracking/OrderTracking').then(m => ({ default: m.OrderTracking })));
 const UserOrders = React.lazy(() => import('./UserOrders').then(m => ({ default: m.UserOrders })));
 const StoreChatPage = React.lazy(() => import('./DigitalMenu/StoreChatPage').then(m => ({ default: m.StoreChatPage })));
+const StreetRequestPage = React.lazy(() => import('../src/pages/StreetRequestPage').then(m => ({ default: m.StreetRequestPage })));
+const StreetRequestsAdmin = React.lazy(() => import('../src/pages/StreetRequestsAdmin').then(m => ({ default: m.StreetRequestsAdmin })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -105,7 +107,7 @@ export type ActiveTab =
     | 'admin_slides' | 'admin_tips' | 'admin_chat' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_pix_config' | 'admin_location_map' | 'admin_base_catalog'
     | 'order_tracking'
     | 'admin_store_categories' | 'admin_global_coupons' | 'admin_image_gallery'
-    | 'admin_insurance'
+    | 'admin_insurance' | 'admin_street_requests' | 'admin_mediation'
     | 'profile'
     | 'support'
     | 'shop'
@@ -168,7 +170,8 @@ export type ActiveTab =
     | 'home'
     | 'my_orders'
     | 'digital_menu'
-    | 'store_public_chat';
+    | 'store_public_chat'
+    | 'street_request';
 
 
 interface AppProps {
@@ -770,7 +773,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     const generalTabs = new Set<ActiveTab>([
         'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'internal_chat',
-        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat'
+        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat', 'street_request'
     ]);
 
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
@@ -788,7 +791,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
             'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
-            'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance'
+            'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation'
         ]),
         store_partner: new Set<ActiveTab>([
             'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans', 'store_promotions'
@@ -1129,6 +1132,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuSection title="Gestão de Usuários" />
                             <MenuButton icon={Users} label="Todos os Usuários" tab="admin_users" />
                             <MenuButton icon={Store} label="Gerenciar Lojas" tab="admin_lojas" />
+                            <MenuButton icon={MapPin} label="Solicitações de Ruas" tab="admin_street_requests" />
                             <MenuButton icon={FileCheck} label="Validação de Parceiros" tab="admin_validation" />
                             <MenuButton icon={Wallet} label="Controle de Saldos" tab="admin_wallet_control" />
                             <MenuButton icon={ShieldAlert} label="Segurança & Fraude" tab="admin_security" />

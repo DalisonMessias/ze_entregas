@@ -1,20 +1,9 @@
-# Lista de Tarefas - Integração PIX e Recarga
+# Lista de Tarefas - Correção Mediação
 
-## Tarefas Concluídas
-
-- [x] Atualizar schema do banco de dados (`payment_gateway_settings`, `gateway_name` enum) em `supabase_global.sql`.
-- [x] Criar componente `AdminPixConfig.tsx` para configurar chaves PIX.
-- [x] Integrar `AdminPixConfig` no `AdminPanel.tsx` e rotas do `App.tsx`.
-- [x] Adicionar botão de menu "Configurar PIX" no painel Admin.
-- [x] Atualizar `services/paymentGateway.ts` para suportar geração de PIX (Estático/Manual).
-- [x] Atualizar `PixChargeModal.tsx` para lidar com UX de pagamento manual (aviso, confirmação).
-- [x] Atualizar `StoreWallet.tsx` para usar `PixChargeModal` e integrar fluxo de recarga.
-- [x] Corrigir definições de tipos (`AdminSubTab` em `types.ts`).
-- [x] Corrigir erro de sintaxe SQL em `supabase_global.sql` (DO $$ aninhado).
-- [x] Corrigir inicialização de gateways em `services/cloud.ts` para garantir exibição do PIX.
-
-## Observações
-
-- O fluxo de PIX implementado é **Manual/Estático** (o usuário faz o PIX e o admin confere).
-- O gateway 'mercadopago' também está configurado, mas o PIX manual serve como fallback ou método principal sem taxas de gateway.
-- A verificação de status manual requer ação humana no painel (em desenvolvimento futuro: painel de conferência de transações manuais).
+- [x] Configurar URL amigável para o Painel de Mediação <!-- id: 1 -->
+    - [x] Atualizar `utils/routeMap.ts` mapeando `admin_mediation` para `/admin/mediacao`
+- [x] Resolver erro de tabela não encontrada <!-- id: 2 -->
+    - [x] Verificar tabelas no arquivo mestre `supabase_global.sql` (Linha 10784+)
+    - [x] Garantir inexistência de arquivos SQL separados (Deletado `fix_mediation_tables.sql`)
+- [x] Verificação <!-- id: 3 -->
+    - [x] Confirmar funcionamento das rotas (/admin/mediacao)

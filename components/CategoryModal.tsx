@@ -4,11 +4,17 @@ import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
+import { Toast } from './Toast';
 
 interface CategoryModalProps {
     isOpen: boolean;
     onClose: () => void;
     onCategoriesChange?: () => void;
+}
+
+interface ToastState {
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
 }
 
 export const CategoryModal: React.FC<CategoryModalProps> = ({
@@ -20,7 +26,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     const [newCategoryName, setNewCategoryName] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const { confirm, alert } = useDialog();
+    const [toast, setToast] = useState<ToastState | null>(null);
+    const { confirm } = useDialog();
 
     const loadCategories = async () => {
         setIsLoading(true);
@@ -48,10 +55,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             setNewCategoryName('');
             await loadCategories();
             onCategoriesChange?.();
-            await alert({ title: 'Sucesso', message: 'Categoria criada com sucesso!' });
+            setToast({ message: 'Categoria criada com sucesso!', type: 'success' });
+            // Fechar modal automaticamente após 300ms
+            setTimeout(() => {
+                onClose();
+            }, 300);
         } catch (error: any) {
             console.error("Erro ao criar categoria:", error);
-            await alert({ title: 'Erro', message: "Erro ao criar categoria: " + (error.message || 'Verifique se o nome já existe.') });
+            setToast({
+                message: error.message || 'Erro ao criar categoria. Verifique se o nome já existe.',
+                type: 'error'
+            });
         } finally {
             setIsSaving(false);
         }
@@ -70,10 +84,10 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 await cloud.deleteStoreCategory(id);
                 await loadCategories();
                 onCategoriesChange?.();
-                await alert({ title: 'Sucesso', message: 'Categoria excluída!' });
+                setToast({ message: 'Categoria excluída!', type: 'success' });
             } catch (error) {
                 console.error("Erro ao excluir categoria:", error);
-                await alert({ title: 'Erro', message: "Não foi possível excluir a categoria." });
+                setToast({ message: 'Não foi possível excluir a categoria.', type: 'error' });
             } finally {
                 setIsSaving(false);
             }
@@ -133,6 +147,15 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                     </Button>
                 </div>
             </div>
+
+            {/* Toast Notification */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div>
     );
 };

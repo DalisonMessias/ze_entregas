@@ -41,6 +41,8 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/catalogo-produtos': 'admin_base_catalog',
     '/admin/categorias-loja': 'admin_store_categories',
     '/admin/galeria-imagens': 'admin_image_gallery',
+    '/admin/solicitacoes-ruas': 'admin_street_requests',
+    '/admin/mediacao': 'admin_mediation',
 
     // Shared / Core Routes
     '/perfil': 'profile',

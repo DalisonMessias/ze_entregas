@@ -17,9 +17,11 @@ import {
     adminProcessCityRequest,
     adminUpdateUserPassword,
     adminCreateUserManual,
-    adminLogStatusChange
+    adminLogStatusChange,
+    adminGetStreetRequests,
+    adminProcessStreetRequest
 } from '../services/cloud';
-import { ManagedUser, UserRole, UserStatus, PartnerProfile, PartnerDocument, City, CityRequest, AdminSubTab, PartnerLevelBenefit } from '../types';
+import { ManagedUser, UserRole, UserStatus, PartnerProfile, PartnerDocument, City, CityRequest, AdminSubTab, PartnerLevelBenefit, StreetRequest } from '../types';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
 import { CitySelector } from './CitySelector';
@@ -63,6 +65,8 @@ import { AdminStores } from './AdminStores';
 import { AdminBaseCatalog } from './AdminBaseCatalog';
 import { AdminStoreCategories } from './AdminStoreCategories';
 import { AdminImageGallery } from './Admin/AdminImageGallery';
+import { StreetRequestsAdmin } from '../src/pages/StreetRequestsAdmin';
+import { AdminMediation } from './AdminMediation';
 
 
 // --- HELPERS ---
@@ -846,13 +850,11 @@ const CityManagement: React.FC = () => {
     const [isAddCityModalOpen, setIsAddCityModalOpen] = useState(false);
     const [newName, setNewName] = useState('');
     const [newState, setNewState] = useState('');
-    const [newIbgeCode, setNewIbgeCode] = useState('');
 
     // Edit City Modal
     const [editingCity, setEditingCity] = useState<City | null>(null);
     const [editName, setEditName] = useState('');
     const [editState, setEditState] = useState('');
-    const [editIbgeCode, setEditIbgeCode] = useState('');
 
     useEffect(() => {
         loadData();
@@ -886,12 +888,11 @@ const CityManagement: React.FC = () => {
         setSubmitting(true);
         try {
             console.log('[handleAddCity] Chamando adminAddCity...');
-            await adminAddCity(newName, newState, newIbgeCode);
+            await adminAddCity(newName, newState);
             console.log('[handleAddCity] Sucesso!');
 
             setNewName('');
             setNewState('');
-            setNewIbgeCode('');
             setIsAddCityModalOpen(false); // Close modal
 
             await alert("Cidade adicionada com sucesso!");
@@ -949,7 +950,6 @@ const CityManagement: React.FC = () => {
         setEditingCity(city);
         setEditName(city.name);
         setEditState(city.state);
-        setEditIbgeCode(city.ibge_code || '');
     };
 
     const handleSaveChanges = async () => {
@@ -958,7 +958,7 @@ const CityManagement: React.FC = () => {
 
         setSubmitting(true);
         try {
-            await adminEditCity(editingCity.id, editName, editState, editIbgeCode);
+            await adminEditCity(editingCity.id, editName, editState);
             setEditingCity(null);
             await alert("Cidade editada com sucesso!");
             loadData(true);
@@ -1101,10 +1101,6 @@ const CityManagement: React.FC = () => {
                                 <label className="text-xs font-bold text-gray-500 mb-1 block">Estado (UF)</label>
                                 <input type="text" value={editState} onChange={e => setEditState(e.target.value.toUpperCase())} maxLength={2} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: SP" />
                             </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 mb-1 block">Código IBGE</label>
-                                <input type="text" value={editIbgeCode} onChange={e => setEditIbgeCode(e.target.value.replace(/\D/g, ''))} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono" placeholder="Opcional" />
-                            </div>
                         </div>
                         <div className="flex gap-2 justify-end mt-4">
                             <Button variant="outline" onClick={() => setEditingCity(null)}>Cancelar</Button>
@@ -1126,10 +1122,6 @@ const CityManagement: React.FC = () => {
                             <div>
                                 <label className="text-xs font-bold text-gray-500 mb-1 block">Estado (UF)</label>
                                 <input type="text" value={newState} onChange={e => setNewState(e.target.value.toUpperCase())} maxLength={2} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: SP" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 mb-1 block">Código IBGE</label>
-                                <input type="text" value={newIbgeCode} onChange={e => setNewIbgeCode(e.target.value.replace(/\D/g, ''))} className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono" placeholder="Opcional" />
                             </div>
                         </div>
                         <div className="flex gap-2 justify-end mt-4">
@@ -1190,6 +1182,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'base_catalog': return <AdminBaseCatalog />;
             case 'store_categories': return <AdminStoreCategories />;
             case 'image_gallery': return <AdminImageGallery />;
+            case 'street_requests': return <StreetRequestsAdmin />;
+            case 'mediation': return <AdminMediation />;
 
 
             default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;

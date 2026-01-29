@@ -47,12 +47,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full h-full flex items-center justify-between px-4 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-left focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+        className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border-2 border-gray-100 dark:border-gray-700 rounded-2xl text-base text-left focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all group"
       >
-        <span className={`font-bold ${selectedOption ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+        <span className={`${selectedOption ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
           {selectedOption ? selectedOption.label : placeholder}
         </span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (

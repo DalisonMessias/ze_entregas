@@ -13,7 +13,7 @@ import {
     UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator, StoreAddonOption, StoreAddonGroup,
     StoreDeliverySettings, StoreNeighborhoodFee, PaymentGatewayConfig, PaymentGatewayLog,
     FinancialTransaction, BlacklistEntry, PartnerRating, Claim,
-    CatalogBaseProduct, QuickReply
+    CatalogBaseProduct, QuickReply, StreetRequest, ApprovedStreet
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -1449,6 +1449,8 @@ export const adminUpdateShopSettings = async (settings: Partial<ShopSettings>) =
     await sb.from('shop_settings').upsert({ ...settings, id: '1' });
 };
 
+
+
 export const adminUpdateApiKey = async (serviceName: string, value: string) => {
     const sb = getClient();
     if (!sb) return;
@@ -1629,31 +1631,11 @@ export const adminGetCityRequests = async (): Promise<CityRequest[]> => {
     return data || [];
 };
 
-export const adminAddCity = async (name: string, state: string, ibge_code?: string) => {
+export const adminAddCity = async (name: string, state: string) => {
     const sb = getClient();
     if (!sb) throw new Error("Cliente Supabase não inicializado");
 
-    console.log(`[adminAddCity] Tentando adicionar: ${name}, ${state}, IBGE: ${ibge_code}`);
-
-    // Check if exists
-    console.log('[adminAddCity] Verificando duplicidade...');
-    const { data: existing, error: queryError } = await sb.from('available_cities')
-        .select('id')
-        .ilike('name', name)
-        .eq('state', state)
-        .maybeSingle();
-
-    if (queryError) {
-        console.error('[adminAddCity] Erro ao verificar existência:', queryError);
-        throw new Error('Erro ao verificar cidade: ' + queryError.message);
-    }
-
-    if (existing) {
-        console.warn('[adminAddCity] Cidade já existe:', existing);
-        throw new Error('Cidade já cadastrada.');
-    }
-
-    console.log('[adminAddCity] Duplicidade OK. Preparando insert...');
+    console.log(`[adminAddCity] Tentando adicionar diretamente: ${name}, ${state}`);
 
     // Preparar objeto de inserção
     const payload: any = {
@@ -1661,30 +1643,37 @@ export const adminAddCity = async (name: string, state: string, ibge_code?: stri
         state,
         is_active: true
     };
-    if (ibge_code) payload.ibge_code = ibge_code;
 
     console.log('[adminAddCity] Payload:', payload);
 
-    const { data: insertedData, error } = await sb.from('available_cities')
-        .insert(payload)
-        .select()
-        .single();
+    try {
+        const { data: insertedData, error } = await sb.from('available_cities')
+            .insert(payload)
+            .select()
+            .single();
 
-    if (error) {
-        console.error('[adminAddCity] Erro no insert:', error);
-        throw new Error('Erro ao adicionar cidade: ' + error.message);
+        if (error) {
+            console.error('[adminAddCity] Erro no insert:', error);
+            // Handle unique constraint violation specifically if needed, or just throw
+            if (error.code === '23505') { // Postgres unique_violation
+                throw new Error('Cidade já cadastrada (Constraint Unica).');
+            }
+            throw new Error('Erro ao adicionar cidade: ' + error.message);
+        }
+
+        console.log('[adminAddCity] Sucesso no insert:', insertedData);
+    } catch (e: any) {
+        console.error('[adminAddCity] Exceção capturada:', e);
+        throw e;
     }
-
-    console.log('[adminAddCity] Sucesso no insert:', insertedData);
 };
 
-export const adminEditCity = async (id: string, name: string, state: string, ibge_code?: string) => {
+export const adminEditCity = async (id: string, name: string, state: string) => {
     const sb = getClient();
     if (!sb) throw new Error("Cliente Supabase não inicializado");
     const { error } = await sb.from('available_cities').update({
         name,
-        state,
-        ibge_code: ibge_code || null
+        state
     }).eq('id', id);
     if (error) throw error;
 };
@@ -5851,3 +5840,225 @@ export const getStoreById = async (storeId: string): Promise<PartnerProfile | nu
     return profile;
 };
 
+/**
+ * Solicita o cadastro de uma nova rua.
+ */
+export const requestNewStreet = async (request: Partial<StreetRequest>) => {
+    const sb = getClient();
+    if (!sb) return { error: { message: "Client not ready" } };
+
+    const { user } = await getUserWithCache();
+    if (!user) return { error: { message: "Not logged in" } };
+
+    const { data, error } = await sb
+        .from('street_requests')
+        .insert({
+            ...request,
+            user_id: user.id,
+            status: 'PENDING'
+        })
+        .select()
+        .single();
+
+    return { data, error };
+};
+
+/**
+ * Busca todas as solicitações de ruas (Admin).
+ */
+export const adminGetStreetRequests = async (): Promise<StreetRequest[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('street_requests')
+        .select(`
+            *,
+            user:user_id (
+                name,
+                email
+            )
+        `)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching street requests:', error);
+        return [];
+    }
+    return data || [];
+};
+
+/**
+ * Processa uma solicitação de rua (Aprova ou Rejeita).
+ */
+export const adminProcessStreetRequest = async (requestId: string, status: 'APPROVED' | 'REJECTED', notes?: string) => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    try {
+        // 1. Atualizar status da solicitação
+        const { data: request, error: updateError } = await sb
+            .from('street_requests')
+            .update({ status, admin_notes: notes, updated_at: new Date().toISOString() })
+            .eq('id', requestId)
+            .select()
+            .single();
+
+        if (updateError) throw updateError;
+
+        // 2. Se aprovado, inserir na tabela de ruas oficiais (approved_streets)
+        if (status === 'APPROVED' && request) {
+            const { error: insertError } = await sb
+                .from('approved_streets')
+                .insert({
+                    name: request.street_name,
+                    city: request.city,
+                    state: request.state,
+                    neighborhood: request.neighborhood,
+                    latitude: request.latitude,
+                    longitude: request.longitude,
+                    request_id: request.id
+                });
+
+            if (insertError) throw insertError;
+        }
+
+        return { success: true };
+    } catch (e: any) {
+        console.error('Error processing street request:', e);
+        return { success: false, error: e.message };
+    }
+};
+
+/**
+ * Busca ruas aprovadas manualmente por cidade.
+ */
+export const getApprovedStreetsByCity = async (city: string): Promise<ApprovedStreet[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    // Busca exata ou parcial? O usuário pediu busca unificada.
+    // Vamos buscar por cidade.
+    const { data, error } = await sb
+        .from('approved_streets')
+        .select('*')
+        .eq('city', city);
+
+    if (error) {
+        console.error('Error fetching approved streets:', error);
+        return [];
+    }
+    return data || [];
+};
+
+/**
+ * Adiciona uma rua manualmente ao sistema (já aprovada).
+ */
+export const adminAddManualStreet = async (data: Partial<ApprovedStreet>) => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    try {
+        const { data: inserted, error } = await sb
+            .from('approved_streets')
+            .insert({
+                name: data.name,
+                city: data.city,
+                state: data.state || '',
+                neighborhood: data.neighborhood,
+                latitude: data.latitude,
+                longitude: data.longitude,
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return { success: true, data: inserted };
+    } catch (e: any) {
+        console.error('Error adding manual street:', e);
+        return { success: false, error: e.message };
+    }
+};
+
+/**
+ * Busca todas as ruas aprovadas (Catálogo).
+ */
+export const adminGetAllApprovedStreets = async (): Promise<ApprovedStreet[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('approved_streets')
+        .select('*')
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching all approved streets:', error);
+        return [];
+    }
+    return data || [];
+};
+
+/**
+ * Exclui uma rua do catálogo aprovado.
+ */
+export const adminDeleteApprovedStreet = async (id: string) => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    try {
+        const { error } = await sb
+            .from('approved_streets')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (e: any) {
+        console.error('Error deleting approved street:', e);
+        return { success: false, error: e.message };
+    }
+};
+
+
+export const getStoreSettings = async (storeId: string): Promise<any> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data, error } = await sb.from('shop_settings').select('*').eq('id', storeId).single();
+    if (error) {
+        console.error('Error fetching store settings:', error);
+        return null;
+    }
+    return data;
+};
+
+
+// --- MEDIATION MODULE ---
+export const adminGetMediationSessions = async () => {
+    const sb = getClient();
+    if (!sb) throw new Error("No client");
+
+    // Fetch sessions with order details
+    const { data, error } = await sb
+        .from('mediation_sessions')
+        .select('*, order:orders(id, display_id, status, customer_name, store(name), partner(name))')
+        .order('updated_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data;
+};
+
+export const adminGetMediationActions = async (sessionId: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("No client");
+
+    const { data, error } = await sb
+        .from('mediation_actions')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+
+    if (error) throw new Error(error.message);
+    return data;
+};

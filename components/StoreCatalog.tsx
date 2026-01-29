@@ -12,8 +12,14 @@ import { CategoryManager } from './CategoryManager';
 import { AddonManager } from './AddonManager';
 import { ProfileValidationAlert } from './ProfileValidationAlert';
 import { validateStoreProfile } from '../utils/profileValidation';
+import { Toast } from './Toast';
 
 type Tab = 'products' | 'categories' | 'addons' | 'import';
+
+interface ToastState {
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+}
 
 // Função auxiliar para normalizar texto (remove acentos e lowercase)
 const normalizeText = (text: string) => {
@@ -66,6 +72,7 @@ export const StoreCatalog: React.FC = () => {
     const { confirm, alert: showMessage } = useDialog();
     const imageInputRef = useRef<HTMLInputElement>(null);
     const [updatingImageProdId, setUpdatingImageProdId] = useState<string | null>(null);
+    const [toast, setToast] = useState<ToastState | null>(null);
 
     useEffect(() => {
         loadData();
@@ -121,19 +128,21 @@ export const StoreCatalog: React.FC = () => {
         try {
             if (productData.id) {
                 await cloud.updateStoreProduct(productData);
+                setToast({ message: 'Produto atualizado com sucesso!', type: 'success' });
             } else {
                 await cloud.createStoreProduct(productData);
+                setToast({ message: 'Produto criado com sucesso!', type: 'success' });
             }
             setIsProductModalOpen(false);
             loadData();
         } catch (error: any) {
             if (error.code === '42501') {
-                showMessage({
-                    title: 'Erro de Permissão',
-                    message: 'Sua sessão pode ter expirado ou você não tem permissão para esta ação. Tente recarregar a página.'
+                setToast({
+                    message: 'Sua sessão pode ter expirado ou você não tem permissão para esta ação. Tente recarregar a página.',
+                    type: 'error'
                 });
             } else {
-                alert("Erro ao salvar produto. Verifique sua conexão.");
+                setToast({ message: 'Erro ao salvar produto. Verifique sua conexão.', type: 'error' });
             }
         } finally {
             setIsSaving(false);
@@ -144,11 +153,10 @@ export const StoreCatalog: React.FC = () => {
         setIsSaving(true);
         try {
             await cloud.importBaseProductToStore(baseProduct);
-            showMessage({ title: 'Sucesso', message: `"${baseProduct.name}" importado com sucesso!` });
-            // Não muda mais de aba automaticamente para 'products'
+            setToast({ message: `"${baseProduct.name}" importado com sucesso!`, type: 'success' });
             loadData();
         } catch (error) {
-            alert("Erro ao importar produto.");
+            setToast({ message: 'Erro ao importar produto.', type: 'error' });
         } finally {
             setIsSaving(false);
         }
@@ -196,10 +204,10 @@ export const StoreCatalog: React.FC = () => {
                 image_url: publicUrl
             });
             loadData();
-            showMessage({ title: 'Sucesso', message: 'Imagem atualizada com sucesso!' });
+            setToast({ message: 'Imagem atualizada com sucesso!', type: 'success' });
         } catch (error) {
             console.error("Erro ao trocar imagem:", error);
-            alert("Erro ao enviar imagem.");
+            setToast({ message: 'Erro ao enviar imagem.', type: 'error' });
         } finally {
             setIsSaving(false);
             setUpdatingImageProdId(null);
@@ -250,6 +258,14 @@ export const StoreCatalog: React.FC = () => {
                 </div>
             )}
 
+            {/* Toast Notification */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
             <div className="flex-1 flex flex-col h-full min-w-0 lg:min-w-[500px]">
                 {/* Compact Control Bar */}
                 <div className="flex flex-col md:flex-row gap-4 mb-4 items-center">

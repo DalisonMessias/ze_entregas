@@ -11,6 +11,7 @@ import chatRoutes from './routes/chat.js';
 import zeAssistantRoutes from './routes/zeAssistant.js';
 import pwaRoutes from './routes/pwa.js';
 import paymentRoutes from './routes/payment.js';
+import mediationRoutes from './routes/mediation.js';
 import { initializeWebSocket } from './websocket.js';
 import './services/internalChatService.js'; // Chat Interno Nativo
 import './services/zeAssistantService.js';
@@ -46,6 +47,7 @@ app.use('/api/chat', chatRoutes); // Usar rotas de Chat Interno
 app.use('/api/ze-assistant', zeAssistantRoutes); // Usar rotas do Zé Assistente
 app.use('/pwa', pwaRoutes); // Rotas para PWA dinâmico
 app.use('/api/payment', paymentRoutes); // Rota para pagamentos
+app.use('/api/mediation', mediationRoutes); // Rotas de Mediação IA
 
 
 // Rota de health check

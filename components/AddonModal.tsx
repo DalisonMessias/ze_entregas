@@ -6,12 +6,18 @@ import { CustomInput } from './CustomInput';
 import { X, Plus, Trash2, Save, Loader2, GripVertical, Edit2, Check } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
+import { Toast } from './Toast';
 
 interface AddonModalProps {
     isOpen: boolean;
     onClose: () => void;
     groupToEdit?: StoreAddonGroup;
     onSave?: () => void;
+}
+
+interface ToastState {
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
 }
 
 export const AddonModal: React.FC<AddonModalProps> = ({ isOpen, onClose, groupToEdit, onSave }) => {
@@ -21,6 +27,7 @@ export const AddonModal: React.FC<AddonModalProps> = ({ isOpen, onClose, groupTo
     const [max, setMax] = useState(1);
     const [options, setOptions] = useState<StoreAddonOption[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [toast, setToast] = useState<ToastState | null>(null);
 
     // Internal state for new option
     const [newOptionName, setNewOptionName] = useState('');
@@ -105,7 +112,7 @@ export const AddonModal: React.FC<AddonModalProps> = ({ isOpen, onClose, groupTo
     const handleSave = async () => {
         if (!name.trim()) return;
         if (options.length === 0) {
-            alert("Adicione pelo menos uma opção.");
+            setToast({ message: 'Adicione pelo menos uma opção.', type: 'warning' });
             return;
         }
 
@@ -122,14 +129,21 @@ export const AddonModal: React.FC<AddonModalProps> = ({ isOpen, onClose, groupTo
 
             if (groupToEdit) {
                 await cloud.updateStoreAddonGroup({ ...groupData, id: groupToEdit.id });
+                setToast({ message: 'Grupo atualizado com sucesso!', type: 'success' });
             } else {
                 await cloud.createStoreAddonGroup(groupData);
+                setToast({ message: 'Grupo criado com sucesso!', type: 'success' });
             }
+
             onSave?.();
-            onClose();
+
+            // Fechar modal automaticamente após 300ms
+            setTimeout(() => {
+                onClose();
+            }, 300);
         } catch (error) {
             console.error("Erro ao salvar grupo:", error);
-            alert("Erro ao salvar grupo. Tente novamente.");
+            setToast({ message: 'Erro ao salvar grupo. Tente novamente.', type: 'error' });
         } finally {
             setIsSaving(false);
         }
@@ -311,6 +325,15 @@ export const AddonModal: React.FC<AddonModalProps> = ({ isOpen, onClose, groupTo
                     </div>
                 </div>
             </div>
+
+            {/* Toast Notification */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div>
     );
 };

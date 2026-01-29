@@ -1,21 +1,18 @@
-# Walkthrough - Correção de Tipagem no Chat Interno
 
-Concluí a correção do erro de tipagem no componente `InternalChatContainer.tsx`. O erro impedia a comparação correta do estado de bloqueio e causava um alerta de erro do TypeScript.
+# Walkthrough - Refinamento de Entrega e Retirada no Menu Digital
+
+Implementei melhorias na lógica de seleção de entrega e retirada, garantindo que a interface do usuário reflita fielmente as configurações da loja.
 
 ## Alterações Realizadas
 
-### Componente de Chat
-- **[InternalChatContainer.tsx](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/InternalChat/InternalChatContainer.tsx)**
-    - Atualizada a definição do estado `showBlockConfirm` para incluir explicitamente o tipo `'unblock'`.
-    - Removidos os casts `as any` que eram usados como contorno para a falta do tipo.
-    - Corrigida a lógica de renderização no modal de confirmação para lidar corretamente com a ação de desbloqueio.
+### Menu Digital
+- **[DigitalMenu.tsx](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/DigitalMenu/DigitalMenu.tsx)**
+    - **Sincronização de Estado**: Adicionado `useEffect` para garantir que o `deliveryType` seja válido com base nas configurações da loja, eliminando o uso de `setState` durante o render.
+    - **UI do Cabeçalho**: Refinados os badges informativos. Agora, o badge de "Retirada" aparece explicitamente se a loja permitir, e o de "Entrega" só é exibido se habilitado.
+    - **Lógica de Checkout**: Simplificada a renderização condicional das abas de entrega no carrinho.
 
-## Verificação
-- O erro `This comparison appears to be unintentional because the types '"report"' and '"unblock"' have no overlap.` foi resolvido.
-- A lógica de UI agora reflete corretamente se a ação é de Bloquear, Desbloquear ou Denunciar.
+## Verificação Realizada
+- [x] Remoção de alertas de loop de renderização (Side-effects no render).
+- [x] Badges do cabeçalho agora são dinâmicos baseados no `deliverySettings`.
 
-## Documentação
-- O arquivo `documentation/TASK_LIST.md` foi atualizado.
-- O histórico em `checklist.txt` foi preservado e atualizado com a nova entrada.
-
-render_diffs(file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/InternalChat/InternalChatContainer.tsx)
+render_diffs(file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/DigitalMenu/DigitalMenu.tsx)

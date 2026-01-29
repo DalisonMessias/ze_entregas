@@ -113,7 +113,6 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 });
             }
 
-            // Set default delivery type based on settings
             // Set default delivery type based on settings - ENHANCED LOGIC
             if (settingsData) {
                 const canDeliver = settingsData.is_own_delivery_enabled || settingsData.is_partner_delivery_enabled;
@@ -124,7 +123,6 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 } else if (!canDeliver && canPickup) {
                     setDeliveryType('PICKUP');
                 } else if (canDeliver && canPickup) {
-                    // Both available, keep default or logic preference
                     setDeliveryType('DELIVERY');
                 }
             }
@@ -156,6 +154,20 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             setCartRestored(true);
         }
     }, [store?.id, cartRestored]);
+
+    // --- SYNC DELIVERY TYPE ---
+    useEffect(() => {
+        if (deliverySettings) {
+            const canDeliverAvailable = deliverySettings.is_own_delivery_enabled || deliverySettings.is_partner_delivery_enabled;
+            const canPickupAvailable = deliverySettings.is_pickup_enabled;
+
+            if (canDeliverAvailable && !canPickupAvailable && deliveryType !== 'DELIVERY') {
+                setDeliveryType('DELIVERY');
+            } else if (!canDeliverAvailable && canPickupAvailable && deliveryType !== 'PICKUP') {
+                setDeliveryType('PICKUP');
+            }
+        }
+    }, [deliverySettings, deliveryType]);
 
     // Save cart on change
     useEffect(() => {
@@ -415,8 +427,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             message: `Seu pedido #${orderId.slice(0, 8).toUpperCase()} foi enviado para a loja.\n\nVocê será redirecionado para a tela de rastreamento.`
                         });
                         // Redirect to Tracking
-                        window.history.pushState({}, '', `/track/${orderId}`);
-                        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                        window.location.href = `/track/${orderId}`;
                     }
                 } else {
                     throw error || new Error('Falha ao criar pedido');
@@ -492,7 +503,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 }
             }
 
-            if (paymentMethod === 'DINHEIRO' && changeFor) {
+            if (paymentMethod === 'CASH' && changeFor) {
                 msg += `Troco para: ${changeFor}\n`;
             }
 
@@ -710,10 +721,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     Preparo: {store.preparation_time_min || 0}-{store.preparation_time_max || 0} min
                                 </div>
                             )}
-                            {deliverySettings && (
+                            {canDeliver && deliverySettings && (
                                 <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
                                     <Bike className="w-4 h-4 text-white" />
                                     {deliverySettings.delivery_time_min}-{deliverySettings.delivery_time_max} min
+                                </div>
+                            )}
+                            {canPickup && (
+                                <div className="flex items-center gap-1.5 bg-brand-500 text-white px-2.5 py-1.5 rounded-lg">
+                                    <StoreIcon className="w-4 h-4 text-white" /> Retirada
                                 </div>
                             )}
                             <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
@@ -1029,7 +1045,6 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                                     // 2. Only Delivery
                                     if (canDeliver && !canPickup) {
-                                        if (deliveryType !== 'DELIVERY') setDeliveryType('DELIVERY'); // Force state if wrong
                                         return (
                                             <div className="p-3 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 rounded-xl flex items-center justify-center gap-2 font-bold mb-4">
                                                 <Bike className="w-5 h-5" />
@@ -1040,7 +1055,6 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                                     // 3. Only Pickup
                                     if (!canDeliver && canPickup) {
-                                        if (deliveryType !== 'PICKUP') setDeliveryType('PICKUP'); // Force state if wrong
                                         return (
                                             <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 rounded-xl flex items-center justify-center gap-2 font-bold mb-4">
                                                 <StoreIcon className="w-5 h-5" />
@@ -1150,8 +1164,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                                     {/* CARTÃO */}
                                     <button
-                                        onClick={() => setPaymentMethod('CARTAO')}
-                                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'CARTAO' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        onClick={() => setPaymentMethod('CREDIT_CARD')}
+                                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'CREDIT_CARD' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                     >
                                         <CreditCard className="w-6 h-6" />
                                         <span className="text-xs font-bold">Cartão</span>
@@ -1160,7 +1174,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     {/* DINHEIRO */}
                                     <button
                                         onClick={() => {
-                                            setPaymentMethod('DINHEIRO');
+                                            setPaymentMethod('CASH');
                                             setTimeout(() => {
                                                 const changeInput = document.getElementById('change-input-container');
                                                 if (changeInput) {
@@ -1168,14 +1182,14 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                 }
                                             }, 100);
                                         }}
-                                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'DINHEIRO' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'CASH' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                     >
                                         <Banknote className="w-6 h-6" />
                                         <span className="text-xs font-bold">Dinheiro</span>
                                     </button>
                                 </div>
 
-                                {paymentMethod === 'DINHEIRO' && (
+                                {paymentMethod === 'CASH' && (
                                     <div id="change-input-container" className="animate-in fade-in pt-2">
                                         <CustomInput
                                             label="Troco para quanto?"

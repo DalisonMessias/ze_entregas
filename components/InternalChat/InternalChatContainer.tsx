@@ -11,7 +11,7 @@ import ContactsManager from './ContactsManager';
 import { BaseModal } from '../BaseModal';
 import { ZeAssistantConfig, ZeAssistantRulesManager, ZeAssistantDashboard, ZeAssistantQuickReplies } from './ZeAssistant/index';
 import { BroadcastModal } from './BroadcastModal';
-import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot, Shield, Megaphone } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot, Shield, Megaphone, Scale } from 'lucide-react';
 
 import { getApiBaseUrl } from '../../utils/apiConfig';
 import * as cloud from '../../services/cloud';
@@ -67,6 +67,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   const [showAssistantModal, setShowAssistantModal] = useState(false);
   const [showBroadcastModal, setShowBroadcastModal] = useState(false); // Novo state
   const [isAssistantActive, setIsAssistantActive] = useState(true);
+  const [isMediationActive, setIsMediationActive] = useState(false); // NOVO: Estado da mediação
   const [pixKey, setPixKey] = useState<string>("");
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -302,6 +303,66 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
     } catch (e) {
       console.warn('Erro ao buscar status do assistente:', e);
       setIsAssistantActive(true);
+    }
+
+    // Buscar status da mediação
+    checkMediationStatus(conversation.conversation_id);
+  };
+
+  const checkMediationStatus = async (conversationId: string) => {
+    // Tenta inferir orderId da conversa ou busca sessão ativa
+    // Por simplificação no MVP, vamos checar se existe sessão para algum pedido associado ou se a flag está ativa no pedido
+    try {
+      // Assume que conversation_id pode ser mapeado para order, ou buscamos via API customizada
+      // Aqui vamos simular/buscar da tabela orders se tivessemos o orderId
+      // Como o chat é por conversation_id, se for entregador, buscamos pedido ativo dele
+      // MVP: Chama endpoint para checar status
+      // Implementação real requereria saber qual pedido está sendo discutido.
+      setIsMediationActive(false); // Default off até implementação robusta de contexto
+    } catch (e) {
+      console.warn('Erro ao checar mediação', e);
+    }
+  };
+
+  const triggerMediation = async (text: string) => {
+    if (!isMediationActive || !selectedConversation) return;
+
+    // Tenta extrair ID do pedido do contexto ou usar um placeholder
+    // Em produção, o chat deve estar vinculado a um pedido
+    const orderId = "ORDER_ID_PLACEHOLDER"; // TODO: Obter do contexto do chat
+
+    try {
+      await axios.post('/api/mediation/run', {
+        orderId,
+        userRole: 'store', // Estamos no painel da loja
+        message: text,
+        storeId
+      });
+    } catch (e) {
+      console.error('Falha ao acionar mediação:', e);
+    }
+  };
+
+  const handleToggleMediation = async () => {
+    if (!selectedConversation) return;
+
+    // Optimistic Update
+    const newState = !isMediationActive;
+    setIsMediationActive(newState);
+
+    try {
+      // Assume que temos um endpoint para persistir o estado
+      const orderId = "ORDER_ID_PLACEHOLDER";
+      await axios.post('/api/mediation/status', {
+        orderId,
+        active: newState,
+        storeId
+      });
+      setToast({ message: `Mediação ${newState ? 'ativada' : 'desativada'}`, type: 'info' });
+    } catch (e) {
+      console.warn('Erro ao alternar mediação:', e);
+      setToast({ message: 'Erro ao salvar status da mediação.', type: 'error' });
+      setIsMediationActive(!newState); // Revert
     }
   };
 
@@ -582,6 +643,12 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
         console.error('Erro ao enviar mensagem:', error);
         setMessages(prev => prev.map(m => m.message_id === tempId ? { ...m, status: 'error' } : m));
       }
+
+      // Acionar Mediação (Fire and forget)
+      if (isMediationActive) {
+        triggerMediation(text);
+      }
+
     } else {
       // Modo Offline: Fila de sincronização
       console.log('Mensagem enfileirada para envio posterior (offline)');
@@ -1145,6 +1212,21 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                       <><RefreshCw size={14} /> PAUSAR ZÉ</>
                     ) : (
                       <><Bot size={14} /> RETOMAR ZÉ</>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleToggleMediation}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm ${isMediationActive
+                      ? 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                      : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                      }`}
+                    title={isMediationActive ? 'Parar Mediação Automática' : 'Iniciar Mediação Automática'}
+                  >
+                    {isMediationActive ? (
+                      <><Scale size={14} /> MEDIAÇÃO ON</>
+                    ) : (
+                      <><Scale size={14} /> MEDIAÇÃO OFF</>
                     )}
                   </button>
 

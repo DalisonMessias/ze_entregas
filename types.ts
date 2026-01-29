@@ -407,9 +407,16 @@ export interface Order {
     driver_id?: string;
     payment_status?: string;
 
+    // Mediation Fields
+    pickup_code?: string;
+    delivery_code?: string;
+    return_code?: string;
+    is_mediation_active?: boolean;
+
     store?: any;
     partner?: any;
     collaborator_name?: string;
+    display_id?: string;
     created_at: string;
 }
 
@@ -584,6 +591,35 @@ export interface CityRequest {
     state: string;
     user_email: string;
     status: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
+export interface StreetRequest {
+    id: string;
+    user_id: string;
+    street_name: string;
+    city: string;
+    state?: string;
+    neighborhood?: string;
+    reference?: string;
+    latitude?: number;
+    longitude?: number;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    admin_notes?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ApprovedStreet {
+    id: string;
+    name: string;
+    city: string;
+    state?: string;
+    neighborhood?: string;
+    latitude?: number;
+    longitude?: number;
+    request_id?: string;
+    created_at: string;
+    updated_at: string;
 }
 
 
@@ -842,7 +878,7 @@ export interface FinancialTransaction {
     created_at: string;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance';
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation';
 
 export interface AppNotification {
     id: string;
@@ -1502,3 +1538,23 @@ export interface AnalysisSuggestion {
 
 
 
+
+export interface MediationSession {
+    id: string;
+    order_id: string;
+    status: 'ACTIVE' | 'RESOLVED' | 'ESCALATED' | 'CANCELLED';
+    current_step: string;
+    ai_memory: any;
+    created_at: string;
+    updated_at: string;
+    order?: Order;
+}
+
+export interface MediationAction {
+    id: string;
+    session_id: string;
+    action_type: string;
+    description: string;
+    payload: any;
+    created_at: string;
+}

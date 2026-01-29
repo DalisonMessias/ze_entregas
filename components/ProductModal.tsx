@@ -5,6 +5,7 @@ import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
 import { CategorySelector } from './CategorySelector';
+import { Toast } from './Toast';
 
 interface ProductModalProps {
     isOpen: boolean;
@@ -12,6 +13,11 @@ interface ProductModalProps {
     product: Partial<StoreProduct>;
     onSave: (product: Partial<StoreProduct>) => Promise<void>;
     isSaving: boolean;
+}
+
+interface ToastState {
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({
@@ -25,6 +31,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     const [uploadingImage, setUploadingImage] = useState(false);
     const [wasUploaded, setWasUploaded] = useState(false);
     const [categories, setCategories] = useState<any[]>([]);
+    const [toast, setToast] = useState<ToastState | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -56,8 +63,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             setEditingProduct(prev => ({ ...prev, image_url: publicUrl }));
             setWasUploaded(true);
         } catch (error) {
-            // console.error("Erro ao subir imagem:", error);
-            alert("Não foi possível carregar a imagem. Verifique se o bucket de 'products' está configurado.");
+            console.error("Erro ao subir imagem:", error);
+            setToast({
+                message: 'Não foi possível carregar a imagem. Verifique se o bucket de produtos está configurado.',
+                type: 'error'
+            });
         } finally {
             setUploadingImage(false);
         }
@@ -227,6 +237,15 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     </Button>
                 </div>
             </div>
+
+            {/* Toast Notification */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div>
     );
 };
