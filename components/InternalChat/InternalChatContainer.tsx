@@ -26,12 +26,14 @@ interface InternalChatContainerProps {
   storeId?: string;
   attendantId?: string; // ID do atendente logado
   onBack?: () => void; // Função para voltar ao dashboard do app
+  filterType?: 'all' | 'customer' | 'driver'; // Novo filtro
 }
 
 const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   storeId = 'default-store-id',
   attendantId,
-  onBack
+  onBack,
+  filterType = 'all'
 }) => {
   const { status, setStatus, lastMessage, lastStatusUpdate } = useChatWebSocket(storeId);
   const [hasSession, setHasSession] = useState(false);
@@ -42,6 +44,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [profilePictures, setProfilePictures] = useState<Record<string, string>>({});
   const [isSyncing, setIsSyncing] = useState(false);
+  const [conversationTypes, setConversationTypes] = useState<Record<string, 'driver' | 'customer'>>({}); // Cache de tipos
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const [apiError, setApiError] = useState<string | null>(null);
@@ -67,10 +70,28 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
   const [showAssistantModal, setShowAssistantModal] = useState(false);
   const [showBroadcastModal, setShowBroadcastModal] = useState(false); // Novo state
   const [isAssistantActive, setIsAssistantActive] = useState(true);
-  const [isMediationActive, setIsMediationActive] = useState(false); // NOVO: Estado da mediação
+  const [isMediationActive, setIsMediationActive] = useState(filterType === 'driver'); // Ativa por padrão se for aba de entregadores
+  const [canShowMediation, setCanShowMediation] = useState(filterType === 'driver');
   const [pixKey, setPixKey] = useState<string>("");
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  // Verificar se deve exibir botão de mediação
+  useEffect(() => {
+    if (selectedConversation?.phone_number) {
+      cloud.checkDeliveryModeForChat(selectedConversation.phone_number).then(mode => {
+        // Oculta APENAS se for motorista PRÓPRIO (OWN).
+        // Exibe para ASSOCIATE ou PLATFORM.
+        if (mode === 'OWN') {
+          setCanShowMediation(false);
+        } else {
+          setCanShowMediation(true);
+        }
+      });
+    } else {
+      setCanShowMediation(true);
+    }
+  }, [selectedConversation]);
 
   const scrollFilters = (direction: 'left' | 'right') => {
     if (filterContainerRef.current) {
@@ -149,15 +170,22 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
       setApiError(null);
 
       uniqueConversations.forEach(async (conv) => {
+        // Enriquecer Foto
         if (!profilePictures[conv.conversation_id]) {
           try {
             const picRes = await axios.get(`${API_BASE_URL}/profile-picture/${conv.conversation_id}?storeId=${storeId}`);
             if (picRes.data?.profilePicUrl) {
               setProfilePictures(prev => ({ ...prev, [conv.conversation_id]: picRes.data.profilePicUrl }));
             }
-          } catch (e) {
-            // Ignora erro de foto
-          }
+          } catch (e) { /* Ignora */ }
+        }
+
+        // Enriquecer Tipo (Driver vs Customer)
+        if (!conversationTypes[conv.conversation_id] && conv.phone_number) {
+          try {
+            const mode = await cloud.checkDeliveryModeForChat(conv.phone_number);
+            setConversationTypes(prev => ({ ...prev, [conv.conversation_id]: mode ? 'driver' : 'customer' }));
+          } catch (e) { /* Ignora */ }
         }
       });
     } catch (error: any) {
@@ -400,6 +428,26 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
         (c.contact_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.conversation_id.includes(searchQuery)
       );
+    }
+
+    // 1.5 Aplicar Filtro de Tipo (Driver vs Customer)
+    // 1.5 Aplicar Filtro de Tipo (Driver vs Customer)
+    if (filterType !== 'all') {
+      sorted = sorted.filter(c => {
+        const type = conversationTypes[c.conversation_id];
+
+        if (filterType === 'driver') {
+          // Modo Rígido: Só mostra se CONFIRMADO como driver.
+          return type === 'driver';
+        }
+
+        if (filterType === 'customer') {
+          // Modo Excludente: Mostra tudo, EXCETO o que for confirmado como driver.
+          return type !== 'driver';
+        }
+
+        return true;
+      });
     }
 
     // 2. Aplicar Filtro de Categoria (Abas)
@@ -1214,21 +1262,23 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                       <><Bot size={14} /> RETOMAR ZÉ</>
                     )}
                   </button>
-
-                  <button
-                    onClick={handleToggleMediation}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm ${isMediationActive
-                      ? 'bg-purple-100 text-purple-600 hover:bg-purple-200'
-                      : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                      }`}
-                    title={isMediationActive ? 'Parar Mediação Automática' : 'Iniciar Mediação Automática'}
-                  >
-                    {isMediationActive ? (
-                      <><Scale size={14} /> MEDIAÇÃO ON</>
-                    ) : (
-                      <><Scale size={14} /> MEDIAÇÃO OFF</>
-                    )}
-                  </button>
+                  {/* Botão Mediação: Só exibe se não for chat de cliente e se o parceiro for qualificado */}
+                  {canShowMediation && filterType !== 'customer' && (
+                    <button
+                      onClick={handleToggleMediation}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm ${isMediationActive
+                        ? 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                        : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                        }`}
+                      title={isMediationActive ? 'Parar Mediação Automática' : 'Iniciar Mediação Automática'}
+                    >
+                      {isMediationActive ? (
+                        <><Scale size={14} /> MEDIAÇÃO ON</>
+                      ) : (
+                        <><Scale size={14} /> MEDIAÇÃO OFF</>
+                      )}
+                    </button>
+                  )}
 
                   <button
                     onClick={handleFinalizeConversation}
@@ -1359,226 +1409,242 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
 
 
       {/* Modal: Detalhes do Contato */}
-      {showContactDetails && selectedConversation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg w-[400px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
-            <div className="h-48 bg-gradient-to-br from-brand-600 to-brand-700 flex flex-col items-center justify-center relative">
-              <button
-                onClick={() => setShowContactDetails(false)}
-                className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"
-                title="Fechar"
-              >
-                <X size={20} />
-              </button>
-              <div className="w-24 h-24 rounded-full bg-white border-4 border-white shadow-lg overflow-hidden flex items-center justify-center mb-3">
-                {profilePictures[selectedConversation.conversation_id] ? (
-                  <img src={profilePictures[selectedConversation.conversation_id]} className="w-full h-full object-cover" alt="Perfil" />
-                ) : (
-                  <Users size={48} className="text-gray-300" />
-                )}
-              </div>
-              <h3 className="text-white text-xl font-bold">{selectedConversation.contact_name}</h3>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs text-gray-500 uppercase font-bold tracking-wider">Número</label>
-                  <p className="text-[#111B21] text-lg">+{selectedConversation.phone_number || selectedConversation.conversation_id.split('@')[0]}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 uppercase font-bold tracking-wider">Status</label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`w-2 h-2 rounded-full ${selectedConversation.status === 'open' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                    <p className="text-sm font-medium text-gray-700">{selectedConversation.status === 'open' ? 'Conversa Ativa' : 'Conversa Fechada'}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-8 grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => { setShowContactDetails(false); setShowBlockConfirm(selectedConversation.is_blocked ? 'unblock' : 'block'); }}
-                  className={`px-4 py-2 border rounded font-medium transition-colors ${selectedConversation.is_blocked ? 'border-brand-200 text-brand-600 hover:bg-brand-50' : 'border-red-200 text-red-600 hover:bg-red-50'}`}
-                >
-                  {selectedConversation.is_blocked ? 'Desbloquear' : 'Bloquear'}
-                </button>
+      {
+        showContactDetails && selectedConversation && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
+            <div className="bg-white rounded-lg w-[400px] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+              <div className="h-48 bg-gradient-to-br from-brand-600 to-brand-700 flex flex-col items-center justify-center relative">
                 <button
                   onClick={() => setShowContactDetails(false)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 font-medium transition-colors"
+                  className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"
+                  title="Fechar"
                 >
-                  Fechar
+                  <X size={20} />
+                </button>
+                <div className="w-24 h-24 rounded-full bg-white border-4 border-white shadow-lg overflow-hidden flex items-center justify-center mb-3">
+                  {profilePictures[selectedConversation.conversation_id] ? (
+                    <img src={profilePictures[selectedConversation.conversation_id]} className="w-full h-full object-cover" alt="Perfil" />
+                  ) : (
+                    <Users size={48} className="text-gray-300" />
+                  )}
+                </div>
+                <h3 className="text-white text-xl font-bold">{selectedConversation.contact_name}</h3>
+              </div>
+              <div className="p-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase font-bold tracking-wider">Número</label>
+                    <p className="text-[#111B21] text-lg">+{selectedConversation.phone_number || selectedConversation.conversation_id.split('@')[0]}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase font-bold tracking-wider">Status</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`w-2 h-2 rounded-full ${selectedConversation.status === 'open' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                      <p className="text-sm font-medium text-gray-700">{selectedConversation.status === 'open' ? 'Conversa Ativa' : 'Conversa Fechada'}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-8 grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => { setShowContactDetails(false); setShowBlockConfirm(selectedConversation.is_blocked ? 'unblock' : 'block'); }}
+                    className={`px-4 py-2 border rounded font-medium transition-colors ${selectedConversation.is_blocked ? 'border-brand-200 text-brand-600 hover:bg-brand-50' : 'border-red-200 text-red-600 hover:bg-red-50'}`}
+                  >
+                    {selectedConversation.is_blocked ? 'Desbloquear' : 'Bloquear'}
+                  </button>
+                  <button
+                    onClick={() => setShowContactDetails(false)}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 font-medium transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal: Confirmação de Bloqueio/Denúncia */}
+      {
+        showBlockConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
+            <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
+              <h3 className="text-lg font-bold mb-2">Confirmar ação?</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Você deseja realmente {showBlockConfirm === 'block' ? 'bloquear' : showBlockConfirm === 'unblock' ? 'desbloquear' : 'denunciar'} este contato?
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowBlockConfirm(null)}
+                  className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleContactAction(showBlockConfirm)}
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium shadow-sm"
+                >
+                  Confirmar
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Modal: Confirmação de Bloqueio/Denúncia */}
-      {showBlockConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
-            <h3 className="text-lg font-bold mb-2">Confirmar ação?</h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Você deseja realmente {showBlockConfirm === 'block' ? 'bloquear' : showBlockConfirm === 'unblock' ? 'desbloquear' : 'denunciar'} este contato?
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowBlockConfirm(null)}
-                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleContactAction(showBlockConfirm)}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium shadow-sm"
-              >
-                Confirmar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Modal: Confirmação de Logout */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
-            <h3 className="text-lg font-bold mb-2">Desconectar?</h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Você deseja realmente desconectarQR Code Chat desta loja? Todas as sessões serão encerradas.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmLogout}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium"
-              >
-                Desconectar
-              </button>
+      {
+        showLogoutConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
+            <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
+              <h3 className="text-lg font-bold mb-2">Desconectar?</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Você deseja realmente desconectarQR Code Chat desta loja? Todas as sessões serão encerradas.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmLogout}
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium"
+                >
+                  Desconectar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Modal: Finalizar Conversa */}
-      {showFinalizeConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
-            <h3 className="text-lg font-bold mb-2">Finalizar Conversa?</h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Esta conversa será movida para a aba "Encerradas".
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowFinalizeConfirm(false)}
-                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmFinalizeConversation}
-                className="px-4 py-2 bg-brand-600 text-white rounded hover:bg-brand-700 font-medium"
-              >
-                Finalizar
-              </button>
+      {
+        showFinalizeConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
+            <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
+              <h3 className="text-lg font-bold mb-2">Finalizar Conversa?</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Esta conversa será movida para a aba "Encerradas".
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowFinalizeConfirm(false)}
+                  className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmFinalizeConversation}
+                  className="px-4 py-2 bg-brand-600 text-white rounded hover:bg-brand-700 font-medium"
+                >
+                  Finalizar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Modal: Apagar Mensagem */}
-      {showDeleteMessageConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
-            <h3 className="text-lg font-bold mb-2">Apagar Mensagem?</h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Esta mensagem será apagada para todos os participantes.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowDeleteMessageConfirm(null)}
-                className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmDeleteMessage}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium"
-              >
-                Apagar
-              </button>
+      {
+        showDeleteMessageConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] animate-in fade-in duration-200">
+            <div className="bg-white rounded-lg p-6 w-80 shadow-2xl">
+              <h3 className="text-lg font-bold mb-2">Apagar Mensagem?</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Esta mensagem será apagada para todos os participantes.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowDeleteMessageConfirm(null)}
+                  className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmDeleteMessage}
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium"
+                >
+                  Apagar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Modal: Zé Assistente */}
-      {showAssistantModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 sticky top-0 z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-2xl flex items-center justify-center text-brand-600">
-                  <Bot size={28} />
+      {
+        showAssistantModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 sticky top-0 z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-2xl flex items-center justify-center text-brand-600">
+                    <Bot size={28} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">Zé Assistente</h3>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Inteligência Artificial</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">Zé Assistente</h3>
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Inteligência Artificial</p>
-                </div>
+                <button
+                  onClick={() => setShowAssistantModal(false)}
+                  className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl text-gray-400 transition-colors"
+                  title="Fechar"
+                >
+                  <X size={24} />
+                </button>
               </div>
-              <button
-                onClick={() => setShowAssistantModal(false)}
-                className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl text-gray-400 transition-colors"
-                title="Fechar"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-              <ZeAssistantDashboard storeId={storeId} />
-              <ZeAssistantQuickReplies storeId={storeId} setToast={setToast} />
-              <ZeAssistantConfig storeId={storeId} />
-              <ZeAssistantRulesManager storeId={storeId} />
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex justify-center">
-              <button
-                onClick={() => setShowAssistantModal(false)}
-                className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-black rounded-2xl transition-all shadow-lg active:scale-95 uppercase text-sm tracking-widest"
-              >
-                Entendido
-              </button>
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                <ZeAssistantDashboard storeId={storeId} />
+                <ZeAssistantQuickReplies storeId={storeId} setToast={setToast} />
+                <ZeAssistantConfig storeId={storeId} />
+                <ZeAssistantRulesManager storeId={storeId} />
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex justify-center">
+                <button
+                  onClick={() => setShowAssistantModal(false)}
+                  className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-black rounded-2xl transition-all shadow-lg active:scale-95 uppercase text-sm tracking-widest"
+                >
+                  Entendido
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Modal: Broadcast / Disparo em Massa */}
-      {showBroadcastModal && (
-        <BroadcastModal
-          storeId={storeId}
-          attendantId={attendantId}
-          onClose={() => setShowBroadcastModal(false)}
-        />
-      )}
+      {
+        showBroadcastModal && (
+          <BroadcastModal
+            storeId={storeId}
+            attendantId={attendantId}
+            onClose={() => setShowBroadcastModal(false)}
+          />
+        )
+      }
 
       {/* Notificação Toast */}
-      {toast && (
-        <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 ${toast.type === 'success' ? 'bg-[#00A884] text-white' :
-          toast.type === 'error' ? 'bg-red-500 text-white' :
-            'bg-[#111B21] text-white'
-          }`}>
-          {toast.type === 'success' ? <Check size={18} /> : toast.type === 'error' ? <AlertTriangle size={18} /> : <MessageSquare size={18} />}
-          <span className="text-sm font-medium">{toast.message}</span>
-          <button onClick={() => setToast(null)} className="ml-2 hover:opacity-70">
-            <X size={16} />
-          </button>
-        </div>
-      )}
-    </div>
+      {
+        toast && (
+          <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 ${toast.type === 'success' ? 'bg-[#00A884] text-white' :
+            toast.type === 'error' ? 'bg-red-500 text-white' :
+              'bg-[#111B21] text-white'
+            }`}>
+            {toast.type === 'success' ? <Check size={18} /> : toast.type === 'error' ? <AlertTriangle size={18} /> : <MessageSquare size={18} />}
+            <span className="text-sm font-medium">{toast.message}</span>
+            <button onClick={() => setToast(null)} className="ml-2 hover:opacity-70">
+              <X size={16} />
+            </button>
+          </div>
+        )
+      }
+    </div >
   );
 };
 

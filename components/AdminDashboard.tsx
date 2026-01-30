@@ -65,25 +65,41 @@ export const AdminDashboard = () => {
     // NOTA: Os componentes Skeleton foram removidos deste arquivo, pois agora são de uso exclusivo da SplashScreen.
     // Nenhuma outra tela deve utilizar o componente Skeleton para carregamento.
 
-    const loadStats = async () => {
+    const loadStats = async (signal?: AbortSignal) => {
         try {
-            const data = await cloud.getAdminDashboardStats();
-            setStats(data || {} as AdminDashboardStats);
-            setErrorMsg(null);
+            const data = await cloud.getAdminDashboardStats(signal);
+            if (!signal?.aborted) {
+                setStats(data || {} as AdminDashboardStats);
+                setErrorMsg(null);
+            }
         } catch (e: any) {
-            console.error("Dashboard error:", e);
-            // Safely extract error message
-            const msg = e?.message || (typeof e === 'string' ? e : "Erro desconhecido ao carregar dashboard.");
-            setErrorMsg(msg);
+            if (e.name !== 'AbortError' && e.code !== '20') {
+                console.error("Dashboard error:", e);
+                // Safely extract error message
+                const msg = e?.message || (typeof e === 'string' ? e : "Erro desconhecido ao carregar dashboard.");
+                setErrorMsg(msg);
+            }
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
         }
     };
 
     useEffect(() => {
-        loadStats();
-        const interval = setInterval(loadStats, 60000); // Refresh every minute
-        return () => clearInterval(interval);
+        const controller = new AbortController();
+        loadStats(controller.signal);
+
+        const interval = setInterval(() => {
+            if (!document.hidden) {
+                loadStats(controller.signal);
+            }
+        }, 60000); // Exemplo de otimização simples: Só carrega se a aba estiver visível
+
+        return () => {
+            clearInterval(interval);
+            controller.abort();
+        };
     }, []);
 
     const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);

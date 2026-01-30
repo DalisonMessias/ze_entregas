@@ -45,7 +45,7 @@ export const ZePayStore: React.FC = () => {
     const [profile, setProfile] = useState<any | null>(null);
     const [isSuperStore, setIsSuperStore] = useState<boolean | null>(null); // Null = loading check
     const [loading, setLoading] = useState(true);
-    const { alert } = useDialog();
+    const { alert, confirm, toast } = useDialog();
     const [activeTab, setActiveTab] = useState<'overview' | 'extract'>('overview');
     const [showPOS, setShowPOS] = useState(false);
     const [showRecharge, setShowRecharge] = useState(false);
@@ -189,51 +189,17 @@ export const ZePayStore: React.FC = () => {
 
     const handleGeneratePayment = async () => {
         if (!rechargeAmount) {
-            await alert({ title: 'Aviso', message: 'Informe o valor da recarga.' });
+            toast({ message: 'Informe o valor da recarga.', type: 'warning' });
             return;
         }
 
-        setProcessing(true);
-        try {
-            const amount = parseFloat(rechargeAmount.replace(/\./g, '').replace(',', '.'));
-
-            if (amount < 1) {
-                await alert({ title: 'Aviso', message: 'Valor mínimo: R$ 1,00' });
-                return;
-            }
-
-            const profile = await cloud.getMyPartnerProfile();
-            if (!profile?.id) throw new Error('Perfil não encontrado');
-
-            // Chamar serviço de payment gateway
-            const result = await generatePaymentQRCode(amount, {
-                description: 'Recarga ZéPay',
-                userId: profile.id,
-                type: 'zepay_recharge'
-            });
-
-            setPixDetails({
-                copyPaste: result.qrCode,
-                txId: result.txId,
-                gatewayUsed: result.gatewayUsed
-            });
-
-            // Iniciar polling para verificar pagamento
-            setPolling(true);
-
-            await alert({
-                title: 'Sucesso',
-                message: `QR Code gerado via ${result.gatewayUsed}!`
-            });
-        } catch (error: any) {
-            console.error('Erro ao gerar pagamento:', error);
-            await alert({
-                title: 'Erro na Cobrança',
-                message: error.message || 'Erro ao gerar cobrança.'
-            });
-        } finally {
-            setProcessing(false);
+        const amount = parseFloat(rechargeAmount.replace(/\./g, '').replace(',', '.'));
+        if (amount < 1) {
+            toast({ message: 'Valor mínimo: R$ 1,00', type: 'warning' });
+            return;
         }
+
+        setShowRecharge(true);
     };
 
     if (loading && isSuperStore === null) {
@@ -422,39 +388,23 @@ export const ZePayStore: React.FC = () => {
             )}
 
             {showRecharge && (
-                <div className="fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowRecharge(false)}>
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center">
-                            <h3 className="font-bold text-lg dark:text-white">Adicionar Saldo</h3>
-                            <button onClick={() => setShowRecharge(false)}><X className="w-5 h-5 text-gray-400" /></button>
-                        </div>
-                        {!pixDetails ? (
-                            <>
-                                <CustomInput
-                                    mask="currency"
-                                    placeholder="Valor (R$)"
-                                    value={rechargeAmount}
-                                    onChange={e => setRechargeAmount(e.target.value)}
-                                />
-                                <Button fullWidth onClick={handleGeneratePayment} disabled={processing}>
-                                    {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Gerar Cobrança PIX'}
-                                </Button>
-                            </>
-                        ) : (
-                            <div className="space-y-4">
-                                <p className="text-xs text-gray-500">Escaneie o QR ou copie o código para pagar.</p>
-                                <div className="flex items-center justify-center">
-                                    <canvas id="zepay-pix-qr" className="mx-auto border-4 border-gray-100 rounded-lg" />
-                                </div>
-                                <div className="relative">
-                                    <CustomInput readOnly value={pixDetails.copyPaste} className="text-xs truncate" />
-                                    <button onClick={() => navigator.clipboard.writeText(pixDetails.copyPaste)} className="absolute right-2 top-2 p-1"><Copy className="w-4 h-4" /></button>
-                                </div>
-                                <Button variant="outline" onClick={() => setShowRecharge(false)}>Fechar</Button>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                <PixChargeModal
+                    isOpen={showRecharge}
+                    onClose={() => {
+                        setShowRecharge(false);
+                        setRechargeAmount('');
+                        setPixDetails(null);
+                    }}
+                    pixKey="SYSTEM"
+                    storeName="Zé Entregas"
+                    storeCity="Distribuição"
+                    userId={profile?.id}
+                    customTitle="Adicionar Saldo"
+                    onPaymentSuccess={async (val) => {
+                        toast({ message: `Saldo de R$ ${val.toFixed(2)} adicionado com sucesso.`, type: 'success' });
+                        checkAccessAndLoad();
+                    }}
+                />
             )}
 
 
@@ -545,14 +495,21 @@ export const ZePayStore: React.FC = () => {
                 </div>
             )}
 
-            <PixChargeModal
-                isOpen={showPixCharge}
-                onClose={() => setShowPixCharge(false)}
-                pixKey={profile?.pix_key || profile?.cpf || ''}
-                pixKeyType={profile?.pix_key_type}
-                storeName={profile?.store_name || 'LOJA'}
-                storeCity={profile?.store_address_city || 'CIDADE'}
-            />
+            {showPixCharge && (
+                <PixChargeModal
+                    isOpen={showPixCharge}
+                    onClose={() => setShowPixCharge(false)}
+                    pixKey={profile?.pix_key || profile?.cpf || ''}
+                    pixKeyType={profile?.pix_key_type}
+                    storeName={profile?.store_name || 'LOJA'}
+                    storeCity={profile?.store_address_city || 'CIDADE'}
+                    customTitle="Receber PIX"
+                    onPaymentSuccess={async (val) => {
+                        toast({ message: `Cobranca de R$ ${val.toFixed(2)} recebida!`, type: 'success' });
+                        checkAccessAndLoad();
+                    }}
+                />
+            )}
         </div>
     );
 };

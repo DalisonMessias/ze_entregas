@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Bot, Search, Plus, Loader2, Sparkles, Send, Trash2, Edit2, Check, X, Package, MessageSquare, BarChart3, AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { CatalogBaseProduct } from '../types';
 import { useDialog } from '../utils/dialogService';
+import { useDebounce } from '../hooks/useDebounce';
 // GoogleGenAI import removido - Gerenciado pelo cloud.generateAIContent
 
 interface AnalysisReport {
@@ -66,30 +67,38 @@ export const AdminBaseCatalog: React.FC = () => {
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        loadData();
+        const controller = new AbortController();
+        loadData(controller.signal);
+        return () => controller.abort();
     }, []);
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatHistory]);
 
-    const loadData = async () => {
+    const loadData = async (signal?: AbortSignal) => {
         setLoading(true);
         try {
             const [baseProducts, settings] = await Promise.all([
-                cloud.getCatalogBaseProducts(),
+                cloud.getCatalogBaseProducts(signal),
                 cloud.getShopSettings()
             ]);
-            setProducts(baseProducts);
-            setApiKey(settings?.google_gemini_api_key || '');
+            if (!signal?.aborted) {
+                setProducts(baseProducts);
+                setApiKey(settings?.google_gemini_api_key || '');
 
-            // Extrair categorias únicas para contexto da IA
-            const cats = Array.from(new Set(baseProducts.map(p => p.category || 'Geral').filter(Boolean)));
-            setExistingCategories(cats);
-        } catch (error) {
-            console.error("Error loading base catalog:", error);
+                // Extrair categorias únicas para contexto da IA
+                const cats = Array.from(new Set(baseProducts.map(p => p.category || 'Geral').filter(Boolean)));
+                setExistingCategories(cats);
+            }
+        } catch (error: any) {
+            if (error.name !== 'AbortError' && error.code !== '20') {
+                console.error("Error loading base catalog:", error);
+            }
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
         }
     };
 
@@ -563,10 +572,18 @@ export const AdminBaseCatalog: React.FC = () => {
         }
     };
 
-    const filteredProducts = products.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const debouncedSearch = useDebounce(searchTerm, 300);
+
+    const filteredProducts = useMemo(() => {
+        const q = debouncedSearch.toLowerCase().trim();
+        if (!q) return products;
+
+        return products.filter(p =>
+            p.name.toLowerCase().includes(q) ||
+            p.category?.toLowerCase().includes(q) ||
+            p.brand?.toLowerCase().includes(q)
+        );
+    }, [debouncedSearch, products]);
 
     return (
         <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] animate-in fade-in duration-500">

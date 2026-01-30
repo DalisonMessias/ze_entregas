@@ -13,6 +13,8 @@ import { DistrictSearchSelect } from './DistrictSearchSelect';
 import { LocationHelpModal } from './LocationHelpModal';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Logo } from './Logo';
+import { useDebounce } from '../hooks/useDebounce';
+import { useMemo } from 'react';
 
 // Interface para detalhamento da taxa do Parceiro Zé
 interface PlatformFeeDetails {
@@ -132,20 +134,24 @@ export const InternalOrders: React.FC = () => {
     });
     const [deliveryLocationReference, setDeliveryLocationReference] = useState('');
 
+    const debouncedSearch = useDebounce(search, 300);
+
     useEffect(() => {
+        const controller = new AbortController();
         const initializeData = async () => {
             try {
                 const { data } = await cloud.getClient()?.auth.getUser() || {};
                 if (data?.user) {
                     setCurrentUserId(data.user.id);
-
-                    // Carrega todos os dados em paralelo para melhor performance
-                    await Promise.all([
-                        loadProducts(),
-                        loadAssociates(data.user.id),
-                        loadPrinterSettings(data.user.id),
-                        loadProfile(data.user.id)
-                    ]);
+                    if (!controller.signal.aborted) {
+                        // Carrega todos os dados em paralelo para melhor performance
+                        await Promise.all([
+                            loadProducts(controller.signal),
+                            loadAssociates(data.user.id),
+                            loadPrinterSettings(data.user.id),
+                            loadProfile(data.user.id)
+                        ]);
+                    }
                 }
             } catch (error) {
                 console.error('Erro ao inicializar dados:', error);
@@ -153,6 +159,7 @@ export const InternalOrders: React.FC = () => {
         };
 
         initializeData();
+        return () => controller.abort();
     }, []);
 
     const loadAssociates = async (storeId: string) => {
@@ -204,12 +211,26 @@ export const InternalOrders: React.FC = () => {
     };
 
     const handleUpdateTicketStatus = async (ticketId: string, status: string) => {
+        // Garantir que qualquer ação de finalização use o status 'COMPLETED'
+        const finalStatus = ['delivered', 'completed'].includes(status.toLowerCase()) ? 'COMPLETED' : status;
+
         try {
-            await cloud.updateTicketStatus(ticketId, status);
-            await loadTickets();
-            if (status === 'ready') {
-                showAlert({ title: 'Sucesso', message: 'Pedido finalizado e pronto para entrega/retirada!' });
+            await cloud.updateTicketStatus(ticketId, finalStatus);
+
+            if (finalStatus === 'COMPLETED') {
+                showAlert({ title: 'Sucesso', message: 'Pedido finalizado com sucesso!' });
+                // Força a recarga de ambas as listas para garantir consistência
+                await Promise.all([loadTickets(), loadHistory()]);
+            } else if (finalStatus === 'pending') {
+                showAlert({ title: 'Sucesso', message: 'Pedido movido para a fila!' });
+                // Também recarrega ambos para consistência, caso um pedido estivesse no histórico e voltou
+                await Promise.all([loadTickets(), loadHistory()]);
+            } else {
+                // Para outros status intermediários como 'ready', 'producing'
+                showAlert({ title: 'Status Atualizado', message: 'O status do pedido foi atualizado.' });
+                await loadTickets();
             }
+
         } catch (error) {
             showAlert({ title: 'Erro', message: 'Falha ao atualizar status do pedido.' });
         }
@@ -477,24 +498,29 @@ export const InternalOrders: React.FC = () => {
     };
 
     useEffect(() => {
-        if (view === 'HISTORY') {
+        if (view === 'HISTORY' || productionTab === 'HISTORY' || productionTab === 'CANCELLED') {
             loadHistory();
-        } else if (view === 'TABLES') {
+        }
+    }, [view, productionTab, historyDateFilter, historyTimeStart, historyTimeEnd]);
+
+    useEffect(() => {
+        if (view === 'TABLES') {
             loadActiveTables();
         }
     }, [view]);
 
     useEffect(() => {
-        if (productionTab === 'HISTORY') {
-            loadHistory();
+        // Carrega os tickets sempre que a aba de produção é focada ou alterada
+        if (view === 'PRODUCTION') {
+            loadTickets();
         }
-    }, [productionTab]);
+    }, [view, productionTab]);
 
-    const loadProducts = async () => {
+    const loadProducts = async (signal?: AbortSignal) => {
         setLoading(true);
         try {
             const [productsData, profile, settings, fees, onlineDrivers, shopSettings, associatesData] = await Promise.all([
-                cloud.getStoreProducts(),
+                cloud.getStoreProducts(undefined, signal),
                 cloud.getMyPartnerProfile(),
                 cloud.getStoreDeliverySettings(),
                 cloud.getStoreNeighborhoodFees(),
@@ -703,9 +729,11 @@ export const InternalOrders: React.FC = () => {
         setIsCustomProductModalOpen(true);
     };
 
-    const filteredProducts = products.filter(p =>
-        p.name.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredProducts = useMemo(() => {
+        return products.filter(p =>
+            p.name.toLowerCase().includes(debouncedSearch.toLowerCase())
+        );
+    }, [products, debouncedSearch]);
 
     const deliveryFee = orderType === 'DELIVERY' ? Number(deliveryFeeStr.replace(/\D/g, '')) / 100 : 0;
     const total = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0) + deliveryFee;
@@ -1847,8 +1875,8 @@ export const InternalOrders: React.FC = () => {
                                 </button>
                             </div>
 
-                            {/* Filtros de Data/Hora para aba HISTORY */}
-                            {productionTab === 'HISTORY' && (
+                            {/* Filtros de Data/Hora para abas HISTORY e CANCELLED */}
+                            {(productionTab === 'HISTORY' || productionTab === 'CANCELLED') && (
                                 <div className="flex gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                     <div className="flex-1">
                                         <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data</label>
@@ -1896,26 +1924,56 @@ export const InternalOrders: React.FC = () => {
 
                             <div className="flex-1 overflow-y-auto custom-scrollbar">{(() => {
                                 // Filtrar tickets baseado na aba ativa
-                                let filteredTickets = tickets;
+                                let filteredTickets = [];
 
                                 if (productionTab === 'QUEUE') {
                                     // Fila: Apenas pendentes (aguardando início)
                                     filteredTickets = tickets.filter(t => t.status === 'pending');
                                 } else if (productionTab === 'DELIVERY') {
-                                    // Entrega: pending, producing, ready ou in_transit + tipo DELIVERY
-                                    filteredTickets = tickets.filter(t => (t.status === 'pending' || t.status === 'producing' || t.status === 'ready' || t.status === 'in_transit') && t.orders?.order_type === 'DELIVERY');
+                                    // Prontos p/ Entrega: Apenas 'ready' do tipo 'DELIVERY'
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type === 'DELIVERY');
                                 } else if (productionTab === 'PICKUP') {
-                                    // Retirada: producing ou ready + tipo PICKUP
-                                    filteredTickets = tickets.filter(t => (t.status === 'producing' || t.status === 'ready') && t.orders?.order_type === 'PICKUP');
+                                    // Prontos p/ Retirada: Apenas 'ready' do tipo 'PICKUP'
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type === 'PICKUP');
                                 } else if (productionTab === 'LOCAL') {
-                                    // Local: producing ou ready + tipo LOCAL
-                                    filteredTickets = tickets.filter(t => (t.status === 'producing' || t.status === 'ready') && (t.orders?.order_type === 'LOCAL' || !t.orders?.order_type));
+                                    // Consumo Local: Apenas 'ready' do tipo 'LOCAL'
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && (t.orders?.order_type === 'LOCAL' || !t.orders?.order_type));
+                                } else if (productionTab === 'CANCELLED') {
+                                    // Rejeitados/Cancelados: status 'rejected' ou 'cancelled' com filtro de data
+                                    filteredTickets = tickets.filter(t => {
+                                        const isCancelled = t.status === 'rejected' || t.status === 'cancelled';
+                                        if (!isCancelled) return false;
+
+                                        if (!t.created_at) return false;
+                                        const orderDate = new Date(t.created_at);
+                                        const [year, month, day] = historyDateFilter.split('-').map(Number);
+                                        const filterDate = new Date(Date.UTC(year, month - 1, day));
+                                
+                                        const isSameDay = orderDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
+                                                        orderDate.getUTCMonth() === filterDate.getUTCMonth() &&
+                                                        orderDate.getUTCDate() === filterDate.getUTCDate();
+                                
+                                        return isSameDay;
+                                    });
                                 } else if (productionTab === 'HISTORY') {
-                                    // Histórico: Usa historyOrders (do DB) mapeado para estrutura de ticket
-                                    // Garantindo persistência mesmo após refresh
-                                    filteredTickets = historyOrders.map((o: any) => ({
+                                    // Histórico / Finalizados
+                                    filteredTickets = historyOrders.filter(o => {
+                                        if (!o.created_at) return false;
+                                        const orderDate = new Date(o.created_at);
+                                        const [year, month, day] = historyDateFilter.split('-').map(Number);
+                                        const filterDate = new Date(Date.UTC(year, month - 1, day));
+                                
+                                        const isSameDay = orderDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
+                                                        orderDate.getUTCMonth() === filterDate.getUTCMonth() &&
+                                                        orderDate.getUTCDate() === filterDate.getUTCDate();
+                                
+                                        if (!isSameDay) return false;
+
+                                        const orderTime = new Date(o.created_at).toTimeString().slice(0, 5);
+                                        return orderTime >= historyTimeStart && orderTime <= historyTimeEnd;
+                                    }).map((o: any) => ({
                                         id: o.id,
-                                        status: o.status === 'COMPLETED' || o.status === 'DELIVERED' ? 'delivered' : o.status.toLowerCase(),
+                                        status: 'COMPLETED',
                                         created_at: o.created_at,
                                         items: o.items || [],
                                         orders: {
@@ -1926,17 +1984,7 @@ export const InternalOrders: React.FC = () => {
                                             table_identifier: o.table_identifier,
                                             customer_name: o.customer_name
                                         }
-                                    }) as any).filter(t => {
-                                        // Filtro de data
-                                        const ticketDateStr = new Date(t.created_at).toISOString().split('T')[0];
-                                        const isSameDay = ticketDateStr === historyDateFilter;
-                                        if (!isSameDay) return false;
-
-                                        // Filtro de hora
-                                        const ticketDate = new Date(t.created_at);
-                                        const ticketTime = ticketDate.toTimeString().slice(0, 5); // HH:MM
-                                        return ticketTime >= historyTimeStart && ticketTime <= historyTimeEnd;
-                                    });
+                                    }) as any);
                                 }
 
                                 return filteredTickets.length === 0 ? (
@@ -1949,7 +1997,12 @@ export const InternalOrders: React.FC = () => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
                                         {filteredTickets.map(ticket => (
-                                            <div key={ticket.id} className={`p-6 rounded-[32px] border transition-all group ${ticket.status === 'producing' ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800' : ticket.status === 'in_transit' ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-900/50 dark:border-gray-700'}`}>
+                                            <div key={ticket.id} className={`p-6 rounded-[32px] border transition-all group ${
+                                                ticket.status === 'producing' ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800' 
+                                                : ticket.status === 'in_transit' ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800' 
+                                                : (ticket.status === 'rejected' || ticket.status === 'cancelled') ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800'
+                                                : 'bg-gray-50 border-gray-100 dark:bg-gray-900/50 dark:border-gray-700'
+                                            }`}>
                                                 <div className="flex justify-between items-start mb-4 pb-4 border-b border-gray-200/50 dark:border-gray-700/50">
                                                     <div>
                                                         <div className="flex items-center gap-2 mb-2">
@@ -1970,6 +2023,11 @@ export const InternalOrders: React.FC = () => {
                                                             {ticket.status === 'in_transit' && (
                                                                 <span className="flex items-center gap-1 text-[10px] text-blue-600 font-black uppercase">
                                                                     <Truck className="w-3 h-3" /> Em Rota
+                                                                </span>
+                                                            )}
+                                                            {(ticket.status === 'rejected' || ticket.status === 'cancelled') && (
+                                                                <span className="flex items-center gap-1 text-[10px] text-red-600 font-black uppercase">
+                                                                    <X className="w-3 h-3" /> Cancelado
                                                                 </span>
                                                             )}
                                                         </div>
@@ -2027,58 +2085,30 @@ export const InternalOrders: React.FC = () => {
                                                             </Button>
                                                         </div>
                                                     ) : productionTab === 'DELIVERY' ? (
-                                                        // ENTREGA
-                                                        ticket.status === 'pending' ? (
-                                                            <div className="flex gap-2 w-full">
-                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                    Aceitar
-                                                                </Button>
-                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'rejected')} className="bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                    Rejeitar
-                                                                </Button>
-                                                            </div>
-                                                        ) : ticket.status === 'producing' ? (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                Finalizar Produção
+                                                        // ENTREGA (apenas status 'ready' é exibido aqui)
+                                                        <div className="flex gap-2 w-full">
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'in_transit')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                <Truck className="w-4 h-4" /> Despachar
                                                             </Button>
-                                                        ) : ticket.status === 'ready' ? (
-                                                            <div className="flex gap-2 w-full">
-                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'in_transit')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                                    <Truck className="w-4 h-4" /> Despachar
-                                                                </Button>
-                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                                    <CheckCircle className="w-4 h-4" /> Entregue
-                                                                </Button>
-                                                            </div>
-                                                        ) : ticket.status === 'in_transit' ? (
                                                             <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                                <CheckCircle className="w-4 h-4" /> Confirmar Entrega
+                                                                <CheckCircle className="w-4 h-4" /> Entregue
                                                             </Button>
-                                                        ) : null
+                                                        </div>
                                                     ) : productionTab === 'PICKUP' ? (
-                                                        // RETIRADA
-                                                        ticket.status === 'producing' ? (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                Finalizar Produção
-                                                            </Button>
-                                                        ) : (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                                <ShoppingCart className="w-4 h-4" /> Entregar ao Cliente
-                                                            </Button>
-                                                        )
+                                                        // RETIRADA (apenas status 'ready' é exibido aqui)
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                            <ShoppingCart className="w-4 h-4" /> Entregar ao Cliente
+                                                        </Button>
                                                     ) : productionTab === 'LOCAL' ? (
-                                                        // LOCAL
-                                                        ticket.status === 'producing' ? (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                Finalizar Produção
-                                                            </Button>
-                                                        ) : (
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                                <Utensils className="w-4 h-4" /> Encerrar Pedido
-                                                            </Button>
-                                                        )
+                                                        // LOCAL (apenas status 'ready' é exibido aqui)
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                            <Utensils className="w-4 h-4" /> Encerrar Pedido
+                                                        </Button>
+                                                    ) : productionTab === 'CANCELLED' ? (
+                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'pending')} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                            <ClockArrowDown className="w-4 h-4" /> Mover para Fila
+                                                        </Button>
                                                     ) : productionTab === 'HISTORY' ? (
-                                                        // HISTÓRICO
                                                         <div className="w-full text-center py-2 bg-green-50 dark:bg-green-900/20 text-green-600 font-black uppercase text-[10px] rounded-xl flex items-center justify-center gap-2">
                                                             <CheckCircle className="w-4 h-4" /> Finalizado
                                                         </div>
@@ -2093,70 +2123,136 @@ export const InternalOrders: React.FC = () => {
                     ) : view === 'HISTORY' ? (
                         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
                             {/* History View */}
-                            <h2 className="text-2xl font-bold dark:text-white mb-6">Histórico de Pedidos Internos</h2>
+                            <h2 className="text-2xl font-bold dark:text-white mb-6">Histórico de Pedidos</h2>
+
+                            {/* Filtros de Data/Hora para a aba HISTORY */}
+                            <div className="flex gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data</label>
+                                    <input
+                                        type="date"
+                                        value={historyDateFilter}
+                                        onChange={(e) => setHistoryDateFilter(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Hora Início</label>
+                                    <input
+                                        type="time"
+                                        value={historyTimeStart}
+                                        onChange={(e) => setHistoryTimeStart(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Hora Fim</label>
+                                    <input
+                                        type="time"
+                                        value={historyTimeEnd}
+                                        onChange={(e) => setHistoryTimeEnd(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+                                    />
+                                </div>
+                                <div className="flex items-end">
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => {
+                                            setHistoryDateFilter(new Date().toISOString().split('T')[0]);
+                                            // Resetar para as horas padrão da loja, se houver
+                                            const start = profile?.support_hours_start?.slice(0, 5) || '00:00';
+                                            const end = profile?.support_hours_end?.slice(0, 5) || '23:59';
+                                            setHistoryTimeStart(start);
+                                            setHistoryTimeEnd(end);
+                                        }}
+                                        className="px-4 py-2 h-[38px]"
+                                    >
+                                        Hoje
+                                    </Button>
+                                </div>
+                            </div>
 
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                {loadingHistory ? (
-                                    <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
-                                ) : historyOrders.length === 0 ? (
-                                    <div className="text-center py-20 text-gray-400">
-                                        <HistoryIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                        <p>Nenhum pedido encontrado.</p>
-                                    </div>
-                                ) : (
-                                    <table className="w-full text-left border-collapse">
-                                        <thead className="text-gray-500 font-bold text-xs bg-gray-50 dark:bg-gray-900">
-                                            <tr>
-                                                <th className="p-3 rounded-l-xl">Data</th>
-                                                <th className="p-3">Cliente</th>
-                                                <th className="p-3">Itens</th>
-                                                <th className="p-3">Total</th>
-                                                <th className="p-3">Pagamento</th>
-                                                <th className="p-3 rounded-r-xl text-center">Ações</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="text-sm">
-                                            {historyOrders.map(order => (
-                                                <tr key={order.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                                    <td className="p-3 dark:text-gray-300">
-                                                        {new Date(order.created_at).toLocaleDateString()} <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleTimeString().slice(0, 5)}</span>
-                                                    </td>
-                                                    <td className="p-3 dark:text-white font-bold">{order.customer_name || '-'}</td>
-                                                    <td className="p-3 dark:text-gray-300">
-                                                        {order.items.length} itens
-                                                    </td>
-                                                    <td className="p-3 font-bold dark:text-white">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total_price)}
-                                                    </td>
-                                                    <td className="p-3 dark:text-gray-300 text-xs">
-                                                        {order.payment_method === 'CREDIT_CARD' ? 'Crédito' :
-                                                            order.payment_method === 'DEBIT_CARD' ? 'Débito' :
-                                                                order.payment_method === 'PIX' ? 'Pix' :
-                                                                    order.payment_method === 'CASH' ? 'Dinheiro' : 'Outro'}
-                                                    </td>
-                                                    <td className="p-3 text-center">
-                                                        <div className="flex justify-center gap-2">
-                                                            <button
-                                                                onClick={() => { setLastOrder(order); setShowPrintPreview(true); }}
-                                                                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-600 dark:text-gray-300"
-                                                                title="Visualizar/Imprimir"
-                                                            >
-                                                                <Printer className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDuplicate(order)}
-                                                                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-600 dark:text-gray-300"
-                                                                title="Duplicar Pedido"
-                                                            >
-                                                                <Copy className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </td>
+                                {(() => {
+                                    const filteredHistory = historyOrders.filter(order => {
+                                        if (!order.created_at) return false;
+                                        const orderDate = new Date(order.created_at);
+                                        const [year, month, day] = historyDateFilter.split('-').map(Number);
+                                        const filterDate = new Date(Date.UTC(year, month - 1, day));
+                                
+                                        const isSameDay = orderDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
+                                                        orderDate.getUTCMonth() === filterDate.getUTCMonth() &&
+                                                        orderDate.getUTCDate() === filterDate.getUTCDate();
+                                
+                                        if (!isSameDay) return false;
+
+                                        const orderTime = new Date(order.created_at).toTimeString().slice(0, 5); // HH:MM
+                                        return orderTime >= historyTimeStart && orderTime <= historyTimeEnd;
+                                    });
+
+                                    return loadingHistory ? (
+                                        <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
+                                    ) : filteredHistory.length === 0 ? (
+                                        <div className="text-center py-20 text-gray-400">
+                                            <HistoryIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                            <p>Nenhum pedido encontrado para esta data.</p>
+                                        </div>
+                                    ) : (
+                                        <table className="w-full text-left border-collapse">
+                                            <thead className="text-gray-500 font-bold text-xs bg-gray-50 dark:bg-gray-900">
+                                                <tr>
+                                                    <th className="p-3 rounded-l-xl">Data</th>
+                                                    <th className="p-3">Cliente</th>
+                                                    <th className="p-3">Itens</th>
+                                                    <th className="p-3">Total</th>
+                                                    <th className="p-3">Pagamento</th>
+                                                    <th className="p-3 rounded-r-xl text-center">Ações</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
+                                            </thead>
+                                            <tbody className="text-sm">
+                                                {filteredHistory.map(order => (
+                                                    <tr key={order.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                        <td className="p-3 dark:text-gray-300">
+                                                            {new Date(order.created_at).toLocaleDateString()} <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleTimeString().slice(0, 5)}</span>
+                                                        </td>
+                                                        <td className="p-3 dark:text-white font-bold">{order.customer_name || '-'}</td>
+                                                        <td className="p-3 dark:text-gray-300">
+                                                            {order.items.length} itens
+                                                        </td>
+                                                        <td className="p-3 font-bold dark:text-white">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total_price)}
+                                                        </td>
+                                                        <td className="p-3 dark:text-gray-300 text-xs">
+                                                            {order.payment_method === 'CREDIT_CARD' ? 'Crédito' :
+                                                                order.payment_method === 'DEBIT_CARD' ? 'Débito' :
+                                                                    order.payment_method === 'PIX' ? 'Pix' :
+                                                                        order.payment_method === 'CASH' ? 'Dinheiro' : 'Outro'}
+                                                        </td>
+                                                        <td className="p-3 text-center">
+                                                            <div className="flex justify-center gap-2">
+                                                                <button
+                                                                    onClick={() => { setLastOrder(order); setShowPrintPreview(true); }}
+                                                                    className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-600 dark:text-gray-300"
+                                                                    title="Visualizar/Imprimir"
+                                                                >
+                                                                    <Printer className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDuplicate(order)}
+                                                                    className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-600 dark:text-gray-300"
+                                                                    title="Duplicar Pedido"
+                                                                >
+                                                                    <Copy className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )
+                                })()}
                             </div>
                         </div>
                     ) : view === 'TABLES_MANAGE' && currentUserId ? (

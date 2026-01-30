@@ -10,7 +10,10 @@ interface NotificationsPanelProps {
 
 // Function to format time difference
 const timeAgo = (dateString: string): string => {
+  if (!dateString) return '';
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
@@ -30,7 +33,7 @@ const timeAgo = (dateString: string): string => {
 export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ notifications, onMarkAsRead, onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center p-4 animate-in fade-in" onClick={onClose}>
-      <div 
+      <div
         className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl shadow-2xl flex flex-col max-h-[60vh] mt-20 animate-in slide-in-from-top-5"
         onClick={e => e.stopPropagation()}
       >
@@ -40,7 +43,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ notifica
           </h3>
           <button onClick={onClose}><X className="w-6 h-6 text-gray-400" /></button>
         </div>
-        
+
         <div className="overflow-y-auto">
           {notifications.length === 0 ? (
             <div className="text-center py-16 px-4">
@@ -50,7 +53,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ notifica
           ) : (
             <ul className="divide-y divide-gray-100 dark:divide-gray-700">
               {notifications.map(notif => (
-                <li 
+                <li
                   key={notif.id}
                   onClick={() => !notif.is_read && onMarkAsRead(notif.id)}
                   className={`p-4 transition-colors ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30' : ''}`}

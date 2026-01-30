@@ -416,7 +416,6 @@ export interface Order {
     store?: any;
     partner?: any;
     collaborator_name?: string;
-    display_id?: string;
     created_at: string;
 }
 
@@ -851,6 +850,11 @@ export interface PaymentGatewayConfig {
     is_active: boolean;
     is_primary: boolean;
     credentials: Record<string, string>;
+    fees?: {
+        pix: number;
+        credit_card: number;
+        credit_card_installments: number;
+    };
     created_at?: string;
     updated_at?: string;
 }

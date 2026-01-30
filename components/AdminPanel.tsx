@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Shield, Search, Edit2, UserX, Loader2, UserCheck, UserCog, CheckCircle, AlertTriangle, Power, PowerOff, X, MapPin, Phone, ShieldCheck, ShieldOff, Plus, Settings, Banknote, Star, Trash2 } from 'lucide-react';
 import {
     getAllUsers,
@@ -29,6 +29,7 @@ import { useDialog } from '../utils/dialogService';
 import { Switch } from './Switch';
 import { CitiesAndDistricts } from '../pages/admin/CitiesAndDistricts';
 import { MapaLocalizacao } from '../pages/admin/MapaLocalizacao';
+import { useDebounce } from '../hooks/useDebounce';
 
 // Imported Modules (from Common/HEAD)
 import { AdminDashboard } from './AdminDashboard';
@@ -170,22 +171,27 @@ const UserManagement: React.FC = () => {
     const [roleFilter, setRoleFilter] = useState<string>('ALL');
 
     useEffect(() => {
-        loadUsers();
-        // loadCities(); // Removed
+        const controller = new AbortController();
+        loadUsers(false, controller.signal);
+        return () => controller.abort();
     }, []);
 
     // Removed loadCities as CitySelector handles it internally
 
-    const loadUsers = async (silent = false) => {
+    const loadUsers = async (silent = false, signal?: AbortSignal) => {
         if (!silent) setLoading(true);
         try {
-            const data = await getAllUsers();
-            setUsers(data);
+            const data = await getAllUsers(signal);
+            if (!signal?.aborted) {
+                setUsers(data);
+            }
         } catch (e: any) {
-            console.error(e);
-            await alert('Erro ao carregar usuários: ' + (e.message || 'Erro desconhecido'));
+            if (e.name !== 'AbortError' && e.code !== '20') {
+                console.error(e);
+                await alert('Erro ao carregar usuários: ' + (e.message || 'Erro desconhecido'));
+            }
         } finally {
-            if (!silent) setLoading(false);
+            if (!silent && !signal?.aborted) setLoading(false);
         }
     };
 
@@ -293,12 +299,18 @@ const UserManagement: React.FC = () => {
         }
     };
 
-    const filteredUsers = users.filter(u => {
-        const matchesSearch = (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
-            (u.email || '').toLowerCase().includes(search.toLowerCase());
-        const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
-        return matchesSearch && matchesRole;
-    });
+    const debouncedSearch = useDebounce(search, 300);
+
+    const filteredUsers = useMemo(() => {
+        const q = debouncedSearch.toLowerCase().trim();
+        return users.filter(u => {
+            const matchesSearch = !q ||
+                (u.name || '').toLowerCase().includes(q) ||
+                (u.email || '').toLowerCase().includes(q);
+            const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+            return matchesSearch && matchesRole;
+        });
+    }, [debouncedSearch, users, roleFilter]);
 
     return (
         <div className="space-y-6 animate-in fade-in">

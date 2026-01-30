@@ -290,14 +290,35 @@ export const adminLogStatusChange = async (userId: string, previousStatus: strin
 
     if (error) console.error('Error logging status history:', error);
 };
-export const getAllUsers = async (): Promise<any[]> => {
+
+export const adminGetAllDrivers = async (signal?: AbortSignal): Promise<ManagedUser[]> => {
     const sb = getClient();
     if (!sb) return [];
 
-    const { data, error } = await sb.from('user_profiles')
+    let query = sb.from('user_profiles')
         .select('*')
+        .in('role', ['delivery_partner', 'delivery_person'])
         .order('created_at', { ascending: false })
-        .limit(100); // Segurança: Evitar carregar milhares de usuários sem necessidade
+        .limit(100);
+
+    if (signal) query = query.abortSignal(signal);
+
+    const { data, error } = await query;
+    if (error && error.code !== '20') {
+        console.error('Error fetching all drivers:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getAllUsers = async (signal?: AbortSignal): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    let query = sb.from('user_profiles').select('*').order('created_at', { ascending: false }).limit(100);
+    if (signal) query = query.abortSignal(signal);
+
+    const { data, error } = await query;
 
     if (error) {
         console.error('Error fetching all users:', error);
@@ -329,14 +350,14 @@ export const getPublicStoresByCity = async (citySlug: string): Promise<any[]> =>
 /**
  * Busca todas as lojas cadastradas no sistema.
  */
-export const adminGetStores = async (): Promise<ManagedUser[]> => {
+export const adminGetStores = async (signal?: AbortSignal): Promise<ManagedUser[]> => {
     const sb = getClient();
     if (!sb) return [];
 
-    const { data, error } = await sb.from('user_profiles')
-        .select('*')
-        .eq('role', 'store_partner')
-        .order('created_at', { ascending: false });
+    let query = sb.from('user_profiles').select('*').eq('role', 'store_partner').order('created_at', { ascending: false });
+    if (signal) query = query.abortSignal(signal);
+
+    const { data, error } = await query;
 
     if (error) {
         console.error('Error fetching all stores:', error);
@@ -1240,7 +1261,7 @@ export const getShopSettings = async (): Promise<ShopSettings | null> => {
 
 // --- STORE PRODUCTS ---
 
-export const getStoreProducts = async (targetStoreId?: string): Promise<StoreProduct[]> => {
+export const getStoreProducts = async (targetStoreId?: string, signal?: AbortSignal): Promise<StoreProduct[]> => {
     const sb = getClient();
     if (!sb) return [];
 
@@ -1255,49 +1276,58 @@ export const getStoreProducts = async (targetStoreId?: string): Promise<StorePro
         userId = user.id;
     }
 
-    const { data, error } = await sb
+    let query = sb
         .from('products')
         .select('*, category:categories(name)')
         .eq('store_id', userId)
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(1000); // Increased limit to support larger catalogs in POS
+
+    if (signal) query = query.abortSignal(signal);
+
+    const { data, error } = await query;
+
+    if (error) {
+        if (error.code !== '20') { // 20 is abort error
+            console.error("Error fetching products:", error);
+        }
+        return [];
+    }
 
     // Mapear o resultado para incluir category_name flat no objeto, compatível com o frontend
     const mappedData = data?.map((p: any) => ({
         ...p,
-        category: p.category?.name || 'Geral' // Nome da categoria para exibição
+        category: p.category?.name || 'Geral', // Nome da categoria para exibição
+        image_url: p.images && p.images.length > 0 ? p.images[0] : null
     }));
 
     return mappedData || [];
-
-    if (error) {
-        console.error("Error fetching products:", error);
-        return [];
-    }
-
-    // Mapear campos do banco para o frontend (ex: images -> image_url)
-    return (data || []).map((p: any) => ({
-        ...p,
-        image_url: p.images && p.images.length > 0 ? p.images[0] : null
-    }));
 };
 
 
 
-export const getStoreCategories = async (): Promise<any[]> => {
+export const getStoreCategories = async (signal?: AbortSignal): Promise<any[]> => {
     const sb = getClient();
     if (!sb) return [];
+
+    // Obter usuário da sessão com cache se possível, mas aqui usamos direto pois é curto
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return [];
 
-    const { data, error } = await sb
+    let query = sb
         .from('categories')
         .select('*')
         .eq('store_id', user.id)
         .order('name', { ascending: true });
 
+    if (signal) query = query.abortSignal(signal);
+
+    const { data, error } = await query;
+
     if (error) {
-        console.error("Error fetching categories:", error);
+        if (error.code !== '20') { // 20 is abort error
+            console.error("Error fetching categories:", error);
+        }
         return [];
     }
 
@@ -1715,12 +1745,16 @@ export const adminUpdateCityStatus = async (id: string, isActive: boolean) => {
 
 // function removed (duplicate/corrupted)
 
-export const getAvailableCities = async (term?: string): Promise<City[]> => {
+export const getAvailableCities = async (term?: string, signal?: AbortSignal): Promise<City[]> => {
     const sb = getClient();
     if (!sb) return [];
     let query = sb.from('available_cities').select('*').eq('is_active', true);
+    if (signal) query = query.abortSignal(signal);
     if (term) query = query.ilike('name', `%${term}%`);
-    const { data } = await query;
+    const { data, error } = await query;
+    if (error && error.code !== '20') { // 20 is abort error
+        console.error('Error fetching cities:', error);
+    }
     return data || [];
 };
 
@@ -2050,15 +2084,23 @@ export const adminGetSupportThreads = async (): Promise<any[]> => {
 
 // --- SHOP DATA & ORDERS ---
 
-export const getShopData = async () => {
+export const getShopData = async (signal?: AbortSignal) => {
     const sb = getClient();
     if (!sb) return { products: [], categories: [], settings: null };
-    const [p, c, s] = await Promise.all([
-        sb.from('products').select('*').eq('is_active', true).limit(100), // Otimização: Limitar carregamento inicial da loja
-        sb.from('categories').select('*').limit(50),
-        sb.from('shop_settings').select('*').single()
-    ]);
-    return { products: p.data || [], categories: c.data || [], settings: s.data };
+
+    try {
+        const [p, c, s] = await Promise.all([
+            sb.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(2000).abortSignal(signal || new AbortController().signal),
+            sb.from('categories').select('*').order('name', { ascending: true }).limit(1000).abortSignal(signal || new AbortController().signal),
+            sb.from('shop_settings').select('*').limit(1).single().abortSignal(signal || new AbortController().signal)
+        ]);
+        return { products: p.data || [], categories: c.data || [], settings: s.data };
+    } catch (error: any) {
+        if (error.code !== '20') { // 20 is abort error
+            // console.error("Error fetching shop data:", error);
+        }
+        return { products: [], categories: [], settings: null };
+    }
 };
 
 export const createOrder = async (order: Partial<Order>) => {
@@ -2937,7 +2979,7 @@ export const uploadIdentityVerification = async (file: File, location: any) => {
     // logic...
 };
 
-export const getAdminDashboardStats = async (): Promise<AdminDashboardStats | null> => {
+export const getAdminDashboardStats = async (signal?: AbortSignal): Promise<AdminDashboardStats | null> => {
     const sb = getClient();
 
     // Objeto padrão seguro para evitar crash no frontend
@@ -2954,6 +2996,8 @@ export const getAdminDashboardStats = async (): Promise<AdminDashboardStats | nu
 
     try {
         // Otimização: Usar RPC v3 com dados financeiros corrigidos e detalhados
+        // RPC calls in Supabase JS v2 don't support AbortSignal directly in options yet, 
+        // but we keep the signature for consistency and future support.
         const { data, error } = await sb.rpc('get_admin_dashboard_stats_v3');
 
         if (error) {
@@ -2965,6 +3009,7 @@ export const getAdminDashboardStats = async (): Promise<AdminDashboardStats | nu
         // A estrutura retornada pelo JSONB no SQL mapeia com o objeto AdminDashboardStats
         return data as AdminDashboardStats;
     } catch (error) {
+        if (signal?.aborted) return null; // Se abortado, retorna null para não setar estado
         console.error("Error in getAdminDashboardStats:", error);
         return emptyStats;
     }
@@ -5106,14 +5151,14 @@ export const adminUploadPlatformNewsImage = async (newsId: string, file: File): 
 /**
  * Busca todos os produtos do catálogo base (ativos).
  */
-export const getCatalogBaseProducts = async (): Promise<CatalogBaseProduct[]> => {
+export const getCatalogBaseProducts = async (signal?: AbortSignal): Promise<CatalogBaseProduct[]> => {
     const sb = getClient();
     if (!sb) return [];
 
-    const { data, error } = await sb
-        .from('catalog_base_products')
-        .select('*')
-        .order('name', { ascending: true });
+    let query = sb.from('catalog_base_products').select('*').order('name', { ascending: true });
+    if (signal) query = query.abortSignal(signal);
+
+    const { data, error } = await query;
 
     if (error) {
         console.error('Error fetching catalog base products:', error);
@@ -6042,7 +6087,7 @@ export const adminGetMediationSessions = async () => {
     // Fetch sessions with order details
     const { data, error } = await sb
         .from('mediation_sessions')
-        .select('*, order:orders(id, display_id, status, customer_name, store(name), partner(name))')
+        .select('*, order:orders(id, status, customer_name, store:store_id(name), partner:driver_id(name))')
         .order('updated_at', { ascending: false });
 
     if (error) throw new Error(error.message);
@@ -6061,4 +6106,41 @@ export const adminGetMediationActions = async (sessionId: string) => {
 
     if (error) throw new Error(error.message);
     return data;
+};
+
+export const checkDeliveryModeForChat = async (phoneNumber: string) => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    // Remove non-digits
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+
+    // 1. Try to find an active order for this driver (approximate by phone match in user_profiles or orders directly if stored)
+    // As per schema, orders have driver_id. We need to find the user_id from the phone.
+
+    // Step A: Find User ID by Phone
+    const { data: userData, error: userError } = await sb
+        .from('user_profiles')
+        .select('id')
+        .eq('phone_number', cleanPhone) // Assuming phone_number matches convention
+        .single();
+
+    if (userError || !userData) {
+        // Fallback: Try searching in orders directly if customer_phone or similar (but this is for drivers)
+        return null;
+    }
+
+    // Step B: Find latest active order for this driver
+    const { data: orderData, error: orderError } = await sb
+        .from('orders')
+        .select('delivery_mode')
+        .eq('driver_id', userData.id)
+        .in('status', ['IN_PROGRESS', 'DELIVERY', 'PICKUP'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+    if (orderError || !orderData) return null;
+
+    return orderData.delivery_mode; // 'OWN', 'PLATFORM', 'ASSOCIATE'
 };

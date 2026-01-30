@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StoreProduct, Category } from '../types';
 import { StoreAIGenerator } from './StoreAIGenerator';
 import { SuperStoreModal } from './SuperStoreModal';
@@ -13,6 +13,7 @@ import { AddonManager } from './AddonManager';
 import { ProfileValidationAlert } from './ProfileValidationAlert';
 import { validateStoreProfile } from '../utils/profileValidation';
 import { Toast } from './Toast';
+import { useDebounce } from '../hooks/useDebounce';
 
 type Tab = 'products' | 'categories' | 'addons' | 'import';
 
@@ -74,40 +75,51 @@ export const StoreCatalog: React.FC = () => {
     const [updatingImageProdId, setUpdatingImageProdId] = useState<string | null>(null);
     const [toast, setToast] = useState<ToastState | null>(null);
 
+    const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
     useEffect(() => {
-        loadData();
+        const controller = new AbortController();
+        loadData(controller.signal);
+        return () => controller.abort();
     }, [activeTab]); // Reload when tab changes impacting categories/products
 
     const [baseProducts, setBaseProducts] = useState<any[]>([]);
     const [isImportLoading, setIsImportLoading] = useState(false);
 
-    const loadData = async () => {
+    const loadData = async (signal?: AbortSignal) => {
         setIsLoading(true);
         try {
             const [prodData, catData, profile] = await Promise.all([
-                cloud.getStoreProducts(),
-                cloud.getStoreCategories(),
+                cloud.getStoreProducts(undefined, signal),
+                cloud.getStoreCategories(signal),
                 cloud.getMyPartnerProfile()
             ]);
 
-            setProducts(prodData);
-            setCategories(catData);
-            setIsSuperStore(!!profile?.is_super_store);
+            if (!signal?.aborted) {
+                setProducts(prodData);
+                setCategories(catData);
+                setIsSuperStore(!!profile?.is_super_store);
 
-            // Validar perfil completo
-            const validation = validateStoreProfile(profile);
-            setProfileValid(validation.isValid);
-            setMissingFields(validation.missingFields);
+                // Validar perfil completo
+                const validation = validateStoreProfile(profile);
+                setProfileValid(validation.isValid);
+                setMissingFields(validation.missingFields);
 
-            if (activeTab === 'import') {
-                loadBaseProducts();
+                if (activeTab === 'import') {
+                    // Import base products doesn't strictly need abort signal as it's secondary
+                    loadBaseProducts();
+                }
             }
-        } catch (error) {
-            // console.error("Erro ao carregar dados:", error);
-            setProfileValid(false);
-            setMissingFields(['Erro ao carregar perfil']);
+        } catch (error: any) {
+            if (error.name !== 'AbortError' && error.code !== '20') {
+                // console.error("Erro ao carregar dados:", error);
+                setProfileValid(false);
+                setMissingFields(['Erro ao carregar perfil']);
+            }
         } finally {
-            setIsLoading(false);
+            if (!signal?.aborted) {
+                setIsLoading(false);
+            }
         }
     };
 
@@ -215,25 +227,27 @@ export const StoreCatalog: React.FC = () => {
         }
     };
 
-    const filteredProducts = products.filter(p => {
-        const term = searchTerm.toLowerCase().trim();
-        let matchesSearch = false;
+    const filteredProducts = useMemo(() => {
+        return products.filter(p => {
+            const term = debouncedSearchTerm.toLowerCase().trim();
+            let matchesSearch = false;
 
-        if (term.startsWith('id-')) {
-            const idPart = term.replace('id-', '');
-            matchesSearch = p.id.toLowerCase().includes(idPart);
-        } else if (term.length > 0 && /^[a-f0-9]+$/i.test(term)) {
-            // Se o termo parece ser um ID (apenas caracteres hexadecimais)
-            // Verifica se corresponde aos primeiros caracteres do ID
-            matchesSearch = p.id.toLowerCase().startsWith(term.toLowerCase());
-        } else {
-            matchesSearch = p.name.toLowerCase().includes(term) ||
-                p.category?.toLowerCase().includes(term);
-        }
+            if (term.startsWith('id-')) {
+                const idPart = term.replace('id-', '');
+                matchesSearch = p.id.toLowerCase().includes(idPart);
+            } else if (term.length > 0 && /^[a-f0-9]+$/i.test(term)) {
+                // Se o termo parece ser um ID (apenas caracteres hexadecimais)
+                // Verifica se corresponde aos primeiros caracteres do ID
+                matchesSearch = p.id.toLowerCase().startsWith(term.toLowerCase());
+            } else {
+                matchesSearch = p.name.toLowerCase().includes(term) ||
+                    (p.category && p.category.toLowerCase().includes(term));
+            }
 
-        const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
-        return matchesSearch && matchesCategory;
-    });
+            const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
+            return matchesSearch && matchesCategory;
+        });
+    }, [products, debouncedSearchTerm, selectedCategory]);
 
     // Validação de perfil
     if (profileValid === false) {

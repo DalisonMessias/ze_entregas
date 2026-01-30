@@ -82,7 +82,7 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
     const [loadingRequests, setLoadingRequests] = useState(true);
     const [errorWallet, setErrorWallet] = useState<string | null>(null);
 
-    const { alert, confirm } = useDialog();
+    const { alert, confirm, toast } = useDialog();
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -412,6 +412,7 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                     storeName="Zé Entregas"
                     storeCity="Online"
                     userId={userId}
+                    customTitle="Recarregar Carteira"
                     onPaymentSuccess={() => {
                         loadAllData();
                         setShowRecharge(false);

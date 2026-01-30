@@ -27,20 +27,32 @@ export const CitySearchSelect: React.FC<CitySearchSelectProps> = ({
 
     // Initial load and search
     useEffect(() => {
+        const controller = new AbortController();
+        const signal = controller.signal;
+
         const fetchCities = async () => {
             setLoading(true);
             try {
-                const data = await cloud.getAvailableCities(searchTerm);
-                setCities(data || []);
+                const data = await cloud.getAvailableCities(searchTerm, signal);
+                if (!signal.aborted) {
+                    setCities(data || []);
+                }
             } catch (error) {
-                console.error('Failed to fetch cities:', error);
+                if (!signal.aborted) {
+                    console.error('Failed to fetch cities:', error);
+                }
             } finally {
-                setLoading(false);
+                if (!signal.aborted) {
+                    setLoading(false);
+                }
             }
         };
 
         const timer = setTimeout(fetchCities, 300);
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
     }, [searchTerm]);
 
     // Close on click outside

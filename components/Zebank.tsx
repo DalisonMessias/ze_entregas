@@ -376,7 +376,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [data, setData] = useState<ZebankData | null>(null);
     const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const { alert, confirm } = useDialog();
+    const { alert, confirm, toast } = useDialog();
     const [activeTab, setActiveTab] = useState<'home' | 'savings' | 'cards' | 'history'>('home');
     const [showBalance, setShowBalance] = useState(false);
 
@@ -390,6 +390,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [showLimitModal, setShowLimitModal] = useState<ZebankCard | null>(null);
     const [showMerchantPOS, setShowMerchantPOS] = useState(false);
     const [showPixCharge, setShowPixCharge] = useState(false);
+    const [showRecharge, setShowRecharge] = useState(false);
 
     // Forms state
     const [p2pForm, setP2pForm] = useState({ code: '', amount: '' });
@@ -650,6 +651,10 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                     <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400"><PiggyBank className="w-5 h-5" /></div>
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Depositar no Cofrinho</span>
                 </button>
+                <button onClick={() => setShowRecharge(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400"><Plus className="w-5 h-5" /></div>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Adicionar Saldo</span>
+                </button>
                 <button onClick={() => setShowPixCharge(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                     <div className="p-3 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400"><ArrowDownLeft className="w-5 h-5" /></div>
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Cobrar</span>
@@ -888,20 +893,39 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
             }
 
 
-            <PixChargeModal
-                isOpen={showPixCharge}
-                onClose={() => setShowPixCharge(false)}
-                pixKey={profile?.pix_key || profile?.cpf || ''}
-                pixKeyType={profile?.pix_key_type}
-                storeName={profile?.name || profile?.store_name || 'USUARIO'}
-                storeCity={profile?.city || profile?.store_address_city || 'CIDADE'}
-                // Integração Gateway
-                userId={profile?.id}
-                onPaymentSuccess={async (val) => {
-                    await alert({ title: 'Recebido!', message: `Você recebeu R$ ${val.toFixed(2)}` });
-                    loadData();
-                }}
-            />
+            {showPixCharge && (
+                <PixChargeModal
+                    isOpen={showPixCharge}
+                    onClose={() => setShowPixCharge(false)}
+                    pixKey={profile?.pix_key || profile?.cpf || ''}
+                    pixKeyType={profile?.pix_key_type}
+                    storeName={profile?.name || profile?.store_name || 'USUARIO'}
+                    storeCity={profile?.city || profile?.store_address_city || 'CIDADE'}
+                    // Integração Gateway
+                    userId={profile?.id}
+                    customTitle="Receber PIX"
+                    onPaymentSuccess={async (val) => {
+                        toast({ message: `Você recebeu R$ ${val.toFixed(2)}`, type: 'success' });
+                        loadData();
+                    }}
+                />
+            )}
+
+            {showRecharge && (
+                <PixChargeModal
+                    isOpen={showRecharge}
+                    onClose={() => setShowRecharge(false)}
+                    pixKey="SYSTEM"
+                    storeName="Zé Entregas"
+                    storeCity="Distribuição"
+                    userId={profile?.id}
+                    customTitle="Adicionar Saldo"
+                    onPaymentSuccess={async (val) => {
+                        toast({ message: `O saldo de R$ ${val.toFixed(2)} foi adicionado com sucesso.`, type: 'success' });
+                        loadData();
+                    }}
+                />
+            )}
         </div>
     );
 };

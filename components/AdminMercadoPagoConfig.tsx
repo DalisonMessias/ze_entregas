@@ -8,6 +8,7 @@ import { CustomInput } from './CustomInput';
 
 export const AdminMercadoPagoConfig: React.FC = () => {
     const [config, setConfig] = useState<any>({ accessToken: '', publicKey: '', webhookSecret: '' });
+    const [fees, setFees] = useState({ pix: 0, credit_card: 0, credit_card_installments: 0 });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -30,6 +31,9 @@ export const AdminMercadoPagoConfig: React.FC = () => {
             const mp = gateways.find(g => g.gateway_name === 'mercadopago');
             if (mp && mp.credentials) {
                 setConfig(mp.credentials);
+            }
+            if (mp?.fees) {
+                setFees(mp.fees);
             }
         } catch (error) {
             console.error("Failed to load settings:", error);
@@ -111,8 +115,48 @@ export const AdminMercadoPagoConfig: React.FC = () => {
                     <p className="text-xs text-gray-500 mt-2">Configure esta URL no painel de desenvolvedor do Mercado Pago para receber notificações IPN.</p>
                 </div>
 
-                <div className="pt-4">
-                    <Button onClick={handleSave} disabled={saving} className="w-full py-4 text-lg shadow-lg bg-blue-600 hover:bg-blue-700 text-white">
+                <div className="pt-4 space-y-4">
+                    <div className="border-t border-gray-100 dark:border-gray-700 pt-6">
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Taxas Dinâmicas (%)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Taxa PIX (%)</label>
+                                <CustomInput
+                                    type="number"
+                                    value={fees.pix}
+                                    onChange={e => setFees(s => ({ ...s, pix: Number(e.target.value) }))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Crédito à Vista (%)</label>
+                                <CustomInput
+                                    type="number"
+                                    value={fees.credit_card}
+                                    onChange={e => setFees(s => ({ ...s, credit_card: Number(e.target.value) }))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Crédito Parcelado (%)</label>
+                                <CustomInput
+                                    type="number"
+                                    value={fees.credit_card_installments}
+                                    onChange={e => setFees(s => ({ ...s, credit_card_installments: Number(e.target.value) }))}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <Button onClick={async () => {
+                        setSaving(true);
+                        try {
+                            await cloud.updatePaymentGateway('mercadopago', { credentials: config, fees });
+                            await alert({ title: "Sucesso", message: "Configurações e taxas salvas!" });
+                        } catch (error: any) {
+                            await alert({ title: "Erro", message: error.message });
+                        } finally {
+                            setSaving(false);
+                        }
+                    }} disabled={saving} className="w-full py-4 text-lg shadow-lg bg-blue-600 hover:bg-blue-700 text-white">
                         {saving ? <Loader2 className="animate-spin w-6 h-6" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Configurações</>}
                     </Button>
                 </div>

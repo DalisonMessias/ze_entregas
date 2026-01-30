@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, MapPin, ChevronDown, Check, Loader2, X, AlertCircle, Navigation, Target } from 'lucide-react';
 import { CustomInput } from './CustomInput';
 import { useGeocoding } from '../hooks/useGeocoding';
+import { useDebounce } from '../hooks/useDebounce';
 
 // Declaração de tipos para Leaflet (carregado via CDN)
 declare const L: any;
@@ -26,7 +27,6 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [suggestions, setSuggestions] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -67,20 +67,27 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
     }, [isOpen, city]);
 
     const fetchAllStreetsForCity = async (cityName: string) => {
+        const controller = new AbortController();
+        const signal = controller.signal;
+
         setLoading(true);
         setError(null);
         try {
             // Step 1: Get city info from Nominatim to get BBox
             const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=1&q=${encodeURIComponent(cityName)}`;
-            const nominatimRes = await fetch(nominatimUrl, { headers: { 'User-Agent': 'ZeEntregas-App/1.0' } });
+            const nominatimRes = await fetch(nominatimUrl, {
+                headers: { 'User-Agent': 'ZeEntregas-App/1.0' },
+                signal
+            });
 
             if (!nominatimRes.ok) throw new Error('Erro ao buscar cidade');
             const nominatimData = await nominatimRes.json();
 
             if (!nominatimData || nominatimData.length === 0) {
-                // If city not found, we can't autocomplete, but user can still type manually
-                setLoading(false);
-                setStreetsLoaded(true);
+                if (!signal.aborted) {
+                    setLoading(false);
+                    setStreetsLoaded(true);
+                }
                 return;
             }
 
@@ -97,7 +104,8 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
             const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'data=' + encodeURIComponent(overpassQuery)
+                body: 'data=' + encodeURIComponent(overpassQuery),
+                signal
             });
 
             if (!overpassRes.ok) throw new Error('Erro ao buscar ruas');
@@ -112,29 +120,32 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
                 }
             }
 
-            setAllStreets(Array.from(streetsSet).sort((a, b) => a.localeCompare(b, 'pt-BR')));
-            setStreetsLoaded(true);
+            if (!signal.aborted) {
+                setAllStreets(Array.from(streetsSet).sort((a, b) => a.localeCompare(b, 'pt-BR')));
+                setStreetsLoaded(true);
+            }
 
-        } catch (err) {
+        } catch (err: any) {
+            if (err.name === 'AbortError') return;
             console.error(err);
             setError('Não foi possível carregar as ruas automaticamente. Digite manualmente.');
         } finally {
-            setLoading(false);
+            if (!controller.signal.aborted) {
+                setLoading(false);
+            }
         }
     };
 
-    // Filter suggestions based on search term
-    useEffect(() => {
-        if (!searchTerm) {
-            setSuggestions([]); // Or show top streets? Better not show thousands.
-            return;
-        }
+    const debouncedSearch = useDebounce(searchTerm, 300);
 
-        const q = searchTerm.toLowerCase();
+    // Filter suggestions based on search term
+    const suggestions = useMemo(() => {
+        if (!debouncedSearch) return [];
+
+        const q = debouncedSearch.toLowerCase().trim();
         // Simple filter limit to 50
-        const filtered = allStreets.filter(s => s.toLowerCase().includes(q)).slice(0, 50);
-        setSuggestions(filtered);
-    }, [searchTerm, allStreets]);
+        return allStreets.filter(s => s.toLowerCase().includes(q)).slice(0, 50);
+    }, [debouncedSearch, allStreets]);
 
     // Close on click outside
     useEffect(() => {

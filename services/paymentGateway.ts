@@ -1,6 +1,7 @@
 import { getClient } from './cloud';
 import { infinitePayCreateCharge, infinitePayCheckStatus } from './infinitepay';
 import { mercadoPagoCreatePayment, mercadoPagoCheckStatus } from './mercadopago';
+import { generatePixPayload } from '../utils/pixPayloadGenerator';
 import type { PaymentGatewayConfig } from '../types';
 
 export interface PaymentQRCodeResult {
@@ -17,32 +18,24 @@ export interface PaymentStatus {
 }
 
 /**
- * Busca configuração de gateway ativo
- * @param preferPrimary Se true, busca o gateway principal. Se falso, busca o fallback.
+ * Busca todos os gateways ativos, priorizando o principal
  */
-export const getActiveGateway = async (preferPrimary: boolean = true): Promise<PaymentGatewayConfig | null> => {
+export const getActiveGateways = async (): Promise<PaymentGatewayConfig[]> => {
     const sb = getClient();
-    if (!sb) return null;
+    if (!sb) return [];
 
     try {
-        const query = sb
+        const { data, error } = await sb
             .from('payment_gateway_settings')
             .select('*')
-            .eq('is_active', true);
-
-        if (preferPrimary) {
-            query.eq('is_primary', true);
-        } else {
-            query.eq('is_primary', false);
-        }
-
-        const { data, error } = await query.limit(1).maybeSingle();
+            .eq('is_active', true)
+            .order('is_primary', { ascending: false });
 
         if (error) throw error;
-        return data;
+        return data || [];
     } catch (error) {
-        console.error('Erro ao buscar gateway ativo:', error);
-        return null;
+        console.error('Erro ao buscar gateways ativos:', error);
+        return [];
     }
 };
 
@@ -77,77 +70,80 @@ export const logTransaction = async (
 /**
  * Executa uma operação de pagamento com fallback automático
  */
-const attemptWithFallback = async <T>(
+const attemptWithGateway = async <T>(
     operation: (gateway: PaymentGatewayConfig) => Promise<T>,
-    operationType: 'charge' | 'refund' | 'check_status'
+    operationType: 'charge' | 'refund' | 'check_status',
+    preferredGateway?: string
 ): Promise<T> => {
-    // Tenta com gateway principal
-    const primary = await getActiveGateway(true);
+    const gateways = await getActiveGateways();
 
-    if (primary) {
+    if (gateways.length === 0) {
+        throw new Error('Nenhum gateway de pagamento ativo encontrado.');
+    }
+
+    // Se um gateway preferencial for passado, tentamos apenas ele primeiro
+    const targetGateways = preferredGateway
+        ? gateways.filter(g => g.gateway_name === preferredGateway)
+        : gateways;
+
+    if (preferredGateway && targetGateways.length === 0) {
+        throw new Error(`O gateway ${preferredGateway} não está ativo ou disponível.`);
+    }
+
+    let lastError: any = null;
+
+    for (const gateway of targetGateways) {
         try {
-            const result = await operation(primary);
-            await logTransaction(primary.gateway_name, operationType, true, {}, result);
+            const result = await operation(gateway);
+            await logTransaction(gateway.gateway_name, operationType, true, {}, result);
             return result;
         } catch (error: any) {
-            console.warn(`Gateway principal ${primary.gateway_name} falhou:`, error.message);
+            console.warn(`Gateway ${gateway.gateway_name} falhou:`, error.message);
             await logTransaction(
-                primary.gateway_name,
+                gateway.gateway_name,
                 operationType,
                 false,
                 {},
                 {},
                 error.message
             );
+            lastError = error;
+            // Se o usuário ESCOLHEU esse gateway, não fazemos fallback automático para outros
+            if (preferredGateway) break;
         }
     }
 
-    // Fallback para gateway secundário
-    const fallback = await getActiveGateway(false);
-
-    if (fallback) {
-        try {
-            const result = await operation(fallback);
-            await logTransaction(fallback.gateway_name, operationType, true, {}, result);
-            return result;
-        } catch (error: any) {
-            console.error(`Gateway fallback ${fallback.gateway_name} também falhou:`, error.message);
-            await logTransaction(
-                fallback.gateway_name,
-                operationType,
-                false,
-                {},
-                {},
-                error.message
-            );
-            throw new Error('Nenhum gateway de pagamento disponível no momento.');
-        }
-    }
-
-    throw new Error('Nenhum gateway de pagamento ativo encontrado.');
+    throw new Error(lastError?.message || 'Nenhum gateway de pagamento disponível no momento.');
 };
 
-/**
- * Gera QR Code PIX para pagamento
- */
-import { generatePixPayload } from '../utils/pixPayloadGenerator';
+export const estimateFee = (amount: number, gateway: PaymentGatewayConfig): { fee: number; total: number } => {
+    if (!gateway.fees || gateway.gateway_name === 'pix') return { fee: 0, total: amount };
 
-// ... existing code ...
+    // Por padrão usamos a taxa de PIX, já que o modal é focado em PIX no momento
+    const feePercent = gateway.fees.pix || 0;
+    const fee = amount * (feePercent / 100);
+    return { fee, total: amount + fee };
+};
 
 export const generatePaymentQRCode = async (
     amount: number,
-    metadata: Record<string, any>
+    metadata: Record<string, any>,
+    preferredGateway?: string
 ): Promise<PaymentQRCodeResult> => {
-    return attemptWithFallback(async (gateway) => {
+    return attemptWithGateway(async (gateway) => {
         let qrCode: string;
         let txId: string;
 
+        // Aplica taxa dinâmica se houver
+        const { total } = estimateFee(amount, gateway);
+        const finalAmount = Number(total.toFixed(2));
+
         if (gateway.gateway_name === 'infinitepay') {
-            const result = await infinitePayCreateCharge(amount, metadata, gateway.credentials as any);
+            const result = await infinitePayCreateCharge(finalAmount, metadata, gateway.credentials as any);
             qrCode = result.qrCode;
             txId = result.txId;
         } else if (gateway.gateway_name === 'mercadopago') {
-            const result = await mercadoPagoCreatePayment(amount, metadata, gateway.credentials as any);
+            const result = await mercadoPagoCreatePayment(finalAmount, metadata, gateway.credentials as any);
             qrCode = result.qrCode;
             txId = result.txId;
         } else if (gateway.gateway_name === 'pix') {
@@ -158,7 +154,7 @@ export const generatePaymentQRCode = async (
                 keyType: creds.pixKeyType,
                 name: creds.merchantName || 'Zé Entregas',
                 city: creds.merchantCity || 'Brasília',
-                amount: amount,
+                amount: finalAmount,
                 description: metadata.description || 'Recarga Carteira'
             });
             txId = 'MANUAL_OFFLINE_' + Date.now();
@@ -171,20 +167,18 @@ export const generatePaymentQRCode = async (
             txId,
             gatewayUsed: gateway.gateway_name
         };
-    }, 'charge');
+    }, 'charge', preferredGateway);
 };
 
 /**
  * Verifica status de um pagamento
  */
-export const checkPaymentStatus = async (txId: string): Promise<PaymentStatus> => {
+export const checkPaymentStatus = async (txId: string, preferredGateway?: string): Promise<PaymentStatus> => {
     if (txId.startsWith('MANUAL_OFFLINE_')) {
-        // Para PIX estático, não há verificação automática via API
-        // Retornamos 'pending' para que a UI aguarde confirmação manual (upload de comprovante ou admin)
         return { txId, status: 'pending' };
     }
 
-    return attemptWithFallback(async (gateway) => {
+    return attemptWithGateway(async (gateway) => {
         if (gateway.gateway_name === 'infinitepay') {
             return await infinitePayCheckStatus(txId, gateway.credentials as any);
         } else if (gateway.gateway_name === 'mercadopago') {
@@ -195,14 +189,14 @@ export const checkPaymentStatus = async (txId: string): Promise<PaymentStatus> =
         } else {
             throw new Error(`Gateway ${gateway.gateway_name} não suportado.`);
         }
-    }, 'check_status');
+    }, 'check_status', preferredGateway);
 };
 
 /**
  * Estorna um pagamento
  */
 export const refundPayment = async (txId: string): Promise<boolean> => {
-    return attemptWithFallback(async (gateway) => {
+    return attemptWithGateway(async (gateway) => {
         // Implementar lógica de estorno aqui (futuro)
         throw new Error('Funcionalidade de estorno ainda não implementada.');
     }, 'refund');

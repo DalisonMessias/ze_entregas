@@ -78,6 +78,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/dashboard': 'wallet',
     '/loja/colaborador': 'collaborator_area',
     '/loja/chat': 'internal_chat',
+    '/loja/entregadores-chat': 'store_drivers_chat',
     '/loja/nova-entrega': 'new_request',
     '/loja/pedidos': 'associate_orders',
     '/loja/historico': 'history',

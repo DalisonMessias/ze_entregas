@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import { ShoppingBag, X, ArrowLeft, Plus, Minus, CreditCard, Barcode, QrCode, Copy, Check, Loader2, AlertTriangle, Search, Wallet, MapPin, ChevronRight, Star, Clock, Tag, Truck, Ticket, Heart, Zap, Shield } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { Product, ShopSettings, CartItem, PaymentMethod, Order, Category } from '../types';
@@ -92,24 +93,33 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
     const { alert } = useDialog(); // Use the custom dialog service
 
-    const fetchShopData = async () => {
+    const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+    const fetchShopData = async (signal?: AbortSignal) => {
         setLoading(true);
         setError(null);
         try {
-            const data = await cloud.getShopData();
-            setProducts(data.products || []);
-            setCategories(data.categories || []);
-            setSettings(data.settings || null);
+            const data = await cloud.getShopData(signal);
+            if (!signal?.aborted) {
+                setProducts(data.products || []);
+                setCategories(data.categories || []);
+                setSettings(data.settings || null);
+            }
         } catch (err: any) {
-            // console.error('[Shop] Load Error:', err);
-            setError("Não foi possível carregar a vitrine agora.");
+            if (err.name !== 'AbortError' && err.code !== '20') {
+                setError("Não foi possível carregar a vitrine agora.");
+            }
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
         }
     };
 
     useEffect(() => {
-        fetchShopData();
+        const controller = new AbortController();
+        fetchShopData(controller.signal);
+        return () => controller.abort();
     }, []);
 
 
@@ -188,10 +198,15 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
         setShippingCost(null);
 
         try {
-            // 1. Fetch User Address from BrasilAPI
-            const resUser = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-            if (!resUser.ok) throw new Error("CEP não encontrado");
-            const dataUser = await resUser.json();
+            const originCep = settings.shipping_origin_cep.replace(/\D/g, '');
+
+            // 1. Fetch Addresses Parallel
+            const [dataUser, dataOrigin] = await Promise.all([
+                fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`).then(r => r.ok ? r.json() : null),
+                fetch(`https://brasilapi.com.br/api/cep/v2/${originCep}`).then(r => r.ok ? r.json() : null)
+            ]);
+
+            if (!dataUser) throw new Error("CEP não encontrado");
 
             // Auto-fill address parts
             setShippingAddress(prev => ({
@@ -202,19 +217,20 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 state: dataUser.state || ''
             }));
 
-            // 2. Calculate Distance (Logic Simulation of Correios)
-            // Use Nominatim to get coords for Origin and Dest
-            const originCep = settings.shipping_origin_cep.replace(/\D/g, '');
-            const resOrigin = await fetch(`https://brasilapi.com.br/api/cep/v2/${originCep}`);
-            const dataOrigin = await resOrigin.json(); // Get city/state to help geocoding if needed, or just use CEP for geocode query
+            // 2. Geocode & Calculate (Parallel Geocode needed?)
+            // BrasilAPI v2 returns location.coordinates: { longitude: string, latitude: string } sometimes
+            // If BrasilAPI gives coords, great! Otherwise Nominatim.
+            // Let's stick with Nominatim for consistency across various CEPs for now, but parallelize.
 
-            // Geocode Origin
-            const geoOriginRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${originCep}, Brazil&limit=1`);
-            const geoOriginData = await geoOriginRes.json();
+            const [geoOriginRes, geoDestRes] = await Promise.all([
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${originCep}, Brazil&limit=1`),
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${cep}, Brazil&limit=1`)
+            ]);
 
-            // Geocode Dest
-            const geoDestRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${cep}, Brazil&limit=1`);
-            const geoDestData = await geoDestRes.json();
+            const [geoOriginData, geoDestData] = await Promise.all([
+                geoOriginRes.json(),
+                geoDestRes.json()
+            ]);
 
             if (geoOriginData.length > 0 && geoDestData.length > 0) {
                 const lat1 = parseFloat(geoOriginData[0].lat);
@@ -222,7 +238,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 const lat2 = parseFloat(geoDestData[0].lat);
                 const lon2 = parseFloat(geoDestData[0].lon);
 
-                // Haversine Distance (simplified "As the crow flies" for estimate)
+                // Haversine Distance
                 const R = 6371; // km
                 const dLat = (lat2 - lat1) * Math.PI / 180;
                 const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -233,7 +249,6 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 const d = R * c; // Distance in km
 
                 // Pricing Logic (Simulation)
-                // Base cost R$ 10.00 + R$ 0.50 per km
                 let price = 10.00 + (d * 0.50);
 
                 // Free shipping check
@@ -243,12 +258,11 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
                 setShippingCost(parseFloat(price.toFixed(2)));
             } else {
-                // Fallback if geocoding fails
-                setShippingCost(20.00); // Flat rate fallback
+                // Fallback
+                setShippingCost(20.00);
             }
 
         } catch (e: any) {
-            // console.error(e);
             setShippingError("Erro ao calcular frete. Tente novamente.");
         } finally {
             setCalculatingShipping(false);
@@ -338,11 +352,11 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
     // Filter Products
     const filteredProducts = useMemo(() => {
         return products.filter(p => {
-            const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesSearch = p.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
             const matchesCategory = activeCategory === 'all' || p.category_id === activeCategory;
             return matchesSearch && matchesCategory;
         });
-    }, [products, searchTerm, activeCategory]);
+    }, [products, debouncedSearchTerm, activeCategory]);
 
     // --- RENDERERS ---
 

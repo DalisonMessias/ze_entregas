@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Search, Store, Settings, Shield, UserX, UserCheck,
     AlertTriangle, Loader2, X, Edit2, History, Info,
@@ -9,6 +9,7 @@ import { adminGetStores, adminUpdateStoreStatus, adminGetStatusHistory } from '.
 import { ManagedUser } from '../types';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
+import { useDebounce } from '../hooks/useDebounce';
 // import { ProductImportExport } from './ProductImportExport'; // Substituído pelo Manager Completo
 import { StoreProductManager } from './StoreProductManager';
 import { StoreEditModal } from './StoreEditModal';
@@ -52,18 +53,26 @@ export const AdminStores: React.FC = () => {
     const { confirm, alert } = useDialog();
 
     useEffect(() => {
-        loadStores();
+        const controller = new AbortController();
+        loadStores(controller.signal);
+        return () => controller.abort();
     }, []);
 
-    const loadStores = async () => {
+    const loadStores = async (signal?: AbortSignal) => {
         setLoading(true);
         try {
-            const data = await adminGetStores();
-            setStores(data);
-        } catch (error) {
-            console.error('Error loading stores:', error);
+            const data = await adminGetStores(signal);
+            if (!signal?.aborted) {
+                setStores(data);
+            }
+        } catch (error: any) {
+            if (error.name !== 'AbortError' && error.code !== '20') {
+                console.error('Error loading stores:', error);
+            }
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
         }
     };
 
@@ -121,10 +130,17 @@ export const AdminStores: React.FC = () => {
         }
     };
 
-    const filteredStores = stores.filter(s =>
-        (s.name?.toLowerCase().includes(search.toLowerCase())) ||
-        (s.id.toLowerCase().includes(search.toLowerCase()))
-    );
+    const debouncedSearch = useDebounce(search, 300);
+
+    const filteredStores = useMemo(() => {
+        const q = debouncedSearch.toLowerCase().trim();
+        if (!q) return stores;
+
+        return stores.filter(s =>
+            (s.name?.toLowerCase().includes(q)) ||
+            (s.id.toLowerCase().includes(q))
+        );
+    }, [debouncedSearch, stores]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">

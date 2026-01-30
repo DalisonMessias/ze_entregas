@@ -1,10 +1,1 @@
-[2024-05-22] Remoção de duplicações no services/cloud.ts.
-[2024-05-22] Implementação de funcionalidade de toast no utils/dialogService.tsx.
-[2024-05-22] Adição de suporte a loading no componente components/Button.tsx.
-[2024-05-22] Correção de erros de contexto e chamadas de API em StreetRequestPage.tsx e StreetRequestsAdmin.tsx.
-[2024-05-22] Refatoração de AdminPanel.tsx para integrar componente externo de administração de ruas.
-[2026-01-29] Refinamento das opções de entrega e retirada no DigitalMenu para maior consistência visual e técnica.
-[2026-01-29] Correção da listagem de ruas no Admin: Adicionada visão de catálogo de ruas aprovadas e sincronização de dados após cadastro manual.
-[2026-01-29] Implementa��o de tabelas e colunas para o M�dulo de Media��o Inteligente.
-[2026-01-29] Cria��o do servi�o services/ai_mediation.ts para integra��o com Gemini.
-- Painel Admin de Mediação implementado (components/AdminMediation.tsx) com visualização de logs e status.
+- Corrigido o erro "column oc.order_id does not exist" nas funções `getUnifiedOrderHistory` e `getUnifiedActiveOrders`

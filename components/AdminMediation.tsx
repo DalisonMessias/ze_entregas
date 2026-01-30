@@ -93,7 +93,7 @@ export const AdminMediation: React.FC = () => {
                                         </span>
                                         <span className="text-[10px] text-gray-400">{new Date(session.updated_at).toLocaleDateString()}</span>
                                     </div>
-                                    <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">Pedido #{session.order?.display_id || session.order_id.slice(0, 8)}</h4>
+                                    <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">Pedido #{session.order_id.slice(0, 8)}</h4>
                                     <p className="text-xs text-gray-500 truncate">Passo: {session.current_step}</p>
                                 </div>
                             ))

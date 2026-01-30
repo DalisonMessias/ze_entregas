@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminGetScoreConfig, adminUpdateScoreConfig, adminGetBlockingConfig, adminUpdateBlockingConfig, getAllUsers, adminUpdateUserScore, adminGetScoreHistory } from '../services/cloud';
+import { adminGetScoreConfig, adminUpdateScoreConfig, adminGetBlockingConfig, adminUpdateBlockingConfig, adminGetAllDrivers, adminUpdateUserScore, adminGetScoreHistory } from '../services/cloud';
 import { Button } from './Button';
 import { BaseModal } from './BaseModal';
 import { Loader2, Save, Star, AlertCircle, TrendingUp, History, UserX, ShieldAlert, Edit2, CheckCircle2, XCircle, Plus, Minus } from 'lucide-react';
@@ -50,25 +50,37 @@ export const AdminScoreConfig: React.FC = () => {
     };
 
     useEffect(() => {
-        loadData();
+        const controller = new AbortController();
+        loadData(controller.signal);
+        return () => controller.abort();
     }, []);
 
-    const loadData = async () => {
+    const loadData = async (signal?: AbortSignal) => {
         setLoading(true);
         try {
-            const [configs, block, allUsers] = await Promise.all([
+            const [configs, block, driversData] = await Promise.all([
                 adminGetScoreConfig(),
                 adminGetBlockingConfig(),
-                getAllUsers()
+                adminGetAllDrivers(signal)
             ]);
-            setScoreConfigs(configs);
-            setBlockingConfig(block);
-            setDrivers(allUsers.filter(u => u.role === 'delivery_partner'));
+            if (!signal?.aborted) {
+                setScoreConfigs(configs);
+                setBlockingConfig(block);
+                // Filter keeping both types of delivery folks or just partners?
+                // The API fetches both. The previous code filtered 'delivery_partner'.
+                // Let's filter 'delivery_partner' to be safe and consistent with previous behavior, 
+                // but now we have 100 drivers instead of 100 mixed users.
+                setDrivers(driversData.filter(u => u.role === 'delivery_partner'));
+            }
         } catch (e: any) {
-            console.error(e);
-            await alert({ title: 'Erro de Carregamento', message: 'Erro ao carregar configurações de pontuação: ' + (e.message || 'Erro desconhecido') });
+            if (e.name !== 'AbortError' && e.code !== '20') {
+                console.error(e);
+                await alert({ title: 'Erro de Carregamento', message: 'Erro ao carregar configurações de pontuação: ' + (e.message || 'Erro desconhecido') });
+            }
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
         }
     };
 

@@ -8898,9 +8898,15 @@ BEGIN
         is_active BOOLEAN DEFAULT FALSE,
         is_primary BOOLEAN DEFAULT FALSE,
         credentials JSONB DEFAULT '{}'::jsonb,
+        fees JSONB DEFAULT '{"pix": 0, "credit_card": 0, "credit_card_installments": 0}'::jsonb,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Garantir coluna fees se a tabela já existir
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment_gateway_settings' AND column_name = 'fees') THEN
+        ALTER TABLE public.payment_gateway_settings ADD COLUMN fees JSONB DEFAULT '{"pix": 0, "credit_card": 0, "credit_card_installments": 0}'::jsonb;
+    END IF;
 
     -- Garantir que o gateway 'pix' possa ser inserido se a tabela já existir (caso a constraint precise ser atualizada)
     BEGIN 
@@ -9044,15 +9050,23 @@ BEGIN
     CREATE POLICY "Only admins can manage gateways" ON public.payment_gateway_settings
     FOR ALL USING (public.is_admin());
 
+    DROP POLICY IF EXISTS "Anyone authenticated can view active gateways" ON public.payment_gateway_settings;
+    CREATE POLICY "Anyone authenticated can view active gateways" ON public.payment_gateway_settings
+    FOR SELECT USING (auth.role() = 'authenticated');
+
     -- Grants
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.payment_gateway_settings TO authenticated;
 
     -- Inserir gateways padrão
-    INSERT INTO public.payment_gateway_settings (gateway_name, is_active, is_primary)
+    INSERT INTO public.payment_gateway_settings (gateway_name, is_active, is_primary, fees)
     VALUES 
-        ('infinitepay', true, true),
-        ('mercadopago', false, false)
-    ON CONFLICT (gateway_name) DO NOTHING;
+        ('infinitepay', true, true, '{"pix": 0, "credit_card": 0, "credit_card_installments": 0}'::jsonb),
+        ('mercadopago', true, false, '{"pix": 0, "credit_card": 0, "credit_card_installments": 0}'::jsonb),
+        ('pix', true, false, '{"pix": 0, "credit_card": 0, "credit_card_installments": 0}'::jsonb)
+    ON CONFLICT (gateway_name) DO UPDATE SET 
+        is_active = EXCLUDED.is_active,
+        is_primary = EXCLUDED.is_primary,
+        fees = COALESCE(payment_gateway_settings.fees, EXCLUDED.fees);
 
     -- ==================================================================
     -- Tabela de Logs de Gateways de Pagamento (20/01/2026)
@@ -10835,6 +10849,7 @@ CREATE POLICY "Admins can view mediation actions" ON public.mediation_actions FO
 
 DROP POLICY IF EXISTS "Systems can insert mediation actions" ON public.mediation_actions;
 -- Assumindo que o backend (service role) insere, mas se for via client (IA simulada), precisamos de permissão
+DROP POLICY IF EXISTS "Participants can view actions" ON public.mediation_actions;
 CREATE POLICY "Participants can view actions" ON public.mediation_actions
     FOR SELECT USING (
         session_id IN (SELECT id FROM public.mediation_sessions) 
@@ -10847,3 +10862,85 @@ GRANT ALL ON public.mediation_actions TO authenticated;
 GRANT ALL ON public.mediation_sessions TO service_role;
 GRANT ALL ON public.mediation_actions TO service_role;
 
+
+-- ==================================================================
+-- 3.x FUNÇÕES RPC (Correções de NaN e Unificação de Pedidos)
+-- ==================================================================
+
+-- Drop para evitar erro de assinatura diferente (42P13)
+DROP FUNCTION IF EXISTS public.get_unified_order_history(uuid, integer);
+DROP FUNCTION IF EXISTS public.get_unified_active_orders(uuid);
+
+-- Função para buscar histórico unificado de pedidos (corrigindo NaN)
+CREATE OR REPLACE FUNCTION public.get_unified_order_history(p_store_id uuid, p_limit integer)
+RETURNS TABLE (
+    id uuid,
+    customer_name text,
+    status text,
+    total_price numeric,
+    payment_method text,
+    created_at timestamptz,
+    items jsonb,
+    order_type text,
+    table_identifier text,
+    ticket_id uuid
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        o.id,
+        o.customer_name,
+        o.status::text,
+        COALESCE(o.total_price, 0) as total_price,
+        o.payment_method::text,
+        o.created_at,
+        o.items,
+        o.order_type,
+        oc.table_identifier::text,
+        ot.id as ticket_id
+    FROM public.orders o
+    LEFT JOIN public.orders_tickets ot ON o.id = ot.general_order_id
+    LEFT JOIN public.orders_collaborators oc ON ot.order_id = oc.id
+    WHERE o.store_id = p_store_id
+    ORDER BY o.created_at DESC
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Função para buscar pedidos ativos unificados
+CREATE OR REPLACE FUNCTION public.get_unified_active_orders(p_store_id uuid)
+RETURNS TABLE (
+    id uuid,
+    customer_name text,
+    status text,
+    total_amount numeric,
+    created_at timestamptz,
+    items jsonb,
+    origin text,
+    table_identifier text,
+    order_type text,
+    payment_status text,
+    ticket_id uuid
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        o.id,
+        o.customer_name,
+        o.status::text,
+        COALESCE(o.total_price, 0) as total_amount,
+        o.created_at,
+        o.items,
+        o.origin,
+        oc.table_identifier::text,
+        o.order_type,
+        o.payment_status::text,
+        ot.id as ticket_id
+    FROM public.orders o
+    LEFT JOIN public.orders_tickets ot ON o.id = ot.general_order_id
+    LEFT JOIN public.orders_collaborators oc ON ot.order_id = oc.id
+    WHERE o.store_id = p_store_id
+    AND o.status NOT IN ('COMPLETED', 'CANCELLED', 'DELIVERED', 'REJECTED')
+    ORDER BY o.created_at DESC;
+END;
+$$ LANGUAGE plpgsql;

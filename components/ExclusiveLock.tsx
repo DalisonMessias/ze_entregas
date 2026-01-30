@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Crown, ChevronRight, Zap, Loader2, Check } from 'lucide-react';
+import { Lock, Crown, ChevronRight, Zap, Loader2, Check, CheckCircle } from 'lucide-react';
 import { UserRole } from '../types';
 import * as cloud from '../services/cloud';
 import { SuperStoreModal } from './SuperStoreModal';
@@ -116,23 +116,54 @@ export const ExclusiveLock: React.FC<ExclusiveLockProps> = ({ title, description
         );
     }
 
-    // Renderiza o bloqueio para entregador normal (Legacy)
+    // Renderiza o bloqueio para entregador normal (Novo Design)
     if (userRole === 'delivery_person') {
         return (
-            <div className="flex flex-col items-center justify-center p-4 min-h-[60vh]">
-                <div className="w-full max-w-lg bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-xl text-green-500">
-                            <Zap className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-gray-900 dark:text-white">{title}</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
-                        </div>
+            <div className="flex flex-col items-center justify-center p-4 min-h-[70vh] animate-in fade-in duration-700">
+                <div className="w-full max-w-xl bg-white dark:bg-gray-800 p-8 md:p-12 rounded-[48px] shadow-2xl border border-gray-100 dark:border-gray-700 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-5">
+                        <Zap className="w-64 h-64 rotate-12" />
                     </div>
-                    <Button size="sm" fullWidth onClick={handleNavigateToPartner} className="mt-4">
-                        <Zap className="w-4 h-4 mr-2" /> Torne-se um Parceiro Verificado
-                    </Button>
+
+                    <div className="relative z-10 text-center">
+                        <div className="w-20 h-20 bg-brand-50 dark:bg-brand-900/30 rounded-[32px] flex items-center justify-center mx-auto mb-8 shadow-inner">
+                            <Zap className="w-10 h-10 text-brand-500 animate-bounce-slow" />
+                        </div>
+
+                        <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-4 tracking-tighter">
+                            {title || "Funcionalidade Restrita"}
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400 mb-10 leading-relaxed font-medium">
+                            {description || "Para acessar esta e outras ferramentas exclusivas, você precisa se tornar um Parceiro Verificado."}
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10 text-left">
+                            {[
+                                { title: "Mais Pedidos", desc: "Prioridade na fila de chamadas." },
+                                { title: "Ganhos Extras", desc: "Acesso a bônus de performance." }
+                            ].map((b, i) => (
+                                <div key={i} className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-750 rounded-2xl border border-gray-100 dark:border-gray-700">
+                                    <div className="p-2 bg-brand-50 dark:bg-brand-900/40 rounded-xl text-brand-500">
+                                        <CheckCircle className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-xs text-gray-900 dark:text-white">{b.title}</h4>
+                                        <p className="text-[10px] text-gray-500 dark:text-gray-400">{b.desc}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <Button
+                            variant="primary"
+                            className="w-full h-16 !rounded-3xl font-black text-lg shadow-xl shadow-brand-500/20 transform transition-all hover:scale-[1.02] active:scale-[0.98]"
+                            onClick={handleNavigateToPartner}
+                        >
+                            <Zap className="w-5 h-5 mr-3" /> Quero ser Parceiro
+                        </Button>
+
+                        <p className="mt-6 text-[10px] text-gray-400 font-bold uppercase tracking-widest">Verificação rápida em até 24h</p>
+                    </div>
                 </div>
             </div>
         );
