@@ -406,6 +406,7 @@ export interface Order {
     delivery_location_reference?: string;
     driver_id?: string;
     payment_status?: string;
+    is_location_delivery?: boolean;
 
     // Mediation Fields
     pickup_code?: string;

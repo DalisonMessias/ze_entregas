@@ -1444,13 +1444,13 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE, -- Loja que criou o pedido
-    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Usuﾃ｡rio que fez o pedido (se aplicﾃ｡vel)
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Usuário que fez o pedido (se aplicável)
     status public.order_status NOT NULL,
-    items JSONB[] NOT NULL DEFAULT ARRAY[]::JSONB[], -- [{ product_id, name, quantity, price }]
+    items JSONB NOT NULL DEFAULT '[]'::JSONB, -- [{ product_id, name, quantity, price }]
     total_price NUMERIC(10, 2) NOT NULL,
     payment_method public.payment_method NOT NULL,
 
-    shipping_address JSONB, -- Endereﾃｧo de entrega
+    shipping_address JSONB, -- Endereço de entrega
     payment_details JSONB, -- Detalhes adicionais do pagamento
     shipping_cost NUMERIC(10, 2),
     discount NUMERIC(10, 2) DEFAULT 0,
@@ -1459,6 +1459,13 @@ CREATE TABLE IF NOT EXISTS public.orders (
     delivery_mode TEXT, -- 'OWN' | 'PLATFORM' | 'ASSOCIATE'
     delivery_location_reference TEXT, -- Referência ou Local da Entrega (Obrigatório para Entregar por Localização)
     driver_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL, -- Entregador atribuído (fixo)
+    customer_name TEXT,
+    customer_phone TEXT,
+    observation TEXT,
+    origin TEXT DEFAULT 'INTERNAL',
+    amount_paid NUMERIC(10, 2),
+    change_amount NUMERIC(10, 2),
+    custom_payment_label TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     payment_status TEXT DEFAULT 'pending' -- pending, paid
@@ -1476,9 +1483,40 @@ CREATE TRIGGER tr_restrict_orders
 BEFORE INSERT OR UPDATE OR DELETE ON public.orders
 FOR EACH ROW EXECUTE FUNCTION public.check_not_restricted_trigger();
 
--- Adicionar coluna delivery_location_reference se não existir
+-- Adicionar colunas e corrigir tipos na tabela orders se necessário
 DO $$
 BEGIN
+    -- Corrigir tipo da coluna items se for array (JSONB[]) para JSONB
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'orders' AND column_name = 'items' AND data_type = 'ARRAY'
+    ) THEN
+        ALTER TABLE public.orders ALTER COLUMN items TYPE JSONB USING array_to_json(items)::JSONB;
+        ALTER TABLE public.orders ALTER COLUMN items SET DEFAULT '[]'::JSONB;
+    END IF;
+
+    -- Adicionar colunas de dados do cliente e metadados
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'customer_name') THEN
+        ALTER TABLE public.orders ADD COLUMN customer_name TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'customer_phone') THEN
+        ALTER TABLE public.orders ADD COLUMN customer_phone TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'observation') THEN
+        ALTER TABLE public.orders ADD COLUMN observation TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'origin') THEN
+        ALTER TABLE public.orders ADD COLUMN origin TEXT DEFAULT 'INTERNAL';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'amount_paid') THEN
+        ALTER TABLE public.orders ADD COLUMN amount_paid NUMERIC(10, 2);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'change_amount') THEN
+        ALTER TABLE public.orders ADD COLUMN change_amount NUMERIC(10, 2);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'custom_payment_label') THEN
+        ALTER TABLE public.orders ADD COLUMN custom_payment_label TEXT;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'delivery_location_reference') THEN
         ALTER TABLE public.orders ADD COLUMN delivery_location_reference TEXT;
     END IF;
@@ -7516,9 +7554,10 @@ BEGIN
         
         -- Verificar se já existe ticket para este pedido
         IF NOT EXISTS (SELECT 1 FROM public.orders_tickets WHERE order_id = NEW.id) THEN
-            INSERT INTO public.orders_tickets (store_id, order_id, items, status, created_at)
-            VALUES (NEW.store_id, NEW.id, COALESCE(NEW.items, '[]'::jsonb), 'pending', NEW.created_at);
+            INSERT INTO public.orders_tickets (store_id, order_id, general_order_id, items, status, created_at)
+            VALUES (NEW.store_id, NEW.id, NEW.id, COALESCE(NEW.items, '[]'::jsonb), 'pending', NEW.created_at);
         END IF;
+
     END IF;
 
     -- Se o pedido for cancelado, remover ticket ou marcar como cancelado? Vamos marcar como completed para sair da fila visível ou deletar?
@@ -10891,7 +10930,7 @@ BEGIN
         o.id,
         o.customer_name,
         o.status::text,
-        COALESCE(o.total_price, 0) as total_price,
+        COALESCE(o.total_price, oc.total_amount, 0) as total_price,
         o.payment_method::text,
         o.created_at,
         o.items,
@@ -10944,3 +10983,304 @@ BEGIN
     ORDER BY o.created_at DESC;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Função para buscar histórico unificado de pedidos por intervalo de datas (Server-Side Filtering)
+CREATE OR REPLACE FUNCTION public.get_unified_order_history_by_date(
+    p_store_id uuid, 
+    p_start_date timestamptz, 
+    p_end_date timestamptz
+)
+RETURNS TABLE (
+    id uuid,
+    customer_name text,
+    status text,
+    total_price numeric,
+    payment_method text,
+    created_at timestamptz,
+    items jsonb,
+    order_type text,
+    table_identifier text,
+    ticket_id uuid
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        o.id,
+        o.customer_name,
+        o.status::text,
+        COALESCE(o.total_price, oc.total_amount, 0) as total_price,
+        o.payment_method::text,
+        o.created_at,
+        o.items,
+        o.order_type,
+        oc.table_identifier::text,
+        ot.id as ticket_id
+    FROM public.orders o
+    LEFT JOIN public.orders_tickets ot ON o.id = ot.general_order_id
+    LEFT JOIN public.orders_collaborators oc ON ot.order_id = oc.id
+    WHERE o.store_id = p_store_id
+    AND o.created_at >= p_start_date
+    AND o.created_at <= p_end_date
+    ORDER BY o.created_at DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Função para restaurar um pedido à fila de produção (recriando ticket se necessário)
+CREATE OR REPLACE FUNCTION public.restore_order_ticket(p_order_id uuid)
+RETURNS jsonb
+AS $$
+DECLARE
+    v_ticket_id uuid;
+    v_order_status text;
+    v_updates_count int;
+BEGIN
+    -- Verifica se o pedido existe e pega status atual
+    SELECT status INTO v_order_status FROM public.orders WHERE id = p_order_id;
+    
+    IF v_order_status IS NULL THEN
+        RETURN json_build_object('success', false, 'message', 'Order not found for ID: ' || p_order_id);
+    END IF;
+
+    -- Atualiza status do pedido para PENDING forçadamente
+    UPDATE public.orders 
+    SET status = 'PENDING' 
+    WHERE id = p_order_id;
+    
+    GET DIAGNOSTICS v_updates_count = ROW_COUNT;
+    IF v_updates_count = 0 THEN
+         RETURN json_build_object('success', false, 'message', 'Failed to update order status');
+    END IF;
+
+    -- Verifica se já existe ticket para este pedido
+    SELECT id INTO v_ticket_id FROM public.orders_tickets WHERE general_order_id = p_order_id LIMIT 1;
+    
+    IF v_ticket_id IS NOT NULL THEN
+        -- Ticket existe, apenas reativa
+        UPDATE public.orders_tickets 
+        SET status = 'pending' 
+        WHERE id = v_ticket_id;
+        
+        RETURN json_build_object('success', true, 'message', 'Ticket updated', 'ticket_id', v_ticket_id, 'previous_status', v_order_status);
+    ELSE
+        -- Ticket não existe, cria um novo
+        INSERT INTO public.orders_tickets (
+            store_id,
+            general_order_id,
+            order_id,
+            status,
+            items,
+            created_at,
+            updated_at
+        )
+        SELECT 
+            store_id,
+            id,
+            id, -- Preenchendo order_id também para satisfazer constraint legada
+            'pending',
+            -- Coluna items em orders é JSONB, então passamos direto.
+            -- COALESCE garante que não seja NULL.
+            COALESCE(items, '[]'::jsonb),
+            NOW(),
+            NOW()
+        FROM public.orders WHERE id = p_order_id
+        RETURNING id INTO v_ticket_id;
+        
+        RETURN json_build_object('success', true, 'message', 'Ticket created', 'ticket_id', v_ticket_id, 'previous_status', v_order_status);
+    END IF;
+EXCEPTION WHEN others THEN
+    RETURN json_build_object('success', false, 'message', SQLERRM);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Correção de permissão para sequência de tickets (Necessário para INSERT na restore_order_ticket)
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE public.orders_tickets_display_id_seq TO authenticated;
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE public.orders_tickets_display_id_seq TO service_role;
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE public.orders_tickets_display_id_seq TO anon;
+
+-- Função para atualizar status do ticket E AUTOMATIZAR PAGAMENTO se finalizado
+CREATE OR REPLACE FUNCTION public.update_ticket_status(p_ticket_id uuid, p_status text)
+RETURNS void
+AS $$
+DECLARE
+    v_general_order_id uuid;
+    v_order_id uuid;
+    v_new_payment_status text;
+    v_order_status_mapped text;
+BEGIN
+    -- Mapeamento de status de interface para status de banco (Enum)
+    v_order_status_mapped := CASE
+        WHEN p_status = 'pending' THEN 'PENDING'
+        WHEN p_status = 'producing' THEN 'PREPARING'
+        WHEN p_status = 'ready' THEN 'READY'
+        WHEN p_status = 'in_transit' THEN 'IN_DELIVERY'
+        WHEN p_status = 'delivered' THEN 'DELIVERED'
+        WHEN p_status = 'completed' THEN 'DELIVERED'
+        WHEN p_status = 'cancelled' THEN 'CANCELLED'
+        WHEN p_status = 'rejected' THEN 'REJECTED'
+        ELSE UPPER(p_status) -- Tenta converter direto caso não mapeado
+    END;
+
+    -- Se o status for de finalização (entregue), define pagamento como 'paid'
+    -- Aceita variações de string comuns no frontend
+    IF p_status ILIKE 'delivered' OR p_status ILIKE 'completed' THEN
+        v_new_payment_status := 'paid';
+    END IF;
+
+    -- Atualiza o ticket com o status original (geralmente lowercase no frontend)
+    UPDATE public.orders_tickets
+    SET status = p_status, updated_at = NOW()
+    WHERE id = p_ticket_id
+    RETURNING general_order_id, order_id INTO v_general_order_id, v_order_id;
+
+    -- Atualiza pedidos vinculados
+    IF v_general_order_id IS NOT NULL THEN
+        -- Tenta atualizar status apenas se for um valor válido para o enum, senão ignora o status e atualiza só pagamento
+        BEGIN
+            UPDATE public.orders 
+            SET 
+                status = v_order_status_mapped::public.order_status, 
+                updated_at = NOW(),
+                payment_status = COALESCE(v_new_payment_status, payment_status)
+            WHERE id = v_general_order_id;
+        EXCEPTION WHEN invalid_text_representation THEN
+            -- Se falhar o cast do status, atualiza apenas o pagamento (fallback seguro)
+            UPDATE public.orders 
+            SET 
+                updated_at = NOW(),
+                payment_status = COALESCE(v_new_payment_status, payment_status)
+            WHERE id = v_general_order_id;
+        END;
+    END IF;
+
+    IF v_order_id IS NOT NULL THEN
+        UPDATE public.orders_collaborators 
+        SET 
+            status = p_status, -- orders_collaborators costuma usar status texto simples
+            updated_at = NOW(),
+            payment_status = COALESCE(v_new_payment_status, payment_status)
+        WHERE id = v_order_id;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Função para atualizar PREÇO TOTAL do pedido manualmente
+CREATE OR REPLACE FUNCTION public.update_order_price(p_order_id uuid, p_new_price numeric)
+RETURNS void
+AS $$
+DECLARE
+    v_general_order_id uuid;
+    v_order_id uuid;
+BEGIN
+    -- Atualiza orders (tabela principal)
+    -- 1. Tenta achar o ticket usando o ID fornecido (pode ser order.id ou orders_collaborators.id)
+    SELECT general_order_id, order_id 
+    INTO v_general_order_id, v_order_id
+    FROM public.orders_tickets 
+    WHERE general_order_id = p_order_id OR order_id = p_order_id
+    LIMIT 1;
+
+    -- 2. Se não achou ticket, assume que p_order_id é orders.id (comportamento padrão)
+    IF v_general_order_id IS NULL AND v_order_id IS NULL THEN
+        UPDATE public.orders
+        SET total_price = p_new_price, updated_at = NOW()
+        WHERE id = p_order_id;
+        RETURN;
+    END IF;
+
+    -- 3. Atualiza orders (Tabela Principal)
+    IF v_general_order_id IS NOT NULL THEN
+        UPDATE public.orders
+        SET total_price = p_new_price, updated_at = NOW()
+        WHERE id = v_general_order_id;
+    END IF;
+
+    -- 4. Atualiza orders_collaborators (Mesas/Comandas)
+    IF v_order_id IS NOT NULL THEN
+        UPDATE public.orders_collaborators
+        SET total_amount = p_new_price, updated_at = NOW()
+        WHERE id = v_order_id;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ==================================================================
+-- CORREÇÃO DE CLASSIFICAÇÃO DE PEDIDOS - 31/01/2026
+-- ==================================================================
+
+-- 1. Adicionar coluna is_location_delivery se não existir
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'is_location_delivery') THEN
+        ALTER TABLE public.orders ADD COLUMN is_location_delivery BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
+
+-- 2. Atualizar create_public_order para persistir is_location_delivery
+CREATE OR REPLACE FUNCTION public.create_public_order(
+    p_store_id UUID,
+    p_items JSONB,
+    p_total_price NUMERIC,
+    p_payment_method TEXT,
+    p_shipping_address JSONB,
+    p_delivery_mode TEXT,
+    p_customer_name TEXT,
+    p_customer_phone TEXT,
+    p_pix_active BOOLEAN DEFAULT FALSE,
+    p_observation TEXT DEFAULT NULL,
+    p_is_location_delivery BOOLEAN DEFAULT FALSE,
+    p_shipping_cost NUMERIC DEFAULT 0
+)
+RETURNS UUID
+AS $$
+DECLARE
+    v_order_id UUID;
+    v_status public.order_status := 'pending';
+BEGIN
+    -- Definir status baseado na ativação do PIX
+    IF p_payment_method = 'PIX' THEN
+        IF p_pix_active THEN
+            v_status := 'Aguardando pagamento (PIX)';
+        ELSE
+            v_status := 'Pagamento a combinar com a loja';
+        END IF;
+    END IF;
+
+    INSERT INTO public.orders (
+        store_id, 
+        user_id, 
+        status, 
+        items, 
+        total_price, 
+        payment_method, 
+        shipping_address, 
+        order_type,
+        customer_name, 
+        customer_phone,
+        observation,
+        is_location_delivery,
+        shipping_cost,
+        origin
+    )
+    VALUES (
+        p_store_id, 
+        auth.uid(),
+        v_status, 
+        p_items, 
+        p_total_price, 
+        p_payment_method::public.payment_method, 
+        p_shipping_address, 
+        p_delivery_mode, 
+        p_customer_name, 
+        p_customer_phone,
+        p_observation,
+        p_is_location_delivery,
+        p_shipping_cost,
+        'DIGITAL_MENU'
+    )
+    RETURNING id INTO v_order_id;
+
+    RETURN v_order_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC) TO anon, authenticated;

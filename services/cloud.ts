@@ -2090,9 +2090,9 @@ export const getShopData = async (signal?: AbortSignal) => {
 
     try {
         const [p, c, s] = await Promise.all([
-            sb.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(2000).abortSignal(signal || new AbortController().signal),
-            sb.from('categories').select('*').order('name', { ascending: true }).limit(1000).abortSignal(signal || new AbortController().signal),
-            sb.from('shop_settings').select('*').limit(1).single().abortSignal(signal || new AbortController().signal)
+            (sb.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(2000) as any).abortSignal(signal || new AbortController().signal),
+            (sb.from('categories').select('*').order('name', { ascending: true }).limit(1000) as any).abortSignal(signal || new AbortController().signal),
+            (sb.from('shop_settings').select('*').limit(1).single() as any).abortSignal(signal || new AbortController().signal)
         ]);
         return { products: p.data || [], categories: c.data || [], settings: s.data };
     } catch (error: any) {
@@ -3531,7 +3531,7 @@ export const getOrdersTickets = async (storeId: string) => {
     const { data, error } = await sb.from('orders_tickets')
         .select(`
             *,
-            orders!order_id (
+            orders:orders!general_order_id (
                 id,
                 customer_name,
                 order_type,
@@ -3539,12 +3539,16 @@ export const getOrdersTickets = async (storeId: string) => {
                 total_price,
                 payment_method,
                 payment_status,
+                shipping_cost,
+                is_location_delivery,
                 created_at
             ),
             orders_collaborators (
+                id,
                 table_identifier,
                 customer_name,
-                payment_status
+                payment_status,
+                total_amount
             )
         `)
         .eq('store_id', storeId)
@@ -3600,6 +3604,35 @@ export const toggleTicketPaymentStatus = async (ticketId: string, currentStatus:
     }
 
     return newStatus;
+};
+
+export const restoreOrderToQueue = async (orderId: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Supabase client not initialized");
+
+    const { data, error } = await sb.rpc('restore_order_ticket', { p_order_id: orderId });
+
+    if (error) {
+        console.error('restoreOrderToQueue RPC Error:', error);
+        throw error;
+    }
+
+    return data;
+};
+
+export const updateOrderPrice = async (orderId: string, newPrice: number) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Supabase client not initialized");
+
+    const { error } = await sb.rpc('update_order_price', {
+        p_order_id: orderId,
+        p_new_price: newPrice
+    });
+
+    if (error) {
+        console.error('updateOrderPrice RPC Error:', error);
+        throw error;
+    }
 };
 
 export const getClosedOrders = async (storeId: string, collaboratorId: string) => {
@@ -4646,6 +4679,21 @@ export const getUnifiedOrderHistory = async (storeId: string, limit: number = 50
     }
     return data || [];
 };
+
+export const getUnifiedOrderHistoryByDate = async (storeId: string, startDate: string, endDate: string) => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.rpc('get_unified_order_history_by_date', {
+        p_store_id: storeId,
+        p_start_date: startDate,
+        p_end_date: endDate
+    });
+    if (error) {
+        console.error('getUnifiedOrderHistoryByDate error', error);
+        return [];
+    }
+    return data || [];
+};
 // --- SCORE & BLOCKING ADMIN ---
 export const adminGetScoreConfig = async () => {
     const sb = getClient();
@@ -5687,7 +5735,9 @@ export const createPublicOrder = async (
         p_customer_name: customerName,
         p_customer_phone: customerPhone,
         p_pix_active: pixActive,
-        p_observation: observation
+        p_observation: observation,
+        p_is_location_delivery: shippingAddress?.is_location_delivery || false,
+        p_shipping_cost: shippingAddress?.fee || 0
     });
 
     if (error) {

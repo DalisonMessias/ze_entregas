@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StoreProduct, Order, CartItem, Product, PaymentMethod, StoreDeliverySettings, StoreNeighborhoodFee } from '../types';
 import * as cloud from '../services/cloud';
-import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator, Truck, ShoppingCart, Utensils, ClipboardList, Settings, Eye, ClockArrowDown } from 'lucide-react';
+import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator, Truck, ShoppingCart, Utensils, ClipboardList, Settings, Eye, ClockArrowDown, Check, Pencil, XCircle } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { useDialog } from '../utils/dialogService';
@@ -40,9 +40,9 @@ export const InternalOrders: React.FC = () => {
     const [productionTab, setProductionTab] = useState<'QUEUE' | 'DELIVERY' | 'PICKUP' | 'LOCAL' | 'HISTORY' | 'CANCELLED'>('QUEUE');
 
     // Filtros de data para aba HISTORY
-    const [historyDateFilter, setHistoryDateFilter] = useState<string>(new Date().toISOString().split('T')[0]); // Data atual por padrão
-    const [historyTimeStart, setHistoryTimeStart] = useState<string>('00:00');
-    const [historyTimeEnd, setHistoryTimeEnd] = useState<string>('23:59');
+    // Filtros de data para aba HISTORY e CANCELLED
+    const [filterStartDate, setFilterStartDate] = useState<string>(new Date().toISOString().split('T')[0]); // Data Inicial
+    const [filterEndDate, setFilterEndDate] = useState<string>(new Date().toISOString().split('T')[0]); // Data Final
 
     const [products, setProducts] = useState<StoreProduct[]>([]);
     const [activeOrders, setActiveOrders] = useState<any[]>([]); // Antiga activeTables, agora unificada
@@ -197,6 +197,39 @@ export const InternalOrders: React.FC = () => {
     };
 
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // Estados para edição de preço
+    const [isEditingPrice, setIsEditingPrice] = useState(false);
+    const [newPriceValue, setNewPriceValue] = useState('');
+
+    const handleSavePrice = async () => {
+        if (!lastOrder?.id) return;
+
+        try {
+            // Remove R$, espaços e pontos de milhar, mantém vírgula decimal
+            const cleanValue = newPriceValue.replace(/[R$\s.]/g, '').replace(',', '.');
+            const price = parseFloat(cleanValue);
+
+            if (isNaN(price)) {
+                showAlert({ title: 'Erro', message: 'Valor inválido' });
+                return;
+            }
+
+            await cloud.updateOrderPrice(lastOrder.id, price);
+
+            // Atualiza estado local
+            setLastOrder(prev => ({ ...prev, total_price: price }));
+            setIsEditingPrice(false);
+            showAlert({ title: 'Sucesso', message: 'Valor atualizado!' });
+
+            // Atualiza listas em background
+            loadTickets();
+            loadHistory();
+        } catch (error) {
+            console.error('Erro ao atualizar preço:', error);
+            showAlert({ title: 'Erro', message: 'Falha ao atualizar valor.' });
+        }
+    };
 
     const loadTickets = async () => {
         if (currentUserId) {
@@ -499,9 +532,13 @@ export const InternalOrders: React.FC = () => {
 
     useEffect(() => {
         if (view === 'HISTORY' || productionTab === 'HISTORY' || productionTab === 'CANCELLED') {
-            loadHistory();
+            // Removido auto-load ao mudar datas (loadHistory)
+            // Agora o usuário deve clicar em "Filtrar"
+            // Mas carregamos a primeira vez ao entrar na aba
+            loadHistory(filterStartDate, filterEndDate);
         }
-    }, [view, productionTab, historyDateFilter, historyTimeStart, historyTimeEnd]);
+        // Dependências removidas: [filterStartDate, filterEndDate] para evitar reload em digitação
+    }, [view, productionTab]);
 
     useEffect(() => {
         if (view === 'TABLES') {
@@ -539,8 +576,9 @@ export const InternalOrders: React.FC = () => {
 
             if (shopSettings) {
                 // Inicializar horários do filtro com base nas configurações da loja se disponíveis
-                if (shopSettings.support_hours_start) setHistoryTimeStart(shopSettings.support_hours_start.slice(0, 5));
-                if (shopSettings.support_hours_end) setHistoryTimeEnd(shopSettings.support_hours_end.slice(0, 5));
+                // Ignorado na nova versão por intervalo de datas
+                // if (shopSettings.support_hours_start) setHistoryTimeStart(shopSettings.support_hours_start.slice(0, 5));
+                // if (shopSettings.support_hours_end) setHistoryTimeEnd(shopSettings.support_hours_end.slice(0, 5));
             }
 
             setHasOnlineCouriers(onlineDrivers && onlineDrivers.length > 0);
@@ -577,15 +615,19 @@ export const InternalOrders: React.FC = () => {
         }
     };
 
-    const loadHistory = async () => {
+    const loadHistory = async (start = filterStartDate, end = filterEndDate) => {
         if (!currentUserId) return;
         setLoadingHistory(true);
         try {
-            const data = await cloud.getUnifiedOrderHistory(currentUserId);
+            // Ajustar para garantir que pegamos o dia inteiro no fuso horário local
+            // Ao criar Date com "YYYY-MM-DDTHH:mm:ss", o JS assume horário local
+            const startDateTime = new Date(`${start}T00:00:00`);
+            const endDateTime = new Date(`${end}T23:59:59.999`);
+
+            const data = await cloud.getUnifiedOrderHistoryByDate(currentUserId, startDateTime.toISOString(), endDateTime.toISOString());
             setHistoryOrders(data);
         } catch (error: any) {
             console.error('Error loading unified history:', error?.message || error);
-            // Tenta logar detalhes se for objeto
             if (typeof error === 'object') {
                 try { console.error('History Error Details:', JSON.stringify(error)); } catch (e) { }
             }
@@ -831,6 +873,23 @@ export const InternalOrders: React.FC = () => {
             const { data: { user } } = await mbClient.auth.getUser();
             if (!user) throw new Error("User not found");
 
+            console.log('[handleCheckout] Payload:', {
+                orderType,
+                deliveryMode,
+                isLocationOnly,
+                deliveryLocationReference,
+                shipping_address: orderType === 'DELIVERY' ? {
+                    street: addressStreet,
+                    number: addressNumber,
+                    district: addressDistrict,
+                    city: addressCity,
+                    zip: addressZip,
+                    latitude: latitude,
+                    longitude: longitude,
+                    is_location_delivery: isLocationOnly
+                } : {},
+            });
+
             const order = await cloud.createOrder({
                 items: cart.map(i => ({
                     product_id: i.product.id.startsWith('custom_') ? 'custom' : i.product.id, // Envia 'custom' ou null se o backend aceitar, mas 'custom' é mais seguro para lógica de string
@@ -864,7 +923,8 @@ export const InternalOrders: React.FC = () => {
                 delivery_mode: orderType === 'DELIVERY' ? (deliveryMode || undefined) : undefined,
                 delivery_location_reference: (orderType === 'DELIVERY' && isLocationOnly) ? deliveryLocationReference : undefined,
                 driver_id: deliveryMode === 'ASSOCIATE' ? selectedAssociateId : undefined,
-                status: paymentTiming === 'ONLINE' ? 'CONFIRMED' : 'PENDING'
+                status: paymentTiming === 'ONLINE' ? 'CONFIRMED' : 'PENDING',
+                is_location_delivery: orderType === 'DELIVERY' && isLocationOnly
             });
 
             setLastOrder(order);
@@ -996,6 +1056,7 @@ export const InternalOrders: React.FC = () => {
         setCustomerName(order.customer_name || '');
         setCustomerPhone(order.customer_phone || '');
         setObservation(order.observation || '');
+        setOrderType((order as any).order_type || 'LOCAL');
         setView('NEW_ORDER');
     };
 
@@ -1876,32 +1937,24 @@ export const InternalOrders: React.FC = () => {
                             </div>
 
                             {/* Filtros de Data/Hora para abas HISTORY e CANCELLED */}
+                            {/* Filtros de Data para abas HISTORY e CANCELLED (Intervalo) */}
                             {(productionTab === 'HISTORY' || productionTab === 'CANCELLED') && (
                                 <div className="flex gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                     <div className="flex-1">
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data</label>
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data Inicial</label>
                                         <input
                                             type="date"
-                                            value={historyDateFilter}
-                                            onChange={(e) => setHistoryDateFilter(e.target.value)}
+                                            value={filterStartDate}
+                                            onChange={(e) => setFilterStartDate(e.target.value)}
                                             className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
                                         />
                                     </div>
                                     <div className="flex-1">
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Hora Início</label>
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data Final</label>
                                         <input
-                                            type="time"
-                                            value={historyTimeStart}
-                                            onChange={(e) => setHistoryTimeStart(e.target.value)}
-                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
-                                        />
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Hora Fim</label>
-                                        <input
-                                            type="time"
-                                            value={historyTimeEnd}
-                                            onChange={(e) => setHistoryTimeEnd(e.target.value)}
+                                            type="date"
+                                            value={filterEndDate}
+                                            onChange={(e) => setFilterEndDate(e.target.value)}
                                             className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
                                         />
                                     </div>
@@ -1910,13 +1963,21 @@ export const InternalOrders: React.FC = () => {
                                             size="sm"
                                             variant="secondary"
                                             onClick={() => {
-                                                setHistoryDateFilter(new Date().toISOString().split('T')[0]);
-                                                setHistoryTimeStart('00:00');
-                                                setHistoryTimeEnd('23:59');
+                                                const today = new Date().toISOString().split('T')[0];
+                                                setFilterStartDate(today);
+                                                setFilterEndDate(today);
                                             }}
                                             className="px-4 py-2 h-[38px]"
                                         >
                                             Hoje
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => loadHistory(filterStartDate, filterEndDate)}
+                                            className="px-4 py-2 h-[38px] bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2"
+                                        >
+                                            <Search className="w-4 h-4" />
+                                            Filtrar
                                         </Button>
                                     </div>
                                 </div>
@@ -1927,52 +1988,44 @@ export const InternalOrders: React.FC = () => {
                                 let filteredTickets = [];
 
                                 if (productionTab === 'QUEUE') {
-                                    // Fila: Apenas pendentes (aguardando início)
-                                    filteredTickets = tickets.filter(t => t.status === 'pending');
+                                    // Fila: Pendentes e Produzindo
+                                    filteredTickets = tickets.filter(t => t.status === 'pending' || t.status === 'producing');
                                 } else if (productionTab === 'DELIVERY') {
                                     // Prontos p/ Entrega: Apenas 'ready' do tipo 'DELIVERY'
-                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type === 'DELIVERY');
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type?.toUpperCase() === 'DELIVERY');
                                 } else if (productionTab === 'PICKUP') {
                                     // Prontos p/ Retirada: Apenas 'ready' do tipo 'PICKUP'
-                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type === 'PICKUP');
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && t.orders?.order_type?.toUpperCase() === 'PICKUP');
                                 } else if (productionTab === 'LOCAL') {
                                     // Consumo Local: Apenas 'ready' do tipo 'LOCAL'
-                                    filteredTickets = tickets.filter(t => t.status === 'ready' && (t.orders?.order_type === 'LOCAL' || !t.orders?.order_type));
+                                    // Adicionando fallback para NULL apenas se necessário, mas preferindo explícito
+                                    filteredTickets = tickets.filter(t => t.status === 'ready' && (t.orders?.order_type?.toUpperCase() === 'LOCAL' || !t.orders?.order_type));
                                 } else if (productionTab === 'CANCELLED') {
-                                    // Rejeitados/Cancelados: status 'rejected' ou 'cancelled' com filtro de data
-                                    filteredTickets = tickets.filter(t => {
-                                        const isCancelled = t.status === 'rejected' || t.status === 'cancelled';
-                                        if (!isCancelled) return false;
-
-                                        if (!t.created_at) return false;
-                                        const orderDate = new Date(t.created_at);
-                                        const [year, month, day] = historyDateFilter.split('-').map(Number);
-                                        const filterDate = new Date(Date.UTC(year, month - 1, day));
-                                
-                                        const isSameDay = orderDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
-                                                        orderDate.getUTCMonth() === filterDate.getUTCMonth() &&
-                                                        orderDate.getUTCDate() === filterDate.getUTCDate();
-                                
-                                        return isSameDay;
-                                    });
-                                } else if (productionTab === 'HISTORY') {
-                                    // Histórico / Finalizados
+                                    // Rejeitados/Cancelados: Agora usa historyOrders (Server-Side Filtered)
+                                    // Filtramos localmente apenas para garantir status, já que a busca por data já foi feita no banco
                                     filteredTickets = historyOrders.filter(o => {
-                                        if (!o.created_at) return false;
-                                        const orderDate = new Date(o.created_at);
-                                        const [year, month, day] = historyDateFilter.split('-').map(Number);
-                                        const filterDate = new Date(Date.UTC(year, month - 1, day));
-                                
-                                        const isSameDay = orderDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
-                                                        orderDate.getUTCMonth() === filterDate.getUTCMonth() &&
-                                                        orderDate.getUTCDate() === filterDate.getUTCDate();
-                                
-                                        if (!isSameDay) return false;
-
-                                        const orderTime = new Date(o.created_at).toTimeString().slice(0, 5);
-                                        return orderTime >= historyTimeStart && orderTime <= historyTimeEnd;
+                                        return o.status === 'REJECTED' || o.status === 'CANCELLED';
                                     }).map((o: any) => ({
-                                        id: o.id,
+                                        id: o.ticket_id || o.id, // Usa ticket_id se disponível, senão ID do pedido (fallback)
+                                        status: o.status === 'REJECTED' ? 'rejected' : 'cancelled',
+                                        created_at: o.created_at,
+                                        items: o.items || [],
+                                        orders: {
+                                            order_type: o.order_type,
+                                            customer_name: o.customer_name,
+                                            id: o.id,
+                                            status: o.status
+                                        },
+                                        orders_collaborators: {
+                                            table_identifier: o.table_identifier,
+                                            customer_name: o.customer_name
+                                        }
+                                    }) as any);
+                                } else if (productionTab === 'HISTORY') {
+                                    // Histórico / Finalizados (dentro da aba Produção)
+                                    // Como loadHistory já filtra por data no server-side, exibimos tudo
+                                    filteredTickets = historyOrders.map((o: any) => ({
+                                        id: o.ticket_id || o.id,
                                         status: 'COMPLETED',
                                         created_at: o.created_at,
                                         items: o.items || [],
@@ -1997,19 +2050,18 @@ export const InternalOrders: React.FC = () => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
                                         {filteredTickets.map(ticket => (
-                                            <div key={ticket.id} className={`p-6 rounded-[32px] border transition-all group ${
-                                                ticket.status === 'producing' ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800' 
-                                                : ticket.status === 'in_transit' ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800' 
-                                                : (ticket.status === 'rejected' || ticket.status === 'cancelled') ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800'
-                                                : 'bg-gray-50 border-gray-100 dark:bg-gray-900/50 dark:border-gray-700'
-                                            }`}>
+                                            <div key={ticket.id} className={`p-6 rounded-[32px] border transition-all group ${ticket.status === 'producing' ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800'
+                                                : ticket.status === 'in_transit' ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800'
+                                                    : (ticket.status === 'rejected' || ticket.status === 'cancelled') ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800'
+                                                        : 'bg-gray-50 border-gray-100 dark:bg-gray-900/50 dark:border-gray-700'
+                                                }`}>
                                                 <div className="flex justify-between items-start mb-4 pb-4 border-b border-gray-200/50 dark:border-gray-700/50">
                                                     <div>
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <span className={`${ticket.orders?.order_type === 'DELIVERY' ? 'bg-blue-600' : ticket.orders?.order_type === 'PICKUP' ? 'bg-purple-600' : 'bg-orange-500'} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase`}>
-                                                                {ticket.orders?.order_type === 'DELIVERY' ? 'ENTREGA' :
-                                                                    ticket.orders?.order_type === 'PICKUP' ? 'RETIRADA' :
-                                                                        ticket.orders?.order_type === 'LOCAL' ? (ticket.orders_collaborators?.table_identifier || 'CONSUMO LOCAL') :
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <span className={`${ticket.orders?.order_type?.toUpperCase() === 'DELIVERY' ? 'bg-blue-600' : ticket.orders?.order_type?.toUpperCase() === 'PICKUP' ? 'bg-purple-600' : 'bg-orange-500'} text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider mb-1 inline-block`}>
+                                                                {ticket.orders?.order_type?.toUpperCase() === 'DELIVERY' ? (ticket.orders?.is_location_delivery ? 'LOCALIZAÇÃO' : 'ENTREGA') :
+                                                                    ticket.orders?.order_type?.toUpperCase() === 'PICKUP' ? 'RETIRADA' :
+                                                                        ticket.orders?.order_type?.toUpperCase() === 'LOCAL' ? (ticket.orders_collaborators?.table_identifier || 'LOCAL') :
                                                                             (ticket.orders_collaborators?.table_identifier || 'BALCÃO')}
                                                             </span>
                                                             <span className="text-[10px] text-gray-400 font-bold">
@@ -2025,14 +2077,19 @@ export const InternalOrders: React.FC = () => {
                                                                     <Truck className="w-3 h-3" /> Em Rota
                                                                 </span>
                                                             )}
-                                                            {(ticket.status === 'rejected' || ticket.status === 'cancelled') && (
+                                                            {ticket.status === 'rejected' && (
+                                                                <span className="flex items-center gap-1 text-[10px] text-red-600 font-black uppercase">
+                                                                    <X className="w-3 h-3" /> Rejeitado
+                                                                </span>
+                                                            )}
+                                                            {ticket.status === 'cancelled' && (
                                                                 <span className="flex items-center gap-1 text-[10px] text-red-600 font-black uppercase">
                                                                     <X className="w-3 h-3" /> Cancelado
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <h3 className="font-black text-gray-800 dark:text-white uppercase tracking-tight truncate max-w-[150px]">
-                                                            {ticket.orders?.customer_name || ticket.orders_collaborators?.customer_name || (ticket.orders?.order_type === 'DELIVERY' ? 'Entrega' : ticket.orders?.order_type === 'PICKUP' ? 'Retirada' : 'Pedido Balcão')}
+                                                            {ticket.orders?.customer_name || ticket.orders_collaborators?.customer_name || (ticket.orders?.order_type?.toUpperCase() === 'DELIVERY' ? (ticket.orders?.is_location_delivery ? 'Entregar por Localização' : 'Entrega') : ticket.orders?.order_type?.toUpperCase() === 'PICKUP' ? 'Retirada' : 'Pedido Balcão')}
                                                         </h3>
                                                     </div>
                                                     <Button size="sm" onClick={() => {
@@ -2044,7 +2101,7 @@ export const InternalOrders: React.FC = () => {
                                                                 name: i.name || i.product?.name,
                                                                 total_price: i.quantity * (i.unit_price || i.price || 0)
                                                             })),
-                                                            total_price: ticket.items.reduce((acc: number, i: any) => acc + (i.quantity * (i.unit_price || i.price || 0)), 0),
+                                                            total_price: ticket.orders?.total_price || ticket.orders_collaborators?.total_amount || ticket.items.reduce((acc: number, i: any) => acc + (i.quantity * (i.unit_price || i.price || 0)), 0),
                                                             created_at: ticket.created_at,
                                                             payment_status: ticket.payment_status || 'pending',
                                                             ticketId: ticket.id
@@ -2071,21 +2128,38 @@ export const InternalOrders: React.FC = () => {
                                                             )}
                                                         </div>
                                                     ))}
+
+                                                    {ticket.orders?.shipping_cost > 0 && (
+                                                        <div className="pt-2 border-t border-dashed border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                                            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Taxa de Entrega</span>
+                                                            <span className="text-sm font-black text-blue-600">
+                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ticket.orders.shipping_cost)}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="flex gap-2 mt-auto">
                                                     {productionTab === 'QUEUE' ? (
-                                                        // FILA DE PRODUÇÃO: Aceitar e Rejeitar
-                                                        <div className="flex gap-2 w-full">
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                Aceitar
-                                                            </Button>
-                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'rejected')} className="bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl py-3 text-xs">
-                                                                Rejeitar
-                                                            </Button>
-                                                        </div>
+                                                        // FILA DE PRODUÇÃO: Aceitar/Rejeitar (se pendente) ou Pronto (se produzindo)
+                                                        ticket.status === 'producing' ? (
+                                                            <div className="flex gap-2 w-full">
+                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'ready')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                    <CheckCircle className="w-4 h-4" /> Pronto
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex gap-2 w-full">
+                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'producing')} className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                    Aceitar
+                                                                </Button>
+                                                                <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'rejected')} className="bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl py-3 text-xs">
+                                                                    Rejeitar
+                                                                </Button>
+                                                            </div>
+                                                        )
                                                     ) : productionTab === 'DELIVERY' ? (
-                                                        // ENTREGA (apenas status 'ready' é exibido aqui)
+                                                        // ENTREGA
                                                         <div className="flex gap-2 w-full">
                                                             <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'in_transit')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
                                                                 <Truck className="w-4 h-4" /> Despachar
@@ -2093,21 +2167,57 @@ export const InternalOrders: React.FC = () => {
                                                             <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
                                                                 <CheckCircle className="w-4 h-4" /> Entregue
                                                             </Button>
+                                                            <Button size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'rejected')} className="bg-red-100 hover:bg-red-200 text-red-600 font-bold rounded-2xl px-3 py-3 text-xs flex items-center justify-center" title="Não Entregue">
+                                                                <XCircle className="w-5 h-5" />
+                                                            </Button>
                                                         </div>
                                                     ) : productionTab === 'PICKUP' ? (
-                                                        // RETIRADA (apenas status 'ready' é exibido aqui)
-                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                            <ShoppingCart className="w-4 h-4" /> Entregar ao Cliente
-                                                        </Button>
+                                                        // RETIRADA
+                                                        <div className="flex gap-2 w-full">
+                                                            <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                <ShoppingCart className="w-4 h-4" /> Entregar ao Cliente
+                                                            </Button>
+                                                            <Button size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'rejected')} className="bg-red-100 hover:bg-red-200 text-red-600 font-bold rounded-2xl px-3 py-3 text-xs flex items-center justify-center" title="Não Retirado">
+                                                                <XCircle className="w-5 h-5" />
+                                                            </Button>
+                                                        </div>
                                                     ) : productionTab === 'LOCAL' ? (
                                                         // LOCAL (apenas status 'ready' é exibido aqui)
                                                         <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'delivered')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
                                                             <Utensils className="w-4 h-4" /> Encerrar Pedido
                                                         </Button>
                                                     ) : productionTab === 'CANCELLED' ? (
-                                                        <Button fullWidth size="sm" onClick={() => handleUpdateTicketStatus(ticket.id, 'pending')} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
-                                                            <ClockArrowDown className="w-4 h-4" /> Mover para Fila
-                                                        </Button>
+                                                        <div className="flex gap-2 w-full">
+                                                            <Button fullWidth size="sm" onClick={async () => {
+                                                                try {
+                                                                    const orderId = ticket.orders?.id || ticket.id;
+                                                                    const res = await cloud.restoreOrderToQueue(orderId);
+
+                                                                    if (res && res.success === false) {
+                                                                        throw new Error(res.message || 'Falha na restauração');
+                                                                    }
+
+                                                                    // UX: Feedback imediato e redirecionamento
+                                                                    showAlert({ title: 'Sucesso', message: 'Pedido retornado para a fila de produção.' });
+
+                                                                    // 1. Atualiza lista de tickets ativos (para aparecer na Fila)
+                                                                    await loadTickets();
+
+                                                                    // 2. Atualiza histórico (para sair dos Cancelados)
+                                                                    await loadHistory();
+
+                                                                    // 3. Muda a aba para Fila de Produção
+                                                                    setProductionTab('QUEUE');
+
+                                                                } catch (err: any) {
+                                                                    console.error(err);
+                                                                    const msg = err.message || 'Falha ao retornar pedido.';
+                                                                    showAlert({ title: 'Erro', message: msg });
+                                                                }
+                                                            }} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-2xl py-3 text-xs flex items-center justify-center gap-2">
+                                                                <ClockArrowDown className="w-4 h-4" /> Retornar à Produção
+                                                            </Button>
+                                                        </div>
                                                     ) : productionTab === 'HISTORY' ? (
                                                         <div className="w-full text-center py-2 bg-green-50 dark:bg-green-900/20 text-green-600 font-black uppercase text-[10px] rounded-xl flex items-center justify-center gap-2">
                                                             <CheckCircle className="w-4 h-4" /> Finalizado
@@ -2125,32 +2235,23 @@ export const InternalOrders: React.FC = () => {
                             {/* History View */}
                             <h2 className="text-2xl font-bold dark:text-white mb-6">Histórico de Pedidos</h2>
 
-                            {/* Filtros de Data/Hora para a aba HISTORY */}
+                            {/* Filtros de Data para a aba HISTORY (Intervalo) */}
                             <div className="flex gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                 <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data</label>
+                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data Inicial</label>
                                     <input
                                         type="date"
-                                        value={historyDateFilter}
-                                        onChange={(e) => setHistoryDateFilter(e.target.value)}
+                                        value={filterStartDate}
+                                        onChange={(e) => setFilterStartDate(e.target.value)}
                                         className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
                                     />
                                 </div>
                                 <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Hora Início</label>
+                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data Final</label>
                                     <input
-                                        type="time"
-                                        value={historyTimeStart}
-                                        onChange={(e) => setHistoryTimeStart(e.target.value)}
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
-                                    />
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Hora Fim</label>
-                                    <input
-                                        type="time"
-                                        value={historyTimeEnd}
-                                        onChange={(e) => setHistoryTimeEnd(e.target.value)}
+                                        type="date"
+                                        value={filterEndDate}
+                                        onChange={(e) => setFilterEndDate(e.target.value)}
                                         className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
                                     />
                                 </div>
@@ -2159,37 +2260,31 @@ export const InternalOrders: React.FC = () => {
                                         size="sm"
                                         variant="secondary"
                                         onClick={() => {
-                                            setHistoryDateFilter(new Date().toISOString().split('T')[0]);
-                                            // Resetar para as horas padrão da loja, se houver
-                                            const start = profile?.support_hours_start?.slice(0, 5) || '00:00';
-                                            const end = profile?.support_hours_end?.slice(0, 5) || '23:59';
-                                            setHistoryTimeStart(start);
-                                            setHistoryTimeEnd(end);
+                                            const today = new Date().toISOString().split('T')[0];
+                                            setFilterStartDate(today);
+                                            setFilterEndDate(today);
                                         }}
                                         className="px-4 py-2 h-[38px]"
                                     >
                                         Hoje
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => loadHistory(filterStartDate, filterEndDate)}
+                                        className="px-4 py-2 h-[38px] bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2"
+                                    >
+                                        <Search className="w-4 h-4" />
+                                        Filtrar
                                     </Button>
                                 </div>
                             </div>
 
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
                                 {(() => {
-                                    const filteredHistory = historyOrders.filter(order => {
-                                        if (!order.created_at) return false;
-                                        const orderDate = new Date(order.created_at);
-                                        const [year, month, day] = historyDateFilter.split('-').map(Number);
-                                        const filterDate = new Date(Date.UTC(year, month - 1, day));
-                                
-                                        const isSameDay = orderDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
-                                                        orderDate.getUTCMonth() === filterDate.getUTCMonth() &&
-                                                        orderDate.getUTCDate() === filterDate.getUTCDate();
-                                
-                                        if (!isSameDay) return false;
-
-                                        const orderTime = new Date(order.created_at).toTimeString().slice(0, 5); // HH:MM
-                                        return orderTime >= historyTimeStart && orderTime <= historyTimeEnd;
-                                    });
+                                    // Aba HISTORY (Visualização Principal)
+                                    // Como loadHistory já filtra por data no server-side base, aqui apenas exibimos
+                                    // Ordenação explícita no frontend para garantir (Mais recentes primeiro)
+                                    const filteredHistory = [...historyOrders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
                                     return loadingHistory ? (
                                         <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
@@ -2383,53 +2478,85 @@ export const InternalOrders: React.FC = () => {
 
                             {/* Customer Info */}
                             <div className="mb-6">
+                                <div className="mb-3 border-b border-gray-100 pb-2">
+                                    <h4 className="text-[10px] font-black uppercase text-gray-400 mb-1">👤 Cliente</h4>
+                                    <p className="text-sm font-black dark:text-gray-900 leading-tight">{lastOrder.customer_name || 'Consumidor'}</p>
+                                    {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
+                                </div>
+
                                 {(lastOrder as any).order_type === 'DELIVERY' ? (
                                     <>
                                         <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">📍 Endereço de Entrega</h4>
-                                        <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
-                                        {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
-                                        {(lastOrder as any).shipping_address?.street && (
-                                            <div className="mt-2 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                                                <p className="text-xs font-bold text-gray-800">
+                                        {(lastOrder as any).shipping_address?.street ? (
+                                            <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                                                <p className="text-xs font-bold text-gray-800 leading-snug">
                                                     {(lastOrder as any).shipping_address.street}, {(lastOrder as any).shipping_address.number}
                                                 </p>
                                                 <p className="text-[10px] text-gray-500 font-medium">
                                                     {(lastOrder as any).shipping_address.district} - {(lastOrder as any).shipping_address.city}
                                                 </p>
                                                 {(lastOrder as any).shipping_address.complement && (
-                                                    <p className="text-[10px] text-gray-500 font-medium mt-1">
-                                                        Complemento: {(lastOrder as any).shipping_address.complement}
+                                                    <p className="text-[10px] text-gray-500 font-medium mt-1 border-t border-gray-200 pt-1">
+                                                        <span className="font-bold">Comp:</span> {(lastOrder as any).shipping_address.complement}
                                                     </p>
                                                 )}
                                                 {(lastOrder as any).delivery_location_reference && (
-                                                    <p className="text-xs font-black text-orange-600 mt-2 bg-orange-50 p-2 rounded-lg border border-orange-100">
-                                                        📍 Local: {(lastOrder as any).delivery_location_reference}
+                                                    <p className="text-[10px] font-bold text-orange-600 mt-2 pt-2 border-t border-gray-200">
+                                                        📍 Ponto de Ref: {(lastOrder as any).delivery_location_reference}
                                                     </p>
                                                 )}
                                             </div>
+                                        ) : (lastOrder as any).delivery_location_reference || ((lastOrder as any).shipping_address?.latitude && (lastOrder as any).shipping_address?.longitude) ? (
+                                            <div className="p-3 bg-orange-50 rounded-2xl border border-orange-100">
+                                                <p className="text-xs font-black text-orange-800 mb-1">Entrega por Localização</p>
+                                                {(lastOrder as any).delivery_location_reference && (
+                                                    <p className="text-[10px] text-orange-700 font-medium mb-2">
+                                                        "{(lastOrder as any).delivery_location_reference}"
+                                                    </p>
+                                                )}
+
+                                                {((lastOrder as any).shipping_address?.latitude && (lastOrder as any).shipping_address?.longitude) && (
+                                                    <a
+                                                        href={`https://www.google.com/maps/search/?api=1&query=${(lastOrder as any).shipping_address.latitude},${(lastOrder as any).shipping_address.longitude}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="no-print flex items-center justify-center gap-2 bg-white text-orange-600 border border-orange-200 font-bold text-xs py-2 px-3 rounded-xl hover:bg-orange-50 transition-colors w-full"
+                                                    >
+                                                        <MapPin className="w-3 h-3" /> Abrir no Maps
+                                                    </a>
+                                                )}
+                                                {/* Fallback para impressão ou se não tiver coords mas tiver link no reference (analisar se reference é url) */}
+                                                <div className="hidden print:block text-[10px] text-center text-gray-400 mt-1">
+                                                    (Ver localização no App)
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs font-bold text-gray-400 italic">Endereço não informado</p>
                                         )}
                                     </>
                                 ) : (lastOrder as any).order_type === 'PICKUP' ? (
                                     <>
-                                        <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🛍️ Cliente (Retirada)</h4>
-                                        <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
-                                        {lastOrder.customer_phone && <p className="text-xs font-bold text-gray-600">{lastOrder.customer_phone}</p>}
-                                        <div className="mt-2 p-3 bg-blue-50 rounded-2xl border border-blue-100">
+                                        <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🛍️ Retirada</h4>
+                                        <div className="p-3 bg-blue-50 rounded-2xl border border-blue-100">
                                             <p className="text-xs font-bold text-blue-800">⏰ Cliente irá retirar no balcão</p>
                                         </div>
                                     </>
                                 ) : (
                                     <>
-                                        <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🍽️ Cliente / Mesa</h4>
-                                        <p className="text-sm font-black dark:text-gray-900">{lastOrder.customer_name || 'Não Informado'}</p>
-                                        {(lastOrder as any).table_identifier && (
-                                            <div className="mt-2 p-3 bg-amber-50 rounded-2xl border border-amber-100">
+                                        <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">🍽️ Mesa / Balcão</h4>
+                                        {(lastOrder as any).table_identifier ? (
+                                            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-100">
                                                 <p className="text-xs font-bold text-amber-800">Mesa: {(lastOrder as any).table_identifier}</p>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                                                <p className="text-xs font-bold text-gray-600">Consumo no Local</p>
                                             </div>
                                         )}
                                     </>
                                 )}
                             </div>
+
 
                             {/* Items List */}
                             <div className="mb-6">
@@ -2464,7 +2591,49 @@ export const InternalOrders: React.FC = () => {
                                 )}
                                 <div className="flex justify-between items-center text-lg font-black text-gray-900 uppercase">
                                     <span>Total Geral</span>
-                                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lastOrder.total_price)}</span>
+                                    <div className="flex items-center gap-2">
+                                        {isEditingPrice ? (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-32">
+                                                    <CustomInput
+                                                        value={newPriceValue}
+                                                        onChange={(e) => setNewPriceValue(e.target.value)}
+                                                        mask="currency"
+                                                        placeholder="0,00"
+                                                        className="text-right font-bold text-lg h-10 bg-transparent border-b-2 border-brand-500 rounded-none px-0 focus:ring-0"
+                                                    />
+                                                </div>
+                                                <button
+                                                    className="h-8 w-8 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center shadow-sm transition-colors"
+                                                    onClick={handleSavePrice}
+                                                    title="Confirmar"
+                                                >
+                                                    <Check className="h-5 w-5" />
+                                                </button>
+                                                <button
+                                                    className="h-8 w-8 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-sm transition-colors"
+                                                    onClick={() => setIsEditingPrice(false)}
+                                                    title="Cancelar"
+                                                >
+                                                    <X className="h-5 w-5" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2 group">
+                                                <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lastOrder.total_price)}</span>
+                                                <button
+                                                    onClick={() => {
+                                                        setNewPriceValue(lastOrder.total_price.toString());
+                                                        setIsEditingPrice(true);
+                                                    }}
+                                                    className={`opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-brand-600 ${productionTab !== 'QUEUE' ? 'hidden' : ''}`}
+                                                    title="Editar Valor"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -2574,7 +2743,8 @@ export const InternalOrders: React.FC = () => {
                             }
                         `}</style>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };

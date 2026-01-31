@@ -361,7 +361,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     state: selectedCity?.state || store?.address_state,
                     reference: addressReference,
                     zip: cep,
-                    neighborhood_id: selectedNeighborhoodId
+                    neighborhood_id: selectedNeighborhoodId,
+                    fee: deliveryFee
                 };
 
                 // Prepare Items

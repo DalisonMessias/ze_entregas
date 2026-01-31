@@ -127,7 +127,11 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
 
                     if (o.order_type === 'DELIVERY' && o.shipping_address) {
                         const addr = o.shipping_address;
-                        deliveryAddr = `${addr.street || ''}, ${addr.number || ''} - ${addr.district || ''}`;
+                        if (o.is_location_delivery || addr.is_location_delivery) {
+                            deliveryAddr = 'Entregar por Localização';
+                        } else {
+                            deliveryAddr = `${addr.street || ''}, ${addr.number || ''} - ${addr.district || ''}`;
+                        }
                     } else if (o.order_type === 'PICKUP') {
                         deliveryAddr = 'Retirada no Balcão';
                     } else if (o.order_type === 'LOCAL') {
