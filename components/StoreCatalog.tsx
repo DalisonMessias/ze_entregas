@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StoreProduct, Category } from '../types';
 import { StoreAIGenerator } from './StoreAIGenerator';
 import { SuperStoreModal } from './SuperStoreModal';
-import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera, Eye } from 'lucide-react';
+import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera, Eye } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
@@ -366,8 +367,7 @@ export const StoreCatalog: React.FC = () => {
 
                             {isLoading ? (
                                 <div className="flex flex-col items-center justify-center py-20">
-                                    <Loader2 className="w-12 h-12 animate-spin text-brand-600 mb-4" />
-                                    <p className="text-gray-500 font-bold">Carregando catálogo...</p>
+                                    <Loading variant="container" size="lg" message="Carregando catálogo..." />
                                 </div>
                             ) : filteredProducts.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -397,7 +397,7 @@ export const StoreCatalog: React.FC = () => {
                                                     {/* Loading Overlay */}
                                                     {(isSaving && updatingImageProdId === product.id) ? (
                                                         <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[1px]">
-                                                            <Loader2 className="w-6 h-6 text-brand-500 animate-spin" />
+                                                            <Loading variant="inline" size="sm" />
                                                         </div>
                                                     ) : (
                                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
@@ -510,8 +510,7 @@ export const StoreCatalog: React.FC = () => {
 
                             {isImportLoading ? (
                                 <div className="flex flex-col items-center justify-center py-20">
-                                    <Loader2 className="w-12 h-12 animate-spin text-brand-600 mb-4" />
-                                    <p className="text-gray-500 font-bold">Buscando sugestões...</p>
+                                    <Loading variant="container" size="lg" message="Buscando sugestões..." />
                                 </div>
                             ) : baseProducts.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">

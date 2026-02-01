@@ -32,7 +32,19 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
     const playSound = useCallback((type: NotificationType) => {
         if (!settings.enableSound) return;
-        console.log(`[Sound] Playing ${type} sound`);
+
+        try {
+            // Usando um som de alerta padrão do sistema/web para "info" e outros, focado no novo pedido
+            // O ideal seria um arquivo fixo no projeto, mas usaremos uma URL estável de notificação
+            const audioUrl = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+            const audio = new Audio(audioUrl);
+            audio.volume = 0.5;
+            audio.play().catch(err => {
+                console.warn('[Sound] Autoplay blocked or failed:', err);
+            });
+        } catch (error) {
+            console.error('[Sound] Error playing sound:', error);
+        }
     }, [settings.enableSound]);
 
     const vibrate = useCallback(() => {
@@ -49,12 +61,12 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
         const newNotification: AppNotification = {
             id: crypto.randomUUID(),
+            user_id: 'local',
             title: type.toUpperCase(),
             message,
+            type,
             is_read: false,
             created_at: new Date().toISOString(),
-            user_id: 'local', // Placeholder as context doesn't have user_id access directly here
-            // Note: actionUrl is not part of AppNotification type yet, ignoring for now or extending type
         };
 
         setNotifications(prev => [newNotification, ...prev]);

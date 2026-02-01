@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Wallet, Calendar, Clock, ChevronRight, TrendingUp, TrendingDown, Eye, EyeOff, Building, ArrowDownLeft, ArrowUpRight, DollarSign, PiggyBank, CreditCard, Send, Lock, Plus, ArrowLeftRight, Download, Filter, Search, CheckCircle, AlertTriangle, X, Store, Trash2, ShoppingBag, LockKeyhole, Unlock, Copy, Siren, Wifi, QrCode as QrIcon, Scan, Smartphone, Sliders, Zap } from 'lucide-react';
 import * as cloud from '../services/cloud';
-import { Loader2 } from 'lucide-react';
+import { Loading } from './Loading';
 import { Logo } from './Logo';
 import { DataErrorDisplay } from './DataErrorDisplay';
 import { UserRole, ZebankData, ZebankTransaction, ZebankCard, PayoutSummary } from '../types';
@@ -767,7 +767,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                             <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Transferir para Parceiro</h3><button onClick={() => setShowP2P(false)}><X /></button></div>
                             <CustomInput type="text" placeholder="Código do Parceiro" value={p2pForm.code} onChange={e => setP2pForm({ ...p2pForm, code: e.target.value })} />
                             <CustomInput mask="currency" placeholder="Valor (R$)" value={p2pForm.amount} onChange={e => setP2pForm({ ...p2pForm, amount: e.target.value })} />
-                            <Button fullWidth onClick={handleP2PTransfer} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Confirmar'}</Button>
+                            <Button fullWidth onClick={handleP2PTransfer} disabled={processing}>{processing ? <Loading variant="inline" size="sm" /> : 'Confirmar'}</Button>
                         </div>
                     </div>
                 )
@@ -786,7 +786,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                                 ]}
                             />
                             <CustomInput mask="currency" placeholder="Valor (R$)" value={savingsForm.amount} onChange={e => setSavingsForm({ ...savingsForm, amount: e.target.value })} />
-                            <Button fullWidth onClick={handleSavings} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Confirmar'}</Button>
+                            <Button fullWidth onClick={handleSavings} disabled={processing}>{processing ? <Loading variant="inline" size="sm" /> : 'Confirmar'}</Button>
                         </div>
                     </div>
                 )
@@ -797,7 +797,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                         <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-6">
                             <div className="flex justify-between"><h3 className="font-bold text-lg dark:text-white">Criar Cartão Virtual</h3><button onClick={() => setShowNewCard(false)}><X /></button></div>
                             <CustomInput type="text" placeholder="Nome no Cartão" value={newCardForm.name} onChange={e => setNewCardForm({ name: e.target.value })} />
-                            <Button fullWidth onClick={handleCreateCard} disabled={processing}>{processing ? <Loader2 className="animate-spin" /> : 'Gerar Cartão'}</Button>
+                            <Button fullWidth onClick={handleCreateCard} disabled={processing}>{processing ? <Loading variant="inline" size="sm" /> : 'Gerar Cartão'}</Button>
                         </div>
                     </div>
                 )
@@ -825,7 +825,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                             <div className="flex gap-2">
                                 <Button variant="outline" fullWidth onClick={() => setShowTestConfirm(null)}>Cancelar</Button>
                                 <Button fullWidth onClick={handleTestCard} disabled={processing} className="bg-yellow-500 hover:bg-yellow-600">
-                                    {processing ? <Loader2 className="animate-spin" /> : 'Confirmar Teste'}
+                                    {processing ? <Loading variant="inline" size="sm" /> : 'Confirmar Teste'}
                                 </Button>
                             </div>
                         </div>
@@ -872,7 +872,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                                 </div>
 
                                 <Button fullWidth onClick={handleUpdateLimit} disabled={processing}>
-                                    {processing ? <Loader2 className="animate-spin" /> : 'Salvar Limite'}
+                                    {processing ? <Loading variant="inline" size="sm" /> : 'Salvar Limite'}
                                 </Button>
                             </div>
                         </div>

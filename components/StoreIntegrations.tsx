@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link2, Copy, Check, Eye, EyeOff, Loader2, Info, RefreshCw, FileText } from 'lucide-react';
+import { Link2, Copy, Check, Eye, EyeOff, Info, RefreshCw, FileText } from 'lucide-react';
+import { Loading } from './Loading';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
 // Usar cliente do serviço cloud
@@ -110,7 +111,7 @@ export const StoreIntegrations: React.FC<StoreIntegrationsProps> = ({ onNavigate
         });
     };
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
+    if (loading) return <div className="flex justify-center p-10"><Loading variant="container" size="md" message="Carregando credenciais..." /></div>;
 
     return (
         <div className="space-y-6 animate-in fade-in">
@@ -183,7 +184,7 @@ export const StoreIntegrations: React.FC<StoreIntegrationsProps> = ({ onNavigate
                         fullWidth
                         className={showConfirm ? "bg-red-600 hover:bg-red-700 text-white border-transparent" : ""}
                     >
-                        {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                        {generating ? <Loading variant="inline" size="sm" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                         {showConfirm
                             ? 'Tem certeza? A chave antiga deixará de funcionar.'
                             : (apiKey ? 'Regenerar Chave' : 'Gerar Nova Chave')

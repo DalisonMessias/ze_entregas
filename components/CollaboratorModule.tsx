@@ -11,6 +11,7 @@ import {
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
+import { useNotification } from '../contexts/NotificationContext';
 import { Logo } from './Logo';
 
 const ChatContainer = React.lazy(() => import('./InternalChat/InternalChatContainer'));
@@ -82,6 +83,8 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
     const [isCustomProductModalOpen, setIsCustomProductModalOpen] = useState(false);
     const [customProduct, setCustomProduct] = useState({ name: '', price: '', quantity: 1 });
     const [isScannerOpen, setIsScannerOpen] = useState(false); // Novo Scanner State
+    const { showNotification } = useNotification();
+    const notifiedTickets = React.useRef<Set<string>>(new Set());
 
     useEffect(() => {
         setCurrentAvatarUrl(collaborator.avatar_url);
@@ -97,6 +100,43 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
         }
         load();
     }, []);
+
+    // Real-time listener for new orders (tickets)
+    useEffect(() => {
+        if (!collaborator?.store_id) return;
+
+        const sb = cloud.getClient();
+        if (!sb) return;
+
+        const channel = sb
+            .channel('collaborator_orders_tickets_realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'orders_tickets',
+                    filter: `store_id=eq.${collaborator.store_id}`
+                },
+                (payload) => {
+                    if (payload.new && payload.new.id) {
+                        if (!notifiedTickets.current.has(payload.new.id)) {
+                            notifiedTickets.current.add(payload.new.id);
+                            showNotification('Novo pedido recebido!', 'info', { sound: true });
+
+                            // Recarregar conforme a visualização atual
+                            if (view === 'kitchen') loadKitchenTickets();
+                            if (view === 'orders') loadTickets();
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            sb.removeChannel(channel);
+        };
+    }, [collaborator.store_id, showNotification, view]);
 
     const loadKitchenTickets = async () => {
         try {
@@ -924,7 +964,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     {view !== 'dashboard' ? (
                         <button onClick={() => setView('dashboard')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-500"><ArrowLeft className="w-6 h-6" /></button>
                     ) : (
-                        <Logo className="h-9 w-auto text-brand-600" mode="icon" />
+                        <Logo className="h-9 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />
                     )}
                     <div>
                         <h1 className="font-black text-gray-800 dark:text-white leading-tight">ZÉ ENTREGA</h1>

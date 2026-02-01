@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loading } from './Loading';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'success';
@@ -75,7 +75,7 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {loading ? (
-        <Loader2 className="w-5 h-5 animate-spin" />
+        <Loading variant="inline" size="sm" className="text-current" />
       ) : (
         <>
           {icon && <span className="flex-shrink-0">{icon}</span>}

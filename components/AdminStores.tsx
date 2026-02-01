@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Search, Store, Settings, Shield, UserX, UserCheck,
-    AlertTriangle, Loader2, X, Edit2, History, Info,
+    AlertTriangle, X, Edit2, History, Info,
     MapPin, Phone, Mail, FileText, ExternalLink, Calendar
 } from 'lucide-react';
 import { adminGetStores, adminUpdateStoreStatus, adminGetStatusHistory } from '../services/cloud';
 import { ManagedUser } from '../types';
 import { Button } from './Button';
+import { Loading } from './Loading';
 import { useDialog } from '../utils/dialogService';
 import { useDebounce } from '../hooks/useDebounce';
 // import { ProductImportExport } from './ProductImportExport'; // Substituído pelo Manager Completo
@@ -169,7 +170,7 @@ export const AdminStores: React.FC = () => {
             {/* Lista de Lojas */}
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-4">
-                    <Loader2 className="w-10 h-10 animate-spin text-brand-600" />
+                    <Loading variant="container" size="lg" />
                     <p className="text-gray-500 font-bold">Carregando lojas...</p>
                 </div>
             ) : (
@@ -411,7 +412,7 @@ export const AdminStores: React.FC = () => {
 
                                 {loadingHistory ? (
                                     <div className="flex justify-center py-10">
-                                        <Loader2 className="animate-spin text-brand-600" />
+                                        <Loading variant="inline" size="sm" />
                                     </div>
                                 ) : statusHistory.length === 0 ? (
                                     <p className="text-center py-10 text-gray-500 font-bold italic">Sem histórico de alterações registrado.</p>
@@ -528,7 +529,7 @@ export const AdminStores: React.FC = () => {
                                     nextStatus === 'suspended' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30' : 'bg-green-600 hover:bg-green-700 shadow-green-500/30'
                                     }`}
                             >
-                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Confirmar Alteração'}
+                                {isSaving ? <Loading variant="inline" size="sm" className="mx-auto" /> : 'Confirmar Alteração'}
                             </Button>
                         </div>
                     </div>

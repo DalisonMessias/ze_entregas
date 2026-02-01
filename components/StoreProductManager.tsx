@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, ShoppingBag, Plus, Trash2, Edit2, FileSpreadsheet, AlertTriangle, ExternalLink } from 'lucide-react';
+import { ShoppingBag, Plus, Trash2, Edit2, FileSpreadsheet, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Loading } from './Loading';
 import * as cloud from '../services/cloud';
 import { Product, StoreProduct, Category } from '../types';
 import { Button } from './Button';
@@ -117,7 +118,7 @@ export const StoreProductManager: React.FC<StoreProductManagerProps> = ({ target
 
             {loading ? (
                 <div className="flex justify-center p-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+                    <Loading variant="container" size="md" message="Carregando produtos..." />
                 </div>
             ) : (
                 <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm">

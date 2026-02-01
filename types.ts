@@ -472,6 +472,9 @@ export interface PartnerRequest {
     rated_by_store?: boolean;
     rated_by_partner?: boolean;
     customer_name?: string;
+    is_location_delivery?: boolean;
+    latitude?: number;
+    longitude?: number;
 }
 
 export interface PartnerFeeSettings {
@@ -1562,4 +1565,40 @@ export interface MediationAction {
     description: string;
     payload: any;
     created_at: string;
+}
+
+export interface Promotion {
+    id: string;
+    store_id: string;
+    name: string;
+    description?: string;
+    discount_type: 'PERCENTAGE' | 'FIXED' | 'FREE_SHIPPING';
+    discount_value: number;
+    min_order_value: number;
+    start_date: string;
+    end_date?: string | null;
+    is_active: boolean;
+    applies_to_all_products: boolean;
+    products?: string[]; // IDs dos produtos (carregados via junção)
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface Coupon {
+    id: string;
+    store_id: string;
+    code: string;
+    description?: string;
+    discount_type: 'PERCENTAGE' | 'FIXED' | 'FREE_SHIPPING';
+    discount_value: number;
+    min_order_value: number;
+    max_discount_value?: number | null;
+    usage_limit?: number | null;
+    user_usage_limit?: number | null;
+    usage_count: number;
+    start_date: string;
+    end_date?: string | null;
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
 }

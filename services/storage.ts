@@ -5,78 +5,64 @@ import { DeliveryRecord, Theme, SavedAddress, DailyTransaction, UserBankDetails,
 
 // DAILY TRANSACTIONS MANAGEMENT
 
+/** 
+ * @deprecated Utilizar funﾃｧﾃｵes do cloud.ts para persistﾃｪncia no banco de dados.
+ */
 export const getTodayTransactions = (): DailyTransaction[] => {
-  try {
-    const stored = localStorage.getItem('delivery_today_transactions');
-    if (stored) {
-      return JSON.parse(stored);
-    }
-    return [];
-  } catch (e) {
-    console.error("Error reading today transactions", e);
-    return [];
-  }
+  console.warn("getTodayTransactions (localStorage) is deprecated. Use cloud.getDailyTrackingData instead.");
+  return [];
 };
 
+/** 
+ * @deprecated Utilizar funﾃｧﾃｵes do cloud.ts para persistﾃｪncia no banco de dados.
+ */
 export const saveTodayTransactions = (transactions: DailyTransaction[]): void => {
-  try {
-    localStorage.setItem('delivery_today_transactions', JSON.stringify(transactions));
-  } catch (e) {
-    console.error("Error saving today transactions", e);
-  }
+  console.warn("saveTodayTransactions (localStorage) is deprecated. Use cloud.saveTodayTransactions instead.");
 };
 
-// FIXED VALUE & GOAL MANAGEMENT (Start of Day)
+/** 
+ * @deprecated Utilizar funﾃｧﾃｵes do cloud.ts para persistﾃｪncia no banco de dados.
+ */
 export const getFixedValue = (): number | null => {
-  try {
-    const stored = localStorage.getItem('delivery_fixed_value');
-    return stored ? parseFloat(stored) : null;
-  } catch (e) {
-    return null;
-  }
+  console.warn("getFixedValue (localStorage) is deprecated. Use cloud.getDailyTrackingData instead.");
+  return null;
 };
 
+/** 
+ * @deprecated Utilizar funﾃｧﾃｵes do cloud.ts para persistﾃｪncia no banco de dados.
+ */
 export const setFixedValue = (value: number): void => {
-  try {
-    localStorage.setItem('delivery_fixed_value', value.toString());
-  } catch (e) {
-    console.error("Error saving fixed value", e);
-  }
+  console.warn("setFixedValue (localStorage) is deprecated. Use cloud.saveDailyFixedValue instead.");
 };
 
+/** 
+ * @deprecated Utilizar funﾃｧﾃｵes do cloud.ts para persistﾃｪncia no banco de dados.
+ */
 export const getDailyGoal = (): number | null => {
-  try {
-    const stored = localStorage.getItem('delivery_daily_goal');
-    return stored ? parseFloat(stored) : null;
-  } catch (e) {
-    return null;
-  }
+  console.warn("getDailyGoal (localStorage) is deprecated. Use cloud.getDailyTrackingData instead.");
+  return null;
 };
 
+/** 
+ * @deprecated Utilizar funﾃｧﾃｵes do cloud.ts para persistﾃｪncia no banco de dados.
+ */
 export const setDailyGoal = (value: number): void => {
-  try {
-    localStorage.setItem('delivery_daily_goal', value.toString());
-  } catch (e) {
-    console.error("Error saving daily goal", e);
-  }
+  console.warn("setDailyGoal (localStorage) is deprecated. Use cloud.saveDailyGoal instead.");
 };
 
+/** 
+ * @deprecated Utilizar funﾃｧﾃｵes do cloud.ts para persistﾃｪncia no banco de dados.
+ */
 export const getHistory = (): DeliveryRecord[] => {
-  try {
-    const stored = localStorage.getItem('delivery_history');
-    return stored ? JSON.parse(stored) : [];
-  } catch (e) {
-    console.error("Error reading history", e);
-    return [];
-  }
+  console.warn("getHistory (localStorage) is deprecated. Use database history instead.");
+  return [];
 };
 
+/** 
+ * @deprecated Utilizar funﾃｧﾃｵes do cloud.ts para persistﾃｪncia no banco de dados.
+ */
 export const saveHistory = (history: DeliveryRecord[]): void => {
-  try {
-    localStorage.setItem('delivery_history', JSON.stringify(history));
-  } catch (e) {
-    console.error("Error saving history", e);
-  }
+  console.warn("saveHistory (localStorage) is deprecated. Use cloud.saveManualHistory instead.");
 };
 
 export const clearAllData = (): void => {
@@ -234,105 +220,105 @@ export const clearNavigationState = (): void => {
 
 // --- PROMOTION DETAILS ---
 export const getPromotionDetails = (): PromotionDetails | null => {
-    try {
-        const stored = localStorage.getItem('promotion_details');
-        return stored ? JSON.parse(stored) : null;
-    } catch (e) {
-        return null;
-    }
+  try {
+    const stored = localStorage.getItem('promotion_details');
+    return stored ? JSON.parse(stored) : null;
+  } catch (e) {
+    return null;
+  }
 };
 
 export const savePromotionDetails = (details: PromotionDetails): void => {
-    try {
-        localStorage.setItem('promotion_details', JSON.stringify(details));
-    } catch (e) {
-        console.error("Error saving promotion details", e);
-    }
+  try {
+    localStorage.setItem('promotion_details', JSON.stringify(details));
+  } catch (e) {
+    console.error("Error saving promotion details", e);
+  }
 };
 
 // --- CHAT ASSISTANT HISTORY ---
 export const getAssistantHistory = (): ChatMessage[] => {
-    try {
-        const stored = localStorage.getItem('chat_assistant_history');
-        return stored ? JSON.parse(stored) : [];
-    } catch (e) {
-        return [];
-    }
+  try {
+    const stored = localStorage.getItem('chat_assistant_history');
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
 };
 
 export const saveAssistantHistory = (messages: ChatMessage[]): void => {
-    try {
-        localStorage.setItem('chat_assistant_history', JSON.stringify(messages));
-    } catch (e) {
-        console.error("Error saving chat history", e);
-    }
+  try {
+    localStorage.setItem('chat_assistant_history', JSON.stringify(messages));
+  } catch (e) {
+    console.error("Error saving chat history", e);
+  }
 };
 
 export const clearAssistantHistory = (): void => {
-    try {
-        localStorage.removeItem('chat_assistant_history');
-    } catch (e) {
-        console.error("Error clearing assistant history", e);
-    }
+  try {
+    localStorage.removeItem('chat_assistant_history');
+  } catch (e) {
+    console.error("Error clearing assistant history", e);
+  }
 };
 
 
 // --- AI REMINDERS ---
 export const getReminders = (): Reminder[] => {
-    try {
-        const stored = localStorage.getItem('ai_reminders');
-        return stored ? JSON.parse(stored) : [];
-    } catch (e) {
-        return [];
-    }
+  try {
+    const stored = localStorage.getItem('ai_reminders');
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
 };
 
 export const saveReminders = (reminders: Reminder[]): void => {
-    try {
-        localStorage.setItem('ai_reminders', JSON.stringify(reminders));
-    } catch (e) {
-        console.error("Error saving reminders", e);
-    }
+  try {
+    localStorage.setItem('ai_reminders', JSON.stringify(reminders));
+  } catch (e) {
+    console.error("Error saving reminders", e);
+  }
 };
 
 // --- EMERGENCY BUTTON POSITION ---
 export const saveEmergencyButtonPosition = (pos: { x: number, y: number }) => {
-    try {
-        localStorage.setItem('emergency_button_pos', JSON.stringify(pos));
-    } catch (e) {
-        console.error("Error saving button position", e);
-    }
+  try {
+    localStorage.setItem('emergency_button_pos', JSON.stringify(pos));
+  } catch (e) {
+    console.error("Error saving button position", e);
+  }
 };
 
 export const getEmergencyButtonPosition = (): { x: number, y: number } | null => {
-    try {
-        const stored = localStorage.getItem('emergency_button_pos');
-        return stored ? JSON.parse(stored) : null;
-    } catch (e) {
-        return null;
-    }
+  try {
+    const stored = localStorage.getItem('emergency_button_pos');
+    return stored ? JSON.parse(stored) : null;
+  } catch (e) {
+    return null;
+  }
 };
 
 // --- COOKIE PREFERENCES ---
 export const getCookiePreferences = (): CookiePreferences => {
-    try {
-        const stored = localStorage.getItem('app_cookie_preferences');
-        if (stored) {
-            return JSON.parse(stored);
-        }
-        // Default to all enabled
-        return { functionality: true, analytics: true, performance: true };
-    } catch (e) {
-        return { functionality: true, analytics: true, performance: true };
+  try {
+    const stored = localStorage.getItem('app_cookie_preferences');
+    if (stored) {
+      return JSON.parse(stored);
     }
+    // Default to all enabled
+    return { functionality: true, analytics: true, performance: true };
+  } catch (e) {
+    return { functionality: true, analytics: true, performance: true };
+  }
 };
 
 export const saveCookiePreferences = (prefs: CookiePreferences): void => {
-    try {
-        localStorage.setItem('app_cookie_preferences', JSON.stringify(prefs));
-    } catch (e) {
-        console.error("Error saving cookie preferences", e);
-    }
+  try {
+    localStorage.setItem('app_cookie_preferences', JSON.stringify(prefs));
+  } catch (e) {
+    console.error("Error saving cookie preferences", e);
+  }
 };
 
 // --- SAVED ROUTES (NEW) ---
@@ -373,32 +359,32 @@ export const saveRouteListItems = (items: RouteListItem[]): void => {
 
 // --- NOTIFICATION PREFERENCES (NEW) ---
 export const getNotificationPreferences = (): NotificationPreferences => {
-    try {
-        const stored = localStorage.getItem('notification_preferences');
-        return stored ? JSON.parse(stored) : {
-            new_orders: true,
-            order_updates: true,
-            system_alerts: true,
-            marketing: true,
-            sound_enabled: true
-        };
-    } catch (e) {
-        return {
-            new_orders: true,
-            order_updates: true,
-            system_alerts: true,
-            marketing: true,
-            sound_enabled: true
-        };
-    }
+  try {
+    const stored = localStorage.getItem('notification_preferences');
+    return stored ? JSON.parse(stored) : {
+      new_orders: true,
+      order_updates: true,
+      system_alerts: true,
+      marketing: true,
+      sound_enabled: true
+    };
+  } catch (e) {
+    return {
+      new_orders: true,
+      order_updates: true,
+      system_alerts: true,
+      marketing: true,
+      sound_enabled: true
+    };
+  }
 };
 
 export const saveNotificationPreferences = (prefs: NotificationPreferences): void => {
-    try {
-        localStorage.setItem('notification_preferences', JSON.stringify(prefs));
-    } catch (e) {
-        console.error("Error saving notification preferences", e);
-    }
+  try {
+    localStorage.setItem('notification_preferences', JSON.stringify(prefs));
+  } catch (e) {
+    console.error("Error saving notification preferences", e);
+  }
 };
 
 // --- TASK LIST (NEW) ---

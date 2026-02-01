@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useCityStreets } from '../hooks/useCityStreets';
-import { Loader2, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
+import { Loading } from './Loading';
 
 interface StreetAutocompleteProps {
     city: string;
@@ -89,8 +90,8 @@ export const StreetAutocomplete: React.FC<StreetAutocompleteProps> = ({
                 />
 
                 {loading && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin">
-                        <Loader2 className="w-4 h-4" />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loading variant="inline" size="xs" />
                     </div>
                 )}
             </div>

@@ -85,12 +85,14 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
     }, []);
 
     const loadData = async () => {
-        const storedFixed = storage.getFixedValue();
-        const storedGoal = storage.getDailyGoal();
+        const data = await cloud.getDailyTrackingData();
+
+        const storedFixed = data?.daily_fixed_value ?? null;
+        const storedGoal = data?.daily_goal ?? null;
 
         setFixedValue(storedFixed);
         setDailyGoal(storedGoal);
-        setTransactions(storage.getTodayTransactions());
+        setTransactions(data?.today_transactions || []);
 
         // Pre-fill edit form
         if (storedFixed !== null) {
@@ -98,6 +100,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 fixed: storedFixed.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
                 goal: storedGoal ? storedGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''
             });
+            setIsQuickStart(false);
         } else {
             setIsQuickStart(true);
         }
@@ -114,7 +117,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
 
     // --- LOGIC ---
 
-    const handleStartDay = () => {
+    const handleStartDay = async () => {
         let fixed = 0;
         let goal = 0;
 
@@ -123,8 +126,8 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             goal = parseCurrency(startForm.goal);
         }
 
-        storage.setFixedValue(fixed);
-        storage.setDailyGoal(goal);
+        await cloud.saveDailyFixedValue(fixed);
+        await cloud.saveDailyGoal(goal);
 
         setFixedValue(fixed);
         setDailyGoal(goal);
@@ -135,22 +138,22 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
         setShowStartModal(false);
     };
 
-    const handleSaveConfig = () => {
+    const handleSaveConfig = async () => {
         const fixed = parseCurrency(editForm.fixed);
         const goal = parseCurrency(editForm.goal);
 
-        storage.setFixedValue(fixed);
-        storage.setDailyGoal(goal);
+        await cloud.saveDailyFixedValue(fixed);
+        await cloud.saveDailyGoal(goal);
 
         setFixedValue(fixed);
         setDailyGoal(goal);
         setShowEditConfig(false);
     };
 
-    const addTransaction = (tx: DailyTransaction) => {
+    const addTransaction = async (tx: DailyTransaction) => {
         const updated = [tx, ...transactions];
         setTransactions(updated);
-        storage.saveTodayTransactions(updated);
+        await cloud.saveTodayTransactions(updated);
     };
 
     const handleAddStandard = () => {
@@ -206,11 +209,11 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
         setShowExpenseModal(false);
     };
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (!deleteId) return;
         const updated = transactions.filter(t => t.id !== deleteId);
         setTransactions(updated);
-        storage.saveTodayTransactions(updated);
+        await cloud.saveTodayTransactions(updated);
         setDeleteId(null);
     };
 
@@ -235,11 +238,12 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 paymentBreakdown: { cash: summary.profit, digital: 0 }
             };
 
-            const history = storage.getHistory();
-            storage.saveHistory([record, ...history]);
-
             // Sync to Cloud
             await cloud.saveManualHistory(record);
+
+            // Importante: No fluxo original ele salvava no history do storage.
+            // Como agora usamos cloud.saveManualHistory que manda pro banco,
+            // não precisamos mais do storage.saveHistory.
 
             setShowEndConfirm(false);
             setShowShareCard(true);
@@ -290,8 +294,8 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
         );
     };
 
-    const resetDay = () => {
-        storage.saveTodayTransactions([]);
+    const resetDay = async () => {
+        await cloud.saveTodayTransactions([]);
         setTransactions([]);
         setShowShareCard(false);
     };

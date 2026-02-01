@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Crown, Check, Loader2, X, AlertCircle, Copy, Wallet, QrCode } from 'lucide-react';
+import { Crown, Check, X, AlertCircle, Copy, Wallet, QrCode } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { PartnerFeeSettings, StoreWallet } from '../types';
@@ -150,7 +151,7 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
 
                             <div className="text-center mb-4">
                                 {loading ? (
-                                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-500" />
+                                    <Loading variant="inline" size="sm" />
                                 ) : (
                                     <>
                                         <p className="text-3xl font-black text-gray-900 dark:text-white">
@@ -166,7 +167,7 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
                             </div>
 
                             <Button onClick={handleSubscribe} disabled={loading || processing} fullWidth className="py-4 text-lg bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700 border-none shadow-lg shadow-orange-500/30">
-                                {processing ? <Loader2 className="w-6 h-6 animate-spin" /> : ((wallet?.balance_decimal || 0) < (fees?.super_store_monthly_fee || 0) ? 'Pagar com Pix' : 'Ativar Agora')}
+                                {processing ? <Loading variant="inline" size="md" /> : ((wallet?.balance_decimal || 0) < (fees?.super_store_monthly_fee || 0) ? 'Pagar com Pix' : 'Ativar Agora')}
                             </Button>
                         </>
                     ) : (

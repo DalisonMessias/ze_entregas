@@ -11,6 +11,7 @@ import { useDialog } from '../../utils/dialogService';
 import { StoreRatingModal } from './StoreRatingModal';
 import { PixPaymentModal } from '../PixPaymentModal';
 import { ShippingRulesModal } from './ShippingRulesModal';
+import { AuthRequiredModal } from './AuthRequiredModal';
 
 interface DigitalMenuProps {
     citySlug: string;
@@ -74,6 +75,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [checkoutTotal, setCheckoutTotal] = useState(0);
     const [recentOrders, setRecentOrders] = useState<string[]>([]);
     const [isRecentOrdersModalOpen, setIsRecentOrdersModalOpen] = useState(false);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     const { alert, confirm } = useDialog();
 
@@ -134,6 +137,29 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             setLoading(false);
         }
     };
+
+    // --- AUTH CHECK ---
+    useEffect(() => {
+        const checkAuth = async () => {
+            const { user } = await cloud.getUserWithCache();
+            if (user) {
+                setIsLoggedIn(true);
+                // Get name and phone from profile to populate checkout
+                const sb = cloud.getClient();
+                if (sb) {
+                    const { data: profile } = await sb.from('user_profiles')
+                        .select('name, phone_number')
+                        .eq('id', user.id)
+                        .single();
+                    if (profile) {
+                        if (profile.name) setCustomerName(profile.name);
+                        if (profile.phone_number) setCustomerPhone(profile.phone_number);
+                    }
+                }
+            }
+        };
+        checkAuth();
+    }, []);
 
     // --- CART PERSISTENCE ---
     // Restore cart on store load
@@ -312,6 +338,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     };
 
     const handleCheckout = async () => {
+        if (!isLoggedIn) {
+            setIsAuthModalOpen(true);
+            return;
+        }
+
         if (!customerName || !customerPhone) {
             alert({ title: 'Atenção', message: 'Por favor, informe seu nome e telefone.' });
             return;
@@ -625,7 +656,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800">
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                        <Logo className="h-8 w-auto" />
+                        <Logo className="h-8 w-auto" onClick={() => window.location.href = '/home'} />
                         {recentOrders.length > 0 && (
                             <button
                                 onClick={() => setIsRecentOrdersModalOpen(true)}
@@ -1339,6 +1370,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 isOpen={isRulesModalOpen}
                 onClose={() => setIsRulesModalOpen(false)}
                 rules={shippingRules}
+            />
+
+            <AuthRequiredModal
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
             />
 
         </div>

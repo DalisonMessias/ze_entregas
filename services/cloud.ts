@@ -13,7 +13,8 @@ import {
     UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator, StoreAddonOption, StoreAddonGroup,
     StoreDeliverySettings, StoreNeighborhoodFee, PaymentGatewayConfig, PaymentGatewayLog,
     FinancialTransaction, BlacklistEntry, PartnerRating, Claim,
-    CatalogBaseProduct, QuickReply, StreetRequest, ApprovedStreet
+    CatalogBaseProduct, QuickReply, StreetRequest, ApprovedStreet,
+    Promotion, Coupon
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -2157,6 +2158,22 @@ export const getMyOrders = async (): Promise<Order[]> => {
 };
 
 // --- WALLET & TRANSACTIONS ---
+
+export const getOrderByShortId = async (shortId: string): Promise<Order | null> => {
+    const sb = getClient();
+    if (!sb || !shortId) return null;
+
+    // Busca pedido onde o ID começa com os caracteres fornecidos
+    // shortId terá 8 caracteres. O ID original é um UUID.
+    const { data, error } = await sb
+        .from('orders')
+        .select('*')
+        .like('id', `${shortId.toLowerCase()}%`)
+        .single();
+
+    if (error || !data) return null;
+    return data;
+};
 
 export const getMyWallet = async (): Promise<StoreWallet | null> => {
     const sb = getClient();
@@ -6194,3 +6211,262 @@ export const checkDeliveryModeForChat = async (phoneNumber: string) => {
 
     return orderData.delivery_mode; // 'OWN', 'PLATFORM', 'ASSOCIATE'
 };
+
+// --- NOVAS FUNÇÕES PARA MIGRAÇÃO LOCALSTORAGE ---
+
+/**
+ * Atualiza campos específicos do perfil do usuário para persistência de negócio.
+ */
+export const updateUserProfileData = async (data: any) => {
+    const sb = getClient();
+    if (!sb) throw new Error("Supabase client not initialized");
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { error } = await sb
+        .from('user_profiles')
+        .update(data)
+        .eq('id', user.id);
+
+    if (error) {
+        console.error('Error updating user profile data:', error);
+        throw error;
+    }
+};
+
+/**
+ * Recupera dados de rastreamento diário persistidos no banco.
+ */
+export const getDailyTrackingData = async () => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await sb
+        .from('user_profiles')
+        .select('daily_fixed_value, daily_goal, today_transactions, saved_filters')
+        .eq('id', user.id)
+        .single();
+
+    if (error) {
+        console.error('Error fetching daily tracking data:', error);
+        return null;
+    }
+    return data;
+};
+
+/**
+ * Salva a meta diária no banco de dados.
+ */
+export const saveDailyGoal = async (goal: number) => {
+    return updateUserProfileData({ daily_goal: goal });
+};
+
+/**
+ * Salva o valor fixo (troco inicial) no banco de dados.
+ */
+export const saveDailyFixedValue = async (value: number) => {
+    return updateUserProfileData({ daily_fixed_value: value });
+};
+
+/**
+ * Salva as transações do dia no banco de dados.
+ */
+export const saveTodayTransactions = async (transactions: any[]) => {
+    return updateUserProfileData({ today_transactions: transactions });
+};
+
+/**
+ * Atualiza os filtros salvos por módulo.
+ */
+export const updateSavedFilters = async (module: string, filters: any) => {
+    const tracking = await getDailyTrackingDataFromProfile();
+    const currentFilters = tracking?.saved_filters || {};
+    const newFilters = { ...currentFilters, [module]: filters };
+    return updateUserProfileData({ saved_filters: newFilters });
+};
+
+/**
+ * Helper interno para buscar perfil completo (base para filtros)
+ */
+async function getDailyTrackingDataFromProfile() {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    const { data } = await sb
+        .from('user_profiles')
+        .select('saved_filters')
+        .eq('id', user.id)
+        .single();
+    return data;
+}
+
+// --- PROMOÇÕES E CUPONS ---
+
+/**
+ * Busca promoções de uma loja incluindo os IDs dos produtos associados.
+ */
+export const getPromotions = async (storeId: string): Promise<Promotion[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data: promos, error } = await sb
+        .from('store_promotions')
+        .select(`
+            *,
+            promotion_products(product_id)
+        `)
+        .eq('store_id', storeId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching promotions:', error);
+        return [];
+    }
+
+    return (promos || []).map(p => ({
+        ...p,
+        products: p.promotion_products?.map((pp: any) => pp.product_id) || []
+    }));
+};
+
+export const createPromotion = async (promotion: Partial<Promotion>, productIds: string[] = []) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+
+    try {
+        const { data, error } = await sb
+            .from('store_promotions')
+            .insert(promotion)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        if (productIds.length > 0 && !promotion.applies_to_all_products) {
+            const junctionData = productIds.map(pid => ({
+                promotion_id: data.id,
+                product_id: pid
+            }));
+            const { error: jError } = await sb.from('promotion_products').insert(junctionData);
+            if (jError) throw jError;
+        }
+
+        return { success: true, data };
+    } catch (e) {
+        console.error('Error creating promotion:', e);
+        return { success: false, error: e };
+    }
+};
+
+export const updatePromotion = async (promotionId: string, updates: Partial<Promotion>, productIds: string[] = []) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+
+    try {
+        const { error } = await sb
+            .from('store_promotions')
+            .update(updates)
+            .eq('id', promotionId);
+
+        if (error) throw error;
+
+        // Atualizar produtos associados
+        await sb.from('promotion_products').delete().eq('promotion_id', promotionId);
+
+        if (productIds.length > 0 && !updates.applies_to_all_products) {
+            const junctionData = productIds.map(pid => ({
+                promotion_id: promotionId,
+                product_id: pid
+            }));
+            const { error: jError } = await sb.from('promotion_products').insert(junctionData);
+            if (jError) throw jError;
+        }
+
+        return { success: true };
+    } catch (e) {
+        console.error('Error updating promotion:', e);
+        return { success: false, error: e };
+    }
+};
+
+export const deletePromotion = async (promotionId: string) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+
+    const { error } = await sb.from('store_promotions').delete().eq('id', promotionId);
+    if (error) {
+        console.error('Error deleting promotion:', error);
+        return { success: false, error };
+    }
+    return { success: true };
+};
+
+/**
+ * Busca cupons de uma loja.
+ */
+export const getCoupons = async (storeId: string): Promise<Coupon[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('store_coupons')
+        .select('*')
+        .eq('store_id', storeId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching coupons:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const createCoupon = async (coupon: Partial<Coupon>) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+
+    const { data, error } = await sb
+        .from('store_coupons')
+        .insert(coupon)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating coupon:', error);
+        return { success: false, error };
+    }
+    return { success: true, data };
+};
+
+export const updateCoupon = async (couponId: string, updates: Partial<Coupon>) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+
+    const { error } = await sb
+        .from('store_coupons')
+        .update(updates)
+        .eq('id', couponId);
+
+    if (error) {
+        console.error('Error updating coupon:', error);
+        return { success: false, error };
+    }
+    return { success: true };
+};
+
+export const deleteCoupon = async (couponId: string) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+
+    const { error } = await sb.from('store_coupons').delete().eq('id', couponId);
+    if (error) {
+        console.error('Error deleting coupon:', error);
+        return { success: false, error };
+    }
+    return { success: true };
+};
+

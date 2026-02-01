@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Calculator, Loader2, DollarSign, Navigation, Info, Plus, Trash2, UserX, Phone, Star, X, ShieldCheck, Users, AlertTriangle, Send, Check, Wallet, CheckCircle, Home, Lock } from 'lucide-react';
+import { MapPin, Calculator, DollarSign, Navigation, Info, Plus, Trash2, UserX, Phone, Star, X, ShieldCheck, Users, AlertTriangle, Send, Check, Wallet, CheckCircle, Home, Lock } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { StreetAutocomplete } from './StreetAutocomplete'; // Import StreetAutocomplete
@@ -779,7 +780,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                                 <CustomInput type="text" placeholder="Bairro" value={addr.neighborhood} onChange={e => handleInputChange('neighborhood', e.target.value)} required />
                             </div>
                             <Button variant="primary" size="sm" onClick={() => validateAddress(addr.id)} disabled={addr.validating} className="w-full md:w-auto md:col-start-4 md:row-start-1 md:justify-self-end rounded-lg h-[46px]">
-                                {addr.validating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Validar'}
+                                {addr.validating ? <Loading variant="inline" size="sm" /> : 'Validar'}
                             </Button>
                         </div>
                         {addr.error && <p className="text-xs font-bold text-red-500 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {addr.error}</p>}
@@ -807,7 +808,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
         );
     };
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
+    if (loading) return <div className="flex justify-center p-10"><Loading variant="container" size="md" message="Carregando dados da entrega..." /></div>;
 
     return (
         <div className="space-y-6 animate-in fade-in">
@@ -896,7 +897,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                                 <div className="flex items-center justify-between mb-3">
                                     <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2"><Calculator className="w-4 h-4" /> Cálculo de Valores</h3>
-                                    <Button size="sm" onClick={calculateValues} disabled={calculating} className="rounded-lg">{calculating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Calcular'}</Button>
+                                    <Button size="sm" onClick={calculateValues} disabled={calculating} className="rounded-lg">{calculating ? <Loading variant="inline" size="sm" /> : 'Calcular'}</Button>
                                 </div>
                                 {isSuperStore && (
                                     <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-center gap-2">
@@ -951,7 +952,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                                     className="w-full h-10 rounded-lg focus:ring-2 focus:ring-brand-300 col-span-2"
                                     style={{ alignSelf: 'center', justifySelf: 'stretch' }}
                                 >
-                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Chamar Entregador Zé'}
+                                    {isSubmitting ? <Loading variant="inline" size="sm" /> : 'Chamar Entregador Zé'}
                                 </Button>
                                 {onlineDriversCount === 0 && (
                                     <p className="col-span-1 md:col-span-2 text-center text-xs font-bold text-red-500 mt-2">
@@ -1018,7 +1019,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                                 disabled={isSubmitting || selectedAssociateIds.length === 0}
                                 className="w-full h-12 rounded-xl focus:ring-2 focus:ring-brand-300 mt-4 text-sm uppercase tracking-wide"
                             >
-                                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : `Enviar para ${selectedAssociateIds.length > 0 ? selectedAssociateIds.length : ''} Entregador(es)`}
+                                {isSubmitting ? <Loading variant="inline" size="sm" /> : `Enviar para ${selectedAssociateIds.length > 0 ? selectedAssociateIds.length : ''} Entregador(es)`}
                             </Button>
                         </div>
                     )}

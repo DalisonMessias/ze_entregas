@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Loader2, Trash2, Phone, Bike, Search, X } from 'lucide-react';
+import { Users, UserPlus, Trash2, Phone, Bike, Search, X } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
@@ -238,7 +239,7 @@ export const StoreTeam: React.FC = () => {
                                         className="flex-1 uppercase font-mono"
                                     />
                                     <Button onClick={handleSearch} disabled={searching} className="px-4">
-                                        {searching ? <Loader2 className="animate-spin w-5 h-5" /> : <Search className="w-5 h-5" />}
+                                        {searching ? <Loading variant="inline" size="sm" /> : <Search className="w-5 h-5" />}
                                     </Button>
                                 </div>
 
@@ -259,7 +260,7 @@ export const StoreTeam: React.FC = () => {
                                             </p>
                                         )}
                                         <Button fullWidth onClick={handleAssociate} disabled={associating}>
-                                            {associating ? <Loader2 className="animate-spin" /> : 'Confirmar Associação'}
+                                            {associating ? <Loading variant="inline" size="sm" /> : 'Confirmar Associação'}
                                         </Button>
                                     </div>
                                 )}

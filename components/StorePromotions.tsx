@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Tag, Ticket, Calendar, Search, Trash2, Edit2, CheckCircle, XCircle, AlertCircle, Percent, DollarSign, Truck, Package, Info, Loader2, ArrowRight } from 'lucide-react';
+import { Plus, Tag, Ticket, Calendar, Search, Trash2, Edit2, CheckCircle, XCircle, AlertCircle, Percent, DollarSign, Truck, Package, Info, ArrowRight } from 'lucide-react';
+import { Loading } from './Loading';
 import * as cloud from '../services/cloud';
 import { Promotion, Coupon, StoreProduct } from '../types';
 import { Button } from './Button';
@@ -179,7 +180,7 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
         setIsCouponModalOpen(true);
     };
 
-    if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin w-8 h-8 text-brand-600" /></div>;
+    if (loading) return <div className="flex justify-center p-20"><Loading variant="container" size="md" message="Carregando promoções e cupons..." /></div>;
 
     return (
         <div className="max-w-6xl mx-auto p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4">

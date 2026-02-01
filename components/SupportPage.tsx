@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, FileQuestion, PenTool, ChevronDown, ChevronRight, Send, AlertCircle, CheckCircle, Clock, Headphones, ExternalLink, Loader2, MessageSquare, CalendarClock, Bot, Lock } from 'lucide-react';
+import { MessageCircle, FileQuestion, PenTool, ChevronDown, ChevronRight, Send, AlertCircle, CheckCircle, Clock, Headphones, ExternalLink, MessageSquare, CalendarClock, Bot, Lock } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
 import { Claim, ShopSettings } from '../types';
@@ -322,7 +323,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                     />
                 </div>
                 <Button fullWidth onClick={() => handleSubmitTicket(false)} disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 mr-2" />}
+                    {isSubmitting ? <Loading variant="inline" size="sm" /> : <Send className="w-5 h-5 mr-2" />}
                     {isSubmitting ? 'Enviando...' : 'Enviar Chamado'}
                 </Button>
             </div>
@@ -358,7 +359,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
         <div className="space-y-4 animate-in fade-in">
             <h2 className="font-bold text-lg dark:text-white mb-4">Histórico de Chamados</h2>
             {loadingClaims ? (
-                <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-brand-500" /></div>
+                <Loading variant="container" size="md" />
             ) : claims.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                     <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-20" />
@@ -371,8 +372,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                             <div className="flex justify-between items-start mb-2">
                                 <span className="font-bold text-sm dark:text-white uppercase tracking-wide">{claim.type.replace('_', ' ')}</span>
                                 <span className={`px-2 py-1 rounded-lg text-xs font-bold ${claim.status === 'resolved' ? 'bg-green-100 text-green-700' :
-                                        claim.status === 'open' ? 'bg-yellow-100 text-yellow-700' :
-                                            'bg-gray-100 text-gray-600'
+                                    claim.status === 'open' ? 'bg-yellow-100 text-yellow-700' :
+                                        'bg-gray-100 text-gray-600'
                                     }`}>
                                     {claim.status === 'open' ? 'Aberto' : claim.status === 'resolved' ? 'Resolvido' : claim.status}
                                 </span>

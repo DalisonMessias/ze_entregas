@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { MapPin, DollarSign, Plus, Trash2, Loader2, Save, Info, Truck, ShoppingBag, Clock, CheckCircle, ArrowRight } from 'lucide-react';
+import { MapPin, DollarSign, Plus, Trash2, Save, Info, Truck, ShoppingBag, Clock, CheckCircle, ArrowRight } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
@@ -143,7 +144,7 @@ export const StoreDeliverySettings: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
+    if (loading) return <div className="flex justify-center p-8"><Loading variant="container" size="md" message="Carregando configurações de entrega..." /></div>;
 
     if (profileValid === false) {
         return (
@@ -387,7 +388,7 @@ export const StoreDeliverySettings: React.FC = () => {
             {/* Action Bar */}
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex justify-center z-50 md:static md:bg-transparent md:border-0 md:p-0 md:justify-end">
                 <Button onClick={handleSaveSettings} disabled={saving} className="w-full md:w-auto min-w-[200px] py-4 shadow-xl shadow-brand-500/20">
-                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Configurações</>}
+                    {saving ? <Loading variant="inline" size="sm" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Configurações</>}
                 </Button>
             </div>
 

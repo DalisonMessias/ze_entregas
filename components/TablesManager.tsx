@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as cloud from '../services/cloud';
-import { Plus, Trash, Download, Loader2, QrCode, Search, Upload, Image as ImageIcon, FileText } from 'lucide-react';
+import { Plus, Trash, Download, QrCode, Search, Upload, Image as ImageIcon, FileText } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 import QRious from 'qrious';
@@ -319,7 +320,7 @@ export const TablesManager: React.FC<{ storeId: string }> = ({ storeId }) => {
                     disabled={generatingPdf || tables.length === 0}
                     className="rounded-2xl border-2 font-bold px-6"
                 >
-                    {generatingPdf ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <FileText className="w-5 h-5 mr-2" />}
+                    {generatingPdf ? <Loading variant="inline" size="sm" /> : <FileText className="w-5 h-5 mr-2" />}
                     Baixar Todos em PDF (A4)
                 </Button>
             </div>
@@ -382,7 +383,7 @@ export const TablesManager: React.FC<{ storeId: string }> = ({ storeId }) => {
                             disabled={creating || !newTableIdentifier.trim()}
                             className="rounded-[24px] px-10 h-[64px] font-black text-lg"
                         >
-                            {creating ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Plus className="w-6 h-6 mr-2" /> Criar</>}
+                            {creating ? <Loading variant="inline" size="md" /> : <><Plus className="w-6 h-6 mr-2" /> Criar</>}
                         </Button>
                     </div>
                 </div>
@@ -405,7 +406,7 @@ export const TablesManager: React.FC<{ storeId: string }> = ({ storeId }) => {
             {/* Listagem (Grid sem cortes) */}
             <div className="pb-40">
                 {loading ? (
-                    <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-brand-600" /></div>
+                    <Loading variant="container" size="lg" message="Carregando mesas..." />
                 ) : filteredTables.length === 0 ? (
                     <div className="text-center py-24 bg-white dark:bg-gray-800 rounded-[60px] border-4 border-dashed border-gray-100 dark:border-gray-700">
                         <QrCode className="w-20 h-20 text-gray-200 mx-auto mb-6" />
@@ -428,7 +429,7 @@ export const TablesManager: React.FC<{ storeId: string }> = ({ storeId }) => {
                                             className="w-full h-full object-contain mix-blend-multiply"
                                         />
                                     ) : (
-                                        <Loader2 className="w-8 h-8 animate-spin text-gray-200" />
+                                        <Loading variant="inline" size="md" />
                                     )}
                                 </div>
 

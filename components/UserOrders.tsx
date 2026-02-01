@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, Hash, CheckCircle, MapPin, Star, Loader2, Package, ArrowLeft } from 'lucide-react';
+import { ShoppingBag, Hash, CheckCircle, MapPin, Star, Package, ArrowLeft } from 'lucide-react';
+import { Loading } from './Loading';
 import * as cloud from '../services/cloud';
 import { Order } from '../types';
 import { Button } from './Button';
@@ -110,10 +111,7 @@ export const UserOrders: React.FC<UserOrdersProps> = ({ onBack }) => {
             </div>
 
             {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                    <Loader2 className="w-10 h-10 animate-spin text-brand-600 mb-4" />
-                    <p className="font-bold">Carregando seus pedidos...</p>
-                </div>
+                <Loading variant="container" size="lg" message="Carregando seus pedidos..." />
             ) : error ? (
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-[32px] text-center shadow-sm border border-gray-100 dark:border-gray-700">
                     <p className="text-red-500 font-bold mb-4">Erro ao carregar pedidos.</p>

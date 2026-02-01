@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, X, CheckCircle, Loader2, LogIn } from 'lucide-react';
 import { Button } from '../Button';
 import { CustomInput } from '../CustomInput';
+import { AuthRequiredModal } from './AuthRequiredModal';
 import * as cloud from '../../services/cloud';
 
 interface StoreRatingModalProps {
@@ -65,7 +66,7 @@ export const StoreRatingModal: React.FC<StoreRatingModalProps> = ({
         setLoading(true);
         setError(null);
         try {
-            await cloud.submitStoreRating(storeId, rating, comment);
+            await cloud.submitRating(storeId, rating, comment, customerName);
             setSuccess(true);
             setTimeout(() => {
                 onClose();
@@ -101,18 +102,13 @@ export const StoreRatingModal: React.FC<StoreRatingModalProps> = ({
 
                         <div className="p-8 space-y-6">
                             {!checkingAuth && !isLoggedIn ? (
-                                <div className="text-center space-y-6">
-                                    <div className="w-16 h-16 bg-brand-50 dark:bg-brand-900/20 rounded-2xl flex items-center justify-center mx-auto text-brand-600">
-                                        <LogIn className="w-8 h-8" />
-                                    </div>
-                                    <div>
-                                        <h4 className="text-lg font-bold text-gray-900 dark:text-white">Login Necessário</h4>
-                                        <p className="text-sm text-gray-500 mt-2">Para avaliar as lojas e ajudar a comunidade, você precisa estar conectado à sua conta.</p>
-                                    </div>
-                                    <Button fullWidth onClick={() => window.location.href = '/login'} className="py-4 rounded-2xl">
-                                        Fazer Login Agora
-                                    </Button>
-                                    <button onClick={onClose} className="text-sm font-bold text-gray-500 hover:text-gray-700">Continuar sem avaliar</button>
+                                <div className="text-center py-4">
+                                    <AuthRequiredModal
+                                        isOpen={true}
+                                        onClose={onClose}
+                                        title="Avaliação Reservada"
+                                        description="Para avaliar as lojas e ajudar a comunidade, você precisa estar conectado à sua conta."
+                                    />
                                 </div>
                             ) : checkingAuth ? (
                                 <div className="py-12 flex flex-col items-center gap-4">

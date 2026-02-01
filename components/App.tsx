@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Loader2, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon } from 'lucide-react';
+import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
 import * as storage from '../services/storage';
@@ -94,6 +95,7 @@ const StreetRequestsAdmin = React.lazy(() => import('../src/pages/StreetRequests
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
 const RouteList = React.lazy(() => import('./RouteList').then(module => ({ default: module.RouteList })));
+const NotFound = React.lazy(() => import('../src/pages/NotFound').then(module => ({ default: module.NotFound })));
 
 // Hooks
 import { StoreStatus } from './StoreStatus';
@@ -175,7 +177,8 @@ export type ActiveTab =
     | 'my_orders'
     | 'digital_menu'
     | 'store_public_chat'
-    | 'street_request';
+    | 'street_request'
+    | 'not_found';
 
 
 interface AppProps {
@@ -589,8 +592,47 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     // Lógica principal de Roteamento / Aba Inicial
     useEffect(() => {
-        const path = window.location.pathname;
+        let path = window.location.pathname;
+
+        // REDIRECIONAMENTO GLOBAL: URL base (/) sempre vai para /home
+        if (path === '/') {
+            window.history.replaceState({}, '', '/home');
+            path = '/home';
+        }
+
         const tabFromUrl = getTabFromUrl(path);
+
+        // Se a rota não existe e não é a raiz (que vai para home), define 404
+        if (!tabFromUrl && path !== '/' && path !== '/home' && !path.startsWith('/track/')) {
+            setActiveTab('not_found');
+            return;
+        }
+
+        // REDIRECIONAMENTO DE LINK CURTO DE PEDIDO (ID de 8 caracteres)
+        const pathSegments = path.split('/').filter(Boolean);
+        if (pathSegments.length === 1 && pathSegments[0].length === 8 && !tabFromUrl) {
+            const shortId = pathSegments[0];
+            const handleShortLinkRedirect = async () => {
+                try {
+                    const order = await cloud.getOrderByShortId(shortId);
+                    if (order && order.is_location_delivery && order.shipping_address?.latitude && order.shipping_address?.longitude) {
+                        const { latitude, longitude } = order.shipping_address;
+                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+                        window.location.href = mapsUrl;
+                        return;
+                    } else if (order) {
+                        // Se for um pedido normal, talvez queira abrir no tracking? 
+                        // O requisito pede apenas "Entregar por Localização" -> Maps.
+                        // Mas podemos redirecionar para o tracking se for um pedido regular.
+                        navigate('order_tracking'); // Ou manter no fluxo normal
+                    }
+                } catch (error) {
+                    console.error('Erro no redirecionamento de link curto:', error);
+                }
+            };
+            handleShortLinkRedirect();
+            return;
+        }
         const authTabs = ['login', 'signup', 'forgot_password'];
         const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
         const isAuthenticated = userId && userId !== 'guest';
@@ -982,6 +1024,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'upgrade_to_partner': return <UpgradeToPartnerPage />;
                 case 'settings': return <SettingsPage onBack={() => navigate(effectiveRole === 'user' ? 'profile' : (isDriver ? 'daily_panel' : 'shop'))} userRole={effectiveRole} />;
                 case 'streets_list': return <StreetsList />;
+                case 'not_found': return <NotFound />;
 
                 default: return <div className="p-10 text-center text-gray-500">Etapa não implementada: {activeTab}</div>;
             }
@@ -990,7 +1033,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         return (
             <React.Suspense fallback={
                 <div className="flex items-center justify-center p-20">
-                    <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
+                    <Loading variant="inline" size="md" />
                 </div>
             }>
                 <SectionErrorBoundary key={`${activeTab}-${navigationKey}`} componentName={activeTab}>
@@ -1034,7 +1077,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 {renderContent()}
 
                 {showPrivacy && (
-                    <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
+                    <Suspense fallback={<Loading variant="container" size="md" />}>
                         <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
                     </Suspense>
                 )}
@@ -1131,10 +1174,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 
                 `}>
                         {/* Logo - Show only when expanded */}
-                        {isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" />}
+                        {isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" onClick={() => window.location.href = '/home'} />}
 
                         {/* Logo Icon Only - Show when collapsed */}
-                        {!isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" mode="icon" />}
+                        {!isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />}
 
                         {/* Close Button - Visible only on Mobile */}
                         <button onClick={() => setIsMenuOpen(false)} className="md:hidden"><X className="w-6 h-6 text-gray-400 hover:text-gray-600" /></button>
@@ -1147,6 +1190,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <>
                                 <MenuSection title="Visão Geral" />
                                 <MenuButton icon={LayoutDashboard} label="Dashboard BI" tab="admin_dashboard" id="admin-dashboard-link" />
+                                <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
                                 <MenuButton icon={ShoppingBag} label="Acessar Loja" tab="shop" />
 
                                 <MenuSection title="Gestão de Usuários" />
@@ -1330,7 +1374,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                 <Settings className="w-5 h-5" />
                             </button>
                             <button onClick={handleLogout} disabled={isLoggingOut} className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 disabled:opacity-50">
-                                {isLoggingOut ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
+                                {isLoggingOut ? <Loading variant="inline" size="sm" /> : <LogOut className="w-5 h-5" />}
                             </button>
                         </div>
                         {isSidebarExpanded && (
@@ -1346,7 +1390,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             {/* Main Content Area */}
             <main className={`pt-20 px-4 mx-auto transition-all duration-300 ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
                 {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
-                <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
+                <Suspense fallback={<Loading variant="container" size="md" />}>
                     {renderContent()}
                 </Suspense>
             </main>
@@ -1368,7 +1412,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 </SectionErrorBoundary>
             )}
             {showPrivacy && (
-                <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>}>
+                <Suspense fallback={<Loading variant="container" size="md" />}>
                     <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
                 </Suspense>
             )}

@@ -49,6 +49,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/suporte': 'support',
     '/shop': 'shop',
     '/assistente': 'assistant',
+    '/meus-pedidos': 'my_orders',
 
 
     '/mapa-calor': 'heatmap',
@@ -103,11 +104,12 @@ const routeMap: Record<string, ActiveTab> = {
     '/upgrade': 'upgrade_to_partner',
     '/ruas': 'streets_list',
     '/carteira': 'zebank',
+    '/home': 'home',
     // User Routes (Novas)
     '/user/inicio': 'home', // Usuário comum cai na home (landing page busca)
     '/user/perfil': 'profile',
-    '/user/pedidos': 'profile', // Pedidos estão no perfil
-    '/user/historico': 'profile',
+    '/user/pedidos': 'my_orders',
+    '/user/historico': 'my_orders',
     '/user/suporte': 'support',
     '/user/carteira': 'zebank',
     '/user/configuracoes': 'settings',

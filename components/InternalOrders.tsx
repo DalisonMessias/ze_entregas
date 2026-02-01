@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StoreProduct, Order, CartItem, Product, PaymentMethod, StoreDeliverySettings, StoreNeighborhoodFee } from '../types';
 import * as cloud from '../services/cloud';
+import { useNotification } from '../contexts/NotificationContext';
 import { Loader2, Search, Plus, Trash2, Printer, Save, ShoppingBag, Minus, X, Edit2, Package, Image as ImageIcon, CreditCard, Banknote, HelpCircle, CheckCircle, Clock, FileText, History as HistoryIcon, LayoutList, Share2, Copy, Coffee, MapPin, Bike, Store, Home, Calculator, Truck, ShoppingCart, Utensils, ClipboardList, Settings, Eye, ClockArrowDown, Check, Pencil, XCircle } from 'lucide-react';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
@@ -50,6 +51,8 @@ export const InternalOrders: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [cart, setCart] = useState<{ product: StoreProduct, quantity: number }[]>([]);
+    const { showNotification } = useNotification();
+    const notifiedTickets = React.useRef<Set<string>>(new Set());
     const { confirm, alert: showAlert } = useDialog();
 
     // Ticket State
@@ -144,17 +147,28 @@ export const InternalOrders: React.FC = () => {
                 if (data?.user) {
                     setCurrentUserId(data.user.id);
                     if (!controller.signal.aborted) {
-                        // Carrega todos os dados em paralelo para melhor performance
-                        await Promise.all([
-                            loadProducts(controller.signal),
-                            loadAssociates(data.user.id),
-                            loadPrinterSettings(data.user.id),
-                            loadProfile(data.user.id)
-                        ]);
+                        // Carrega filtros salvos em background
+                        cloud.getDailyTrackingData().then(tracking => {
+                            const savedFilters = tracking?.saved_filters?.internal_orders;
+                            if (savedFilters) {
+                                if (savedFilters.startDate) setFilterStartDate(savedFilters.startDate);
+                                if (savedFilters.endDate) setFilterEndDate(savedFilters.endDate);
+                            }
+                        }).catch(e => console.error('Erro ao carregar filtros:', e));
+
+                        // 1. Carrega produtos IMEDIATAMENTE para liberar a UI
+                        loadProducts(controller.signal);
+
+                        // 2. Carrega dados de contexto (perfil, configs, taxas) em paralelo
+                        loadContextData(data.user.id);
+
+                        // 3. Carrega configurações de impressora (não bloqueante)
+                        loadPrinterSettings(data.user.id);
                     }
                 }
             } catch (error) {
                 console.error('Erro ao inicializar dados:', error);
+                setLoading(false);
             }
         };
 
@@ -162,9 +176,47 @@ export const InternalOrders: React.FC = () => {
         return () => controller.abort();
     }, []);
 
-    const loadAssociates = async (storeId: string) => {
-        const data = await cloud.getStoreDeliveryPartners(storeId);
-        setAssociates(data);
+    // Implementação de Tempo Real para Novos Pedidos
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const sb = cloud.getClient();
+        if (!sb) return;
+
+        const channel = sb
+            .channel('internal_orders_tickets_realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'orders_tickets',
+                    filter: `store_id=eq.${currentUserId}`
+                },
+                (payload) => {
+                    if (payload.new && payload.new.id) {
+                        if (!notifiedTickets.current.has(payload.new.id)) {
+                            notifiedTickets.current.add(payload.new.id);
+                            showNotification('Novo pedido recebido!', 'info', { sound: true });
+                            loadTickets();
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            sb.removeChannel(channel);
+        };
+    }, [currentUserId, showNotification]);
+
+    const loadAssociates = async (storeId?: string) => {
+        // Wrapper para compatibilidade ou recarga manual
+        if (!storeId && currentUserId) storeId = currentUserId;
+        if (storeId) {
+            const data = await cloud.getStoreDeliveryPartners(storeId);
+            setAssociates(data);
+        }
     };
 
     const loadPrinterSettings = async (storeId: string) => {
@@ -556,62 +608,51 @@ export const InternalOrders: React.FC = () => {
     const loadProducts = async (signal?: AbortSignal) => {
         setLoading(true);
         try {
-            const [productsData, profile, settings, fees, onlineDrivers, shopSettings, associatesData] = await Promise.all([
-                cloud.getStoreProducts(undefined, signal),
+            // Carrega APENAS produtos
+            const productsData = await cloud.getStoreProducts(undefined, signal);
+            setProducts(productsData);
+        } catch (error) {
+            console.error('[InternalOrders] Erro ao carregar produtos:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadContextData = async (userId: string) => {
+        try {
+            const [profileData, settings, fees, onlineDrivers, shopSettings, associatesData, globalFees] = await Promise.all([
                 cloud.getMyPartnerProfile(),
                 cloud.getStoreDeliverySettings(),
                 cloud.getStoreNeighborhoodFees(),
                 cloud.getOnlineDrivers(0, 0),
                 cloud.getShopSettings(),
-                cloud.getStoreAssociatedPartners()
+                cloud.getStoreAssociatedPartners(),
+                cloud.getPublicFeeSettings().catch(() => null)
             ]);
 
-            setProducts(productsData);
+            setProfile(profileData);
             setDeliverySettings(settings);
             setNeighborhoodFees(fees);
             setAssociates(associatesData);
+            setHasOnlineCouriers(onlineDrivers && onlineDrivers.length > 0);
+            if (globalFees) setPlatformFees(globalFees);
+
             if (settings) {
                 setCalculationMode(settings.own_delivery_mode);
             }
 
-            if (shopSettings) {
-                // Inicializar horários do filtro com base nas configurações da loja se disponíveis
-                // Ignorado na nova versão por intervalo de datas
-                // if (shopSettings.support_hours_start) setHistoryTimeStart(shopSettings.support_hours_start.slice(0, 5));
-                // if (shopSettings.support_hours_end) setHistoryTimeEnd(shopSettings.support_hours_end.slice(0, 5));
-            }
-
-            setHasOnlineCouriers(onlineDrivers && onlineDrivers.length > 0);
-            // console.log('[InternalOrders] Entregadores online:', onlineDrivers?.length || 0);
-
-            // Carregar taxas globais da plataforma para cálculo do Parceiro Zé
-            try {
-                // console.log('[InternalOrders] Carregando taxas da plataforma...');
-                const globalFees = await cloud.getPublicFeeSettings();
-                // console.log('[InternalOrders] Taxas carregadas:', globalFees);
-                setPlatformFees(globalFees);
-            } catch (error) {
-                // console.error('[InternalOrders] Erro ao carregar taxas da plataforma:', error);
-            }
-
-            // Validar perfil completo
-            const validation = validateStoreProfile(profile);
-            // console.log('[InternalOrders] Validação:', validation);
-
+            // Validar perfil
+            const validation = validateStoreProfile(profileData);
             setProfileValid(validation.isValid);
             setMissingFields(validation.missingFields);
 
-            if (validation.isValid && profile) {
-                setStoreCity(profile.store_address_city || profile.city || '');
-                setStoreStreet(profile.store_address_street || profile.address_street || '');
-                setAddressCity(profile.store_address_city || profile.city || '');
+            if (validation.isValid && profileData) {
+                setStoreCity(profileData.store_address_city || profileData.city || '');
+                setStoreStreet(profileData.store_address_street || profileData.address_street || '');
+                setAddressCity(profileData.store_address_city || profileData.city || '');
             }
         } catch (error) {
-            // console.error('[InternalOrders] Erro ao carregar:', error);
-            setProfileValid(false);
-            setMissingFields(['Erro ao carregar perfil']);
-        } finally {
-            setLoading(false);
+            console.error('[InternalOrders] Erro ao carregar dados de contexto:', error);
         }
     };
 
@@ -619,6 +660,11 @@ export const InternalOrders: React.FC = () => {
         if (!currentUserId) return;
         setLoadingHistory(true);
         try {
+            // Salva os filtros no banco para persistência
+            cloud.updateSavedFilters('internal_orders', { startDate: start, endDate: end }).catch(e => {
+                console.error('Erro ao salvar filtros:', e);
+            });
+
             // Ajustar para garantir que pegamos o dia inteiro no fuso horário local
             // Ao criar Date com "YYYY-MM-DDTHH:mm:ss", o JS assume horário local
             const startDateTime = new Date(`${start}T00:00:00`);
@@ -2516,18 +2562,40 @@ export const InternalOrders: React.FC = () => {
                                                 )}
 
                                                 {((lastOrder as any).shipping_address?.latitude && (lastOrder as any).shipping_address?.longitude) && (
-                                                    <a
-                                                        href={`https://www.google.com/maps/search/?api=1&query=${(lastOrder as any).shipping_address.latitude},${(lastOrder as any).shipping_address.longitude}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="no-print flex items-center justify-center gap-2 bg-white text-orange-600 border border-orange-200 font-bold text-xs py-2 px-3 rounded-xl hover:bg-orange-50 transition-colors w-full"
-                                                    >
-                                                        <MapPin className="w-3 h-3" /> Abrir no Maps
-                                                    </a>
+                                                    <div className="space-y-2 no-print">
+                                                        <a
+                                                            href={`https://www.google.com/maps/search/?api=1&query=${(lastOrder as any).shipping_address.latitude},${(lastOrder as any).shipping_address.longitude}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center justify-center gap-2 bg-white text-orange-600 border border-orange-200 font-bold text-xs py-2 px-3 rounded-xl hover:bg-orange-50 transition-colors w-full"
+                                                        >
+                                                            <MapPin className="w-3 h-3" /> Abrir no Maps
+                                                        </a>
+
+                                                        {/* Link Curto (Atalho) */}
+                                                        <div className="flex flex-col gap-1">
+                                                            <p className="text-[10px] font-bold text-gray-500 uppercase">Link Curto (Atalho):</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <code className="flex-1 bg-white p-2 rounded-lg border border-orange-200 text-[10px] font-mono text-orange-700 truncate">
+                                                                    {`${window.location.origin}/${lastOrder.id.substring(0, 8)}`}
+                                                                </code>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        navigator.clipboard.writeText(`${window.location.origin}/${lastOrder.id.substring(0, 8)}`);
+                                                                        showAlert({ title: 'Copiado!', message: 'Link curto copiado para a área de transferência.' });
+                                                                    }}
+                                                                    className="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200"
+                                                                    title="Copiar Link"
+                                                                >
+                                                                    <Copy className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 )}
-                                                {/* Fallback para impressão ou se não tiver coords mas tiver link no reference (analisar se reference é url) */}
-                                                <div className="hidden print:block text-[10px] text-center text-gray-400 mt-1">
-                                                    (Ver localização no App)
+                                                {/* Fallback para impressão - Exibe o link curto textual */}
+                                                <div className="hidden print:block text-[10px] text-center text-gray-500 mt-2 font-mono break-all">
+                                                    Link: {window.location.origin}/{lastOrder.id.substring(0, 8)}
                                                 </div>
                                             </div>
                                         ) : (

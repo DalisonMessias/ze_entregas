@@ -16,7 +16,7 @@ import { ShopSettings, PublicStoreProfile, City } from '../types';
 interface LandingPageProps {
     isAuthenticated: boolean;
     onLoginClick: () => void;
-    onSignupClick: (type: 'STORE_PARTNER' | 'DELIVERY_PARTNER' | 'USER') => void;
+    onSignupClick: (type?: 'STORE_PARTNER' | 'DELIVERY_PARTNER' | 'USER') => void;
     onDashboardClick?: () => void;
 }
 
@@ -91,6 +91,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                     <Logo
                         className="h-8 w-auto"
                         variant={scrolled ? 'default' : 'full-white'}
+                        onClick={() => window.location.href = '/home'}
                     />
                     {!isAuthenticated ? (
                         <div className="flex items-center gap-4">
@@ -103,7 +104,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                                         Entrar
                                     </Button>
                                     <Button
-                                        onClick={() => onSignupClick('USER')}
+                                        onClick={() => onSignupClick()}
                                         className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl hidden md:block transition-all"
                                     >
                                         Cadastrar
@@ -119,7 +120,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                                         Entrar
                                     </Button>
                                     <Button
-                                        onClick={() => onSignupClick('USER')}
+                                        onClick={() => onSignupClick()}
                                         variant="ghost"
                                         className="text-white font-bold hover:bg-white/10 hover:text-white hidden md:block"
                                     >

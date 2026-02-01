@@ -5,9 +5,10 @@ interface LogoProps {
   className?: string;
   variant?: 'default' | 'white' | 'full-white' | 'black';
   mode?: 'full' | 'icon';
+  onClick?: () => void;
 }
 
-export const Logo: React.FC<LogoProps> = ({ className = "", variant = 'default', mode = 'full' }) => {
+export const Logo: React.FC<LogoProps> = ({ className = "", variant = 'default', mode = 'full', onClick }) => {
   // Lógica de Cores:
   // 'default' = Texto "Zé" usa currentColor (Preto no claro, Branco no escuro via Tailwind).
   // 'white' = Texto "Zé" forçado para Branco.
@@ -38,7 +39,8 @@ export const Logo: React.FC<LogoProps> = ({ className = "", variant = 'default',
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox={viewBox}
-      className={className}
+      className={`${className} ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
       style={{ shapeRendering: 'geometricPrecision', textRendering: 'geometricPrecision', fillRule: 'evenodd', clipRule: 'evenodd' }}
       role="img"
       aria-label="Zé Entregas"

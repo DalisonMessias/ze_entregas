@@ -31,14 +31,46 @@ export const OrderTracking: React.FC = () => {
         }
     }, []);
 
-    // Load Order
+    // Load Order & Realtime Subscription
     useEffect(() => {
-        if (orderId) {
-            loadOrder();
-            // Poll for updates (Simulation of Realtime)
-            const interval = setInterval(loadOrder, 5000);
-            return () => clearInterval(interval);
-        }
+        if (!orderId) return;
+
+        // Carga inicial
+        loadOrder();
+
+        // Configuração do Supabase Realtime para atualizações instantâneas
+        const sb = cloud.getClient();
+        if (!sb) return;
+
+        const channel = sb
+            .channel(`order-updates-${orderId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'orders',
+                    filter: `id=eq.${orderId}`
+                },
+                (payload) => {
+                    // console.log('[OrderTracking] Realtime update received:', payload);
+                    const updatedOrder = payload.new as any;
+
+                    setOrder((prev: any) => {
+                        if (!prev) return updatedOrder;
+                        return {
+                            ...updatedOrder,
+                            // Mantém informações da loja que não vêm no payload de update
+                            store: prev.store
+                        };
+                    });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            sb.removeChannel(channel);
+        };
     }, [orderId]);
 
     // Scroll chat
@@ -62,11 +94,7 @@ export const OrderTracking: React.FC = () => {
                 .single();
 
             if (error) throw error;
-            setOrder((prev: any) => {
-                // Only update if status changed to avoid re-renders or checks?
-                // Actually React handles diffing.
-                return orderData;
-            });
+            setOrder(orderData);
 
             // Fetch Store
             if (orderData?.store_id && !store) {
@@ -147,15 +175,31 @@ export const OrderTracking: React.FC = () => {
     }
 
     const steps = getSteps(order.order_type);
-    const normalizedStatus = order.status?.toLowerCase();
-    const currentStepIndex = steps.findIndex(s =>
-        s.status === normalizedStatus ||
-        (s.status === 'accepted' && normalizedStatus === 'preparing')
-    ) !== -1
-        ? steps.findIndex(s => s.status === normalizedStatus || (s.status === 'accepted' && normalizedStatus === 'preparing'))
-        : (normalizedStatus === 'rejected' || normalizedStatus === 'cancelled' ? -1 : 0);
 
-    const isCancelled = normalizedStatus === 'cancelled' || normalizedStatus === 'rejected';
+    // Normalização robusta de status do banco -> interface
+    const getNormalizedStatus = (rawStatus: string) => {
+        const s = rawStatus?.toUpperCase();
+        if (s === 'PENDING') return 'pending';
+        if (s === 'PREPARING') return 'preparing';
+        if (s === 'READY') return 'in_transit'; // No rastreamento, READY vira o passo de trânsito/retirada
+        if (s === 'IN_DELIVERY') return 'in_transit';
+        if (s === 'DELIVERED') return 'delivered';
+        if (s === 'COMPLETED') return 'delivered';
+        if (s === 'CANCELLED' || s === 'REJECTED') return 'cancelled';
+        return rawStatus?.toLowerCase() || 'pending';
+    };
+
+    const normalizedStatus = getNormalizedStatus(order.status);
+
+    const currentStepIndex = steps.findIndex(s => {
+        if (s.status === normalizedStatus) return true;
+        // Fallbacks legados ou variações
+        if (s.status === 'accepted' && (normalizedStatus === 'preparing' || normalizedStatus === 'accepted')) return true;
+        if (s.status === 'in_transit' && (normalizedStatus === 'ready' || normalizedStatus === 'in_transit')) return true;
+        return false;
+    });
+
+    const isCancelled = normalizedStatus === 'cancelled';
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">

@@ -5,11 +5,13 @@ import * as logger from '../services/logger';
 import { useDialog } from '../utils/dialogService';
 import { App } from './App';
 import { UserRole, UserStatus } from '../types';
-import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, Loader2, MapPin, Mail, Lock, User, Phone, FileText, Store as StoreIcon, Home, Truck, RefreshCw } from 'lucide-react';
+import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, MapPin, Mail, Lock, User, Phone, FileText, Store as StoreIcon, Home, Truck, RefreshCw } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import { LandingPage } from './LandingPage';
 import { CitySearchSelect } from './CitySearchSelect';
 import { StreetSearchSelect } from './StreetSearchSelect';
+import { NotFound } from '../src/pages/NotFound';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Logo } from './Logo';
 import { CustomInput } from './CustomInput';
@@ -27,14 +29,14 @@ import { PublicSupportPage } from './PublicSupportPage';
 const updateAuthUrl = (view: AuthView) => {
   // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
   const isAppRoute = getTabFromUrl(window.location.pathname) !== null;
-  const authRoutes = ['/login', '/cadastro', '/recuperar-senha'];
+  const authRoutes = ['/login', '/cadastro', '/recuperar-senha', '/home'];
 
   // Se for uma rota de autenticação, forçamos o path correto
   let path = window.location.pathname;
   if (view === 'login') path = '/login';
-  else if (view === 'signup_city' || view === 'signup_form') path = '/cadastro';
+  else if (view === 'signup_type_selection' || view === 'signup_city' || view === 'signup_form') path = '/cadastro';
   else if (view === 'forgot_password') path = '/recuperar-senha';
-  else if (view === 'landing' && !isAppRoute) path = '/';
+  else if (view === 'landing' && !isAppRoute) path = '/home';
 
   if (window.location.pathname !== path && authRoutes.includes(path)) {
     window.history.pushState({ authView: view }, '', path);
@@ -44,7 +46,7 @@ const updateAuthUrl = (view: AuthView) => {
 const getAuthViewFromUrl = (): AuthView => {
   const path = window.location.pathname;
   if (path === '/login') return 'login';
-  if (path === '/cadastro') return 'signup_city';
+  if (path === '/cadastro') return 'signup_type_selection';
   if (path === '/recuperar-senha') return 'forgot_password';
   return 'landing';
 };
@@ -78,6 +80,9 @@ export const AuthWrapper: React.FC = () => {
   // Sincroniza URL quando view muda e NÃO temos sessão ativa
   useEffect(() => {
     if (!session && !userId) {
+      if (window.location.pathname === '/') {
+        window.history.replaceState({ authView: 'landing' }, '', '/home');
+      }
       updateAuthUrl(view);
     }
   }, [view, session, userId]);
@@ -601,14 +606,12 @@ export const AuthWrapper: React.FC = () => {
   }
 
   if (isCheckingSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 animate-in fade-in">
-        <div className="flex flex-col items-center gap-4">
-          <Logo className="h-16 w-auto text-brand-600" mode="icon" />
-          <Loader2 className="w-6 h-6 animate-spin text-brand-600" />
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 animate-in fade-in">
+      <div className="flex flex-col items-center gap-4">
+        <Logo className="h-16 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />
+        <Loading variant="inline" size="sm" />
       </div>
-    );
+    </div>
   }
 
   if (collaboratorSession) {
@@ -665,13 +668,21 @@ export const AuthWrapper: React.FC = () => {
   }
 
   if (view === 'landing') {
+    const isHome = currentPath === '/' || currentPath === '/home';
+    if (!isHome) {
+      return <NotFound />;
+    }
     return (
       <LandingPage
         isAuthenticated={false}
         onLoginClick={() => setView('login')}
         onSignupClick={(type) => {
-          setSignupType(type);
-          setView('signup_city');
+          if (type) {
+            setSignupType(type);
+            setView('signup_city');
+          } else {
+            setView('signup_type_selection');
+          }
         }}
       />
     );
@@ -699,7 +710,7 @@ export const AuthWrapper: React.FC = () => {
 
           <div className="text-center mb-10">
             <div className="inline-flex p-4 bg-brand-50 dark:bg-brand-900/30 rounded-3xl mb-6 shadow-sm">
-              <Logo className="h-10 w-auto text-brand-600" mode="icon" />
+              <Logo className="h-10 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />
             </div>
             <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
               {view === 'login' && 'Olá novamente! 👋'}
@@ -783,7 +794,7 @@ export const AuthWrapper: React.FC = () => {
                 disabled={authLoading}
                 className="py-5 text-lg font-black bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-600 shadow-[0_12px_24px_-8px_rgba(var(--brand-600-rgb),0.4)] transition-all active:scale-[0.98]"
               >
-                {authLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Entrar no Sistema'}
+                {authLoading ? <Loading variant="inline" size="sm" className="text-white" /> : 'Entrar no Sistema'}
               </Button>
 
               <div className="pt-6 text-center">
@@ -875,7 +886,7 @@ export const AuthWrapper: React.FC = () => {
                 autoFocus
               />
               <Button fullWidth onClick={handleForgotPassword} disabled={authLoading} className="py-5 text-lg font-black shadow-lg">
-                {authLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Resetar Senha'}
+                {authLoading ? <Loading variant="inline" size="sm" className="text-white" /> : 'Resetar Senha'}
               </Button>
               <button
                 onClick={() => setView('login')}
@@ -888,15 +899,22 @@ export const AuthWrapper: React.FC = () => {
 
           {view === 'signup_city' && (
             <div className="space-y-6">
-              <div className={`p-4 rounded-2xl border-2 flex items-center gap-3 ${signupType === 'STORE_PARTNER'
-                ? 'bg-blue-50/50 border-blue-100 text-blue-700 dark:bg-blue-900/10 dark:border-blue-900/30'
-                : 'bg-brand-50/50 border-brand-100 text-brand-700 dark:bg-brand-900/10 dark:border-brand-900/30'
+              <div className={`p-4 rounded-2xl border-2 flex items-center gap-3 ${signupType === 'STORE_PARTNER' ? 'bg-blue-50/50 border-blue-100 text-blue-700 dark:bg-blue-900/10 dark:border-blue-900/30' :
+                signupType === 'USER' ? 'bg-green-50/50 border-green-100 text-green-700 dark:bg-green-900/10 dark:border-green-900/30' :
+                  'bg-brand-50/50 border-brand-100 text-brand-700 dark:bg-brand-900/10 dark:border-brand-900/30'
                 }`}>
-                <div className={`p-2 rounded-xl ${signupType === 'STORE_PARTNER' ? 'bg-blue-100 text-blue-600' : 'bg-brand-100 text-brand-600'}`}>
-                  {signupType === 'STORE_PARTNER' ? <StoreIcon className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
+                <div className={`p-2 rounded-xl ${signupType === 'STORE_PARTNER' ? 'bg-blue-100 text-blue-600' :
+                  signupType === 'USER' ? 'bg-green-100 text-green-600' :
+                    'bg-brand-100 text-brand-600'
+                  }`}>
+                  {signupType === 'STORE_PARTNER' ? <StoreIcon className="w-5 h-5" /> :
+                    signupType === 'USER' ? <Home className="w-5 h-5" /> :
+                      <Truck className="w-5 h-5" />}
                 </div>
                 <span className="font-bold text-sm">
-                  {signupType === 'STORE_PARTNER' ? 'Cadastro Lojista' : 'Cadastro Entregador'}
+                  {signupType === 'STORE_PARTNER' ? 'Cadastro Lojista' :
+                    signupType === 'USER' ? 'Cadastro de Cliente' :
+                      'Cadastro Entregador'}
                 </span>
               </div>
 
@@ -1009,7 +1027,7 @@ export const AuthWrapper: React.FC = () => {
 
               <div className="pt-4">
                 <Button fullWidth onClick={handleSignup} disabled={authLoading} className="py-5 text-lg font-black bg-brand-600 shadow-xl">
-                  {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Finalizar e Começar'}
+                  {authLoading ? <Loading variant="inline" size="sm" className="mx-auto" /> : 'Finalizar e Começar'}
                 </Button>
               </div>
             </div>

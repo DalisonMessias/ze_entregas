@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Loader2, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer, Wallet, ChevronDown, Share2, Copy, ExternalLink, Power, MessageCircle } from 'lucide-react';
+import { Settings, Truck, Save, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer, Wallet, ChevronDown, Share2, Copy, ExternalLink, Power, MessageCircle } from 'lucide-react';
+import { Loading } from './Loading';
 import { Switch } from './Switch';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
@@ -16,7 +17,6 @@ import { formatPhoneNumber } from '../utils/mapHelpers';
 import { useDialog } from '../utils/dialogService';
 
 // --- TOAST COMPONENT ---
-type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'random';
 
 
 
@@ -73,20 +73,14 @@ export const StoreSettings: React.FC = () => {
         city: '',
         address_state: '',
         address_complement: '',
-        pix_key: '',
         description: '',
         is_open: true,
 
-        // Order Config
-        receive_orders_via_platform: true,
-        receive_orders_via_chat: false,
-        chat_number: ''
+
     });
 
     const [citySlug, setCitySlug] = useState('');
     const [storeSlug, setStoreSlug] = useState('');
-
-    const [pixKeyType, setPixKeyType] = useState<PixKeyType>('random');
 
     const loadProfileData = async () => {
         setLoading(true);
@@ -127,33 +121,15 @@ export const StoreSettings: React.FC = () => {
 
                     address_state: useStoreAddr ? (p.store_address_state || '') : (p.address_state || p.city?.split(' - ')[1] || ''),
                     address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.store_address_complement || ''),
-                    pix_key: p.pix_key || '',
                     description: p.description || '',
                     is_open: p.is_open ?? true,
 
-                    // New Fields
-                    receive_orders_via_platform: p.receive_orders_via_platform ?? true,
-                    receive_orders_via_chat: p.receive_orders_via_chat ?? false,
-                    chat_number: p.chat_number || p.phone_number || ''
+
                 });
 
                 setCitySlug(p.city_slug || '');
                 setStoreSlug(p.store_slug || '');
 
-                // Infer PIX Type
-                const key = p.pix_key || '';
-                if (key.includes('@')) {
-                    setPixKeyType('email');
-                } else if (key.length > 14) {
-                    setPixKeyType('cnpj');
-                } else if (key.length === 11 || (key.length === 14 && key.includes('.'))) { // CPF formatted is 14 chars but structure 3.3.3-2
-                    // Simple heuristic: if likely CPF
-                    if (key.length === 14 && key.charAt(3) === '.') setPixKeyType('cpf');
-                    else if (key.length === 11) setPixKeyType('cpf');
-                    else setPixKeyType('random');
-                } else {
-                    setPixKeyType('random');
-                }
 
                 // Load printer settings
                 const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', p.id).single() || {};
@@ -237,7 +213,7 @@ export const StoreSettings: React.FC = () => {
 
             const rawPhone = (form.phone_number || '').replace(/\D/g, '');
             const rawZip = (form.address_zip || '').replace(/\D/g, '');
-            const rawChatNumber = (form.chat_number || '').replace(/\D/g, '');
+
 
             await cloud.updateMyPartnerProfile({
                 store_name: form.name,
@@ -255,14 +231,11 @@ export const StoreSettings: React.FC = () => {
                 store_address_city: cityName,
                 store_address_state: cityState,
                 store_address_complement: form.address_complement,
-                pix_key: form.pix_key,
                 description: form.description,
                 is_open: form.is_open,
 
                 // Order Config
-                receive_orders_via_platform: form.receive_orders_via_platform,
-                receive_orders_via_chat: form.receive_orders_via_chat,
-                chat_number: rawChatNumber
+
 
                 // Also update legacy/display 'city' field for compatibility if needed, 
                 // but usually 'city' on profile is for search. Let's keep them synced for now or just update store fields.
@@ -400,7 +373,7 @@ export const StoreSettings: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
+    if (loading) return <div className="flex justify-center p-10"><Loading variant="container" size="md" message="Carregando configurações..." /></div>;
 
     return (
         <div className="space-y-6 animate-in fade-in pb-24">
@@ -466,7 +439,7 @@ export const StoreSettings: React.FC = () => {
                             )}
 
                             <label className="absolute bottom-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full cursor-pointer transition-all backdrop-blur-sm">
-                                {uploadingAsset === 'cover' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+                                {uploadingAsset === 'cover' ? <Loading variant="inline" size="sm" /> : <Camera className="w-5 h-5" />}
                                 <input
                                     type="file"
                                     className="hidden"
@@ -487,7 +460,7 @@ export const StoreSettings: React.FC = () => {
                                     )}
                                 </div>
                                 <label className="absolute bottom-0 right-0 bg-brand-600 hover:bg-brand-700 text-white p-2 rounded-full cursor-pointer shadow-md transition-all border-2 border-white dark:border-gray-800">
-                                    {uploadingAsset === 'logo' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                                    {uploadingAsset === 'logo' ? <Loading variant="inline" size="xs" /> : <Camera className="w-4 h-4" />}
                                     <input
                                         type="file"
                                         className="hidden"
@@ -627,138 +600,18 @@ export const StoreSettings: React.FC = () => {
                                     />
                                 </div>
 
-                                {/* Linha 3: Email e PIX */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <CustomInput
-                                        label="E-mail da Loja"
-                                        type="email"
-                                        value={form.contact_email}
-                                        onChange={e => handleChange('contact_email', e.target.value)}
-                                        placeholder="email@loja.com"
-                                        icon={Mail}
-                                    />
-                                    <div className="relative">
-                                        <div className="relative mb-1 h-4">
-                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                                Chave PIX da Loja
-                                            </label>
-
-                                            {/* Selector (Absolute positioning relative to this header row could handle alignment better, but Flex is safer for responsiveness. Keeping flex but adjusting height match) */}
-                                            {/* Actually, user wants input alignment. Flex row for header is fine as long as height is minimal. 
-                                                Let's try inline styles for colors and compact padding. */}
-                                            <div className="absolute right-0 -top-1 flex gap-1 bg-white dark:bg-gray-800 p-0 pl-2">
-                                                {[
-                                                    { id: 'cpf', label: 'CPF' },
-                                                    { id: 'cnpj', label: 'CNPJ' },
-                                                    { id: 'email', label: 'E-mail' },
-                                                    { id: 'random', label: 'Aleatória' }
-                                                ].map((type) => {
-                                                    const isSelected = pixKeyType === type.id;
-                                                    return (
-                                                        <button
-                                                            key={type.id}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setPixKeyType(type.id as PixKeyType);
-                                                                handleChange('pix_key', '');
-                                                            }}
-                                                            style={{
-                                                                backgroundColor: isSelected ? '#e50039' : 'transparent',
-                                                                borderColor: isSelected ? '#e50039' : 'transparent',
-                                                                color: isSelected ? '#ffffff' : undefined
-                                                            }}
-                                                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all whitespace-nowrap border ${!isSelected ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700' : ''
-                                                                }`}
-                                                        >
-                                                            {type.label}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        <CustomInput
-                                            type={pixKeyType === 'email' ? 'email' : (pixKeyType === 'random' ? 'text' : 'tel')}
-                                            value={form.pix_key}
-                                            onChange={e => handleChange('pix_key', e.target.value)}
-                                            placeholder={
-                                                pixKeyType === 'cpf' ? '000.000.000-00' :
-                                                    pixKeyType === 'cnpj' ? '00.000.000/0000-00' :
-                                                        pixKeyType === 'email' ? 'email@loja.com' :
-                                                            'Chave Aleatória'
-                                            }
-                                            mask={pixKeyType === 'cpf' ? 'cpf' : pixKeyType === 'cnpj' ? 'cnpj' : undefined}
-                                            icon={Wallet}
-                                            helperText="Esta chave será enviada aos clientes no WhatsApp."
-                                        />
-                                    </div>
-                                </div>
+                                <CustomInput
+                                    label="E-mail da Loja"
+                                    type="email"
+                                    value={form.contact_email}
+                                    onChange={e => handleChange('contact_email', e.target.value)}
+                                    placeholder="email@loja.com"
+                                    icon={Mail}
+                                />
                             </div>
                         </div>
 
-                        {/* Order Configuration */}
-                        <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
-                            <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
-                                <MessageCircle className="w-5 h-5 text-gray-500" /> Recebimento de Pedidos
-                            </h3>
-                            <div className="space-y-6">
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h4 className="font-bold text-gray-900 dark:text-white">Receber via Plataforma (Recomendado)</h4>
-                                            <p className="text-xs text-gray-500 leading-relaxed">
-                                                Ativa o fluxo profissional. Os pedidos chegam no seu painel em tempo real, geram histórico, relatórios financeiros e o cliente pode rastrear cada etapa.
-                                            </p>
-                                        </div>
-                                        <Switch
-                                            checked={form.receive_orders_via_platform}
-                                            onChange={() => {
-                                                setForm(prev => ({
-                                                    ...prev,
-                                                    receive_orders_via_platform: !prev.receive_orders_via_platform,
-                                                    // Se ativar plataforma, desativa WhatsApp
-                                                    receive_orders_via_chat: !prev.receive_orders_via_platform ? false : prev.receive_orders_via_chat
-                                                }));
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-600 pt-4">
-                                        <div>
-                                            <h4 className="font-bold text-gray-900 dark:text-white">Receber via WhatsApp</h4>
-                                            <p className="text-xs text-gray-500 leading-relaxed">
-                                                Atendimento manual. O cliente envia o carrinho para o seu WhatsApp. <strong>Nota:</strong> Se ativo, pedidos em dinheiro/cartão irão para o WhatsApp. Pedidos PIX continuam na plataforma.
-                                            </p>
-                                        </div>
-                                        <Switch
-                                            checked={form.receive_orders_via_chat}
-                                            onChange={() => {
-                                                setForm(prev => ({
-                                                    ...prev,
-                                                    receive_orders_via_chat: !prev.receive_orders_via_chat,
-                                                    // Se ativar WhatsApp, desativa plataforma
-                                                    receive_orders_via_platform: !prev.receive_orders_via_chat ? false : prev.receive_orders_via_platform
-                                                }));
-                                            }}
-                                        />
-                                    </div>
 
-                                    {form.receive_orders_via_chat && (
-                                        <div className="pt-4 animate-in fade-in slide-in-from-top-2">
-                                            <CustomInput
-                                                label="Número do WhatsApp para Pedidos"
-                                                type="tel"
-                                                value={form.chat_number}
-                                                onChange={e => handleChange('chat_number', e.target.value)}
-                                                placeholder="(00) 00000-0000"
-                                                mask="phone"
-                                                icon={MessageCircle}
-                                                helperText="Número que receberá as mensagens dos clientes."
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
 
                         {/* Store Address (Separated) */}
                         <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
@@ -851,15 +704,17 @@ export const StoreSettings: React.FC = () => {
                             </div>
                         </div>
 
-                        <Button onClick={handleSave} disabled={saving} fullWidth className="mt-4 py-4">
-                            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Alterações da Loja</>}
+                        <Button
+                            onClick={handleSave}
+                            disabled={saving}
+                            fullWidth
+                            className="mt-4 py-4 bg-white !text-brand-600 hover:!bg-gray-100 border-2 border-gray-100 dark:border-gray-700 font-black shadow-sm"
+                        >
+                            {saving ? <Loading variant="inline" size="sm" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Alterações da Loja</>}
                         </Button>
                     </div>
-
-
                 </div>
             )}
-
 
             {/* Shipping Settings */}
             {activeTab === 'shipping' && (
@@ -881,7 +736,8 @@ export const StoreSettings: React.FC = () => {
                         </div>
                     )}
                 </div>
-            )}
+            )
+            }
 
             {/* Printer Settings */}
             {activeTab === 'printer' && (
@@ -1045,10 +901,6 @@ export const StoreSettings: React.FC = () => {
                                 </div>
                             </div>
                         )}
-
-                        <Button onClick={handleSavePrinter} disabled={savingPrinter} fullWidth className="mt-6 py-4">
-                            {savingPrinter ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Configurações de Impressora</>}
-                        </Button>
                     </div>
                 </div>
             )}

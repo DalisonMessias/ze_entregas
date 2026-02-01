@@ -5197,6 +5197,12 @@ CREATE TABLE IF NOT EXISTS public.store_addon_groups (
 -- Index para performance
 CREATE INDEX IF NOT EXISTS store_addon_groups_store_id_idx ON public.store_addon_groups (store_id);
 
+-- OTIMIZAÇÃO DE PERFORMANCE (STORE ORDERS)
+CREATE INDEX IF NOT EXISTS idx_products_store_id ON public.products(store_id);
+CREATE INDEX IF NOT EXISTS idx_orders_tickets_store_id ON public.orders_tickets(store_id);
+CREATE INDEX IF NOT EXISTS idx_orders_tickets_created_at ON public.orders_tickets(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_tickets_status ON public.orders_tickets(status);
+
 -- Trigger para updated_at
 DROP TRIGGER IF EXISTS handle_store_addon_groups_updated_at ON public.store_addon_groups;
 CREATE TRIGGER handle_store_addon_groups_updated_at BEFORE UPDATE ON public.store_addon_groups
@@ -11284,3 +11290,156 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC) TO anon, authenticated;
+
+-- ==================================================================
+-- MIGRAÇÃO LOCALSTORAGE PARA BANCO DE DADOS - 01/02/2026
+-- ==================================================================
+
+DO $$
+BEGIN
+    -- 1. Colunas para controle diário (DailyPanel)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'daily_fixed_value') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN daily_fixed_value NUMERIC(15, 2) DEFAULT 0.00;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'daily_goal') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN daily_goal NUMERIC(15, 2) DEFAULT 0.00;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'today_transactions') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN today_transactions JSONB DEFAULT '[]'::jsonb;
+    END IF;
+
+    -- 2. Coluna para filtros persistentes (Busca/Filtros Globais)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'saved_filters') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN saved_filters JSONB DEFAULT '{}'::jsonb;
+    END IF;
+END $$;
+
+-- ==================================================================
+-- CONFIGURAÇÃO DE REALTIME - 01/02/2026
+-- ==================================================================
+
+-- Garantir que a publicação para Realtime exista e inclua a tabela orders
+-- Isso permite atualizações instantâneas no acompanhamento do cliente
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        CREATE PUBLICATION supabase_realtime;
+    END IF;
+    
+    -- Tenta adicionar a tabela orders à publicação
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+    EXCEPTION
+        WHEN duplicate_object THEN
+            NULL; -- Tabela já está na publicação
+    END;
+END $$;
+
+-- ==================================================================
+-- 3.x PROMOÇÕES E CUPONS (Adicionado em 01/02/2026)
+-- ==================================================================
+
+-- Tabela de Promoções Automáticas
+CREATE TABLE IF NOT EXISTS public.store_promotions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    discount_type TEXT DEFAULT 'PERCENTAGE', -- 'PERCENTAGE', 'FIXED', 'FREE_SHIPPING'
+    discount_value NUMERIC(10, 2) DEFAULT 0,
+    min_order_value NUMERIC(10, 2) DEFAULT 0,
+    start_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+    end_date TIMESTAMPTZ,
+    is_active BOOLEAN DEFAULT TRUE,
+    applies_to_all_products BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS store_promotions_store_id_idx ON public.store_promotions (store_id);
+CREATE INDEX IF NOT EXISTS store_promotions_is_active_idx ON public.store_promotions (is_active);
+
+DROP TRIGGER IF EXISTS handle_store_promotions_updated_at ON public.store_promotions;
+CREATE TRIGGER handle_store_promotions_updated_at BEFORE UPDATE ON public.store_promotions
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Relacionamento Promoções x Produtos (Para promoções específicas)
+CREATE TABLE IF NOT EXISTS public.promotion_products (
+    promotion_id UUID REFERENCES public.store_promotions(id) ON DELETE CASCADE,
+    product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
+    PRIMARY KEY (promotion_id, product_id)
+);
+
+-- Tabela de Cupons de Desconto
+CREATE TABLE IF NOT EXISTS public.store_coupons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE NOT NULL,
+    code TEXT NOT NULL,
+    description TEXT,
+    discount_type TEXT DEFAULT 'PERCENTAGE', -- 'PERCENTAGE', 'FIXED', 'FREE_SHIPPING'
+    discount_value NUMERIC(10, 2) DEFAULT 0,
+    min_order_value NUMERIC(10, 2) DEFAULT 0,
+    max_discount_value NUMERIC(10, 2),
+    usage_limit INTEGER,
+    user_usage_limit INTEGER DEFAULT 1,
+    usage_count INTEGER DEFAULT 0,
+    start_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+    end_date TIMESTAMPTZ,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, code)
+);
+
+CREATE INDEX IF NOT EXISTS store_coupons_store_id_idx ON public.store_coupons (store_id);
+CREATE INDEX IF NOT EXISTS store_coupons_code_idx ON public.store_coupons (code);
+
+DROP TRIGGER IF EXISTS handle_store_coupons_updated_at ON public.store_coupons;
+CREATE TRIGGER handle_store_coupons_updated_at BEFORE UPDATE ON public.store_coupons
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Habilitar RLS
+ALTER TABLE public.store_promotions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promotion_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.store_coupons ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de RLS para Lojistas (Pelo store_id)
+DROP POLICY IF EXISTS "Lojistas gerenciam suas próprias promoções" ON public.store_promotions;
+CREATE POLICY "Lojistas gerenciam suas próprias promoções" ON public.store_promotions
+    FOR ALL USING (store_id::text = auth.uid()::text OR public.is_admin());
+
+DROP POLICY IF EXISTS "Lojistas gerenciam produtos de suas promoções" ON public.promotion_products;
+CREATE POLICY "Lojistas gerenciam produtos de suas promoções" ON public.promotion_products
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.store_promotions 
+            WHERE id = promotion_id AND (store_id::text = auth.uid()::text OR public.is_admin())
+        )
+    );
+
+DROP POLICY IF EXISTS "Lojistas gerenciam seus próprios cupons" ON public.store_coupons;
+CREATE POLICY "Lojistas gerenciam seus próprios cupons" ON public.store_coupons
+    FOR ALL USING (store_id::text = auth.uid()::text OR public.is_admin());
+
+-- Políticas de Leitura Pública (Para validação no checkout e exibição)
+DROP POLICY IF EXISTS "Leitura pública de promoções ativas" ON public.store_promotions;
+CREATE POLICY "Leitura pública de promoções ativas" ON public.store_promotions
+    FOR SELECT USING (is_active = TRUE);
+
+DROP POLICY IF EXISTS "Leitura pública de produtos em promoção" ON public.promotion_products;
+CREATE POLICY "Leitura pública de produtos em promoção" ON public.promotion_products
+    FOR SELECT USING (TRUE);
+
+DROP POLICY IF EXISTS "Leitura pública de cupons ativos" ON public.store_coupons;
+CREATE POLICY "Leitura pública de cupons ativos" ON public.store_coupons
+    FOR SELECT USING (is_active = TRUE);
+
+-- Permissões
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_promotions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.promotion_products TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_coupons TO authenticated;
+GRANT SELECT ON public.store_promotions TO anon;
+GRANT SELECT ON public.promotion_products TO anon;
+GRANT SELECT ON public.store_coupons TO anon;

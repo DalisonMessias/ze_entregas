@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Wallet, Plus, Loader2, Copy, ExternalLink, X, AlertTriangle, MapPin, Star, MessageCircle, Crown, ChevronRight, Truck, Send, Users, BarChart3, Megaphone, History, Settings, CreditCard, Headphones, ShoppingBag, Search, FileText, Landmark, UploadCloud, Banknote } from 'lucide-react';
+import { Wallet, Plus, Copy, ExternalLink, X, AlertTriangle, MapPin, Star, MessageCircle, Crown, ChevronRight, Truck, Send, Users, BarChart3, Megaphone, History, Settings, CreditCard, Headphones, ShoppingBag, Search, FileText, Landmark, UploadCloud, Banknote } from 'lucide-react';
+import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { DataErrorDisplay } from './DataErrorDisplay';

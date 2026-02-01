@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Wallet, CreditCard, Send, Plus, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, Loader2, CheckCircle, AlertTriangle, X, Lock, Eye, EyeOff, Trash2, Sliders, Smartphone, Copy } from 'lucide-react';
+import { Wallet, CreditCard, Send, Plus, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, CheckCircle, AlertTriangle, X, Lock, Eye, EyeOff, Trash2, Sliders, Smartphone, Copy } from 'lucide-react';
+import { Loading } from './Loading';
 import * as cloud from '../services/cloud';
 import { generatePaymentQRCode, checkPaymentStatus } from '../services/paymentGateway';
 import { ZePayData, StoreVirtualCard } from '../types';
@@ -203,7 +204,7 @@ export const ZePayStore: React.FC = () => {
     };
 
     if (loading && isSuperStore === null) {
-        return <div className="flex justify-center p-10"><Loader2 className="w-10 h-10 animate-spin text-brand-600" /></div>;
+        return <Loading variant="full" message="Carregando Zebank..." />;
     }
 
     // Render com tabs internas (lojistas têm acesso ao módulo; recursos avançados são bloqueados visualmente)
@@ -431,7 +432,7 @@ export const ZePayStore: React.FC = () => {
                             onChange={e => setTransferForm({ ...transferForm, amount: e.target.value })}
                         />
                         <Button fullWidth onClick={handleTransfer} disabled={processing}>
-                            {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirmar Transferência'}
+                            {processing ? <Loading variant="inline" size="sm" /> : 'Confirmar Transferência'}
                         </Button>
                     </div>
                 </div>
@@ -451,7 +452,7 @@ export const ZePayStore: React.FC = () => {
                             onChange={e => setCardForm({ name: e.target.value })}
                         />
                         <Button fullWidth onClick={handleCreateCard} disabled={processing}>
-                            {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Criar Cartão'}
+                            {processing ? <Loading variant="inline" size="sm" /> : 'Criar Cartão'}
                         </Button>
                     </div>
                 </div>
@@ -489,7 +490,7 @@ export const ZePayStore: React.FC = () => {
                         </div>
 
                         <Button fullWidth onClick={handleUpdateLimit} disabled={processing}>
-                            {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Salvar Limite'}
+                            {processing ? <Loading variant="inline" size="sm" /> : 'Salvar Limite'}
                         </Button>
                     </div>
                 </div>

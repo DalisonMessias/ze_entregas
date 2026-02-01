@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, MapPin, ChevronDown, Check, Loader2, X, AlertCircle, Navigation, Target } from 'lucide-react';
+import { Search, MapPin, ChevronDown, Check, X, AlertCircle, Navigation, Target } from 'lucide-react';
+import { Loading } from './Loading';
 import { CustomInput } from './CustomInput';
 import { useGeocoding } from '../hooks/useGeocoding';
 import { useDebounce } from '../hooks/useDebounce';
@@ -442,8 +443,7 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
                     <div className="max-h-[300px] overflow-y-auto custom-scrollbar overscroll-contain">
                         {loading && (
                             <div className="p-8 text-center">
-                                <Loader2 className="w-6 h-6 animate-spin text-brand-500 mx-auto" />
-                                <p className="text-xs text-gray-500 mt-2 font-medium">Carregando ruas de {city}...</p>
+                                <Loading variant="container" size="md" message={`Carregando ruas de ${city}...`} />
                             </div>
                         )}
 
@@ -542,7 +542,7 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
                             >
                                 {capturing ? (
                                     <>
-                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        <Loading variant="inline" size="sm" />
                                         Capturando localização...
                                     </>
                                 ) : (
@@ -574,10 +574,7 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
                             />
                             {geocodingLoading && (
                                 <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center">
-                                    <div className="text-center">
-                                        <Loader2 className="w-8 h-8 animate-spin text-green-600 mx-auto mb-2" />
-                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Buscando endereço...</p>
-                                    </div>
+                                    <Loading variant="container" size="md" message="Buscando endereço..." />
                                 </div>
                             )}
                         </div>

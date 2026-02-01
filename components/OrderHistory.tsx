@@ -2,7 +2,7 @@
 
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, Filter, Calendar, DollarSign, Download, Printer, ChevronDown, ChevronUp, MapPin, Truck, Store, X, CheckCircle, Clock, AlertTriangle, MessageCircle } from 'lucide-react';
+import { Loader2, Filter, Calendar, DollarSign, Download, Printer, ChevronDown, ChevronUp, MapPin, Truck, Store, X, CheckCircle, Clock, AlertTriangle, MessageCircle, Copy } from 'lucide-react';
 
 import { PartnerRequest, HistoryFilters, PartnerRequestStatus } from '../types';
 import * as cloud from '../services/cloud';
@@ -151,7 +151,10 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                         fee_fixed: 0,
                         fee_percent_value: 0,
                         partner: o.driver_id ? { name: 'Entregador' } : undefined, // Placeholder se tiver driver
-                        // ... outros campos obrigatórios do tipo se houver
+                        is_location_delivery: !!(o.is_location_delivery || (o.shipping_address && o.shipping_address.is_location_delivery)),
+                        latitude: o.shipping_address?.latitude,
+                        longitude: o.shipping_address?.longitude,
+                        customer_name: o.customer_name,
                     } as PartnerRequest;
                 });
 
@@ -432,6 +435,42 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                                         <p className="text-sm dark:text-white leading-tight">{selectedOrder.delivery_address}</p>
                                     </div>
                                 </div>
+                                {selectedOrder.is_location_delivery && selectedOrder.latitude && selectedOrder.longitude && (
+                                    <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <MapPin className="w-4 h-4 text-orange-600" />
+                                            <p className="text-xs font-black text-orange-800 dark:text-orange-400">Entrega por Localização</p>
+                                        </div>
+
+                                        <div className="flex flex-col gap-1">
+                                            <p className="text-[10px] font-bold text-gray-500 uppercase">Link Curto (Atalho):</p>
+                                            <div className="flex items-center gap-2">
+                                                <code className="flex-1 bg-white dark:bg-gray-800 p-2 rounded-lg border border-orange-200 dark:border-orange-700 text-[10px] font-mono text-orange-700 dark:text-orange-400 truncate">
+                                                    {`${window.location.origin}/${selectedOrder.id.substring(0, 8)}`}
+                                                </code>
+                                                <button
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(`${window.location.origin}/${selectedOrder.id.substring(0, 8)}`);
+                                                        dialog.alert({ title: 'Copiado!', message: 'Link curto copiado para a área de transferência.' });
+                                                    }}
+                                                    className="p-2 bg-orange-100 dark:bg-orange-950 text-orange-600 rounded-lg hover:bg-orange-200"
+                                                    title="Copiar Link"
+                                                >
+                                                    <Copy className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <Button
+                                            fullWidth
+                                            size="sm"
+                                            onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedOrder.latitude},${selectedOrder.longitude}`, '_blank')}
+                                            className="bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 text-xs font-bold py-2"
+                                        >
+                                            Abrir no Maps
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4 text-sm">

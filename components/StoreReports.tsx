@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Loader2, BarChart3, Clock, Users } from 'lucide-react';
+import { BarChart3, Clock, Users } from 'lucide-react';
+import { Loading } from './Loading';
 import { StoreReportData } from '../types';
 import * as cloud from '../services/cloud';
 import { ExclusiveLock } from './ExclusiveLock';
@@ -82,7 +83,7 @@ export const StoreReports: React.FC = () => {
     }, []);
 
     if (loading) {
-        return <div className="flex justify-center items-center h-64"><Loader2 className="w-10 h-10 animate-spin text-brand-600" /></div>;
+        return <div className="flex justify-center items-center h-64"><Loading variant="container" size="lg" message="Carregando estatísticas..." /></div>;
     }
 
     // Validação de perfil
