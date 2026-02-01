@@ -26,7 +26,7 @@ export const BaseModal: React.FC<BaseModalProps> = ({ isOpen, onClose, children,
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
             <div
                 className={`bg-white dark:bg-gray-800 w-full ${maxWidthClasses[maxWidth]} rounded-2xl shadow-2xl p-6 sm:p-8 animate-in zoom-in-95 relative flex flex-col max-h-[90vh]`}
                 onClick={e => e.stopPropagation()}

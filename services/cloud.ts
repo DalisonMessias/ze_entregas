@@ -133,22 +133,7 @@ export const syncOfflineData = async (): Promise<boolean> => {
     return remainingQueue.length === 0;
 };
 
-export const createTerminalTransaction = async (payload: any) => {
-    const sb = getClient();
-    // If no client (offline) or explicitly offline check?
-    // We try/catch the insert.
-    if (!sb) {
-        addToOfflineQueue('POS_TRANSACTION', payload);
-        return;
-    }
-    try {
-        const { error } = await sb.from('user_terminal_transactions').insert(payload);
-        if (error) throw error;
-    } catch (e) {
-        console.error('Network/DB error, queuing offline:', e);
-        addToOfflineQueue('POS_TRANSACTION', payload);
-    }
-};
+// createTerminalTransaction removed (moved to POS section with wallet logic)
 
 // --- AUTH & USER ---
 
@@ -3913,6 +3898,84 @@ export const createPosPixCharge = async (amount: number): Promise<any> => {
         qr_code: "00020126580014BR.GOV.BCB.PIX0136123e4567-e89b-12d3-a456-426614174000520400005303986540410.005802BR5913Cicrano de Tal6008BRASILIA62070503***6304E2CA",
         qr_code_base64: "base64_qrcode_image_mock"
     };
+};
+
+export const createTerminalTransaction = async (transaction: any): Promise<any> => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not initialized");
+
+    // 1. Identificar Loja Alvo
+    // Tenta pegar do metadata (store_id) ou do dono do terminal (merchant_user_id/user_id)
+    const storeId = transaction.metadata?.store_id || transaction.user_id;
+
+    if (storeId) {
+        try {
+            // 2. Buscar Carteira da Loja
+            const { data: wallet, error: walletError } = await sb
+                .from('store_wallets')
+                .select('balance_decimal')
+                .eq('store_id', storeId)
+                .single();
+
+            if (!walletError && wallet) {
+                const currentBalance = Number(wallet.balance_decimal || 0);
+                const amount = Number(transaction.amount);
+                const newBalance = currentBalance + amount;
+
+                // 3. Atualizar Saldo
+                const { error: updateError } = await sb
+                    .from('store_wallets')
+                    .update({
+                        balance_decimal: newBalance,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('store_id', storeId);
+
+                if (updateError) {
+                    console.error("Falha ao atualizar saldo da loja (createTerminalTransaction):", updateError);
+                } else {
+                    // 4. Registrar Transação Financeira
+                    await sb.from('wallet_transactions').insert({
+                        store_id: storeId,
+                        amount: amount,
+                        type: 'CREDIT',
+                        description: transaction.description || 'Venda Maquininha POS',
+                        status: 'COMPLETED',
+                        created_at: new Date().toISOString()
+                    });
+                }
+            } else {
+                console.warn("Carteira da loja não encontrada para crédito:", storeId);
+            }
+        } catch (err) {
+            console.error("Erro processando crédito na carteira (createTerminalTransaction):", err);
+        }
+    }
+
+    // 5. Registrar Transação do Terminal
+    // 5. Registrar Transação do Terminal
+    const transactionPayload = {
+        terminal_id: transaction.terminal_id,
+        merchant_user_id: transaction.user_id, // Owner
+        amount: transaction.amount,
+        status: transaction.status,
+        created_at: transaction.created_at,
+        payer_name: transaction.payer_name,
+        description: transaction.description,
+        metadata: transaction.metadata,
+        is_offline_sync: false
+    };
+
+    try {
+        const { data, error } = await sb.from('user_terminal_transactions').insert(transactionPayload).select().single();
+        if (error) throw error;
+        return data;
+    } catch (err) {
+        console.error("Erro ao registrar transação online, salvando offline:", err);
+        // Fallback Offline
+        addToOfflineQueue('POS_TRANSACTION', transactionPayload);
+        return { id: 'offline-' + Date.now(), ...transactionPayload };
+    }
 };
 
 export const processPosPayment = async (

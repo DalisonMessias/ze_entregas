@@ -1382,7 +1382,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         if (!activePayment) return null;
 
         return (
-            <div className="absolute inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col animate-in slide-in-from-bottom-10">
+            <div className="absolute inset-0 bg-white dark:bg-gray-900 z-20 flex flex-col animate-in slide-in-from-bottom-10">
                 <SubPageHeader
                     title={
                         activePayment.method === 'PIX' ? 'Pagamento via PIX' :
@@ -1958,29 +1958,40 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                             />
                         </div>
 
-                        <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-6 backdrop-blur-md">
-                            <CheckCircle className="w-12 h-12 text-white" />
+                        <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-6 backdrop-blur-md">
+                            <CheckCircle className="w-10 h-10 text-white" />
                         </div>
-                        <h3 className="text-3xl font-black mb-2">Venda Aprovada!</h3>
-                        <p className="font-medium opacity-90 mb-6">O que deseja fazer agora?</p>
+                        <h3 className="text-2xl font-black mb-2">Venda Aprovada!</h3>
+                        <p className="font-medium opacity-90 mb-8 text-sm">O que deseja fazer agora?</p>
 
-                        <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="flex flex-col w-full max-w-sm gap-3">
                             <Button
-                                onClick={handleDownloadReceipt}
-                                variant="outline"
-                                className="bg-transparent border-white/50 text-white hover:bg-white/10"
+                                onClick={() => setStep('home')} // Reset to home
+                                variant="secondary"
+                                className="bg-white text-green-600 hover:bg-green-50 w-full py-3 shadow-lg"
                             >
-                                <Download className="w-4 h-4 mr-2" />
-                                Baixar Comprovante
+                                <ArrowLeft className="w-4 h-4 mr-2" />
+                                Voltar ao Início
                             </Button>
-                            <Button
-                                onClick={() => setWhatsAppModalOpen(true)}
-                                variant="outline"
-                                className="bg-white/90 border-none text-green-600 hover:bg-white"
-                            >
-                                <Share2 className="w-4 h-4 mr-2" />
-                                Enviar via WhatsApp
-                            </Button>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button
+                                    onClick={handleDownloadReceipt}
+                                    variant="outline"
+                                    className="bg-transparent border-white/50 text-white hover:bg-white/10 py-3 text-sm h-auto"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Comprovante
+                                </Button>
+                                <Button
+                                    onClick={() => setWhatsAppModalOpen(true)}
+                                    variant="outline"
+                                    className="bg-transparent border-white/50 text-white hover:bg-white/10 py-3 text-sm h-auto"
+                                >
+                                    <Share2 className="w-4 h-4 mr-2" />
+                                    WhatsApp
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 );
