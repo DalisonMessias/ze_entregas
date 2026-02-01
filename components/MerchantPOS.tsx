@@ -22,6 +22,136 @@ import ReactJoyride, { Step as JoyrideStep } from '@list-labs/react-joyride';
 // Declare globals from CDN scripts
 declare const QRious: any;
 declare const Html5QrcodeScanner: any;
+declare const Html5Qrcode: any;
+
+export const RenderScanner = ({ onScan }: { onScan: (text: string) => void }) => {
+    const [error, setError] = useState<string | null>(null);
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const scannerRef = useRef<any>(null);
+    const isRunningRef = useRef(false);
+
+    const safeStop = async () => {
+        if (!scannerRef.current) return;
+
+        try {
+            if (isRunningRef.current) {
+                await scannerRef.current.stop();
+                isRunningRef.current = false;
+            }
+        } catch (e: any) {
+            // Ignore "not running" errors which are common in this library's race conditions
+            console.warn("Scanner stop warning:", e);
+        }
+
+        try {
+            await scannerRef.current.clear();
+        } catch (e) {
+            // Ignore clear errors
+        }
+    };
+
+    const startScanner = async () => {
+        setError(null);
+        setPermissionDenied(false);
+
+        // Reset state
+        await safeStop();
+
+        if (typeof Html5Qrcode === 'undefined') {
+            setError("Biblioteca de Scanner não carregada.");
+            return;
+        }
+
+        try {
+            // Create new instance
+            const scanner = new Html5Qrcode("qr-reader");
+            scannerRef.current = scanner;
+
+            await scanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText: string) => {
+                    // Success
+                    if (scannerRef.current && isRunningRef.current) {
+                        safeStop().then(() => onScan(decodedText));
+                    } else {
+                        onScan(decodedText);
+                    }
+                },
+                (errorMessage: string) => {
+                    // Ignore parse errors
+                }
+            );
+
+            // Mark as running ONLY after successful start
+            isRunningRef.current = true;
+
+        } catch (err: any) {
+            console.error("Erro ao iniciar câmera:", err);
+            isRunningRef.current = false;
+            scannerRef.current = null; // Clear ref to avoid cleanup trying to stop it
+
+            if (err?.name === 'NotAllowedError' || err?.message?.includes('permission')) {
+                setPermissionDenied(true);
+            } else if (err?.name === 'NotReadableError' || err?.message?.includes('start video source')) {
+                setError("Câmera em uso ou indisponível. Feche outros apps que usam a câmera.");
+            } else {
+                setError(`Erro ao acessar câmera: ${err?.message || 'Desconhecido'}`);
+            }
+        }
+    };
+
+    useEffect(() => {
+        // Delay start slightly to ensure DOM is ready and previous instances cleared
+        const timer = setTimeout(() => {
+            startScanner();
+        }, 300);
+
+        return () => {
+            clearTimeout(timer);
+            // Cleanup on unmount
+            if (scannerRef.current) {
+                // We can't await in cleanup, but we catch errors
+                if (isRunningRef.current) {
+                    scannerRef.current.stop().catch((e: any) => console.warn("Cleanup stop error:", e));
+                }
+                scannerRef.current.clear().catch(() => { });
+            }
+        };
+    }, []);
+
+    const handleRetry = () => {
+        startScanner();
+    };
+
+    return (
+        <div className="w-full mb-6">
+            <div id="qr-reader" className="w-full bg-black rounded-2xl overflow-hidden min-h-[300px] relative">
+                {(error || permissionDenied) && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-white bg-gray-900/90 z-10">
+                        <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+                        <h4 className="font-bold text-lg mb-2">
+                            {permissionDenied ? 'Acesso à Câmera Negado' : 'Erro na Câmera'}
+                        </h4>
+                        <p className="text-sm text-gray-300 mb-6">
+                            {permissionDenied
+                                ? 'Precisamos de acesso à câmera para ler o QR Code. Por favor, verifique as permissões do seu navegador.'
+                                : error}
+                        </p>
+                        <Button
+                            onClick={handleRetry}
+                            variant="secondary"
+                            className="bg-white text-gray-900 hover:bg-gray-100"
+                        >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Tentar Novamente
+                        </Button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 const parseCurrency = (val: string) => {
@@ -329,36 +459,7 @@ const StatusBar = () => {
     );
 };
 
-export const RenderScanner = ({ onScan }: { onScan: (text: string) => void }) => {
-    useEffect(() => {
-        if (typeof Html5QrcodeScanner === 'undefined') {
-            console.error("Html5QrcodeScanner not found");
-            return;
-        }
 
-        const scanner = new Html5QrcodeScanner(
-            "qr-reader",
-            { fps: 10, qrbox: 250 },
-            /* verbose= */ false
-        );
-
-        const successCallback = (decodedText: string) => {
-            // Avoid multiple calls quickly
-            scanner.clear().then(() => onScan(decodedText)).catch((err: any) => {
-                onScan(decodedText);
-                console.warn("Scanner clear error", err);
-            });
-        };
-
-        scanner.render(successCallback, (err: any) => { /* ignore parse errors */ });
-
-        return () => {
-            scanner.clear().catch((e: any) => console.error("Failed to clear scanner", e));
-        };
-    }, [onScan]);
-
-    return <div id="qr-reader" className="w-full bg-black rounded-2xl overflow-hidden mb-6"></div>;
-};
 
 export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const [step, setStep] = useState<POSStep>('loading');
@@ -722,16 +823,25 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 setPixTxId(result.txId);
                 setIsPolling(true);
             } else if (method === 'ZE_QR' || method === 'USER_CODE') {
-                await cloud.processPosPayment(
-                    payload, // cardId ou userCode
-                    activePayment?.amount || 0,
-                    userRole,
-                    terminal.user_id,
-                    undefined, // splitGroupId
-                    couponCode || undefined,
-                    couponDiscount || 0,
-                    selectedStore?.id
-                );
+
+                // Construct standard transaction payload
+                const transaction = {
+                    user_id: terminal.user_id, // Always credit the terminal owner (or store)
+                    amount: activePayment?.amount || 0,
+                    status: 'COMPLETED', // Direct payment is instant
+                    created_at: new Date().toISOString(),
+                    payer_name: method === 'USER_CODE' ? `Cliente: ${payload}` : 'Cliente QR',
+                    description: method === 'ZE_QR' ? 'Pagamento via QR' : 'Pagamento via Código',
+                    terminal_id: terminal.id,
+                    metadata: {
+                        is_demo: isDemoMode,
+                        store_id: selectedStore?.id, // Ensure wallet routing
+                        payment_method: method,
+                        reference_id: payload
+                    }
+                };
+
+                await cloud.createTerminalTransaction(transaction);
 
                 await dialog.alert({ title: 'Sucesso', message: 'Pagamento confirmado!' });
                 setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p));
@@ -1267,7 +1377,11 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 data = (mockHist as unknown as UserTerminalHistoryItem[]) || [];
                 setHistoryHasMore(false);
             } else {
-                data = await cloud.getMyTerminalHistoryPaged(page, 20);
+                if (terminal?.id) {
+                    data = await cloud.getTerminalHistoryById(terminal.id, page, 20);
+                } else {
+                    data = [];
+                }
                 setHistoryHasMore(data.length === 20);
             }
 

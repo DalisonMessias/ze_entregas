@@ -4106,6 +4106,37 @@ export const getMyTerminalHistoryPaged = async (page: number, limit: number): Pr
     }));
 };
 
+export const getTerminalHistoryById = async (terminalId: string, page: number, limit: number): Promise<UserTerminalHistoryItem[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    // Fetch transactions for this specific terminal
+    const { data, error } = await sb
+        .from('user_terminal_transactions')
+        .select('*')
+        .eq('terminal_id', terminalId)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+    if (error) {
+        console.error('Error fetching terminal history by ID:', error);
+        return [];
+    }
+
+    return (data || []).map((t: any) => ({
+        id: t.id,
+        amount: t.amount,
+        status: t.status,
+        created_at: t.created_at,
+        payer_name: t.payer_name || 'Cliente',
+        description: t.description,
+        metadata: t.metadata
+    }));
+};
+
 // --- SALES SIMULATOR FUNCTIONS ---
 
 export const saveSalesSimulation = async (simulation: any): Promise<void> => {

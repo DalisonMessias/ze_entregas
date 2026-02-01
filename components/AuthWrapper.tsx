@@ -606,12 +606,14 @@ export const AuthWrapper: React.FC = () => {
   }
 
   if (isCheckingSession) {
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 animate-in fade-in">
-      <div className="flex flex-col items-center gap-4">
-        <Logo className="h-16 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />
-        <Loading variant="inline" size="sm" />
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 animate-in fade-in">
+        <div className="flex flex-col items-center gap-4">
+          <Logo className="h-16 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />
+          <Loading variant="inline" size="sm" />
+        </div>
       </div>
-    </div>
+    );
   }
 
   if (collaboratorSession) {
@@ -669,9 +671,19 @@ export const AuthWrapper: React.FC = () => {
 
   if (view === 'landing') {
     const isHome = currentPath === '/' || currentPath === '/home';
-    if (!isHome) {
+    const isInternalRoute = getTabFromUrl(currentPath) !== null;
+
+    if (!isHome && !isInternalRoute) {
       return <NotFound />;
     }
+
+    // Se for uma rota interna válida mas não temos sessão, forçamos para login 
+    // a menos que seja especificamente a home.
+    if (!isHome && isInternalRoute) {
+      setView('login');
+      return null; // O próximo ciclo de renderização mostrará o login
+    }
+
     return (
       <LandingPage
         isAuthenticated={false}
