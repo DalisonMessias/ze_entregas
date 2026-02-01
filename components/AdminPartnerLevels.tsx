@@ -29,9 +29,17 @@ export const AdminPartnerLevels = () => {
     }, [loadLevels]);
 
     const handleLevelChange = (levelId: string, field: keyof PartnerLevelBenefit, value: any) => {
+        // Validar números para evitar NaN
+        let sanitizedValue = value;
+        if (field === 'min_deliveries' || field === 'min_rating' ||
+            field === 'store_discount_percent' || field === 'service_fee_reduction_percent' ||
+            field === 'delivery_price_extra_percent') {
+            sanitizedValue = isNaN(value) || value === '' ? 0 : value;
+        }
+
         setLevels(prevLevels =>
             prevLevels.map(l =>
-                l.id === levelId ? { ...l, [field]: value } : l
+                l.id === levelId ? { ...l, [field]: sanitizedValue } : l
             )
         );
     };
