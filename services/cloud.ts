@@ -3929,20 +3929,78 @@ export const processPosPayment = async (
     const sb = getClient();
     if (!sb) return { transactionId: 'offline-tx' };
 
-    // Create transaction record
+    // 1. Identificar Loja Alvo
+    // Se storeId foi passado, usa ele. Senão, assume que o dono do terminal é a loja.
+    const targetStoreId = storeId || terminalUserId;
+
+    if (targetStoreId) {
+        try {
+            // 2. Buscar Carteira da Loja
+            const { data: wallet, error: walletError } = await sb
+                .from('store_wallets')
+                .select('balance_decimal')
+                .eq('store_id', targetStoreId)
+                .single();
+
+            if (!walletError && wallet) {
+                const currentBalance = Number(wallet.balance_decimal || 0);
+                const newBalance = currentBalance + amount;
+
+                // 3. Atualizar Saldo
+                const { error: updateError } = await sb
+                    .from('store_wallets')
+                    .update({
+                        balance_decimal: newBalance,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('store_id', targetStoreId);
+
+                if (updateError) {
+                    console.error("Falha ao atualizar saldo da loja:", updateError);
+                } else {
+                    // 4. Registrar Transação Financeira
+                    await sb.from('wallet_transactions').insert({
+                        store_id: targetStoreId,
+                        amount: amount,
+                        type: 'CREDIT',
+                        description: 'Venda Maquininha POS',
+                        status: 'COMPLETED',
+                        created_at: new Date().toISOString()
+                    });
+                }
+            } else {
+                console.warn("Carteira da loja não encontrada para crédito:", targetStoreId);
+            }
+
+        } catch (err) {
+            console.error("Erro processando crédito na carteira:", err);
+        }
+    }
+
+    // 5. Registrar Transação do Terminal (Mecanismo original)
+    // Tenta resolver o ID do terminal
+    let terminalDbId = null;
+    try {
+        const t1 = await getStoreTerminal(terminalUserId);
+        if (t1) terminalDbId = t1.id;
+        else {
+            const t2 = await getMyTerminal();
+            if (t2) terminalDbId = t2.id;
+        }
+    } catch (e) { /* ignore */ }
+
     const { data, error } = await sb.from('user_terminal_transactions').insert({
-        terminal_id: (await getStoreTerminal(terminalUserId))?.id || (await getMyTerminal())?.id, // Try to resolve terminal ID
+        terminal_id: terminalDbId,
         merchant_user_id: terminalUserId,
         amount: amount,
         status: 'COMPLETED',
         created_at: new Date().toISOString(),
-        payer_id: null, // Should be resolved from cardId in real scenario
+        payer_id: null, // Idealmente seria resolvido do cardId
         is_offline_sync: false
     }).select('id').single();
 
     if (error) {
-        console.error("Payment Process Error", error);
-        // Return fake ID to not break flow if DB fails (or handle error better)
+        console.error("Erro ao registrar transação do terminal", error);
         return { transactionId: `err-${Date.now()}` };
     }
 

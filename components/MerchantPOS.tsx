@@ -329,6 +329,37 @@ const StatusBar = () => {
     );
 };
 
+export const RenderScanner = ({ onScan }: { onScan: (text: string) => void }) => {
+    useEffect(() => {
+        if (typeof Html5QrcodeScanner === 'undefined') {
+            console.error("Html5QrcodeScanner not found");
+            return;
+        }
+
+        const scanner = new Html5QrcodeScanner(
+            "qr-reader",
+            { fps: 10, qrbox: 250 },
+            /* verbose= */ false
+        );
+
+        const successCallback = (decodedText: string) => {
+            // Avoid multiple calls quickly
+            scanner.clear().then(() => onScan(decodedText)).catch((err: any) => {
+                onScan(decodedText);
+                console.warn("Scanner clear error", err);
+            });
+        };
+
+        scanner.render(successCallback, (err: any) => { /* ignore parse errors */ });
+
+        return () => {
+            scanner.clear().catch((e: any) => console.error("Failed to clear scanner", e));
+        };
+    }, [onScan]);
+
+    return <div id="qr-reader" className="w-full bg-black rounded-2xl overflow-hidden mb-6"></div>;
+};
+
 export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const [step, setStep] = useState<POSStep>('loading');
     const [terminal, setTerminal] = useState<UserTerminal | null>(null);
@@ -666,23 +697,6 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         };
     }, []);
 
-    const requestCameraPermission = async (): Promise<boolean> => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            stream.getTracks().forEach(track => track.stop());
-            return true;
-        } catch (error: any) {
-            console.error('Erro ao solicitar câmera:', error);
-            let message = 'Permissão de câmera negada.';
-            if (error.name === 'NotAllowedError') message = 'Permissão negada. Habilite a câmera no navegador.';
-            else if (error.name === 'NotFoundError') message = 'Nenhuma câmera encontrada.';
-            else if (error.name === 'NotReadableError') message = 'Câmera em uso por outro app.';
-
-            await dialog.alert({ title: 'Erro de Câmera', message });
-            return false;
-        }
-    };
-
     const confirmPayment = async (paymentId: string, method: 'PIX' | 'ZE_QR' | 'USER_CODE', payload: string) => {
         if (!terminal) {
             await dialog.alert({ title: 'Erro', message: 'Terminal não inicializado.' });
@@ -691,6 +705,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
         // CONFIRMAÇÃO MANUAL DE PIX ESTÁTICO
         if (payload === 'MANUAL_PIX_CONFIRM') {
+            setIsPolling(false);
             setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p));
             closePaymentOverlay();
             await dialog.alert({ title: 'Confirmado', message: 'Pagamento Pix registrado com sucesso.' });
@@ -707,9 +722,6 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 setPixTxId(result.txId);
                 setIsPolling(true);
             } else if (method === 'ZE_QR' || method === 'USER_CODE') {
-                // Restaurando lógica original simplificada ou adaptando para processPosPayment
-                // Como processPosPayment pede cardId, e payload aqui seria o decodedText (cardId ou userCode)
-
                 await cloud.processPosPayment(
                     payload, // cardId ou userCode
                     activePayment?.amount || 0,
@@ -722,7 +734,8 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 );
 
                 await dialog.alert({ title: 'Sucesso', message: 'Pagamento confirmado!' });
-                setStep('success');
+                setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p));
+                closePaymentOverlay();
             }
         } catch (e: any) {
             await dialog.alert({ title: 'Erro no Pagamento', message: e.message || 'Falha ao confirmar pagamento.' });
@@ -730,59 +743,30 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         }
     };
 
-    const verifyStatus = async (transactionId: string) => {
-        return await checkPaymentStatus(transactionId);
-    };
-
-    useEffect(() => {
-        let scanner: any = null;
-
-        const initScanner = async () => {
-            if (activePayment?.method === 'SCAN' && typeof Html5QrcodeScanner !== 'undefined') {
-                const hasPermission = await requestCameraPermission();
-                if (!hasPermission) {
-                    setActivePayment(null); // Fecha o modal/estado se não tiver permissão
-                    return;
-                }
-
-                scanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 200 });
-                const onSuccess = (decodedText: string) => {
-                    confirmPayment(activePayment.id, 'ZE_QR', decodedText);
-                    scanner.clear();
-                };
-                const onFailure = () => { };
-                scanner.render(onSuccess, onFailure);
-            }
-        };
-
-        if (activePayment?.method === 'SCAN') {
-            initScanner();
+    const handleScanSuccess = (decodedText: string) => {
+        if (activePayment) {
+            confirmPayment(activePayment.id, 'ZE_QR', decodedText);
         }
-
-        return () => {
-            if (scanner) {
-                try { scanner.clear(); } catch { }
-            }
-        };
-    }, [activePayment]);
+    };
 
     // Polling do PIX
     useEffect(() => {
         let interval: NodeJS.Timeout | undefined;
         if (isPolling && pixTxId && activePayment?.method === 'PIX') {
-            interval = setInterval(async () => {
+            const check = async () => {
                 try {
-                    const status = await checkPaymentStatus(pixTxId); // Usando a importada direto
+                    const status = await checkPaymentStatus(pixTxId);
                     if (status.status === 'paid') {
                         setIsPolling(false);
                         setPixCodeData(null);
                         setPixTxId(null);
-                        await dialog.alert({ title: 'Pagamento Recebido', message: 'Pagamento recebido com sucesso!' });
-                        // Como confirmPayment agora gera novo QR code se method=PIX, e aqui queremos finalizar...
-                        // Mas espere, confirmPayment com 'PIX' GERA o QR code.
-                        // Aqui o pagamento JÁ FOI confirmado externamente.
-                        // Precisamos apenas ir para sucesso.
-                        setStep('success');
+
+                        if (activePayment) {
+                            const paymentId = activePayment.id;
+                            await dialog.alert({ title: 'Pagamento Recebido', message: 'Pagamento recebido com sucesso!' });
+                            setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p));
+                            closePaymentOverlay();
+                        }
                     } else if (status.status === 'failed' || status.status === 'expired') {
                         setIsPolling(false);
                         await dialog.alert({ title: 'Pagamento Expirado', message: 'O tempo limite para o pagamento expirou.' });
@@ -790,7 +774,8 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 } catch (e) {
                     console.error('Polling error', e);
                 }
-            }, 5000);
+            };
+            interval = setInterval(check, 5000);
         }
         return () => {
             if (interval) clearInterval(interval);
@@ -1468,13 +1453,8 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                     {activePayment.method === 'SCAN' && (
                         <>
                             <p className="text-sm text-gray-500 mb-6">Aponte a câmera para o Cartão Virtual ou QR do cliente.</p>
-                            <div id="qr-reader" className="w-64 h-64 bg-black rounded-2xl overflow-hidden mb-6"></div>
-                            <Button
-                                onClick={() => { }}
-                                className="w-full py-4" disabled
-                            >
-                                Aguardando leitura...
-                            </Button>
+                            <RenderScanner onScan={handleScanSuccess} />
+                            <p className="text-xs text-gray-400">Posicione o código no centro</p>
                         </>
                     )}
 
@@ -1764,7 +1744,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
                 return (
                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-                        <SubPageHeader title="Nova Venda" onBack={onClose} />
+                        <SubPageHeader title="Desbloqueio" onBack={onClose} />
                         <div className="flex-1 flex flex-col justify-center items-center p-6">
                             <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full mb-4 shadow-inner">
                                 {isLockedOut ? <Lock className="w-8 h-8 text-red-600" /> : <Lock className="w-8 h-8 text-brand-600" />}
