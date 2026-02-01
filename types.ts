@@ -713,12 +713,12 @@ export interface PartnerDocument {
 
 export interface PartnerLevelBenefit {
     id: string;
-    partner_level: string;
     display_name: string;
     min_deliveries: number;
     min_rating: number;
     store_discount_percent: number;
     service_fee_reduction_percent: number;
+    delivery_price_extra_percent: number;
 }
 
 export interface PartnerRequestLog {

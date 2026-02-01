@@ -1919,6 +1919,132 @@ END $$;
 
 
 -- ==================================================================
+-- TRIGGER PARA PAGAMENTO AUTOMÁTICO DE ENTREGAS (01/02/2026)
+-- ==================================================================
+
+CREATE OR REPLACE FUNCTION public.process_delivery_payment()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_partner_level TEXT;
+    v_bonus_percent NUMERIC(5, 2) := 0;
+    v_bonus_amount NUMERIC(10, 2) := 0;
+    v_total_amount NUMERIC(10, 2);
+    v_description TEXT;
+BEGIN
+    -- Verificar se status mudou para COMPLETED e existe delivered_code (confirmação simples) ou só status
+    -- Aqui usamos status = 'COMPLETED'
+    IF NEW.status = 'COMPLETED' AND OLD.status != 'COMPLETED' AND NEW.partner_id IS NOT NULL THEN
+        
+        -- 1. Obter Nível do Parceiro
+        SELECT partner_level INTO v_partner_level
+        FROM public.user_profiles
+        WHERE id = NEW.partner_id;
+
+        -- 2. Obter Porcentagem de Bônus se existir nível
+        IF v_partner_level IS NOT NULL THEN
+            SELECT delivery_price_extra_percent INTO v_bonus_percent
+            FROM public.partner_levels
+            WHERE id = v_partner_level;
+            
+            IF v_bonus_percent IS NULL THEN v_bonus_percent := 0; END IF;
+        END IF;
+
+        -- 3. Calcular Bônus
+        IF v_bonus_percent > 0 THEN
+            v_bonus_amount := NEW.net_value_partner * (v_bonus_percent / 100.0);
+        END IF;
+
+        v_total_amount := NEW.net_value_partner + v_bonus_amount;
+        
+        IF v_bonus_amount > 0 THEN
+            v_description := 'Entrega Realizada #' || SUBSTRING(NEW.id::text, 1, 8) || ' (Bônus Nível: ' || v_bonus_percent || '%)';
+        ELSE
+            v_description := 'Entrega Realizada #' || SUBSTRING(NEW.id::text, 1, 8);
+        END IF;
+
+        -- 4. Creditar Carteira do Entregador
+        PERFORM public.credit_wallet(NEW.partner_id, v_total_amount, v_description);
+
+        -- 5. Atualizar Score (Opcional, mas recomendado já que entrega foi sucesso)
+        PERFORM public.update_driver_score(NEW.partner_id, 'DELIVERY_SUCCESS', 'Entrega finalizada', NEW.id);
+
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS tr_process_delivery_payment ON public.partner_requests;
+CREATE TRIGGER tr_process_delivery_payment
+AFTER UPDATE ON public.partner_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.process_delivery_payment();
+
+
+-- ==================================================================
+-- TRIGGER PARA PAGAMENTO AUTOMÁTICO DE ENTREGAS (01/02/2026)
+-- ==================================================================
+
+CREATE OR REPLACE FUNCTION public.process_delivery_payment()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_partner_level TEXT;
+    v_bonus_percent NUMERIC(5, 2) := 0;
+    v_bonus_amount NUMERIC(10, 2) := 0;
+    v_total_amount NUMERIC(10, 2);
+    v_description TEXT;
+BEGIN
+    -- Verificar se status mudou para COMPLETED e existe delivered_code (confirmação simples) ou só status
+    -- Aqui usamos status = 'COMPLETED'
+    IF NEW.status = 'COMPLETED' AND OLD.status != 'COMPLETED' AND NEW.partner_id IS NOT NULL THEN
+        
+        -- 1. Obter Nível do Parceiro
+        SELECT partner_level INTO v_partner_level
+        FROM public.user_profiles
+        WHERE id = NEW.partner_id;
+
+        -- 2. Obter Porcentagem de Bônus se existir nível
+        IF v_partner_level IS NOT NULL THEN
+            SELECT delivery_price_extra_percent INTO v_bonus_percent
+            FROM public.partner_levels
+            WHERE id = v_partner_level;
+            
+            IF v_bonus_percent IS NULL THEN v_bonus_percent := 0; END IF;
+        END IF;
+
+        -- 3. Calcular Bônus
+        IF v_bonus_percent > 0 THEN
+            v_bonus_amount := NEW.net_value_partner * (v_bonus_percent / 100.0);
+        END IF;
+
+        v_total_amount := NEW.net_value_partner + v_bonus_amount;
+        
+        IF v_bonus_amount > 0 THEN
+            v_description := 'Entrega Realizada #' || SUBSTRING(NEW.id::text, 1, 8) || ' (Bônus Nível: ' || v_bonus_percent || '%)';
+        ELSE
+            v_description := 'Entrega Realizada #' || SUBSTRING(NEW.id::text, 1, 8);
+        END IF;
+
+        -- 4. Creditar Carteira do Entregador
+        PERFORM public.credit_wallet(NEW.partner_id, v_total_amount, v_description);
+
+        -- 5. Atualizar Score (Opcional, mas recomendado já que entrega foi sucesso)
+        PERFORM public.update_driver_score(NEW.partner_id, 'DELIVERY_SUCCESS', 'Entrega finalizada', NEW.id);
+
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS tr_process_delivery_payment ON public.partner_requests;
+CREATE TRIGGER tr_process_delivery_payment
+AFTER UPDATE ON public.partner_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.process_delivery_payment();
+
+
+-- ==================================================================
 -- 2.3 SCORE E BLOQUEIO (20/01/2026)
 -- ==================================================================
 
@@ -2978,6 +3104,7 @@ CREATE TABLE IF NOT EXISTS public.partner_levels (
     min_rating NUMERIC(2, 1) NOT NULL DEFAULT 0.0,
     store_discount_percent NUMERIC(5, 2) NOT NULL DEFAULT 0.0,
     service_fee_reduction_percent NUMERIC(5, 2) NOT NULL DEFAULT 0.0,
+    delivery_price_extra_percent NUMERIC(5, 2) DEFAULT 0.0, -- Adicionado em 01/02/2026
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -2996,11 +3123,11 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can manage partner levels' AND tablename = 'partner_levels') THEN
         CREATE POLICY "Admins can manage partner levels" ON public.partner_levels FOR ALL USING (public.is_admin());
 -- Inserir nﾃｭveis padrﾃ｣o se nﾃ｣o existirem
-INSERT INTO public.partner_levels (id, display_name, min_deliveries, min_rating, store_discount_percent, service_fee_reduction_percent) VALUES
-('BRONZE', 'Bronze', 0, 0.0, 0.0, 0.0),
-('SILVER', 'Prata', 50, 4.0, 2.0, 1.0),
-('GOLD', 'Ouro', 200, 4.5, 5.0, 2.5),
-('PLATINUM', 'Platina', 500, 4.8, 10.0, 5.0)
+INSERT INTO public.partner_levels (id, display_name, min_deliveries, min_rating, store_discount_percent, service_fee_reduction_percent, delivery_price_extra_percent) VALUES
+('BRONZE', 'Bronze', 0, 0.0, 0.0, 0.0, 0.0),
+('SILVER', 'Prata', 50, 4.0, 2.0, 1.0, 2.0),
+('GOLD', 'Ouro', 200, 4.5, 5.0, 2.5, 5.0),
+('PLATINUM', 'Platina', 500, 4.8, 10.0, 5.0, 10.0)
 ON CONFLICT (id) DO NOTHING;
 
 

@@ -39,13 +39,13 @@ export const AdminPartnerLevels = () => {
     const handleAddLevel = () => {
         setLevels(prev => [...prev, {
             id: `new-${crypto.randomUUID()}`,
-            partner_level: '',
             display_name: '',
             min_deliveries: 0,
             min_rating: 0,
             store_discount_percent: 0,
             service_fee_reduction_percent: 0,
-        } as unknown as PartnerLevelBenefit]);
+            delivery_price_extra_percent: 0,
+        } as PartnerLevelBenefit]);
     };
 
     const handleDeleteLevel = async (levelId: string) => {
@@ -126,8 +126,8 @@ export const AdminPartnerLevels = () => {
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Identificador (Ex: BRONZE)</label>
                                     <input
                                         type="text"
-                                        value={level.partner_level}
-                                        onChange={e => handleLevelChange(level.id, 'partner_level', e.target.value.toUpperCase())}
+                                        value={level.id}
+                                        onChange={e => handleLevelChange(level.id, 'id', e.target.value.toUpperCase())}
                                         className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 font-mono"
                                     />
                                 </div>
@@ -157,6 +157,12 @@ export const AdminPartnerLevels = () => {
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Redução Taxa (%)</label>
                                     <input type="number" value={level.service_fee_reduction_percent} onChange={e => handleLevelChange(level.id, 'service_fee_reduction_percent', parseInt(e.target.value))} className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bônus Entrega (%)</label>
+                                    <input type="number" step="0.1" value={level.delivery_price_extra_percent ?? 0} onChange={e => handleLevelChange(level.id, 'delivery_price_extra_percent', parseFloat(e.target.value))} className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600" />
                                 </div>
                             </div>
                         </div>
