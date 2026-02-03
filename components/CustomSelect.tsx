@@ -47,17 +47,17 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border-2 border-gray-100 dark:border-gray-700 rounded-2xl text-base text-left focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all group"
+        className="w-full flex items-center justify-between px-4 py-3.5 bg-white/90 dark:bg-gray-900/40 border border-gray-200/90 dark:border-gray-700/80 rounded-xl text-base text-left shadow-sm hover:shadow-md hover:border-brand-600 dark:hover:border-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/25 focus-visible:border-brand-400 transition-all group"
       >
         <span className={`${selectedOption ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-400'}`}>
           {selectedOption ? selectedOption.label : placeholder}
         </span>
-        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-5 h-5 text-gray-400 group-hover:text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-2 right-0 w-max min-w-[14rem] origin-top-right bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-xl max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 custom-scrollbar">
-          <div className="p-1 space-y-0.5">
+        <div className="absolute z-50 mt-2 right-0 w-full min-w-full origin-top-right bg-white/95 dark:bg-gray-900/95 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-2xl shadow-black/5 max-h-64 overflow-y-auto animate-in fade-in zoom-in-95 custom-scrollbar backdrop-blur">
+          <div className="p-2 space-y-2">
             {options.map((option) => (
               <button
                 key={option.value}
@@ -66,9 +66,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   onChange(option.value);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-colors text-left ${String(value) === String(option.value)
-                  ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold'
-                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                className={`w-full flex items-center justify-between px-4 py-3 text-[0.95rem] rounded-xl transition-colors text-left ${String(value) === String(option.value)
+                  ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 font-bold'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-brand-600 hover:text-white dark:hover:bg-brand-600'
                   }`}
               >
                 <span>{option.label}</span>

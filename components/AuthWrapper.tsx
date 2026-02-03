@@ -26,6 +26,7 @@ import { DigitalMenu } from './DigitalMenu/DigitalMenu';
 import { StoreChatPage } from './DigitalMenu/StoreChatPage';
 import { PublicSupportPage } from './PublicSupportPage';
 import { CitiesList } from './CitiesList';
+import { CityStoresList } from './CityStoresList';
 
 const updateAuthUrl = (view: AuthView) => {
   // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
@@ -607,6 +608,15 @@ export const AuthWrapper: React.FC = () => {
     return <PublicSupportPage />;
   }
 
+  if (currentPath === '/cidades') {
+    return <CitiesList />;
+  }
+
+  if (currentPath.startsWith('/cidades/')) {
+    const slug = currentPath.split('/cidades/')[1];
+    if (slug) return <CityStoresList citySlug={slug} />;
+  }
+
   if (isCheckingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 animate-in fade-in">
@@ -700,10 +710,6 @@ export const AuthWrapper: React.FC = () => {
     if (!isHome && isInternalRoute) {
       setView('login');
       return null; // O próximo ciclo de renderização mostrará o login
-    }
-
-    if (currentPath === '/cidades') {
-      return <CitiesList />;
     }
 
     return (

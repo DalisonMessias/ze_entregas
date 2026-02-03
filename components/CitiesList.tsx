@@ -5,12 +5,13 @@ import { Logo } from './Logo';
 import { City } from '../types';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
+import { RequestCityModal } from './RequestCityModal';
 
 export const CitiesList: React.FC = () => {
     const [cities, setCities] = useState<City[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [isRequesting, setIsRequesting] = useState(false);
+    const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const { alert, confirm } = useDialog();
 
     useEffect(() => {
@@ -34,24 +35,8 @@ export const CitiesList: React.FC = () => {
         window.dispatchEvent(new Event('popstate'));
     };
 
-    const handleRequestCity = async () => {
-        const city = prompt('Qual o nome da cidade?');
-        const state = prompt('Qual o estado? (Sigla, ex: MG)');
-
-        if (!city || !state) return;
-
-        setIsRequesting(true);
-        try {
-            await cloud.requestNewCity(city, state);
-            await alert({
-                title: 'Solicitação Enviada!',
-                message: `Recebemos seu pedido para ${city}-${state}. Vamos analisar e expandir para lá em breve!`
-            });
-        } catch (error) {
-            await alert({ title: 'Erro', message: 'Não foi possível enviar sua solicitação.' });
-        } finally {
-            setIsRequesting(false);
-        }
+    const handleRequestCity = () => {
+        setIsRequestModalOpen(true);
     };
 
     const filteredCities = cities.filter(city =>
@@ -87,14 +72,14 @@ export const CitiesList: React.FC = () => {
                     </div>
 
                     <div className="hidden md:flex items-center gap-2">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <div className="relative group">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-brand-500 transition-colors" />
                             <input
                                 type="text"
-                                placeholder="Buscar cidade..."
+                                placeholder="Qual cidade você procura?"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none w-64"
+                                className="pl-12 pr-6 py-3.5 bg-gray-100 dark:bg-gray-800/50 border-2 border-transparent focus:border-brand-500/20 rounded-2xl text-base focus:ring-4 focus:ring-brand-500/10 outline-none w-[400px] transition-all"
                             />
                         </div>
                     </div>
@@ -118,7 +103,7 @@ export const CitiesList: React.FC = () => {
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="Buscar cidade..."
+                            placeholder="Qual cidade você procura?"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-base focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
@@ -150,12 +135,9 @@ export const CitiesList: React.FC = () => {
                                         <button
                                             key={city.id}
                                             onClick={() => {
-                                                // Ao clicar, volta para a home já com a cidade selecionada? 
-                                                // Ou apenas navega. O requisito é apenas listar.
-                                                // Vamos navegar salvando a cidade se houver um mecanismo de persistência rápida ou query param.
-                                                const cityValue = `${city.name} - ${city.state}`;
-                                                localStorage.setItem('ze_selected_city', cityValue);
-                                                handleBack();
+                                                const slug = (city as any).city_slug || (city as any).slug || city.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+                                                window.history.pushState({}, '', `/cidades/${slug}`);
+                                                window.dispatchEvent(new Event('popstate'));
                                             }}
                                             className="group bg-white dark:bg-gray-900 p-6 rounded-[32px] border border-gray-50 dark:border-gray-800 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-500 text-left relative overflow-hidden"
                                         >
@@ -197,7 +179,6 @@ export const CitiesList: React.FC = () => {
 
                         <Button
                             onClick={handleRequestCity}
-                            disabled={isRequesting}
                             className="bg-brand-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-brand-600/20"
                         >
                             <PlusCircle className="w-5 h-5 mr-3 inline-block" />
@@ -218,7 +199,6 @@ export const CitiesList: React.FC = () => {
                             </div>
                             <Button
                                 onClick={handleRequestCity}
-                                disabled={isRequesting}
                                 className="bg-gray-900 dark:bg-brand-600 text-white px-10 py-5 rounded-2xl font-black shadow-xl"
                             >
                                 <PlusCircle className="w-5 h-5 mr-3 inline-block" />
@@ -228,6 +208,11 @@ export const CitiesList: React.FC = () => {
                     </div>
                 )}
             </main>
+
+            <RequestCityModal
+                isOpen={isRequestModalOpen}
+                onClose={() => setIsRequestModalOpen(false)}
+            />
         </div>
     );
 };
