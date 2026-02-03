@@ -562,19 +562,29 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
             const key = e.key;
+            const code = e.code;
 
+            // Suporte robusto para linha numérica superior (Digit0-9) e Numpad
             if (/^\d$/.test(key)) {
                 handleKeypadPress(key);
-            } else if (key === 'Backspace') {
+            } else if (code.startsWith('Digit')) {
+                // Extrai o número de 'Digit1', 'Digit2', etc.
+                const num = code.replace('Digit', '');
+                if (/^\d$/.test(num)) handleKeypadPress(num);
+            } else if (code.startsWith('Numpad')) {
+                // Extrai o número de 'Numpad1'
+                const num = code.replace('Numpad', '');
+                if (/^\d$/.test(num)) handleKeypadPress(num);
+            } else if (key === 'Backspace' || code === 'Backspace') {
                 handleKeypadBackspace();
-            } else if (key === 'Delete') {
+            } else if (key === 'Delete' || code === 'Delete') {
                 handleKeypadClear();
-            } else if (key === 'Enter') {
+            } else if (key === 'Enter' || code === 'Enter' || code === 'NumpadEnter') {
                 if (step === 'amount') handleContinueFromAmount();
                 else if (step === 'pin_lock') handlePinVerify();
                 else if (step === 'create_pin') handleCreatePin();
                 else if (step === 'confirm_pin') handleCreatePinConfirm();
-            } else if (key === 'Escape') {
+            } else if (key === 'Escape' || code === 'Escape') {
                 handleGoBack(onClose);
             }
         };

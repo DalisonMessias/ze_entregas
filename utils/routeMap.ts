@@ -175,6 +175,13 @@ export const getTabFromUrl = (pathname: string): ActiveTab | null => {
         return 'store_public_chat';
     }
 
+    // Check for Digital Menu Products (/city/store/produtos)
+    // Regex: /slug/slug/produtos
+    const productsMatch = pathname.match(/^\/[^\/]+\/[^\/]+\/produtos$/);
+    if (productsMatch) {
+        return 'digital_menu';
+    }
+
     const cleanPath = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 
     // Check for Dynamic POS slugs (/loja/{slug} or /entregador/{slug})

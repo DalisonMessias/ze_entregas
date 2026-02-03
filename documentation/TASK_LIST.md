@@ -1,16 +1,11 @@
-# Lista de Tarefas - Melhorias no POS Desktop
 
-- [x] Analisar `MerchantPOSDesktop.tsx` para corrigir entrada de teclado físico.
-- [x] Implementar suporte ao teclado físico para digitar valores.
-- [x] Adicionar um teclado numérico virtual na lateral direita da interface (Desktop).
-- [x] Verificar layout e estilização para acomodar o novo teclado.
-- [x] Ocultar teclado flutuante quando o lateral estiver visível.
-- [x] Corrigir erro de redeclaração da variável `showKeypad`.
-- [x] Remover opção "Ler Cartão/QR" do menu de pagamentos (incompatível com Desktop sem câmera).
+# Lista de Tarefas - Correção de Navegação Home -> Loja
 
-## Melhorias Implementadas
+## Objetivo
+Corrigir o comportamento onde a URL é revertida para `/home` ao acessar uma loja a partir da página inicial.
 
-1.  **Teclado Lateral**: Adicionado `Keypad` na lateral direita durante o step `amount` quando em Desktop.
-2.  **Lógica `showKeypad`**: Corrigida para evitar sobreposição e erros de redeclaração.
-3.  **Botão Cobrar**: Adicionado botão explícito.
-4.  **Remoção de Funcionalidade**: Removido botão de "Ler Cartão/QR" em `MerchantPOSDesktop.tsx` e ajustado grid para 2 colunas.
+## Tarefas
+- [x] Atualizar `utils/routeMap.ts` para reconhecer a rota `/:city/:store/produtos` como aba `digital_menu`.
+- [x] Refatorar navegação em `components/LandingPage.tsx` para usar `window.history.pushState` em vez de reload.
+- [x] Verificar se a URL persiste corretamente ao navegar para uma loja (Validado via Código).
+- [x] Garantir que o botão "Voltar" funcione corretamente (Validado via Código).

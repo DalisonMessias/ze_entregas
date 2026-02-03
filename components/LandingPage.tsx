@@ -80,7 +80,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
     };
 
     const handleStoreClick = (store: PublicStoreProfile) => {
-        window.location.href = `/${store.city_slug}/${store.store_slug}/produtos`;
+        // Use pushState to avoid full reload and maintain SPA state
+        const url = `/${store.city_slug}/${store.store_slug}/produtos`;
+        window.history.pushState({ tab: 'digital_menu' }, '', url);
+        // Dispatch custom event to notify App.tsx to change tab
+        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'digital_menu' } }));
     };
 
     return (
