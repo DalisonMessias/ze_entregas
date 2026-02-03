@@ -6771,4 +6771,57 @@ export const getPlatformStats = async () => {
     }
 };
 
+/**
+ * Busca a chave Pix da Plataforma.
+ */
+export const getPlatformPixKey = async (): Promise<string> => {
+    const sb = getClient();
+    if (!sb) return '';
+
+    try {
+        const { data, error } = await sb.rpc('get_platform_pix_key');
+        if (error) {
+            console.error('Error fetching platform pix key:', error);
+            return '';
+        }
+        return data || '';
+    } catch (e) {
+        console.error('Exception fetching platform pix key:', e);
+        return '';
+    }
+};
+
+/**
+ * Processa a venda de um Entregador Parceiro (Venda Avulsa).
+ * Credita na carteira e NÃO gera histórico de loja.
+ */
+export const processPartnerSaleWallet = async (
+    userId: string,
+    amount: number,
+    paymentMethod: string,
+    metadata: any = {}
+): Promise<{ success: boolean; transactionId?: string; error?: string }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    try {
+        const { data, error } = await sb.rpc('process_partner_sale_wallet', {
+            p_user_id: userId,
+            p_amount: amount,
+            p_payment_method: paymentMethod,
+            p_metadata: metadata
+        });
+
+        if (error) throw error;
+
+        return {
+            success: data.success,
+            transactionId: data.transaction_id
+        };
+    } catch (e: any) {
+        console.error('Error processing partner sale:', e);
+        return { success: false, error: e.message || 'Erro ao processar venda na carteira.' };
+    }
+};
+
 

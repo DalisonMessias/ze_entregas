@@ -383,6 +383,19 @@ export const useMerchantPOS = () => {
                             };
                         }
                     }
+                } else if (userRole === 'delivery_partner') {
+                    // Venda de Entregador Parceiro Avulso -> Pix da Plataforma
+                    const platformKey = await cloud.getPlatformPixKey();
+                    if (platformKey) {
+                        pixData = {
+                            key: platformKey,
+                            name: 'ZÉ ENTREGAS',
+                            city: 'BRASIL'
+                        };
+                    } else {
+                        // Fallback silencioso ou erro
+                        console.error("Chave Pix Plataforma não encontrada");
+                    }
                 } else if (partnerProfile) {
                     pixData = {
                         key: partnerProfile.pix_key || partnerProfile.config?.pixdata?.key || '',
@@ -436,22 +449,38 @@ export const useMerchantPOS = () => {
                 setPixTxId(result.txId);
                 setIsPolling(true);
             } else {
-                const transaction = {
-                    user_id: terminal.user_id,
-                    amount: activePayment?.amount || 0,
-                    status: 'COMPLETED',
-                    created_at: new Date().toISOString(),
-                    payer_name: method === 'USER_CODE' ? `Cliente: ${payload}` : 'Cliente QR',
-                    description: method === 'ZE_QR' ? 'Pagamento via QR' : 'Pagamento via Código',
-                    terminal_id: terminal.id,
-                    metadata: {
-                        is_demo: isDemoMode,
-                        store_id: selectedStore?.id,
-                        payment_method: method,
-                        reference_id: payload
-                    }
-                };
-                await cloud.createTerminalTransaction(transaction);
+                // Modificação: Se for delivery_partner sem loja selecionada, processa na carteira
+                if (userRole === 'delivery_partner' && !selectedStore) {
+                    await cloud.processPartnerSaleWallet(
+                        terminal.user_id,
+                        activePayment?.amount || 0,
+                        method,
+                        {
+                            is_demo: isDemoMode,
+                            payment_method: method,
+                            reference_id: payload,
+                            terminal_id: terminal.id
+                        }
+                    );
+                } else {
+                    // Fluxo normal (Loja)
+                    const transaction = {
+                        user_id: terminal.user_id,
+                        amount: activePayment?.amount || 0,
+                        status: 'COMPLETED',
+                        created_at: new Date().toISOString(),
+                        payer_name: method === 'USER_CODE' ? `Cliente: ${payload}` : 'Cliente QR',
+                        description: method === 'ZE_QR' ? 'Pagamento via QR' : 'Pagamento via Código',
+                        terminal_id: terminal.id,
+                        metadata: {
+                            is_demo: isDemoMode,
+                            store_id: selectedStore?.id,
+                            payment_method: method,
+                            reference_id: payload
+                        }
+                    };
+                    await cloud.createTerminalTransaction(transaction);
+                }
                 await dialog.alert({ title: 'Sucesso', message: 'Pagamento confirmado!' });
                 setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p));
                 setActivePayment(null);

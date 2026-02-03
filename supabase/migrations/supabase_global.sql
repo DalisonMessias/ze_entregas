@@ -11630,3 +11630,110 @@ GRANT ALL ON public.partner_fee_settings TO service_role;
 INSERT INTO public.partner_fee_settings (base_delivery_value, extra_km_value)
 VALUES (5.00, 1.50)
 ON CONFLICT DO NOTHING;
+
+-- ==================================================================
+-- 3.x PLATFORM SETTINGS & PARTNER SALES
+-- ==================================================================
+
+-- Tabela para configurações globais da plataforma (Chave Pix, Taxas, etc.)
+CREATE TABLE IF NOT EXISTS public.platform_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    key TEXT UNIQUE NOT NULL, -- Ex: 'pix_key_type', 'pix_key_value'
+    value TEXT,
+    description TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Garantir que a tabela tenha RLS
+ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
+
+-- Política de leitura: Todos (autenticados ou anon para checkout) podem ler configurações públicas como pix_key
+DROP POLICY IF EXISTS "Public read access to platform_settings" ON public.platform_settings;
+CREATE POLICY "Public read access to platform_settings" ON public.platform_settings FOR SELECT USING (true);
+
+-- Política de escrita: Apenas Admin
+DROP POLICY IF EXISTS "Admins can manage platform_settings" ON public.platform_settings;
+CREATE POLICY "Admins can manage platform_settings" ON public.platform_settings FOR ALL USING (public.is_admin());
+
+
+-- Inserir/Garantir chave Pix padrão (Placeholder)
+INSERT INTO public.platform_settings (key, value, description)
+VALUES ('platform_pix_key', 'chave-pix-padrao-plataforma', 'Chave Pix oficial da plataforma para recebimento de vendas de parceiros')
+ON CONFLICT (key) DO NOTHING;
+
+
+-- Função RPC para buscar a chave Pix da plataforma de forma simples
+CREATE OR REPLACE FUNCTION public.get_platform_pix_key()
+RETURNS TEXT AS $$
+DECLARE
+    v_key TEXT;
+BEGIN
+    SELECT value INTO v_key FROM public.platform_settings WHERE key = 'platform_pix_key';
+    RETURN COALESCE(v_key, '');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- Função RPC para processar venda de parceiro (Creditando Carteira e NÃO gerando histórico de loja)
+-- Esta função deve ser chamada quando o vendedor é um 'delivery_partner' (entregador parceiro sem vínculo de loja)
+CREATE OR REPLACE FUNCTION public.process_partner_sale_wallet(
+    p_user_id UUID,
+    p_amount NUMERIC,
+    p_payment_method TEXT,
+    p_metadata JSONB DEFAULT '{}'::jsonb
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_wallet_id UUID;
+    v_transaction_id UUID;
+    v_user_role public.user_role;
+BEGIN
+    -- 1. Verificar Role do Usuário
+    SELECT role INTO v_user_role FROM public.user_profiles WHERE id = p_user_id;
+    
+    IF v_user_role IS NULL THEN
+        RAISE EXCEPTION 'Usuário não encontrado.';
+    END IF;
+
+    -- Opcional: Validar se é delivery_partner, mas a lógica pode ser usada por outros no futuro se desejado.
+    -- Por regra de negócio atual, focado em parceiros.
+
+    -- 2. Garantir existência da carteira (store_wallets unificada também atende parceiros conforme trigger handle_new_user)
+    -- Se não existir, cria agora.
+    INSERT INTO public.store_wallets (store_id, balance_decimal)
+    VALUES (p_user_id, 0)
+    ON CONFLICT (store_id) DO NOTHING;
+
+    SELECT id INTO v_wallet_id FROM public.store_wallets WHERE store_id = p_user_id;
+
+    -- 3. Inserir Transação de Crédito na Carteira
+    -- Tipo 'SALE_CREDIT' ou 'CREDIT'
+    INSERT INTO public.wallet_transactions (
+        store_id,
+        amount,
+        type,
+        status,
+        description,
+        metadata
+    ) VALUES (
+        p_user_id,
+        p_amount,
+        'CREDIT', -- Tipo genérico de crédito
+        'COMPLETED',
+        'Venda Avulsa (App Parceiro)',
+        p_metadata || jsonb_build_object('source', 'partner_pos', 'payment_method', p_payment_method)
+    ) RETURNING id INTO v_transaction_id;
+
+    -- 4. Atualizar Saldo da Carteira
+    UPDATE public.store_wallets
+    SET balance_decimal = balance_decimal + p_amount,
+        updated_at = NOW()
+    WHERE store_id = p_user_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'transaction_id', v_transaction_id,
+        'new_balance', (SELECT balance_decimal FROM public.store_wallets WHERE store_id = p_user_id)
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

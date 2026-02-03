@@ -759,27 +759,7 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
         if (!allPaymentsDone) return;
         setProcessing(true);
 
-        // Construct Payload
-        const transaction = {
-            user_id: userRole === 'delivery_partner' ? terminal?.user_id : userRole === 'store_partner' ? terminal?.user_id : undefined, // Fallback
-            amount: totalToSplit,
-            payments: partialAmounts,
-            status: 'COMPLETED',
-            created_at: new Date().toISOString(),
-            payer_name: 'Cliente Final',
-            description: selectedStore ? `Venda Loja: ${selectedStore.name}` : 'Venda Avulsa',
-            terminal_id: terminal?.id,
-            metadata: {
-                is_demo: isDemoMode,
-                coupon: couponCode,
-                store_id: selectedStore?.id,
-                order_id: selectedOrder?.id
-            }
-        };
-
         if (isDemoMode) {
-            // Just proceed to success in demo
-            // Maybe add to mock history if needed (already handled by getMockData logic perhaps?)
             await dialog.alert({ title: 'Sucesso', message: 'Venda Demo Registrada!' });
             setStep('success');
             setProcessing(false);
@@ -787,13 +767,54 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
         }
 
         try {
-            await cloud.createTerminalTransaction(transaction);
+            // Lógica Condicional: Parceiro vs Loja
+            if (userRole === 'delivery_partner' && !selectedStore) {
+                // Venda Avulsa de Entregador Parceiro -> Crédito na Carteira
+                await cloud.processPartnerSaleWallet(
+                    terminal?.user_id || '',
+                    totalToSplit,
+                    partialAmounts[0]?.method || 'UNKNOWN', // Assume método principal ou primeiro
+                    {
+                        is_demo: isDemoMode,
+                        payments: partialAmounts,
+                        coupon: couponCode
+                    }
+                );
+                // Não cria transação de terminal (histórico de loja)
+            } else {
+                // Venda de Loja (ou Associado) -> Fluxo Original
+                const transaction = {
+                    user_id: userRole === 'delivery_partner' ? terminal?.user_id : userRole === 'store_partner' ? terminal?.user_id : undefined, // Fallback
+                    amount: totalToSplit,
+                    payments: partialAmounts,
+                    status: 'COMPLETED',
+                    created_at: new Date().toISOString(),
+                    payer_name: 'Cliente Final',
+                    description: selectedStore ? `Venda Loja: ${selectedStore.name}` : 'Venda Avulsa',
+                    terminal_id: terminal?.id,
+                    metadata: {
+                        is_demo: isDemoMode,
+                        coupon: couponCode,
+                        store_id: selectedStore?.id,
+                        order_id: selectedOrder?.id
+                    }
+                };
+                await cloud.createTerminalTransaction(transaction);
+            }
+
             setStep('success');
         } catch (e: any) {
-            await dialog.alert({ title: 'Erro no Registro', message: 'Erro ao registrar venda. Tentando offline...' });
-            setStep('success'); // Optimistic success
+            // Fallback para offline apenas se não for wallet (wallet precisa de online para segurança por enquanto, ou fila offline?)
+            if (userRole === 'delivery_partner' && !selectedStore) {
+                await dialog.alert({ title: 'Erro de Conexão', message: 'Não foi possível creditar a carteira. Verifique sua conexão.' });
+            } else {
+                await dialog.alert({ title: 'Erro no Registro', message: 'Erro ao registrar venda. Tentando offline...' });
+            }
+            if (selectedStore || userRole !== 'delivery_partner') setStep('success');
+            else setProcessing(false);
+            return;
         } finally {
-            setProcessing(false);
+            if (step === 'success' || (selectedStore || userRole !== 'delivery_partner')) setProcessing(false);
         }
     };
 
