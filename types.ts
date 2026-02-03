@@ -683,6 +683,9 @@ export interface PartnerProfile {
     city_slug?: string;
     store_slug?: string;
     description?: string;
+    delivery_time_max?: number;
+    address_complement?: string;
+
 
     // Order Configuration
     receive_orders_via_platform?: boolean;
