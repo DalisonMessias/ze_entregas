@@ -631,18 +631,24 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+            <div className="min-h-screen bg-neutral-50 dark:bg-gray-950 flex items-center justify-center">
+                <div className="flex items-center gap-3 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <Loader2 className="w-5 h-5 animate-spin text-brand-600" />
+                    <span>Carregando cardápio...</span>
+                </div>
             </div>
         );
     }
 
     if (error || !store) {
         return (
-            <div className="min-h-screen bg-white dark:bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
-                <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{error || 'Loja não encontrada'}</h2>
-                <Button onClick={() => window.location.reload()}>Tentar Novamente</Button>
+            <div className="min-h-screen bg-neutral-50 dark:bg-gray-950 flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-full max-w-sm bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-800 rounded-2xl p-6 shadow-sm">
+                    <AlertCircle className="w-10 h-10 text-red-500 mb-3 mx-auto" />
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{error || 'Loja não encontrada'}</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Tente novamente em alguns instantes.</p>
+                    <Button onClick={() => window.location.reload()}>Tentar Novamente</Button>
+                </div>
             </div>
         );
     }
@@ -651,16 +657,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     // const categories = Array.from(new Set(products.map(p => p.category || 'Outros'))).sort();
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24 md:pb-0">
+        <div className="min-h-screen bg-neutral-50 dark:bg-gray-950 pb-24 md:pb-0 text-gray-900 dark:text-white">
             {/* --- FIXED NAVBAR --- */}
-            <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800">
+            <div className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-gray-950/90 backdrop-blur border-b border-gray-200/70 dark:border-gray-800/80 shadow-[0_1px_0_0_rgba(0,0,0,0.04)]">
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <Logo className="h-8 w-auto" onClick={() => window.location.href = '/'} />
                         {recentOrders.length > 0 && (
                             <button
                                 onClick={() => setIsRecentOrdersModalOpen(true)}
-                                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-brand-50 text-brand-600 rounded-lg text-xs font-bold hover:bg-brand-100 transition-colors"
+                                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300 border border-gray-200/70 dark:border-gray-800 hover:border-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                             >
                                 <ClipboardList className="w-4 h-4" />
                                 Acompanhar Pedido
@@ -670,20 +676,20 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     <div className="flex-1 max-w-lg mx-auto hidden md:block">
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-gray-400" /></div>
-                            <input type="text" className="block w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-500 focus:bg-white dark:focus:bg-gray-700 transition-all placeholder-gray-500 text-gray-900 dark:text-white" placeholder="Buscar no cardápio..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            <input type="text" className="block w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-800 rounded-full text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all placeholder-gray-400 text-gray-900 dark:text-white" placeholder="Buscar no cardápio..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
                         {recentOrders.length > 0 && (
                             <button
                                 onClick={() => setIsRecentOrdersModalOpen(true)}
-                                className="bg-brand-50 text-brand-600 hover:bg-brand-100 p-2.5 rounded-xl transition-colors"
+                                className="p-2.5 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-300 transition-colors"
                                 title="Acompanhar Meus Pedidos"
                             >
                                 <ClipboardList className="w-5 h-5" />
                             </button>
                         )}
-                        <button onClick={() => setIsCartOpen(true)} className="relative flex-shrink-0 bg-brand-50 text-brand-600 hover:bg-brand-100 p-2.5 rounded-xl transition-colors">
+                        <button onClick={() => setIsCartOpen(true)} className="relative flex-shrink-0 bg-gray-900 text-white hover:bg-gray-800 p-2.5 rounded-full transition-colors">
                             <ShoppingBag className="w-5 h-5" />
                             {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{cart.reduce((a, b) => a + b.quantity, 0)}</span>}
                         </button>
@@ -692,12 +698,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 <div className="md:hidden px-4 pb-3">
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-gray-400" /></div>
-                        <input type="text" className="block w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-500 focus:bg-white dark:focus:bg-gray-700 transition-all placeholder-gray-500 text-gray-900 dark:text-white" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                        <input type="text" className="block w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-800 rounded-full text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all placeholder-gray-400 text-gray-900 dark:text-white" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
                 </div>
-                <div className="border-t border-gray-50 dark:border-gray-800 bg-white dark:bg-gray-900 py-3">
+                <div className="border-t border-gray-200/70 dark:border-gray-800 bg-white/80 dark:bg-gray-950/80 py-2.5">
                     <div className="container mx-auto px-4 flex gap-2 overflow-x-auto no-scrollbar scroll-smooth snap-x">
-                        {categories.map(cat => (<button key={cat} onClick={() => setSelectedCategoryFilter(cat)} className={`snap-start px-4 py-1.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all border ${selectedCategoryFilter === cat ? 'bg-brand-600 text-white border-brand-600 shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-brand-300'}`}>{cat}</button>))}
+                        {categories.map(cat => (<button key={cat} onClick={() => setSelectedCategoryFilter(cat)} className={`snap-start px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide whitespace-nowrap transition-all border ${selectedCategoryFilter === cat ? 'bg-gray-900 text-white border-gray-900 shadow-sm' : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-gray-800 hover:border-gray-300'}`}>{cat}</button>))}
                     </div>
                 </div>
             </div>
@@ -715,7 +721,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 </div>
 
                 <div className="container mx-auto px-4 -mt-10 relative flex flex-col md:flex-row items-center md:items-start gap-4 pb-6">
-                    <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl border-4 border-white dark:border-gray-900 bg-white dark:bg-gray-800 shadow-lg overflow-hidden flex-shrink-0">
+                    <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl border border-white/80 dark:border-gray-800 bg-white/90 dark:bg-gray-900 shadow-sm ring-1 ring-black/5 overflow-hidden flex-shrink-0">
                         {store.store_logo_url ? (
                             <img src={store.store_logo_url} alt="Logo" className="w-full h-full object-cover" />
                         ) : (
@@ -727,53 +733,53 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                     <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white mb-2 z-10 md:mt-2">
                         <div className="flex flex-col md:flex-row md:items-center justify-center md:justify-start gap-2 mb-2">
-                            <h1 className="text-xl md:text-2xl font-black text-gray-900 md:text-white dark:text-white md:drop-shadow-md">
+                            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 md:text-white dark:text-white">
                                 {store.store_name || store.name}
                             </h1>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider self-center md:self-auto ${isStoreOpen ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider self-center md:self-auto ${isStoreOpen ? 'bg-emerald-500/90 text-white' : 'bg-rose-500/90 text-white'}`}>
                                 {isStoreOpen ? 'Aberto' : 'Fechado'}
                             </span>
                         </div>
 
                         {store.description && (
-                            <p className="text-sm md:block text-gray-600 dark:text-gray-400 mb-3 max-w-2xl leading-relaxed">
+                            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 max-w-2xl leading-relaxed">
                                 {store.description}
                             </p>
                         )}
 
-                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm font-medium text-gray-600 dark:text-gray-400 md:text-gray-100">
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
                             {store.opening_hours && (
-                                <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
-                                    <Clock className="w-4 h-4 text-white" /> {store.opening_hours}
+                                <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">
+                                    <Clock className="w-4 h-4 text-gray-500 dark:text-gray-300" /> {store.opening_hours}
                                 </div>
                             )}
                             {(store.preparation_time_min || store.preparation_time_max) && (
-                                <div className="flex items-center gap-1.5 bg-orange-500 text-white px-2.5 py-1.5 rounded-lg">
-                                    <ChefHat className="w-4 h-4 text-white" />
+                                <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-200 border border-amber-200/60 dark:border-amber-800/60 px-3 py-1.5 rounded-full shadow-sm">
+                                    <ChefHat className="w-4 h-4" />
                                     Preparo: {store.preparation_time_min || 0}-{store.preparation_time_max || 0} min
                                 </div>
                             )}
                             {canDeliver && deliverySettings && (
-                                <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
-                                    <Bike className="w-4 h-4 text-white" />
+                                <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">
+                                    <Bike className="w-4 h-4 text-gray-500 dark:text-gray-300" />
                                     {deliverySettings.delivery_time_min}-{deliverySettings.delivery_time_max} min
                                 </div>
                             )}
                             {canPickup && (
-                                <div className="flex items-center gap-1.5 bg-brand-500 text-white px-2.5 py-1.5 rounded-lg">
-                                    <StoreIcon className="w-4 h-4 text-white" /> Retirada
+                                <div className="flex items-center gap-1.5 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-200 border border-brand-200/60 dark:border-brand-800/50 px-3 py-1.5 rounded-full shadow-sm">
+                                    <StoreIcon className="w-4 h-4" /> Retirada
                                 </div>
                             )}
-                            <div className="flex items-center gap-1.5 bg-gray-500 text-white px-2.5 py-1.5 rounded-lg">
-                                <StoreIcon className="w-4 h-4 text-white" /> {products.length} itens
+                            <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">
+                                <StoreIcon className="w-4 h-4 text-gray-500 dark:text-gray-300" /> {products.length} itens
                             </div>
 
                             {/* Botão de Avaliação - Sempre visível na barra de badges */}
                             <div
                                 onClick={() => setIsRatingModalOpen(true)}
-                                className="flex items-center gap-1.5 bg-yellow-500/90 text-white px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-yellow-500 transition-colors shadow-sm"
+                                className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 px-3 py-1.5 rounded-full cursor-pointer hover:border-amber-300 transition-colors shadow-sm"
                             >
-                                <Star className="w-4 h-4 fill-white text-white" />
+                                <Star className="w-4 h-4 fill-current" />
                                 <span className="font-bold">
                                     {store.average_rating ? store.average_rating.toFixed(1) : 'Avaliar'}
                                 </span>
@@ -786,7 +792,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     window.dispatchEvent(new CustomEvent('popstate'));
                                     window.dispatchEvent(new CustomEvent('pushstate_changed'));
                                 }}
-                                className="flex items-center gap-1.5 bg-brand-600 text-white px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-brand-700 transition-colors shadow-sm"
+                                className="flex items-center gap-1.5 bg-gray-900 text-white px-3 py-1.5 rounded-full cursor-pointer hover:bg-gray-800 transition-colors shadow-sm"
                             >
                                 <MessageCircle className="w-4 h-4" />
                                 <span className="font-bold">Falar com a Loja</span>
@@ -797,31 +803,34 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 </div>
             </div>
 
-            <div className="container mx-auto px-4 py-8">
+            <div className="container mx-auto px-4 py-10">
 
                 {/* --- PRODUCT LIST (Full Width) --- */}
-                <div className="space-y-10">
+                <div className="space-y-8">
                     {/* Active Sections Loop */}
                     {activeSections.length === 0 ? (
-                        <div className="text-center py-20">
-                            <Search className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                            <h3 className="text-lg font-bold text-gray-500">Nenhum produto encontrado.</h3>
-                            <p className="text-gray-400 text-sm">Tente buscar por outro termo ou categoria.</p>
-                            <Button variant="outline" className="mt-4" onClick={() => { setSearchTerm(''); setSelectedCategoryFilter('Todos'); }}>
-                                Limpar Filtros
-                            </Button>
+                        <div className="text-center py-16">
+                            <div className="max-w-md mx-auto bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-800 rounded-2xl p-8 shadow-sm">
+                                <Search className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+                                <h3 className="text-base font-semibold text-gray-700 dark:text-gray-200">Nenhum produto encontrado.</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Tente outro termo ou categoria.</p>
+                                <Button variant="outline" className="mt-5" onClick={() => { setSearchTerm(''); setSelectedCategoryFilter('Todos'); }}>
+                                    Limpar Filtros
+                                </Button>
+                            </div>
                         </div>
                     ) : (
                         activeSections.map(cat => (
                             <div key={cat} className="scroll-mt-32">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                    <span className="w-1 h-6 bg-brand-500 rounded-full" /> {cat}
+                                <h2 className="text-lg md:text-xl font-semibold tracking-tight text-gray-900 dark:text-white mb-5 flex items-center gap-3">
+                                    <span className="w-2 h-2 bg-brand-500 rounded-full" />
+                                    <span>{cat}</span>
                                 </h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                                     {filteredProducts.filter(p => (p.category || 'Outros') === cat).map(product => (
                                         <div
                                             key={product.id}
-                                            className="group relative bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 hover:border-brand-300 dark:hover:border-brand-700 transition-all flex gap-4 overflow-hidden shadow-sm hover:shadow-md"
+                                            className="group relative bg-white/90 dark:bg-gray-900 p-5 rounded-2xl border border-gray-200/70 dark:border-gray-800 hover:border-gray-300 transition-all flex gap-4 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5"
                                         >
                                             {/* Card content - Opens Preview */}
                                             <div
@@ -833,18 +842,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                 }}
                                             >
                                                 <div className="flex-1 py-1">
-                                                    <h3 className="font-bold text-gray-900 dark:text-white mb-1 group-hover:text-brand-600 transition-colors line-clamp-2">{product.name}</h3>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">{product.description}</p>
-                                                    <span className="font-black text-lg text-brand-600">R$ {product.price.toFixed(2).replace('.', ',')}</span>
+                                                    <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1 group-hover:text-brand-600 transition-colors line-clamp-2">{product.name}</h3>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">{product.description}</p>
+                                                    <span className="text-base font-semibold text-brand-600">R$ {product.price.toFixed(2).replace('.', ',')}</span>
                                                 </div>
 
                                                 {product.image_url ? (
-                                                    <div className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
+                                                    <div className="w-24 h-24 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 border border-gray-200/70 dark:border-gray-800">
                                                         <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                                     </div>
                                                 ) : (
-                                                    <div className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                                                        <ShoppingBag className="w-8 h-8 text-gray-300" />
+                                                    <div className="w-24 h-24 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-200/70 dark:border-gray-800">
+                                                        <ShoppingBag className="w-7 h-7 text-gray-300" />
                                                     </div>
                                                 )}
                                             </div>
@@ -856,9 +865,9 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                     e.stopPropagation();
                                                     addToCart(product, 1);
                                                 }}
-                                                className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-colors shadow-sm z-10 ${!isStoreOpen
+                                                className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm z-10 ${!isStoreOpen
                                                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                    : 'bg-gray-100 dark:bg-gray-800 hover:bg-brand-600 hover:text-white'
+                                                    : 'bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-900 hover:text-white'
                                                     }`}
                                             >
                                                 <Plus className="w-5 h-5" />
@@ -879,15 +888,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 <div className="lg:hidden fixed bottom-6 left-4 right-4 z-40">
                     <button
                         onClick={() => setIsCartOpen(true)}
-                        className="w-full bg-brand-600 text-white p-4 rounded-2xl shadow-xl shadow-brand-600/30 flex items-center justify-between"
+                        className="w-full bg-gray-900 text-white p-4 rounded-2xl shadow-lg flex items-center justify-between"
                     >
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm">
+                            <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center font-semibold text-sm">
                                 {cart.reduce((acc, i) => acc + i.quantity, 0)}
                             </div>
                             <span className="font-bold">Ver Carrinho</span>
                         </div>
-                        <span className="font-black text-lg">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
+                        <span className="font-semibold text-lg">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
                     </button>
                 </div>
             )}
@@ -897,7 +906,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             {selectedProduct && (
                 <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 sm:p-4">
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedProduct(null)} />
-                    <div className="relative bg-white dark:bg-gray-900 w-full max-w-md rounded-t-[32px] md:rounded-[32px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 md:zoom-in-95 flex flex-col max-h-[90vh]">
+                    <div className="relative bg-white/95 dark:bg-gray-900 w-full max-w-md rounded-t-[24px] md:rounded-[28px] border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 md:zoom-in-95 flex flex-col max-h-[90vh]">
 
                         {/* Drag Handle for Mobile */}
                         <div className="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/30 backdrop-blur rounded-full z-20 md:hidden"></div>
@@ -915,19 +924,19 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                         <div className="p-8 pt-2 overflow-y-auto">
                             <div className="mb-6">
-                                <h3 className="text-3xl font-black text-gray-900 dark:text-white leading-tight mb-2">{selectedProduct.name}</h3>
+                                <h3 className="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white leading-tight mb-2">{selectedProduct.name}</h3>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-2xl font-bold text-brand-600">R$ {selectedProduct.price.toFixed(2).replace('.', ',')}</span>
-                                    {selectedProduct.category && <span className="bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs font-bold px-2 py-1 rounded-lg uppercase tracking-wider">{selectedProduct.category}</span>}
+                                    <span className="text-xl font-semibold text-brand-600">R$ {selectedProduct.price.toFixed(2).replace('.', ',')}</span>
+                                    {selectedProduct.category && <span className="bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider border border-gray-200/70 dark:border-gray-800">{selectedProduct.category}</span>}
                                 </div>
                             </div>
 
-                            <p className="text-gray-500 dark:text-gray-400 text-base leading-relaxed mb-8">{selectedProduct.description}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-6">{selectedProduct.description}</p>
 
                             <div className="mb-8">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Alguma observação?</label>
+                                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-2">Alguma observação?</label>
                                 <textarea
-                                    className="w-full bg-gray-50 dark:bg-gray-800 border-0 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-brand-500 outline-none resize-none"
+                                    className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200/70 dark:border-gray-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none resize-none"
                                     placeholder="Ex: Sem cebola, ponto da carne..."
                                     rows={3}
                                     value={productObservation}
@@ -936,21 +945,21 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             </div>
 
                             <div className="flex items-center gap-4">
-                                <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-2xl p-1.5 shadow-inner">
+                                <div className="flex items-center bg-gray-50 dark:bg-gray-800 border border-gray-200/70 dark:border-gray-700 rounded-xl p-1">
                                     <button
                                         onClick={() => setProductQuantity(Math.max(1, productQuantity - 1))}
-                                        className="w-12 h-12 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-xl transition-all shadow-sm"
+                                        className="w-10 h-10 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all"
                                     ><Minus className="w-5 h-5 text-gray-600 dark:text-gray-400" /></button>
-                                    <span className="w-10 text-center font-black text-lg">{productQuantity}</span>
+                                    <span className="w-9 text-center font-semibold text-base">{productQuantity}</span>
                                     <button
                                         onClick={() => setProductQuantity(productQuantity + 1)}
-                                        className="w-12 h-12 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-xl transition-all shadow-sm"
+                                        className="w-10 h-10 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all"
                                     ><Plus className="w-5 h-5 text-gray-600 dark:text-gray-400" /></button>
                                 </div>
                                 <Button
                                     fullWidth
                                     disabled={!isStoreOpen}
-                                    className={`py-5 text-lg rounded-2xl shadow-xl ${!isStoreOpen ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed shadow-none' : 'shadow-brand-500/20'}`}
+                                    className={`py-4 text-base rounded-xl shadow-sm ${!isStoreOpen ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed shadow-none' : 'shadow-brand-500/20'}`}
                                     onClick={() => addToCart()} // Calling without args uses modal state
                                 >
                                     {isStoreOpen ? 'Adicionar' : 'Loja Fechada'}
@@ -965,39 +974,52 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             {isCartOpen && (
                 <div className="fixed inset-0 z-50 flex justify-end">
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer" onClick={() => setIsCartOpen(false)} />
-                    <div className="relative w-full max-w-lg bg-white dark:bg-gray-900 h-full shadow-2xl animate-in slide-in-from-right flex flex-col">
+                    <div className="relative w-full max-w-lg bg-white/95 dark:bg-gray-900 h-full border-l border-gray-200/70 dark:border-gray-800 shadow-2xl animate-in slide-in-from-right flex flex-col">
 
                         {/* Header */}
-                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                            <h2 className="text-2xl font-black text-gray-900 dark:text-white">Finalizar Pedido</h2>
-                            <button onClick={() => setIsCartOpen(false)} className="p-2 bg-gray-50 dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><X className="w-6 h-6 text-gray-500" /></button>
+                        <div className="p-5 border-b border-gray-200/70 dark:border-gray-800 flex items-center justify-between">
+                            <h2 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">Finalizar Pedido</h2>
+                            <button onClick={() => setIsCartOpen(false)} className="p-2 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 transition-colors"><X className="w-5 h-5" /></button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                        <div className="flex-1 overflow-y-auto p-5 space-y-6">
 
                             {/* Review Items */}
                             <section>
-                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Seus Itens</h3>
+                                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Seus Itens</h3>
                                 <div className="space-y-4">
+                                    {cart.length === 0 && (
+                                        <div className="border border-dashed border-gray-200/80 dark:border-gray-800 rounded-xl p-6 text-center bg-white/70 dark:bg-gray-900/60">
+                                            <ShoppingBag className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">Seu carrinho está vazio.</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Adicione produtos para continuar.</p>
+                                            <button
+                                                onClick={() => setIsCartOpen(false)}
+                                                className="mt-4 text-xs font-semibold text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full hover:border-gray-300 transition-colors"
+                                            >
+                                                Voltar ao cardápio
+                                            </button>
+                                        </div>
+                                    )}
                                     {cart.map(item => (
-                                        <div key={item.id} className="flex gap-4 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
-                                            <div className="w-16 h-16 bg-gray-200 dark:bg-gray-800 rounded-xl overflow-hidden flex-shrink-0">
+                                        <div key={item.id} className="flex gap-3 bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200/70 dark:border-gray-800 shadow-sm">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200/70 dark:border-gray-800">
                                                 {item.product.image_url ? <img src={item.product.image_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ShoppingBag className="w-6 h-6 text-gray-400" /></div>}
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex justify-between items-start">
-                                                    <h4 className="font-bold text-gray-900 dark:text-white text-sm line-clamp-2">{item.product.name}</h4>
-                                                    <span className="font-bold text-sm flex-shrink-0 ml-2">R$ {(item.product.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+                                                    <h4 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">{item.product.name}</h4>
+                                                    <span className="font-semibold text-sm flex-shrink-0 ml-2">R$ {(item.product.price * item.quantity).toFixed(2).replace('.', ',')}</span>
                                                 </div>
                                                 {item.observation && <p className="text-xs text-gray-500 mt-1 italic">Obs: {item.observation}</p>}
 
                                                 <div className="flex items-center justify-between mt-2">
-                                                    <div className="flex items-center bg-white dark:bg-gray-700 rounded-lg p-0.5 shadow-inner">
-                                                        <button onClick={() => updateQuantity(item.id, -1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-all"><Minus className="w-4 h-4 text-gray-600 dark:text-gray-400" /></button>
-                                                        <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
-                                                        <button onClick={() => updateQuantity(item.id, 1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-all"><Plus className="w-4 h-4 text-gray-600 dark:text-gray-400" /></button>
+                                                    <div className="flex items-center bg-gray-50 dark:bg-gray-800 border border-gray-200/70 dark:border-gray-700 rounded-lg p-0.5">
+                                                        <button onClick={() => updateQuantity(item.id, -1)} className="w-8 h-8 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-md transition-all"><Minus className="w-4 h-4 text-gray-600 dark:text-gray-400" /></button>
+                                                        <span className="w-8 text-center font-semibold text-sm">{item.quantity}</span>
+                                                        <button onClick={() => updateQuantity(item.id, 1)} className="w-8 h-8 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-md transition-all"><Plus className="w-4 h-4 text-gray-600 dark:text-gray-400" /></button>
                                                     </div>
-                                                    <button onClick={() => removeFromCart(item.id)} className="p-2 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full transition-colors">
+                                                    <button onClick={() => removeFromCart(item.id)} className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -1005,7 +1027,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         </div>
                                     ))}
                                     {cart.length > 0 && (
-                                        <button onClick={clearCart} className="w-full py-2 text-sm font-bold text-gray-400 hover:text-red-500 border border-dashed border-gray-300 rounded-xl hover:border-red-300 hover:bg-red-50 transition-all">
+                                        <button onClick={clearCart} className="w-full py-2 text-xs font-semibold text-gray-500 hover:text-red-500 border border-dashed border-gray-300/80 rounded-full hover:border-red-300 hover:bg-red-50 transition-all">
                                             Limpar Carrinho
                                         </button>
                                     )}
@@ -1014,12 +1036,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                             {/* Order Observation */}
                             <section>
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Observação do Pedido</label>
+                                <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2 block">Observação do Pedido</label>
                                 <textarea
                                     value={orderObservation}
                                     onChange={e => setOrderObservation(e.target.value)}
                                     placeholder="Ex: Campainha não funciona, deixar na portaria..."
-                                    className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none resize-none border border-gray-100 dark:border-gray-800 font-medium text-gray-900 dark:text-white placeholder-gray-400"
+                                    className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none resize-none border border-gray-200/70 dark:border-gray-800 font-medium text-gray-900 dark:text-white placeholder-gray-400"
                                     rows={2}
                                 />
                             </section>
@@ -1028,7 +1050,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                             {/* Identification */}
                             <section className="space-y-4">
-                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Identificação</h3>
+                                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Identificação</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <CustomInput label="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Seu nome" />
                                     <CustomInput label="Seu Telefone" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="(00) 00000-0000" mask="phone" />
@@ -1038,7 +1060,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             {/* Delivery Options - CONDITIONAL RENDERING */}
                             <section className="space-y-4">
                                 <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Entrega ou Retirada</h3>
+                                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Entrega ou Retirada</h3>
                                 </div>
 
                                 {/* Calculate Availability */}
@@ -1049,16 +1071,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     // 1. Both Available: Show Tabs
                                     if (canDeliver && canPickup) {
                                         return (
-                                            <div className="grid grid-cols-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl mb-4 relative">
+                                            <div className="grid grid-cols-2 p-1 bg-gray-50 dark:bg-gray-800 border border-gray-200/70 dark:border-gray-700 rounded-xl mb-4 relative">
                                                 {/* Tabs Indicator Background */}
                                                 <div
-                                                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-xl shadow-sm transition-all duration-300 ease-in-out ${deliveryType === 'PICKUP' ? 'left-[calc(50%+2px)]' : 'left-1'
+                                                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-lg border border-gray-200/70 dark:border-gray-700 shadow-sm transition-all duration-300 ease-in-out ${deliveryType === 'PICKUP' ? 'left-[calc(50%+2px)]' : 'left-1'
                                                         }`}
                                                 />
 
                                                 <button
                                                     onClick={() => setDeliveryType('DELIVERY')}
-                                                    className={`relative z-10 p-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${deliveryType === 'DELIVERY' ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                                    className={`relative z-10 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${deliveryType === 'DELIVERY' ? 'text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
                                                         }`}
                                                 >
                                                     <Bike className="w-4 h-4" /> Entrega
@@ -1066,7 +1088,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                                                 <button
                                                     onClick={() => setDeliveryType('PICKUP')}
-                                                    className={`relative z-10 p-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${deliveryType === 'PICKUP' ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                                    className={`relative z-10 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${deliveryType === 'PICKUP' ? 'text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
                                                         }`}
                                                 >
                                                     <StoreIcon className="w-4 h-4" /> Retirada
@@ -1078,7 +1100,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     // 2. Only Delivery
                                     if (canDeliver && !canPickup) {
                                         return (
-                                            <div className="p-3 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 rounded-xl flex items-center justify-center gap-2 font-bold mb-4">
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 rounded-xl flex items-center justify-center gap-2 font-semibold mb-4">
                                                 <Bike className="w-5 h-5" />
                                                 <span>Apenas Entrega Disponível</span>
                                             </div>
@@ -1088,7 +1110,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     // 3. Only Pickup
                                     if (!canDeliver && canPickup) {
                                         return (
-                                            <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 rounded-xl flex items-center justify-center gap-2 font-bold mb-4">
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 rounded-xl flex items-center justify-center gap-2 font-semibold mb-4">
                                                 <StoreIcon className="w-5 h-5" />
                                                 <span>Apenas Retirada na Loja</span>
                                             </div>
@@ -1097,18 +1119,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                                     // 4. None (Should not happen if store is active, but fallback)
                                     return (
-                                        <div className="p-3 bg-red-50 text-red-600 rounded-xl text-center font-bold mb-4">
+                                        <div className="p-3 bg-red-50 text-red-600 rounded-xl text-center font-semibold mb-4 border border-red-100">
                                             Momentaneamente indisponível
                                         </div>
                                     );
                                 })()}
 
                                 {canPickup && deliveryType === 'PICKUP' && (
-                                    <div className="space-y-2 animate-in fade-in p-6 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 text-center">
-                                        <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <div className="space-y-2 animate-in fade-in p-5 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/70 dark:border-gray-800 text-center shadow-sm">
+                                        <div className="w-11 h-11 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-2 border border-gray-200/70 dark:border-gray-800">
                                             <MapPin className="w-6 h-6 text-gray-500" />
                                         </div>
-                                        <h4 className="text-base font-bold text-gray-900 dark:text-white">Retirar na Loja</h4>
+                                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Retirar na Loja</h4>
                                         <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                                             {(store?.store_address_street || store?.address_street) && <p>{`${store.store_address_street || store.address_street}, ${store.store_address_number || store.address_number}`}</p>}
                                             {(store?.store_address_district || store?.address_district) && <p>{store.store_address_district || store.address_district}</p>}
@@ -1118,7 +1140,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                             <div className="pt-4 border-t border-gray-100 dark:border-gray-700 mt-4 flex justify-center">
                                                 <a
                                                     href={`tel:${store.phone_number.replace(/\D/g, '')}`}
-                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-xl font-bold text-sm hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
+                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full font-semibold text-xs hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
                                                 >
                                                     <Phone className="w-4 h-4" />
                                                     <span>Ligar: {store.phone_number}</span>
@@ -1153,7 +1175,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         <div className="grid grid-cols-1 gap-4">
                                             {deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' ? (
                                                 <div>
-                                                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block uppercase tracking-wide">Bairro (Taxa de Entrega)</label>
+                                                    <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1 block uppercase tracking-wide">Bairro (Taxa de Entrega)</label>
                                                     <select
                                                         value={selectedNeighborhoodId}
                                                         onChange={e => setSelectedNeighborhoodId(e.target.value)}
@@ -1179,7 +1201,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                             {/* Payment */}
                             <section className="space-y-4">
-                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Pagamento</h3>
+                                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Pagamento</h3>
 
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                     {/* PIX: Show if Store has PIX enabled (Auto or Manual) */}
@@ -1187,20 +1209,20 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                                     <button
                                         onClick={() => setPaymentMethod('PIX')}
-                                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'PIX' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'PIX' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                     >
                                         <QrCode className="w-6 h-6" />
                                         {/* Show (Auto) tag only if it WILL open the modal */}
-                                        <span className="text-xs font-bold">PIX {(store?.receive_orders_via_platform && store?.config?.pixdata?.enabled) ? '(Auto)' : ''}</span>
+                                        <span className="text-xs font-semibold">PIX {(store?.receive_orders_via_platform && store?.config?.pixdata?.enabled) ? '(Auto)' : ''}</span>
                                     </button>
 
                                     {/* CARTÃO */}
                                     <button
                                         onClick={() => setPaymentMethod('CREDIT_CARD')}
-                                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'CREDIT_CARD' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'CREDIT_CARD' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                     >
                                         <CreditCard className="w-6 h-6" />
-                                        <span className="text-xs font-bold">Cartão</span>
+                                        <span className="text-xs font-semibold">Cartão</span>
                                     </button>
 
                                     {/* DINHEIRO */}
@@ -1214,10 +1236,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                 }
                                             }, 100);
                                         }}
-                                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${paymentMethod === 'CASH' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'CASH' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                     >
                                         <Banknote className="w-6 h-6" />
-                                        <span className="text-xs font-bold">Dinheiro</span>
+                                        <span className="text-xs font-semibold">Dinheiro</span>
                                     </button>
                                 </div>
 
@@ -1238,7 +1260,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         </div>
 
                         {/* Sticky Checkout Footer */}
-                        <div className="p-6 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
+                        <div className="p-5 bg-white dark:bg-gray-900 border-t border-gray-200/70 dark:border-gray-800 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] z-20">
                             <div className="space-y-2 mb-4">
                                 <div className="flex justify-between text-sm text-gray-500">
                                     <span>Subtotal</span>
@@ -1248,7 +1270,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-500">Entrega</span>
                                         {deliveryFee === 0 ? (
-                                            <span className="font-bold text-green-600 flex items-center">
+                                            <span className="font-semibold text-green-600 flex items-center">
                                                 Grátis*
                                                 <button
                                                     onClick={() => setIsRulesModalOpen(true)}
@@ -1262,16 +1284,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         )}
                                     </div>
                                 )}
-                                <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-800">
+                                <div className="flex justify-between items-center pt-2 border-t border-gray-200/70 dark:border-gray-800">
                                     <span className="font-medium text-gray-900 dark:text-white">Total</span>
-                                    <span className="font-black text-2xl text-gray-900 dark:text-white">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
+                                    <span className="font-semibold text-2xl text-gray-900 dark:text-white">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
                                 </div>
                             </div>
                             <Button
                                 fullWidth
                                 size="lg"
                                 onClick={handleCheckout}
-                                className={`rounded-2xl py-5 text-lg shadow-xl shadow-brand-500/20 ${!isStoreOpen || isSubmitting ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                                className={`rounded-xl py-4 text-base shadow-sm ${!isStoreOpen || isSubmitting ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                                 disabled={!isStoreOpen || isSubmitting}
                             >
                                 {isSubmitting ? (
@@ -1330,14 +1352,14 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             {isRecentOrdersModalOpen && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsRecentOrdersModalOpen(false)} />
-                    <div className="relative bg-white dark:bg-gray-900 w-full max-w-sm rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95">
-                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                            <h3 className="text-xl font-black text-gray-900 dark:text-white">Meus Pedidos</h3>
-                            <button onClick={() => setIsRecentOrdersModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-                                <X className="w-5 h-5 text-gray-400" />
+                    <div className="relative bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden animate-in zoom-in-95">
+                        <div className="p-5 border-b border-gray-200/70 dark:border-gray-800 flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meus Pedidos</h3>
+                            <button onClick={() => setIsRecentOrdersModalOpen(false)} className="p-2 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 transition-colors">
+                                <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
+                        <div className="p-5 space-y-3 max-h-[400px] overflow-y-auto">
                             {recentOrders.length === 0 ? (
                                 <p className="text-center text-gray-500 py-8">Nenhum pedido recente encontrado.</p>
                             ) : (
@@ -1348,18 +1370,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                             // Force full navigation to ensure tracking page loads correctly for visitors
                                             window.location.assign(`/track/${id}`);
                                         }}
-                                        className="w-full p-4 bg-gray-50 dark:bg-gray-800 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between transition-all group"
+                                        className="w-full p-4 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl border border-gray-200/70 dark:border-gray-800 flex items-center justify-between transition-all group"
                                     >
                                         <div className="text-left">
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pedido</p>
-                                            <p className="font-black text-gray-900 dark:text-white">#{id.slice(0, 8).toUpperCase()}</p>
+                                            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Pedido</p>
+                                            <p className="font-semibold text-gray-900 dark:text-white">#{id.slice(0, 8).toUpperCase()}</p>
                                         </div>
-                                        <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-brand-500 transition-colors" />
+                                        <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
                                     </button>
                                 ))
                             )}
                         </div>
-                        <div className="p-6 bg-gray-50 dark:bg-gray-800/50">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50">
                             <p className="text-[10px] text-center text-gray-400 font-medium uppercase tracking-widest">Apenas pedidos feitos via plataforma</p>
                         </div>
                     </div>
