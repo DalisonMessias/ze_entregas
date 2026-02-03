@@ -140,6 +140,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/': 'home',
     '/partner-store': 'partner_store',
     '/partner-delivery': 'partner_delivery',
+    '/cidades': 'cities_list',
     // User Routes (Novas)
 
     '/user/inicio': 'home', // Usuário comum cai na home (landing page busca)
