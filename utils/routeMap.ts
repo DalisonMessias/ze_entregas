@@ -1,4 +1,5 @@
 import { ActiveTab } from '../components/App';
+import { UserRole } from '../types';
 
 // Mapeamento de rotas amigáveis para Tabs internas
 // Estrutura: { slug_da_url: nome_da_active_tab }
@@ -43,10 +44,19 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/galeria-imagens': 'admin_image_gallery',
     '/admin/solicitacoes-ruas': 'admin_street_requests',
     '/admin/mediacao': 'admin_mediation',
+    '/admin/zepoint': 'zepoint',
 
     // Shared / Core Routes
     '/perfil': 'profile',
+    '/loja/perfil': 'profile',
+    '/entregador/perfil': 'profile',
+    '/user/perfil': 'profile',
+
     '/suporte': 'support',
+    '/loja/suporte': 'support',
+    '/entregador/suporte': 'support',
+    '/user/suporte': 'support',
+
     '/shop': 'shop',
     '/assistente': 'assistant',
     '/meus-pedidos': 'my_orders',
@@ -55,11 +65,31 @@ const routeMap: Record<string, ActiveTab> = {
     '/mapa-calor': 'heatmap',
     '/status': 'status',
     '/privacidade': 'privacy',
+    '/loja/privacidade': 'privacy',
+    '/entregador/privacidade': 'privacy',
+
     '/notificacoes': 'notifications',
+    '/loja/notificacoes': 'notifications',
+    '/entregador/notificacoes': 'notifications',
+
     '/configuracoes': 'settings',
+    '/entregador/configuracoes': 'settings',
+
     '/sobre': 'about',
+    '/loja/sobre': 'about',
+    '/entregador/sobre': 'about',
+
     '/faq': 'faq',
+    '/loja/faq': 'faq',
+    '/entregador/faq': 'faq',
+
     '/nuvem': 'cloud',
+    '/loja/nuvem': 'cloud',
+    '/entregador/nuvem': 'cloud',
+
+    '/carteira': 'zebank',
+    '/loja/carteira': 'zebank',
+    '/entregador/carteira': 'zebank',
 
     // Store Partner Routes
     '/loja/equipe': 'store_team',
@@ -72,6 +102,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/status': 'store_status',
     '/loja/financeiro': 'store_finance_panel',
     '/loja/catalogo': 'store_catalog',
+    '/loja/catalogo-impresso': 'store_print_catalog',
     '/loja/api': 'store_api_docs',
     '/loja/zepay': 'zepay_store',
     '/loja/emprestimos': 'store_loans',
@@ -83,6 +114,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/nova-entrega': 'new_request',
     '/loja/pedidos': 'associate_orders',
     '/loja/historico': 'history',
+    '/loja/zepoint': 'zepoint',
 
     // Delivery Partner/Person Routes
     '/entregador/inicio': 'daily_panel',
@@ -98,23 +130,20 @@ const routeMap: Record<string, ActiveTab> = {
     '/entregador/enderecos': 'addresses',
     '/entregador/pedidos': 'associate_orders',
     '/entregador/pontuacao': 'score',
+    '/entregador/zepoint': 'zepoint',
 
     // Public/Misc
     '/instalar': 'install_app',
     '/upgrade': 'upgrade_to_partner',
     '/ruas': 'streets_list',
-    '/carteira': 'zebank',
     '/home': 'home',
+    '/partner-store': 'partner_store',
+    '/partner-delivery': 'partner_delivery',
     // User Routes (Novas)
+
     '/user/inicio': 'home', // Usuário comum cai na home (landing page busca)
-    '/user/perfil': 'profile',
     '/user/pedidos': 'my_orders',
     '/user/historico': 'my_orders',
-    '/user/suporte': 'support',
-    '/user/carteira': 'zebank',
-    '/user/configuracoes': 'settings',
-    '/user/privacidade': 'privacy',
-    '/user/notificacoes': 'notifications',
 
     // Authentication Routes
     '/login': 'login',
@@ -122,12 +151,12 @@ const routeMap: Record<string, ActiveTab> = {
     '/recuperar-senha': 'forgot_password'
 };
 
-// Inverte o mapa para buscar URL a partir da Tab
-// active_tab -> /slug
-const reverseRouteMap: Record<string, string> = Object.entries(routeMap).reduce((acc, [path, tab]) => {
-    acc[tab] = path;
+// Agrupa caminhos por Tab para busca eficiente por Role
+const tabToPaths = Object.entries(routeMap).reduce((acc, [path, tab]) => {
+    if (!acc[tab]) acc[tab] = [];
+    acc[tab].push(path);
     return acc;
-}, {} as Record<string, string>);
+}, {} as Record<string, string[]>);
 
 /**
  * Retorna a ActiveTab correspondente à URL atual.
@@ -146,32 +175,61 @@ export const getTabFromUrl = (pathname: string): ActiveTab | null => {
         return 'store_public_chat';
     }
 
-    // Normaliza removendo trailing slash, exceto se for raiz
     const cleanPath = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+
+    // Check for Dynamic POS slugs (/loja/{slug} or /entregador/{slug})
+    // Only if it doesn't match an existing route in routeMap
+    if (!routeMap[cleanPath]) {
+        if (pathname.match(/^\/loja\/[^\/]+$/)) return 'zepoint';
+        if (pathname.match(/^\/entregador\/[^\/]+$/)) return 'zepoint';
+    }
+
+    // Normaliza removendo trailing slash, exceto se for raiz
     return routeMap[cleanPath] || null;
 };
 
 /**
- * Retorna a URL (slug) correspondente à Tab.
+ * Retorna a URL (slug) correspondente à Tab, considerando a Role do usuário para prefixação.
  * Se não encontrar, retorna null.
  */
-export const getUrlFromTab = (tab: ActiveTab): string | null => {
-    return reverseRouteMap[tab] || null;
+export const getUrlFromTab = (tab: ActiveTab, role?: UserRole): string | null => {
+    const paths = tabToPaths[tab];
+    if (!paths || paths.length === 0) return null;
+
+    // Se houver Role, tenta encontrar o caminho com o prefixo ideal
+    if (role === 'admin') {
+        const found = paths.find(p => p.startsWith('/admin/'));
+        if (found) return found;
+    }
+
+    if (role === 'store_partner' || role === 'collaborator') {
+        const found = paths.find(p => p.startsWith('/loja/'));
+        if (found) return found;
+    }
+
+    if (role === 'delivery_partner' || role === 'delivery_person') {
+        const found = paths.find(p => p.startsWith('/entregador/'));
+        if (found) return found;
+    }
+
+    if (role === 'user') {
+        const found = paths.find(p => p.startsWith('/user/'));
+        if (found) return found;
+    }
+
+    // Prefere rotas curtas (root) se não houver match de prefixo específico de role
+    // Ou simplesmente retorna o primeiro disponível
+    return paths.find(p => !p.includes('/', 1)) || paths[0];
 };
 
 /**
  * Atualiza a URL do navegador sem recarregar a página.
  */
-export const syncUrlWithTab = (tab: ActiveTab) => {
-    const path = getUrlFromTab(tab);
+export const syncUrlWithTab = (tab: ActiveTab, role?: UserRole) => {
+    const path = getUrlFromTab(tab, role);
     if (path) {
         // Se a URL já for a correta, não faz nada
         if (window.location.pathname === path) return;
         window.history.pushState({ tab }, '', path);
-    } else {
-        // Se for uma tab sem rota mapeada, volta para raiz ou mantém? 
-        // Idealmente todas deveriam ter rota. Se não tiver, voltamos pro root ou hash.
-        // Vamos manter a URL limpa se não tiver mapping, ou usar um default.
-        // window.history.pushState({ tab }, '', '/'); 
     }
 };

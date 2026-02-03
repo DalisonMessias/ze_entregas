@@ -19,7 +19,6 @@ import { FuelCalculator } from './FuelCalculator';
 import { RouteCalculator } from './RouteCalculator';
 import { Maintenance } from './Maintenance';
 import { ExclusiveLock } from './ExclusiveLock';
-import { MerchantPOS } from './MerchantPOS';
 import { useDialog } from '../utils/dialogService';
 import { NotificationCenter } from './NotificationCenter';
 import { useNotification } from '../contexts/NotificationContext';
@@ -141,7 +140,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
     const [showFuelCalc, setShowFuelCalc] = useState(false);
     const [showRouteCalc, setShowRouteCalc] = useState(false);
     const [showMaintenance, setShowMaintenance] = useState(false);
-    const [showMerchantPOS, setShowMerchantPOS] = useState(false);
 
     // Delivery Code Input
     const [deliveryCodeInput, setDeliveryCodeInput] = useState<string>('');
@@ -695,7 +693,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Manutenção</span>
                             </Button>
-                            <Button onClick={() => setShowMerchantPOS(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                            <Button onClick={() => onNavigate('zepoint')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
                                     <Smartphone className="w-5 h-5" />
                                 </div>
@@ -906,7 +904,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
             {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
             {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
-            {showMerchantPOS && <MerchantPOS onClose={() => setShowMerchantPOS(false)} />}
             {showNotifications && <NotificationCenter onClose={() => setShowNotifications(false)} />}
 
             {/* GPS Selection Modal */}

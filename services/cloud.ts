@@ -118,6 +118,17 @@ export const syncOfflineData = async (): Promise<boolean> => {
 
                 // Re-fetch terminal ID if needed or trust stored ID
                 // Ideally payload has everything. 
+
+                // CRITICAL FIX: Ensure user_id is present to avoid constraint violation (23502)
+                if (!payload.user_id) {
+                    const { user } = await getUserWithCache();
+                    if (user) {
+                        payload.user_id = user.id;
+                        // Also ensure merchant_user_id is set if missing, as it tracks the seller
+                        if (!payload.merchant_user_id) payload.merchant_user_id = user.id;
+                    }
+                }
+
                 // We perform the insert directly.
                 const { error } = await sb.from('user_terminal_transactions').insert(payload);
                 if (error) throw error;
@@ -1249,45 +1260,82 @@ export const getShopSettings = async (): Promise<ShopSettings | null> => {
 
 export const getStoreProducts = async (targetStoreId?: string, signal?: AbortSignal): Promise<StoreProduct[]> => {
     const sb = getClient();
-    if (!sb) return [];
+    if (!sb) {
+        console.error('[Cloud] Supabase client not initialized');
+        return [];
+    }
 
     let userId: string | undefined;
 
     if (targetStoreId) {
-        // Admin mode or explicit target
         userId = targetStoreId;
     } else {
         const { user } = await getUserWithCache();
-        if (!user) return [];
+        if (!user) {
+            console.warn('[Cloud] User not authenticated in getStoreProducts');
+            return [];
+        }
         userId = user.id;
     }
 
-    let query = sb
-        .from('products')
-        .select('*, category:categories(name)')
-        .eq('store_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1000); // Increased limit to support larger catalogs in POS
+    console.log('[Cloud] Fetching products for store:', userId);
 
-    if (signal) query = query.abortSignal(signal);
+    try {
+        // Tenta query simples primeiro para garantir que o básico funciona
+        // Recuperamos category_id para poder mapear manualmente se necessário ou apenas ignorar
+        let query = sb
+            .from('products')
+            .select('*')
+            .eq('store_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1000);
 
-    const { data, error } = await query;
+        if (signal) query = query.abortSignal(signal);
 
-    if (error) {
-        if (error.code !== '20') { // 20 is abort error
-            console.error("Error fetching products:", error);
+        const { data, error } = await query;
+
+        if (error) {
+            console.error("[Cloud] Error fetching products (simple query):", error);
+            return [];
         }
+
+        console.log(`[Cloud] Fetched ${data?.length || 0} products successfully.`);
+
+        // Se precisarmos de categorias, idealmente faríamos um join, mas se o join está quebrando,
+        // vamos carregar as categorias separadamente e mapear em memória por enquanto (seguro e robusto)
+        // Isso evita que um erro de relação quebre toda a listagem de produtos
+        let mappedData = data || [];
+
+        try {
+            // Busca categorias separadas para mapear nomes
+            const categoriesResponse = await sb.from('categories').select('id, name').eq('store_id', userId);
+            const categoriesMap = new Map();
+            if (categoriesResponse.data) {
+                categoriesResponse.data.forEach((c: any) => categoriesMap.set(c.id, c.name));
+            }
+
+            // Mapear
+            mappedData = mappedData.map((p: any) => ({
+                ...p,
+                category: categoriesMap.get(p.category_id) || 'Geral',
+                image_url: p.images && p.images.length > 0 ? p.images[0] : null
+            }));
+
+        } catch (catError) {
+            console.warn("[Cloud] Error fetching/mapping categories, defaulting to Geral:", catError);
+            mappedData = mappedData.map((p: any) => ({
+                ...p,
+                category: 'Geral',
+                image_url: p.images && p.images.length > 0 ? p.images[0] : null
+            }));
+        }
+
+        return mappedData;
+
+    } catch (e) {
+        console.error("[Cloud] Unexpected error in getStoreProducts:", e);
         return [];
     }
-
-    // Mapear o resultado para incluir category_name flat no objeto, compatível com o frontend
-    const mappedData = data?.map((p: any) => ({
-        ...p,
-        category: p.category?.name || 'Geral', // Nome da categoria para exibição
-        image_url: p.images && p.images.length > 0 ? p.images[0] : null
-    }));
-
-    return mappedData || [];
 };
 
 
@@ -3956,13 +4004,14 @@ export const createTerminalTransaction = async (transaction: any): Promise<any> 
     // 5. Registrar Transação do Terminal
     const transactionPayload = {
         terminal_id: transaction.terminal_id,
-        merchant_user_id: transaction.user_id, // Owner
+        user_id: transaction.user_id || (await getUserWithCache()).user?.id, // Obrigatório para o banco atual (NOT NULL). Fallback para avoid error.
+        merchant_user_id: transaction.user_id || (await getUserWithCache()).user?.id, // Novo padrão (identificado como vendedor)
         amount: transaction.amount,
         status: transaction.status,
-        created_at: transaction.created_at,
+        created_at: transaction.created_at || new Date().toISOString(),
         payer_name: transaction.payer_name,
         description: transaction.description,
-        metadata: transaction.metadata,
+        metadata: transaction.metadata || {},
         is_offline_sync: false
     };
 
@@ -6621,4 +6670,40 @@ export const deleteCoupon = async (couponId: string) => {
     }
     return { success: true };
 };
+
+// --- POS HELPERS ---
+
+export const checkTerminalPinExists = async (terminalId: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+    const { data, error } = await sb.from('user_terminals').select('pin_code').eq('id', terminalId).single();
+    if (error || !data) return false;
+    return !!data.pin_code;
+};
+
+export const validateTerminalPin = async (terminalId: string, pin: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+    const { data, error } = await sb.from('user_terminals').select('pin_code').eq('id', terminalId).single();
+    if (error || !data) return false;
+    return data.pin_code === pin;
+};
+
+export const getPartnerFeeSettings = async (): Promise<PartnerFeeSettings> => {
+    const sb = getClient();
+    // Try to fetch from a settings table if it exists, otherwise return defaults
+    // Assuming 'system_settings' or generic config table might exist, but for now returning defaults
+    // based on common values seen in the app.
+    return {
+        global_tax_fixed: 0.50,
+        global_tax_percent: 2.0,
+        super_store_monthly_fee: 99.00,
+        association_fee: 10.00,
+        base_delivery_value: 5.00,
+        base_delivery_km: 3,
+        extra_km_value: 1.50,
+        additional_stop_fee: 2.00
+    };
+};
+
 

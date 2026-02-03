@@ -1104,7 +1104,10 @@ CREATE TABLE IF NOT EXISTS public.user_terminal_transactions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     is_offline_sync BOOLEAN DEFAULT FALSE,
     merchant_user_id UUID NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     payer_id UUID,
+    description TEXT,
+    payer_name TEXT,
     -- Chave estrangeira para user_terminals
     CONSTRAINT fk_terminal
         FOREIGN KEY (terminal_id)
@@ -9018,23 +9021,32 @@ BEGIN
     CREATE TABLE IF NOT EXISTS public.user_terminal_transactions (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         terminal_id UUID REFERENCES public.user_terminals(id) ON DELETE CASCADE,
-        user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
         amount DECIMAL(10,2) NOT NULL,
         type TEXT CHECK (type IN ('SALE', 'REFUND')),
         status TEXT DEFAULT 'pending' CHECK (status IN ('paid', 'pending', 'failed', 'processing')),
         method TEXT CHECK (method IN ('PIX', 'CREDIT_CARD', 'ZE_QR', 'ZE_CODE')),
         metadata JSONB DEFAULT '{}'::jsonb,
+        description TEXT,
+        payer_name TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
     -- Garantir colunas (Migração Aditiva para tabela existente)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'user_id') THEN
-        ALTER TABLE public.user_terminal_transactions ADD COLUMN user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE;
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'terminal_id') THEN
         ALTER TABLE public.user_terminal_transactions ADD COLUMN terminal_id UUID REFERENCES public.user_terminals(id) ON DELETE CASCADE;
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'merchant_user_id') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN merchant_user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+    END IF;
+
+    -- Atualizar merchant_user_id com user_id se estiver nulo
+    UPDATE public.user_terminal_transactions SET merchant_user_id = user_id WHERE merchant_user_id IS NULL;
 
     -- Índices
     CREATE INDEX IF NOT EXISTS user_terminal_transactions_terminal_id_idx ON public.user_terminal_transactions(terminal_id);
@@ -9141,6 +9153,12 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'metadata') THEN
         ALTER TABLE public.user_terminal_transactions ADD COLUMN metadata JSONB DEFAULT '{}'::jsonb;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'description') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN description TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_terminal_transactions' AND column_name = 'payer_name') THEN
+        ALTER TABLE public.user_terminal_transactions ADD COLUMN payer_name TEXT;
     END IF;
 
     CREATE INDEX IF NOT EXISTS payment_gateway_settings_gateway_name_idx ON public.payment_gateway_settings(gateway_name);

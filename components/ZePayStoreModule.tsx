@@ -10,7 +10,7 @@ import { Button } from './Button';
 import { Skeleton } from './Skeleton';
 import { Logo } from './Logo';
 import { FinancialPanel } from './FinancialPanel';
-import { MerchantPOS } from './MerchantPOS';
+import { MerchantPOSDesktop } from './MerchantPOSDesktop';
 import { useDialog } from '../utils/dialogService';
 import { CustomInput } from './CustomInput';
 import { PixChargeModal } from './PixChargeModal';
@@ -283,7 +283,7 @@ export const ZePayStore: React.FC = () => {
                                 <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Receber PIX</span>
                             </button>
                             <button
-                                onClick={() => setShowPOS(true)}
+                                onClick={() => { const evt = new CustomEvent('navigateToTab', { detail: { tab: 'zepoint' } }); window.dispatchEvent(evt); }}
                                 className="flex flex-col items-center justify-center p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-95"
                             >
                                 <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600 mb-2">
@@ -373,20 +373,6 @@ export const ZePayStore: React.FC = () => {
                 <FinancialPanel userRole="store_partner" hideHeader />
             )}
 
-            {showPOS && (
-                <div className="mt-4">
-                    {isSuperStore ? (
-                        <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                            <MerchantPOS onClose={() => setShowPOS(false)} />
-                        </div>
-                    ) : (
-                        <ExclusiveLock
-                            title="Maquininha do Zé"
-                            description="A maquininha está disponível apenas para Super Lojistas."
-                        />
-                    )}
-                </div>
-            )}
 
             {showRecharge && (
                 <PixChargeModal

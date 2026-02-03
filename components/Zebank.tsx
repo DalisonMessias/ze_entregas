@@ -8,7 +8,6 @@ import { UserRole, ZebankData, ZebankTransaction, ZebankCard, PayoutSummary } fr
 import { ExclusiveLock } from './ExclusiveLock';
 import { Button } from './Button';
 import { Skeleton } from './Skeleton';
-import { MerchantPOS } from './MerchantPOS';
 import { useDialog } from '../utils/dialogService';
 import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
@@ -388,7 +387,6 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
     const [showCardQR, setShowCardQR] = useState<string | null>(null);
     const [showTestConfirm, setShowTestConfirm] = useState<ZebankCard | null>(null);
     const [showLimitModal, setShowLimitModal] = useState<ZebankCard | null>(null);
-    const [showMerchantPOS, setShowMerchantPOS] = useState(false);
     const [showPixCharge, setShowPixCharge] = useState(false);
     const [showRecharge, setShowRecharge] = useState(false);
 
@@ -664,7 +662,7 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Novo Cartão</span>
                 </button>
                 {userRole !== 'user' && (
-                    <button onClick={() => setShowMerchantPOS(true)} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <button onClick={() => { const evt = new CustomEvent('navigateToTab', { detail: { tab: 'zepoint' } }); window.dispatchEvent(evt); }} className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                         <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400"><Smartphone className="w-5 h-5" /></div>
                         <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Maquininha</span>
                     </button>
@@ -880,17 +878,6 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
                 )
             }
 
-            {/* Merchant POS Modal */}
-            {
-                showMerchantPOS && (
-                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-                        <div className="relative w-full max-w-md">
-                            <button onClick={() => setShowMerchantPOS(false)} className="absolute -top-12 right-0 text-white"><X className="w-8 h-8" /></button>
-                            <MerchantPOS onClose={() => setShowMerchantPOS(false)} />
-                        </div>
-                    </div>
-                )
-            }
 
 
             {showPixCharge && (

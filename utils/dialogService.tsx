@@ -103,19 +103,30 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const alert = (options: string | DialogOptions): Promise<void> => {
         const opt = typeof options === 'string' ? { title: 'Aviso', message: options } : options;
-        return new Promise(resolve => {
-            setDialogState({
-                isOpen: true,
-                type: 'alert',
-                title: opt.title,
-                message: opt.message,
-                resolve: resolve,
-                reject: null,
-                confirmButtonText: opt.confirmButtonText || 'OK',
-            });
-            resolveRef.current = resolve;
-            typeRef.current = 'alert';
+
+        // Inferência inteligente do tipo de notificação baseada no título
+        let type: 'success' | 'error' | 'info' | 'warning' = 'info';
+        const titleLower = opt.title.toLowerCase();
+
+        if (titleLower.includes('erro') || titleLower.includes('falha') || titleLower.includes('error')) {
+            type = 'error';
+        } else if (titleLower.includes('sucesso') || titleLower.includes('enviado') || titleLower.includes('salvo') || titleLower.includes('concluído')) {
+            type = 'success';
+        } else if (titleLower.includes('aviso') || titleLower.includes('atenção') || titleLower.includes('cuidado') || titleLower.includes('importante')) {
+            type = 'warning';
+        }
+
+        // Se options tiver um type explícito (se expandirmos a interface no futuro), usaria aqui.
+        // Por enquanto, usamos a inferência.
+
+        setToastState({
+            isOpen: true,
+            message: opt.message,
+            type: type,
+            duration: 4000,
         });
+
+        return Promise.resolve();
     };
 
     const confirm = (options: string | DialogOptions): Promise<boolean> => {

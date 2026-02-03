@@ -333,6 +333,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                                 <Button
                                     onClick={() => {
                                         window.history.pushState({ tab: 'partner_store' }, '', '/partner-store');
+                                        window.dispatchEvent(new CustomEvent('pushstate_changed'));
                                         window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'partner_store' } }));
                                     }}
                                     variant="outline"
@@ -383,6 +384,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                                 <Button
                                     onClick={() => {
                                         window.history.pushState({ tab: 'partner_delivery' }, '', '/partner-delivery');
+                                        window.dispatchEvent(new CustomEvent('pushstate_changed'));
                                         window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'partner_delivery' } }));
                                     }}
                                     variant="outline"

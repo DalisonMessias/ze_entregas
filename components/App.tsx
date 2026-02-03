@@ -43,6 +43,7 @@ const StoreTeam = React.lazy(() => import('./StoreTeam').then(module => ({ defau
 const StoreReports = React.lazy(() => import('./StoreReports').then(module => ({ default: module.StoreReports })));
 const StoreMarketing = React.lazy(() => import('./StoreMarketing').then(module => ({ default: module.StoreMarketing })));
 const StoreIntegrations = React.lazy(() => import('./StoreIntegrations').then(module => ({ default: module.StoreIntegrations })));
+const PrintCatalogGenerator = React.lazy(() => import('./PrintCatalogGenerator').then(module => ({ default: module.PrintCatalogGenerator })));
 const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => ({ default: module.StoreSettings })));
 const StoreProductImport = React.lazy(() => import('./ProductImportExport').then(module => ({ default: module.ProductImportExport })));
 const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => ({ default: module.ZePayStore })));
@@ -91,6 +92,8 @@ const UserOrders = React.lazy(() => import('./UserOrders').then(m => ({ default:
 const StoreChatPage = React.lazy(() => import('./DigitalMenu/StoreChatPage').then(m => ({ default: m.StoreChatPage })));
 const StreetRequestPage = React.lazy(() => import('../src/pages/StreetRequestPage').then(m => ({ default: m.StreetRequestPage })));
 const StreetRequestsAdmin = React.lazy(() => import('../src/pages/StreetRequestsAdmin').then(m => ({ default: m.StreetRequestsAdmin })));
+const MerchantPOSMobile = React.lazy(() => import('./MerchantPOSMobile').then(m => ({ default: m.MerchantPOSMobile })));
+const MerchantPOSDesktop = React.lazy(() => import('./MerchantPOSDesktop').then(m => ({ default: m.MerchantPOSDesktop })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -157,6 +160,7 @@ export type ActiveTab =
     | 'install_app'
     | 'internal_orders'
     | 'store_catalog'
+    | 'store_print_catalog'
     | 'store_api_docs'
     | 'store_promotions'
 
@@ -178,6 +182,7 @@ export type ActiveTab =
     | 'digital_menu'
     | 'store_public_chat'
     | 'street_request'
+    | 'zepoint'
     | 'not_found';
 
 
@@ -700,7 +705,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     // Sincroniza URL quando a aba muda
     useEffect(() => {
         if (activeTab) {
-            syncUrlWithTab(activeTab);
+            syncUrlWithTab(activeTab, effectiveRole);
         }
     }, [activeTab, effectiveRole]);
 
@@ -835,18 +840,18 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
             'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
-            'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation',
+            'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation', 'zepoint',
             'store_drivers_chat'
         ]),
         store_partner: new Set<ActiveTab>([
-            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_api_docs', 'store_loans', 'store_promotions', 'internal_chat', 'store_drivers_chat'
+            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_print_catalog', 'store_api_docs', 'store_loans', 'store_promotions', 'internal_chat', 'store_drivers_chat', 'zepoint'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
-            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'loans', 'insurance', 'score'
+            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'loans', 'insurance', 'score', 'zepoint'
         ]),
         delivery_person: new Set<ActiveTab>([
-            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'insurance', 'score'
+            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'insurance', 'score', 'zepoint'
         ]),
         collaborator: new Set(['collaborator_area', 'shop', 'internal_orders', 'store_catalog']), // Added shop access
         user: new Set(['shop', 'profile', 'support', 'addresses', 'home', 'notifications', 'privacy', 'settings', 'zebank']) // Basic user access
@@ -979,10 +984,16 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'zepay_store': return <ZePayStore />; // ZéPay Module
                 case 'internal_orders': return <InternalOrders />;
                 case 'store_catalog': return <StoreCatalog />;
+                case 'store_print_catalog': return <PrintCatalogGenerator />;
                 case 'store_promotions': return <StorePromotions storeId={userId} />;
                 case 'store_api_docs': return <StoreApiDocs onNavigate={navigate} />;
                 case 'store_loans': return <LoansModule />;
                 case 'collaborator_area': return <CollaboratorWrapper userId={userId} onLogout={handleLogout} />;
+                case 'zepoint':
+                    if (isStore || isAdmin) {
+                        return <MerchantPOSDesktop onClose={() => navigate(defaultTabByRole[effectiveRole])} />;
+                    }
+                    return <MerchantPOSMobile onClose={() => navigate(defaultTabByRole[effectiveRole])} />;
 
 
                 // Partner & Delivery Person Specific
@@ -1229,6 +1240,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                 <MenuButton icon={CreditCard} label="Gateways de Pagamento" tab="admin_payment_gateways" />
                                 <MenuButton icon={Link2} label="Mercado Pago" tab="admin_mercadopago" />
                                 <MenuButton icon={Smartphone} label="Configurar PIX" tab="admin_pix_config" />
+                                <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
                                 <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
 
                                 <MenuSection title="Marketing & Conteúdo" />
@@ -1257,6 +1269,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                 <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
                                 <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
                                 <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
+                                <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
                                 <MenuButton icon={MessageSquare} label="Chat com Clientes" tab="internal_chat" />
                                 <MenuButton icon={MessageCircle} label="Chat c/ Entregadores" tab="store_drivers_chat" />
                                 <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
@@ -1313,6 +1326,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                 <MenuButton icon={Flame} label="Mapa de Calor" tab="heatmap" />
                                 <MenuButton icon={MapPin} label="Meus Endereços" tab="addresses" />
                                 <MenuButton icon={Zap} label="Ferramentas de Rota" tab="route_tools" />
+                                <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
                             </>
                         )}
 
@@ -1388,7 +1402,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             </SectionErrorBoundary>
 
             {/* Main Content Area */}
-            <main className={`pt-20 px-4 mx-auto transition-all duration-300 ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
+            <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
                 {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
                 <Suspense fallback={<Loading variant="container" size="md" />}>
                     {renderContent()}

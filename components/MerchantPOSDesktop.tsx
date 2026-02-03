@@ -5,6 +5,7 @@ import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
 import { UserTerminal, UserTerminalHistoryItem, PartnerFeeSettings, FinancialStatementItem, ShopSettings, ShopCoupon, SalesSimulation, UserRole, AssociatedStore, Order, PartnerProfile } from '../types';
 import { generatePixPayload } from '../utils/pixPayloadGenerator';
+import { useMerchantPOS } from '../hooks/useMerchantPOS';
 import { generatePaymentQRCode, checkPaymentStatus } from '../services/paymentGateway';
 import { Logo } from './Logo';
 import { ReceiptModal } from './ReceiptModal';
@@ -461,78 +462,128 @@ const StatusBar = () => {
 
 
 
-export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
-    const [step, setStep] = useState<POSStep>('loading');
-    const [terminal, setTerminal] = useState<UserTerminal | null>(null);
-    const [amount, setAmount] = useState('0,00');
-    const [errorMsg, setErrorMsg] = useState('');
-    const [errorType, setErrorType] = useState<'timeout' | 'auth' | 'validation' | 'unknown' | null>(null);
-    const [userRole, setUserRole] = useState<UserRole>('delivery_person'); // Default role
+export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
+    const {
+        step, setStep,
+        terminal, setTerminal,
+        amount, setAmount,
+        errorMsg, setErrorMsg,
+        userRole, partnerProfile,
+        processing, setProcessing,
+        totalToSplit, setTotalToSplit,
+        partialAmounts, setPartialAmounts,
+        activePayment, setActivePayment,
+        pixCodeData, pixTxId,
+        pinEntry, setPinEntry,
+        newPin, setNewPin,
+        confirmPin, setConfirmPin,
+        pinAttempts, lockoutUntil, lockoutCountdown,
+        simulatorAmount, setSimulatorAmount,
+        feePayer, setFeePayer,
+        feeSettings,
+        simulationHistory, setSimulationHistory,
+        showHistory, setShowHistory,
+        simulatorCalculations,
+        saleTypeSelection, setSaleTypeSelection,
+        associatedStores, setAssociatedStores,
+        selectedStore, setSelectedStore,
+        storeOpenOrders, setStoreOpenOrders,
+        selectedOrder, setSelectedOrder,
+        activatingMessageIndex,
+        activatingMessages,
+        formatCurrency, parseCurrency,
+        handleActivateStart,
+        confirmPayment,
+        loadData,
+        handlePinSubmit,
+        handleCreatePin,
+        handleCreatePinConfirm,
+        resetPaymentState,
+        initiatePayment,
+        dialog,
+        isDemoMode,
+        toggleDemoMode,
+        history, setHistory,
+        loadingHistory, setLoadingHistory,
+        historyPage, setHistoryPage,
+        historyHasMore, setHistoryHasMore,
+        couponCode, setCouponCode,
+        couponDiscount, setCouponDiscount,
+        // New UI States from hook
+        errorType, setErrorType,
+        isWhatsAppModalOpen, setWhatsAppModalOpen,
+        isSplitButtonActive, setIsSplitButtonActive,
+        isDeactivateModalOpen, setDeactivateModalOpen,
+        showSummaryModal, setShowSummaryModal,
+        showLogsModal, setShowLogsModal,
+        runTutorial, setRunTutorial,
+        handleCopyToClipboard,
+        tutorialSteps,
+        getMockData,
+        setIsPolling, setPixCodeData, setPixTxId,
+        isPolling,
 
-    // Simulator State
-    const [simulatorAmount, setSimulatorAmount] = useState('0,00');
-    const [feePayer, setFeePayer] = useState<'seller' | 'buyer'>('seller');
-    const [feeSettings, setFeeSettings] = useState<PartnerFeeSettings | null>(null);
-    const [simulationHistory, setSimulationHistory] = useState<SalesSimulation[]>([]);
-    const [showHistory, setShowHistory] = useState(false);
+        // New central handlers
+        handleKeypadPress,
+        handleKeypadClear,
+        handleKeypadBackspace,
+        handleGoBack,
+        handleContinueFromAmount,
+        resetFlow
+    } = useMerchantPOS();
 
-    // Split State
-    const [totalToSplit, setTotalToSplit] = useState(0);
-    const [partialAmounts, setPartialAmounts] = useState<PartialPayment[]>([]);
+    // Specific local states
+    const [isDesktop, setIsDesktop] = useState(false);
+    const [userCodeInput, setUserCodeInput] = useState('');
+    const settings = { enableHighContrast: false }; // Default settings if not provided by context
 
-    const dialog = useDialog(); // Prover dialog.alert, dialog.confirm e dialog.prompt
+    // Additional local logic
+    const { showNotification } = useNotification();
+    const amountFontSize = useDynamicFont(amount, 60, 30, 1);
 
-    const [processing, setProcessing] = useState(false);
-    const [pinEntry, setPinEntry] = useState('');
-    const [newPin, setNewPin] = useState(''); // For creation
-    const [confirmPin, setConfirmPin] = useState(''); // For confirmation
-    const [pinAttempts, setPinAttempts] = useState(0); // For brute force protection
-    const [lockoutUntil, setLockoutUntil] = useState<Date | null>(null); // For lockout timer
-
-    // Coupon state
-    const [couponCode, setCouponCode] = useState('');
-    const [couponDiscount, setCouponDiscount] = useState(0);
-
-    // New states for sale type selection and associated stores
-    const [saleTypeSelection, setSaleTypeSelection] = useState<'mine' | 'associated_store' | null>(null);
-    const [associatedStores, setAssociatedStores] = useState<AssociatedStore[]>([]);
-    const [selectedStore, setSelectedStore] = useState<AssociatedStore | null>(null);
-    const [storeOpenOrders, setStoreOpenOrders] = useState<Order[]>([]);
-    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    useEffect(() => {
+        setIsDesktop(true);
+    }, []);
 
     // Simulation Message
-    const [simMessage, setSimMessage] = useState('');
+    const [simMessage, setSimMessage] = useState(''); // Seems unused or local
     const [pendingOpId, setPendingOpId] = useState<string | null>(null);
-    const [activatingMessageIndex, setActivatingMessageIndex] = useState(0); // New state for activation messages
-    const [partnerProfile, setPartnerProfile] = useState<PartnerProfile | null>(null);
 
-    // New Hooks & State for Features
-    const { isDemoMode, toggleDemoMode, getMockData } = useDemoMode();
-    const { showNotification, settings } = useNotification();
-    const [showSummaryModal, setShowSummaryModal] = useState(false);
-    const [showLogsModal, setShowLogsModal] = useState(false);
-    const amountFontSize = useDynamicFont(amount, 60, 30, 1); // Dynamic font for amount
-    const [runTutorial, setRunTutorial] = useState(false);
+    // Scrolling refs
+    const splitButtonRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [showScrollButtons, setShowScrollButtons] = useState(false);
 
-    const tutorialSteps: JoyrideStep[] = [
-        {
-            target: 'body',
-            content: 'Bem-vindo ao ZéPoint! Vamos fazer um tour rápido?',
-            placement: 'center'
-        },
-        {
-            target: '.nova-venda-btn',
-            content: 'Toque aqui para iniciar uma nova venda.'
-        },
-        {
-            target: '.simulador-btn',
-            content: 'Use o simulador para calcular taxas antes da venda.'
-        },
-        {
-            target: '.historico-btn',
-            content: 'Visualize suas vendas passadas aqui.'
-        }
-    ];
+    const handlePinVerify = () => handlePinSubmit(pinEntry);
+
+    // Ouvinte para teclado físico (Desktop)
+    useEffect(() => {
+        const handlePhysicalKeyboard = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            const key = e.key;
+
+            if (/^\d$/.test(key)) {
+                handleKeypadPress(key);
+            } else if (key === 'Backspace') {
+                handleKeypadBackspace();
+            } else if (key === 'Delete') {
+                handleKeypadClear();
+            } else if (key === 'Enter') {
+                if (step === 'amount') handleContinueFromAmount();
+                else if (step === 'pin_lock') handlePinVerify();
+                else if (step === 'create_pin') handleCreatePin();
+                else if (step === 'confirm_pin') handleCreatePinConfirm();
+            } else if (key === 'Escape') {
+                handleGoBack(onClose);
+            }
+        };
+
+        window.addEventListener('keydown', handlePhysicalKeyboard);
+        return () => window.removeEventListener('keydown', handlePhysicalKeyboard);
+    }, [step, amount, pinEntry, newPin, confirmPin, simulatorAmount, showHistory, onClose]);
+
+    // tutorialSteps moved to hook
 
     useEffect(() => {
         // Try to sync offline data on mount
@@ -546,79 +597,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         return () => window.removeEventListener('online', handleOnline);
     }, []);
 
-    const handleCopyToClipboard = (text: string, label: string) => {
-        navigator.clipboard.writeText(text).then(async () => {
-            await dialog.alert({ title: 'Sucesso', message: `${label} copiado!` });
-        }).catch(async (err) => {
-            await dialog.alert({ title: 'Erro ao Copiar', message: 'Falha ao copiar conteúdo.' });
-            await cloud.logClientError('clipboard_copy', String(err), { label });
-        });
-    };
-
-    const activatingMessages = useMemo(() => [
-        'Sincronizando dados...',
-        'Verificando conexão...',
-        'Atualizando firmware...',
-        'Isso pode levar alguns instantes.',
-    ], []);
-
-    useEffect(() => {
-        if (step === 'activating_animation_1') {
-            const interval = setInterval(() => {
-                setActivatingMessageIndex(prevIndex => (prevIndex + 1) % activatingMessages.length);
-            }, 3000); // Change message every 3 seconds
-            return () => clearInterval(interval);
-        }
-    }, [step, activatingMessages.length]);
-
-    const handleActivateStart = async () => {
-        setActivatingMessageIndex(0); // Reset message index on start
-        setStep('activating_animation_1'); // Show animation for activation
-        try {
-            const activatedTerminal = await cloud.activateMyTerminal();
-            if (activatedTerminal) {
-                setTerminal(activatedTerminal);
-                await dialog.alert({ title: 'Sucesso', message: 'ZéPoint ativada com sucesso!' });
-                // Add a 10-second delay for the animation
-                setTimeout(() => {
-                    setStep('create_pin');
-                }, 10000); // 10000 milliseconds = 10 seconds
-            } else {
-                await dialog.alert({ title: 'Erro na Ativação', message: 'Falha ao ativar ZéPoint: Terminal não retornado.' });
-                setStep('inactive');
-            }
-        } catch (e: any) {
-            await dialog.alert({ title: 'Erro', message: e.message || 'Falha ao ativar ZéPoint.' });
-            setErrorMsg(e.message || 'Erro desconhecido durante a ativação.');
-            setErrorType('unknown');
-            setStep('error');
-            await cloud.logClientError('pos_activate', e?.message, {});
-        }
-    };
-
-    // History
-    const [history, setHistory] = useState<UserTerminalHistoryItem[]>([]);
-    const [loadingHistory, setLoadingHistory] = useState(false);
-    const [historyPage, setHistoryPage] = useState(1);
-    const [historyHasMore, setHistoryHasMore] = useState(true);
-
-    // Settings
-
-    // New state for payment modals
-    const [activePayment, setActivePayment] = useState<{ id: string, method: 'PIX' | 'SCAN' | 'USER_CODE', amount: number } | null>(null);
-    const [pixCodeData, setPixCodeData] = useState<string | null>(null);
-    const [pixTxId, setPixTxId] = useState<string | null>(null);
-    const [isPolling, setIsPolling] = useState(false);
-    const [userCodeInput, setUserCodeInput] = useState('');
-    const [lockoutCountdown, setLockoutCountdown] = useState<number>(0); // New state for lockout countdown
-
-    const [isWhatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
-    const [isSplitButtonActive, setIsSplitButtonActive] = useState(false);
-    const [isDeactivateModalOpen, setDeactivateModalOpen] = useState(false);
-    const splitButtonRef = useRef<HTMLDivElement>(null);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [showScrollButtons, setShowScrollButtons] = useState(false);
-
+    // handleScroll moved to local or hook depends on usage
     const handleScroll = (direction: 'up' | 'down') => {
         if (scrollContainerRef.current) {
             scrollContainerRef.current.scrollBy({
@@ -627,6 +606,9 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
             });
         }
     };
+
+    // handleScroll moved to local or hook depends on usage
+    // Merged local scroll logic
 
     useEffect(() => {
         const checkScroll = () => {
@@ -642,96 +624,9 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         return () => clearTimeout(timer);
     }, [partialAmounts, step]); // Re-check when amounts change or when step changes
 
-    // Effect to manage lockout state from localStorage
-    useEffect(() => {
-        const storedAttempts = localStorage.getItem('pos_pin_attempts');
-        if (storedAttempts) {
-            setPinAttempts(Number(storedAttempts));
-        }
-
-        const storedLockout = localStorage.getItem('pos_lockout_until');
-        if (storedLockout) {
-            const lockoutDate = new Date(storedLockout);
-            if (lockoutDate > new Date()) {
-                setLockoutUntil(lockoutDate);
-            } else {
-                // If lockout time has passed, clear stored values
-                localStorage.removeItem('pos_lockout_until');
-                localStorage.removeItem('pos_pin_attempts');
-                setPinAttempts(0);
-                setLockoutUntil(null);
-            }
-        }
-    }, []);
-
-    // Effect for lockout countdown
-    useEffect(() => {
-        let interval: NodeJS.Timeout | undefined;
-        if (lockoutUntil) {
-            interval = setInterval(() => {
-                const remaining = Math.max(0, Math.ceil((lockoutUntil.getTime() - new Date().getTime()) / 1000));
-                setLockoutCountdown(remaining);
-                if (remaining === 0) {
-                    setLockoutUntil(null);
-                    setPinAttempts(0);
-                    localStorage.removeItem('pos_lockout_until');
-                    localStorage.removeItem('pos_pin_attempts');
-                }
-            }, 1000);
-        }
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [lockoutUntil]);
+    // Lockout effects removed (handled by hook)
 
 
-    const simulatorCalculations = useMemo(() => {
-        const saleValue = parseCurrency(simulatorAmount);
-        if (!feeSettings || saleValue <= 0) {
-            return {
-                gross: formatCurrency(0),
-                fees: formatCurrency(0),
-                net: formatCurrency(0),
-                final: formatCurrency(0),
-                rawGross: 0,
-                rawFees: 0,
-                rawNet: 0,
-            };
-        }
-
-        const feePercent = feeSettings.global_tax_percent / 100;
-        const feeFixed = feeSettings.global_tax_fixed;
-        let gross = 0;
-        let fees = 0;
-        let net = 0;
-
-        if (feePayer === 'seller') {
-            gross = saleValue;
-            fees = (gross * feePercent) + feeFixed;
-            net = gross - fees;
-        } else { // buyer pays
-            // The saleValue is what the seller wants to receive (net)
-            net = saleValue;
-            // Formula to calculate gross amount so that after fees, the net is the intended value
-            gross = (net + feeFixed) / (1 - feePercent);
-            fees = gross - net;
-        }
-
-        const rawGross = gross > 0 ? gross : 0;
-        const rawFees = fees > 0 ? fees : 0;
-        const rawNet = net > 0 ? net : 0;
-
-        return {
-            gross: formatCurrency(rawGross),
-            fees: formatCurrency(rawFees),
-            net: formatCurrency(rawNet),
-            final: formatCurrency(rawGross), // Final value for buyer is always the gross value
-            rawGross,
-            rawFees,
-            rawNet,
-        };
-
-    }, [simulatorAmount, feePayer, feeSettings]);
 
     const handleSaveSimulation = async () => {
         const saleValue = parseCurrency(simulatorAmount);
@@ -798,60 +693,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         };
     }, []);
 
-    const confirmPayment = async (paymentId: string, method: 'PIX' | 'ZE_QR' | 'USER_CODE', payload: string) => {
-        if (!terminal) {
-            await dialog.alert({ title: 'Erro', message: 'Terminal não inicializado.' });
-            return;
-        }
-
-        // CONFIRMAÇÃO MANUAL DE PIX ESTÁTICO
-        if (payload === 'MANUAL_PIX_CONFIRM') {
-            setIsPolling(false);
-            setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p));
-            closePaymentOverlay();
-            await dialog.alert({ title: 'Confirmado', message: 'Pagamento Pix registrado com sucesso.' });
-            return;
-        }
-
-        try {
-            if (method === 'PIX') {
-                const result = await generatePaymentQRCode(activePayment?.amount || 0, {
-                    terminal_id: terminal.id,
-                    type: 'pos_sale'
-                });
-                setPixCodeData(result.qrCode);
-                setPixTxId(result.txId);
-                setIsPolling(true);
-            } else if (method === 'ZE_QR' || method === 'USER_CODE') {
-
-                // Construct standard transaction payload
-                const transaction = {
-                    user_id: terminal.user_id, // Always credit the terminal owner (or store)
-                    amount: activePayment?.amount || 0,
-                    status: 'COMPLETED', // Direct payment is instant
-                    created_at: new Date().toISOString(),
-                    payer_name: method === 'USER_CODE' ? `Cliente: ${payload}` : 'Cliente QR',
-                    description: method === 'ZE_QR' ? 'Pagamento via QR' : 'Pagamento via Código',
-                    terminal_id: terminal.id,
-                    metadata: {
-                        is_demo: isDemoMode,
-                        store_id: selectedStore?.id, // Ensure wallet routing
-                        payment_method: method,
-                        reference_id: payload
-                    }
-                };
-
-                await cloud.createTerminalTransaction(transaction);
-
-                await dialog.alert({ title: 'Sucesso', message: 'Pagamento confirmado!' });
-                setPartialAmounts(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p));
-                closePaymentOverlay();
-            }
-        } catch (e: any) {
-            await dialog.alert({ title: 'Erro no Pagamento', message: e.message || 'Falha ao confirmar pagamento.' });
-            await cloud.logClientError('pos_confirm_payment', e?.message, {});
-        }
-    };
+    // confirmPayment removed (handled by hook)
 
     const handleScanSuccess = (decodedText: string) => {
         if (activePayment) {
@@ -895,113 +737,8 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
     // Load data
     useEffect(() => {
-        const load = async () => {
-            try {
-                // Demo Mode Check
-                if (isDemoMode) {
-                    const mockTerm = getMockData('terminal');
-                    if (mockTerm) {
-                        setTerminal(mockTerm as any);
-                        setUserRole('store_partner'); // Simulate store partner
-                        setStep('amount');
-                    }
-                    return;
-                }
-
-                const [fees, role, stores, profile] = await Promise.all([
-                    cloud.getPublicFeeSettings(),
-                    cloud.getUserRole(),
-                    cloud.getPartnerAssociatedStores(),
-                    cloud.getMyPartnerProfile()
-                ]);
-
-                if (profile) setPartnerProfile(profile);
-
-                if (fees) {
-                    setFeeSettings(fees);
-                }
-                setUserRole(role);
-
-                let currentTerminal: UserTerminal | null = null;
-                let nextStep: POSStep = 'activation_intro';
-
-                // Step 1: Try to get a personal terminal for eligible roles
-                if (role === 'store_partner' || role === 'admin' || role === 'delivery_partner') {
-                    currentTerminal = await cloud.getMyTerminal();
-                }
-
-                if (currentTerminal) {
-                    setTerminal(currentTerminal);
-                    if (currentTerminal.status === 'ACTIVE') {
-                        if (currentTerminal.pin_code) {
-                            nextStep = 'pin_lock';
-                        } else {
-                            nextStep = 'create_pin';
-                        }
-                    } else { // currentTerminal is not ACTIVE
-                        setErrorMsg('Seu terminal está inativo. Por favor, ative-o ou contate o suporte.');
-                        setErrorType('validation');
-                        nextStep = 'inactive';
-                    }
-                } else {
-                    // No personal terminal found, now check for delivery_person and associated stores
-                    if (role === 'delivery_person') {
-                        if (stores && stores.length > 0) {
-                            setAssociatedStores(stores);
-                            if (stores.length === 1) {
-                                setSelectedStore(stores[0]);
-                                currentTerminal = await cloud.getStoreTerminal(stores[0].id);
-                                if (currentTerminal) {
-                                    setTerminal(currentTerminal);
-                                    if (currentTerminal.status === 'ACTIVE') {
-                                        nextStep = 'amount';
-                                    } else {
-                                        setErrorMsg('Terminal da loja associada inativo.');
-                                        setErrorType('validation');
-                                        nextStep = 'inactive';
-                                    }
-                                } else {
-                                    setErrorMsg('Terminal da loja associada não encontrado.');
-                                    setErrorType('validation');
-                                    nextStep = 'inactive';
-                                }
-                            } else { // Multiple associated stores for delivery_person
-                                nextStep = 'choose_sale_type';
-                            }
-                        } else { // delivery_person without associated stores
-                            setErrorMsg('Entregador normal sem lojas associadas não pode usar a maquininha.');
-                            setErrorType('validation');
-                            nextStep = 'inactive';
-                        }
-                    } else if (role === 'delivery_partner' || role === 'store_partner' || role === 'admin') {
-                        // For these roles, if no currentTerminal was found, they need to activate/create one.
-                        nextStep = 'activation_intro';
-                        // Removed setErrorMsg and setErrorType here, as it's an intended flow, not an error.
-                    } else {
-                        // Fallback for any other unhandled scenario or role
-                        setErrorMsg('Não foi possível carregar seu perfil de terminal. Por favor, contate o suporte.');
-                        setErrorType('unknown');
-                        nextStep = 'inactive';
-                    }
-                }
-
-                setStep(nextStep);
-
-            } catch (e: any) {
-                const msg = e?.message || '';
-                let type: 'timeout' | 'auth' | 'validation' | 'unknown' = 'unknown';
-                if (msg.toLowerCase().includes('timeout')) type = 'timeout';
-                else if (msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('token')) type = 'auth';
-                else if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('not found')) type = 'validation';
-                setErrorMsg('Erro ao carregar dados do terminal.');
-                setErrorType(type);
-                setStep('error');
-                await cloud.logClientError('pos_load', msg, {});
-            }
-        };
-
         if (step === 'loading') {
-            load();
+            loadData();
         }
     }, [step]);
 
@@ -1028,133 +765,15 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         });
     };
 
-    const handleGoBack = () => {
-        if (step === 'amount') {
-            if (saleTypeSelection === 'associated_store') {
-                setStep('select_associated_store');
-            } else if (saleTypeSelection === 'mine') {
-                setStep('home');
-            } else { // This might happen if a delivery_person with 1 store goes directly to amount
-                setStep('home'); // Or maybe better to re-evaluate the initial state
-            }
-        } else if (step === 'split_config') {
-            setStep('amount');
-        } else if (step === 'payment_list') {
-            setStep('split_config');
-        } else if (step === 'select_associated_store') {
-            setStep('choose_sale_type');
-        } else if (step === 'select_order_for_store') {
-            setStep('select_associated_store');
-        } else {
-            setStep('home');
-        }
-    };
+    // Navigation handlers moved to hook
 
-    const handlePinVerify = async () => {
-        if (lockoutUntil && new Date() < lockoutUntil) {
-            await dialog.alert({ title: 'Terminal Bloqueado', message: 'Terminal bloqueado. Tente novamente mais tarde.' });
-            setPinEntry('');
-            return;
-        }
+    // handlePinVerify replaced by hook
 
-        if (pinEntry === terminal?.pin_code) {
-            setPinEntry('');
-            setPinAttempts(0); // Reset attempts on success
-            setLockoutUntil(null); // Clear lockout on success
-            localStorage.removeItem('pos_pin_attempts');
-            localStorage.removeItem('pos_lockout_until');
-            setStep('home');
-        } else {
-            const newAttempts = pinAttempts + 1;
-            setPinAttempts(newAttempts);
-            localStorage.setItem('pos_pin_attempts', String(newAttempts));
+    // handleCreatePin replaced by hook
 
-            if (newAttempts >= 3) { // 3 failed attempts
-                const lockoutTime = new Date(new Date().getTime() + 5 * 60 * 1000); // 5 minutes lockout
-                setLockoutUntil(lockoutTime);
-                localStorage.setItem('pos_lockout_until', lockoutTime.toISOString());
-                await dialog.alert({ title: 'Erro', message: `PIN incorreto. Terminal bloqueado por 5 minutos.` });
-            } else {
-                await dialog.alert({ title: 'Erro', message: `PIN incorreto. Tentativas restantes: ${3 - newAttempts}.` });
-            }
-            setPinEntry('');
-        }
-    };
+    // handleCreatePinConfirm replaced by hook
 
-    const handleCreatePin = async () => {
-        // Validation for newPin
-        const pinRegex = /^\d{4,6}$/; // 4 to 6 digits numeric
-        if (!pinRegex.test(newPin)) {
-            await dialog.alert({ title: 'PIN Inválido', message: 'PIN deve ter 4 a 6 dígitos numéricos.' });
-            return;
-        }
-        setStep('confirm_pin');
-    };
-
-    const handleCreatePinConfirm = async () => {
-        if (!terminal) {
-            await dialog.alert({ title: 'Erro', message: 'Terminal não inicializado ou não encontrado.' });
-            setStep('inactive');
-            return;
-        }
-
-        if (newPin !== confirmPin) {
-            await dialog.alert({ title: 'Erro', message: 'Os PINs não coincidem. Tente novamente.' });
-            setConfirmPin(''); // Clear confirm pin for retry
-            return;
-        }
-
-        // Final validation before saving
-        const pinRegex = /^\d{4,6}$/;
-        if (!pinRegex.test(newPin)) {
-            await dialog.alert({ title: 'PIN Inválido', message: 'PIN inválido. Deve ter 4 a 6 dígitos numéricos.' });
-            setNewPin('');
-            setConfirmPin('');
-            setStep('create_pin');
-            return;
-        }
-
-        try {
-            await cloud.setTerminalPin(newPin, terminal.user_id);
-            setTerminal(prev => prev ? { ...prev, pin_code: newPin } : null);
-            setNewPin('');
-            setConfirmPin('');
-            await dialog.alert({ title: 'Sucesso', message: 'PIN criado com sucesso!' });
-            setStep('activating_animation_2');
-            setTimeout(() => {
-                setStep('home');
-            }, 5000);
-        } catch (e: any) {
-            await dialog.alert({ title: 'Erro', message: e.message || 'Falha ao criar PIN.' });
-            await cloud.logClientError('pos_pin_create', e?.message, {});
-        }
-    };
-
-    const resetFlow = () => {
-        setAmount('0,00');
-        setTotalToSplit(0);
-        setPartialAmounts([]);
-        setCouponCode('');
-        setCouponDiscount(0);
-        setActivePayment(null);
-        setSelectedOrder(null); // Clear selected order
-        setSelectedStore(null); // Clear selected store
-        setSaleTypeSelection(null); // Clear sale type selection
-
-        // Determine next step based on user role and associated stores
-        if ((userRole === 'delivery_partner' || userRole === 'delivery_person') && associatedStores.length > 0) {
-            if (userRole === 'delivery_person' && associatedStores.length === 1) {
-                // If normal delivery person has only one store, pre-select it and go to amount
-                setSelectedStore(associatedStores[0]);
-                setSaleTypeSelection('associated_store');
-                setStep('amount');
-            } else {
-                setStep('choose_sale_type');
-            }
-        } else {
-            setStep('home');
-        }
-    };
+    // resetFlow moved to hook
 
     const handleSplitClick = () => {
         setIsSplitButtonActive(prev => !prev);
@@ -1189,91 +808,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         setAmount('0,00'); // Reset amount input
     };
 
-    const handleKeypadPress = (key: string) => {
-        if (step === 'amount' || (step === 'split_config' && isSplitButtonActive)) {
-            setAmount(prev => {
-                if (!/^\d$/.test(key)) return prev;
-                const numStr = prev.replace(/\D/g, '');
-                if (numStr.length >= 11) return prev;
-                const newNumStr = numStr + key;
-                const num = parseInt(newNumStr, 10);
-                return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(num / 100);
-            });
-        } else if (step === 'pin_lock') {
-            const pinLen = terminal?.pin_code?.length || 4;
-            setPinEntry(prev => (prev.length < pinLen ? prev + key : prev));
-        } else if (step === 'create_pin') {
-            setNewPin(prev => {
-                // Allow only numeric input and limit to 6 digits
-                if (!/\d/.test(key) || prev.length >= 6) return prev;
-                return prev + key;
-            });
-        } else if (step === 'confirm_pin') {
-            setConfirmPin(prev => {
-                // Allow only numeric input and limit to 6 digits
-                if (!/\d/.test(key) || prev.length >= 6) return prev;
-                return prev + key;
-            });
-        }
-        else if (step === 'sales_simulator' && !showHistory) {
-            setSimulatorAmount(prev => {
-                if (!/^\d$/.test(key)) return prev;
-                const numStr = prev.replace(/\D/g, '');
-                if (numStr.length >= 11) return prev;
-                const newNumStr = numStr + key;
-                const num = parseInt(newNumStr, 10);
-                return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(num / 100);
-            });
-        }
-    };
-
-    const handleKeypadClear = () => {
-        if (step === 'amount' || (step === 'split_config' && isSplitButtonActive)) {
-            setAmount('0,00');
-        } else if (step === 'pin_lock') {
-            setPinEntry('');
-        } else if (step === 'create_pin') {
-            setNewPin('');
-        } else if (step === 'confirm_pin') {
-            setConfirmPin('');
-        } else if (step === 'sales_simulator' && !showHistory) {
-            setSimulatorAmount('0,00');
-        }
-    };
-
-    const handleKeypadBackspace = () => {
-        if (step === 'amount' || (step === 'split_config' && isSplitButtonActive)) {
-            setAmount(prev => {
-                let numStr = prev.replace(/\./g, '').replace(',', ''); // "12345"
-                if (numStr.length <= 1) return '0,00';
-                numStr = numStr.slice(0, -1);
-                const num = parseInt(numStr, 10);
-                return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num / 100);
-            });
-        } else if (step === 'pin_lock') {
-            setPinEntry(prev => prev.slice(0, -1));
-        } else if (step === 'create_pin') {
-            setNewPin(prev => prev.slice(0, -1));
-        } else if (step === 'confirm_pin') {
-            setConfirmPin(prev => prev.slice(0, -1));
-        } else if (step === 'sales_simulator' && !showHistory) {
-            setSimulatorAmount(prev => {
-                let numStr = prev.replace(/\./g, '').replace(',', ''); // "12345"
-                if (numStr.length <= 1) return '0,00';
-                numStr = numStr.slice(0, -1);
-                const num = parseInt(numStr, 10);
-                return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num / 100);
-            });
-        }
-    };
-
-    const handleContinueFromAmount = () => {
-        const total = parseCurrency(amount);
-        if (total <= 0) return;
-        setTotalToSplit(total);
-        setPartialAmounts([{ id: crypto.randomUUID(), amount: total, status: 'unpaid' }]);
-        setStep('payment_list');
-    };
+    // Keypad handlers moved to hook
 
     const closePaymentOverlay = () => {
         setActivePayment(null);
@@ -1284,79 +819,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     };
 
     // Initiate Payment Action
-    const initiatePayment = async (paymentId: string, amount: number, method: 'PIX' | 'SCAN' | 'USER_CODE') => {
-        setActivePayment({ id: paymentId, method, amount });
-        if (method === 'PIX') {
-            try {
-                // Lógica de determinação de dados Pix (Loja vs Entregador)
-                let pixData = { key: '', name: '', city: '' };
-
-                // 1. Se tem uma loja SELECIONADA (Operação para terceiros)
-                if (selectedStore) {
-                    // Tenta obter dados da loja (assumindo que selectedStore possa ter ou precise buscar)
-                    // Como selectedStore é parcial, vamos tentar usar o terminal da loja se tiver user_id, 
-                    // mas o ideal é ter os dados Pix da loja.
-                    // Vamos tentar assumir que se o usuário tem permissão na loja, ele tem acesso a esses dados
-                    // ou vamos usar o partnerProfile se for store_partner operando sua própria loja.
-
-                    // Fallback: Tentamos pegar do terminal da loja ou profile se disponível.
-                    // Para simplificar e garantir funcionamento: Se eu sou o DONO da loja selecionada (verificação simples)
-                    if (partnerProfile && partnerProfile.is_super_store) {
-                        // Se sou super store, meus dados Pix são da loja
-                        pixData = {
-                            key: partnerProfile.pix_key || partnerProfile.config?.pixdata?.key || '',
-                            name: partnerProfile.name,
-                            city: partnerProfile.city || ''
-                        };
-                    } else {
-                        // Se sou entregador operando para uma loja, PRECISARIA dos dados da loja.
-                        // O sistema atual não carrega o profile completo da loja associada aqui.
-                        // Mas vou tentar usar o que temos. Se não tiver chave da loja, alerta.
-                        // Vou buscar a loja completa via cloud se necessário?
-                        // Melhor: vou usar uma chamada rapida para pegar info da loja se não tiver.
-                        const storeFull = await cloud.getStoreById(selectedStore.id);
-                        if (storeFull) {
-                            pixData = {
-                                key: storeFull.pix_key || storeFull.config?.pixdata?.key || '',
-                                name: storeFull.name,
-                                city: storeFull.city || ''
-                            };
-                        }
-                    }
-                }
-                // 2. Se sou Entregador (venda propria/avulsa) ou Store Partner na minha visão pessoal
-                else if (partnerProfile) {
-                    pixData = {
-                        key: partnerProfile.pix_key || partnerProfile.config?.pixdata?.key || '',
-                        name: partnerProfile.name,
-                        city: partnerProfile.city || ''
-                    };
-                }
-
-                if (!pixData.key) {
-                    await dialog.alert({ title: 'Dados Pix Incompletos', message: 'Não foi encontrada uma chave Pix configurada para este recebedor.' });
-                    return;
-                }
-
-                // Geração Local (Offline-ready) do Payload Pix
-                const payload = generatePixPayload({
-                    key: pixData.key,
-                    name: pixData.name || 'RECEBEDOR',
-                    city: pixData.city || 'BRASIL',
-                    amount: amount,
-                    description: `POS-${terminal?.terminal_id?.slice(0, 4) || 'ZE'}`
-                });
-
-                setPixCodeData(payload);
-                setPixTxId('STATIC_PIX'); // Marcador interno
-                setIsPolling(false); // Pix estático não tem polling automático de gateway
-
-            } catch (e: any) {
-                const msg = e?.message || '';
-                await dialog.alert({ title: 'Erro no PIX', message: 'Falha ao gerar PIX: ' + msg });
-            }
-        }
-    };
+    // initiatePayment replaced by hook
 
 
 
@@ -1400,7 +863,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
 
         // Construct Payload
         const transaction = {
-            user_id: userRole === 'delivery_partner' ? terminal?.user_id : userRole === 'store_partner' ? terminal?.user_id : undefined, // Fallback
+            user_id: terminal?.user_id || partnerProfile?.user_id || partnerProfile?.id, // Fallback robusto para evitar erro 23502
             amount: totalToSplit,
             payments: partialAmounts,
             status: 'COMPLETED',
@@ -1691,13 +1154,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                         const storeTerm = await cloud.getStoreTerminal(store.id);
                         if (storeTerm) {
                             setTerminal(storeTerm);
-                            if (storeTerm.pin_code) {
-                                // If the store's terminal has a PIN, require it
-                                setStep('pin_lock');
-                            } else {
-                                // Otherwise, go straight to amount
-                                setStep('amount');
-                            }
+                            setStep('amount');
                         } else {
                             setErrorMsg('Terminal da loja não encontrado ou inativo.');
                             setErrorType('validation');
@@ -1794,84 +1251,12 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 );
 
             case 'create_pin':
-                const isNewPinValid = newPin.length >= 4 && newPin.length <= 6;
-                return (
-                    <div className="flex-1 flex flex-col p-4 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-                        <div className="flex-1 flex flex-col justify-center items-center">
-                            <Lock className="w-12 h-12 text-brand-600 mb-4" />
-                            <h2 className="text-xl font-bold mb-2">Defina seu PIN</h2>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 text-center">
-                                Crie uma senha numérica de 4 a 6 dígitos para acessar sua ZéPoint.
-                            </p>
-                            <div className="flex gap-4 mb-2">
-                                {Array.from({ length: newPin.length }).map((_, i) => (
-                                    <div key={i} className="w-5 h-5 rounded-full bg-black dark:bg-white" />
-                                ))}
-                                {Array.from({ length: 6 - newPin.length }).map((_, i) => (
-                                    <div key={i} className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-700" />
-                                ))}
-                            </div>
-                            {!isNewPinValid && newPin.length > 0 && (
-                                <p className="text-red-500 text-xs mt-2">O PIN deve ter entre 4 e 6 dígitos.</p>
-                            )}
-                        </div>
-                    </div>
-                );
-
             case 'confirm_pin':
-                const doPinsMatch = newPin === confirmPin;
-                const isConfirmPinValid = confirmPin.length >= 4 && confirmPin.length <= 6;
-                const confirmPinError = !doPinsMatch && confirmPin.length > 0;
-
-                return (
-                    <div className="flex-1 flex flex-col p-4 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-                        <div className="flex-1 flex flex-col justify-center items-center">
-                            <ShieldCheck className="w-12 h-12 text-brand-600 mb-4" />
-                            <h2 className="text-xl font-bold mb-2">Confirme seu PIN</h2>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 text-center">
-                                Repita o PIN que você acabou de criar para confirmar.
-                            </p>
-                            <div className="flex gap-4 mb-2">
-                                {Array.from({ length: confirmPin.length }).map((_, i) => (
-                                    <div key={i} className="w-5 h-5 rounded-full bg-black dark:bg-white" />
-                                ))}
-                                {Array.from({ length: 6 - confirmPin.length }).map((_, i) => (
-                                    <div key={i} className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-700" />
-                                ))}
-                            </div>
-                            {confirmPinError && (
-                                <p className="text-red-500 text-xs mt-2">Os PINs não coincidem!</p>
-                            )}
-                            {!isConfirmPinValid && confirmPin.length > 0 && (
-                                <p className="text-red-500 text-xs mt-2">O PIN deve ter entre 4 e 6 dígitos.</p>
-                            )}
-                        </div>
-                    </div>
-                );
-
             case 'pin_lock':
-                const isLockedOut = lockoutUntil && new Date() < lockoutUntil;
-                const minutes = Math.floor(lockoutCountdown / 60);
-                const seconds = lockoutCountdown % 60;
-                const lockoutMessage = `Terminal bloqueado. Tente novamente em ${minutes > 0 ? `${minutes}m ` : ''}${seconds}s.`;
-                const pinLength = terminal?.pin_code?.length || 4;
-
                 return (
-                    <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-                        <SubPageHeader title="Desbloqueio" onBack={onClose} />
-                        <div className="flex-1 flex flex-col justify-center items-center p-6">
-                            <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full mb-4 shadow-inner">
-                                {isLockedOut ? <Lock className="w-8 h-8 text-red-600" /> : <Lock className="w-8 h-8 text-brand-600" />}
-                            </div>
-                            <h3 className="text-xl font-bold mb-6">{isLockedOut ? 'Acesso Bloqueado' : 'ZéPoint Bloqueado'}</h3>
-                            {isLockedOut ? (
-                                <p className="text-red-500 text-sm mb-8 text-center">{lockoutMessage}</p>
-                            ) : (
-                                <div className="flex justify-center gap-4 mb-8">
-                                    {Array.from({ length: pinLength }).map((_, i) => <div key={i} className={`w-4 h-4 rounded-full border-2 ${i < pinEntry.length ? 'bg-black dark:bg-white border-black dark:border-white' : 'border-gray-300 dark:border-gray-700'}`} />)}
-                                </div>
-                            )}
-                        </div>
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900">
+                        <Loader2 className="w-8 h-8 animate-spin text-brand-500 mb-4" />
+                        <p className="text-gray-500">Acessando PDV...</p>
                     </div>
                 );
 
@@ -1887,8 +1272,8 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 );
 
                 return (
-                    <div className="flex-1 flex flex-col justify-start pt-8 p-4 bg-gray-50 dark:bg-gray-900">
-                        <div className="grid grid-cols-2 gap-4">
+                    <div className="flex-1 flex flex-col justify-start pt-8 p-4 bg-gray-50 dark:bg-gray-900 overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                             <HomeButton
                                 icon={<DollarSign className="w-8 h-8" />}
                                 text="Nova Venda"
@@ -1920,15 +1305,7 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                                 colorClass="text-blue-600 dark:text-blue-400"
                             />
                         </div>
-                        <div className="mt-auto p-4"> {/* Footer for home screen */}
-                            <button
-                                onClick={handleClose}
-                                className="w-full flex justify-center items-center px-6 py-3 rounded-xl text-red-600 font-bold text-sm bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 duration-300 active:scale-95"
-                            >
-                                <PowerOff className="w-4 h-4 mr-2" />
-                                Sair
-                            </button>
-                        </div>
+                        {/* Botão Sair removido por solicitação do usuário */}
                     </div>
                 );
 
@@ -1936,26 +1313,30 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 return (
                     <div className="flex-1 flex flex-col justify-center text-center p-4 relative pt-20 bg-white dark:bg-gray-900">
                         <SubPageHeader title="Nova Venda" onBack={handleGoBack} />
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor a Cobrar</p>
-                        <h1
-                            className="font-black text-gray-900 dark:text-white my-4 tracking-tighter transition-all duration-200"
-                            style={{ fontSize: `${amountFontSize}px` }}
-                        >
-                            <span className="text-2xl align-baseline mr-1 text-gray-400 font-bold">R$</span>{amount}
-                        </h1>
-                        <div
-                            ref={splitButtonRef}
-                            className={`mx-auto mt-4 transition-opacity duration-300 ${parseCurrency(amount) > 0 ? 'opacity-100' : 'opacity-0 invisible'}`}
-                            aria-hidden={parseCurrency(amount) <= 0}
-                        >
-                            <Button
-                                variant={isSplitButtonActive ? 'primary' : 'outline'}
-                                size="sm"
-                                onClick={handleSplitClick}
-                                className={`rounded-xl px-6 ${isSplitButtonActive ? 'bg-red-500 hover:bg-red-600 text-white' : ''}`}
-                            >
-                                <Users className="w-4 h-4 mr-2" /> Dividir Conta
-                            </Button>
+                        <div className={`${isDesktop ? 'flex flex-row items-center justify-around gap-8' : 'flex flex-col'}`}>
+                            <div className="flex-1">
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor a Cobrar</p>
+                                <h1
+                                    className="font-black text-gray-900 dark:text-white my-4 tracking-tighter transition-all duration-200"
+                                    style={{ fontSize: `${isDesktop ? amountFontSize * 1.5 : amountFontSize}px` }}
+                                >
+                                    <span className="text-2xl align-baseline mr-1 text-gray-400 font-bold">R$</span>{amount}
+                                </h1>
+                                <div
+                                    ref={splitButtonRef}
+                                    className={`mx-auto mt-4 transition-opacity duration-300 ${parseCurrency(amount) > 0 ? 'opacity-100' : 'opacity-0 invisible'}`}
+                                    aria-hidden={parseCurrency(amount) <= 0}
+                                >
+                                    <Button
+                                        variant={isSplitButtonActive ? 'primary' : 'outline'}
+                                        size="sm"
+                                        onClick={handleSplitClick}
+                                        className={`rounded-xl px-6 ${isSplitButtonActive ? 'bg-red-500 hover:bg-red-600 text-white' : ''}`}
+                                    >
+                                        <Users className="w-4 h-4 mr-2" /> Dividir Conta
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );
@@ -2365,16 +1746,13 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
         }
     };
 
-    const showKeypad = ['amount', 'pin_lock', 'create_pin', 'confirm_pin', 'split_config'].includes(step) || (step === 'sales_simulator' && !showHistory);
+    const showKeypad = false; // Teclado virtual desativado no Desktop
     const showFooter = step === 'amount' || step === 'split_config' || step === 'payment_list';
 
-    // Loading Splash
     if (step === 'loading') {
         return (
-            <div className="fixed inset-0 bg-gray-100 dark:bg-black/50 z-[200] flex items-center justify-center animate-in fade-in">
-                <div className="w-full h-full sm:max-w-sm bg-gray-900 shadow-2xl overflow-hidden relative flex flex-col p-2 ">
-                    {renderScreenContent()}
-                </div>
+            <div className="w-full h-screen bg-[#0f172a] overflow-hidden relative flex flex-col p-2">
+                {renderScreenContent()}
             </div>
         );
     }
@@ -2386,127 +1764,178 @@ export const MerchantPOS: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const isLockedOut = lockoutUntil && new Date() < lockoutUntil;
 
     return (
-        <div className={`fixed inset-0 bg-black/80 z-[200] flex items-center justify-center animate-in fade-in ${settings.enableHighContrast ? 'contrast-150 saturate-0' : ''}`}>
-
-            <div className="w-full h-full sm:max-w-sm bg-brand-600 shadow-2xl overflow-hidden relative flex flex-col p-2 sm:rounded-xl">
-
-                {/* REMOVIDO LOGO SUPERIOR: <img src="https://raw.githubusercontent.com/DalisonMessias/cdn.rabbit.gg/refs/heads/main/assets/64536456457.svg" alt="Logo" className="h-8 mb-2.5" /> */}
-                <div className="flex-1 bg-white dark:bg-gray-900 rounded-xl shadow-inner mb-2 overflow-hidden relative flex flex-col">
-                    {/* <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-b-2xl flex justify-center items-center p-1">
-                        <div className="w-12 h-1.5 bg-gray-700 rounded-full"></div>
-                    </div>
-                    <StatusBar /> RE MO VI DO PARA GANHAR ESPAÇO */}
-                    {renderScreenContent()}
-                    {renderPaymentOverlay()}
-                    <WhatsAppReceiptModal
-                        isOpen={isWhatsAppModalOpen}
-                        onClose={() => setWhatsAppModalOpen(false)}
-                        onSend={handleSendWhatsAppReceipt}
-                    />
-                    {isDeactivateModalOpen && (
-                        <div className="absolute inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
-                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-                                <div className="text-center">
-                                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/20">
-                                        <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" aria-hidden="true" />
+        <div className={`w-full h-screen flex flex-col ${settings.enableHighContrast ? 'contrast-150 saturate-0' : ''}`}>
+            <div className="flex-1 bg-white dark:bg-gray-900 shadow-inner overflow-hidden relative flex flex-col">
+                <div className={`flex-1 flex ${isDesktop ? 'flex-row' : 'flex-col'} overflow-hidden`}>
+                    {isDesktop && (
+                        <div className="w-80 bg-gray-50 dark:bg-gray-800/50 border-r border-gray-100 dark:border-gray-700 flex flex-col p-6 overflow-y-auto custom-scrollbar">
+                            <Logo className="h-8 mb-8" />
+                            <div className="space-y-6">
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Status do Terminal</h4>
+                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                                                <Server className="w-5 h-5 text-green-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold dark:text-white">{terminal?.label || 'Terminal Zé'}</p>
+                                                <p className="text-[10px] text-green-600 font-bold uppercase">Online</p>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-[10px]">
+                                                <span className="text-gray-400">ID:</span>
+                                                <span className="font-mono dark:text-gray-300">{terminal?.terminal_id?.substring(0, 12)}...</span>
+                                            </div>
+                                            <div className="flex justify-between text-[10px]">
+                                                <span className="text-gray-400">Cargo:</span>
+                                                <span className="font-bold dark:text-gray-300 uppercase">{userRole}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-white">Desativar Terminal?</h3>
-                                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                        Tem certeza? A ZéPoint será desativada e apenas um administrador poderá reativá-la.
-                                    </p>
                                 </div>
-                                <div className="mt-6 flex gap-3">
-                                    <Button onClick={() => setDeactivateModalOpen(false)} variant="outline" className="w-full">
-                                        Cancelar
-                                    </Button>
-                                    <Button onClick={confirmDeactivation} className="w-full bg-red-600 text-white hover:bg-red-700">
-                                        Sim, Desativar
-                                    </Button>
+
+                                {parseCurrency(amount) > 0 && (
+                                    <div className="animate-in slide-in-from-left-4">
+                                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Venda Atual</h4>
+                                        <div className="bg-brand-600 p-4 rounded-xl shadow-lg text-white">
+                                            <p className="text-[10px] opacity-80 uppercase font-bold">Total Bruto</p>
+                                            <p className="text-2xl font-black">{formatCurrency(parseCurrency(amount))}</p>
+                                            {selectedStore && (
+                                                <div className="mt-2 pt-2 border-t border-white/20">
+                                                    <p className="text-[10px] opacity-80 font-bold">Loja: {selectedStore.name}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mt-auto pt-6">
+                                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-100 dark:border-yellow-800">
+                                        <div className="flex gap-2 items-start">
+                                            <AlertCircle className="w-4 h-4 text-yellow-600 shrink-0" />
+                                            <p className="text-[10px] text-yellow-800 dark:text-yellow-200 leading-tight">
+                                                Certifique-se de conferir o valor antes de prosseguir com a cobrança.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     )}
+                    <div className="flex-1 flex flex-col relative overflow-hidden">
+                        {renderScreenContent()}
+                    </div>
                 </div>
-
-                {showFooter && (
-                    <div>
-                        {step === 'split_config' && (
-                            <div className="p-3 bg-white rounded-lg animate-in slide-in-from-bottom-2 grid grid-cols-2 gap-2 mb-2">
-                                <Button onClick={addPartialAmount} className="w-full rounded-lg h-14 text-lg bg-yellow-500 text-gray-900 hover:bg-yellow-600 border-none" disabled={parseCurrency(amount) <= 0}>
-                                    Adicionar
-                                </Button>
-                                <Button onClick={() => setStep('payment_list')} className="w-full rounded-lg h-14 text-lg bg-green-500 hover:bg-green-600 shadow-lg" disabled={remainingToSplit > 0}>
-                                    Pagar
-                                </Button>
-                            </div>
-                        )}
-                        {step === 'payment_list' && (
-                            <div className="p-3 bg-white rounded-lg animate-in slide-in-from-bottom-2 ">
-                                <Button onClick={handleFinalizeSale} disabled={!allPaymentsDone || processing} className="w-full h-14 text-lg bg-green-600 hover:bg-green-600 disabled:bg-green-700 dark:disabled:bg-gray-700 rounded-lg">
-                                    {processing ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Venda'}
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {showKeypad && (
-                    <div className="animate-in slide-in-from-bottom-10">
-                        <Keypad
-                            onKeyPress={isLockedOut ? () => { } : handleKeypadPress} // Disable key presses if locked out
-                            onClear={isLockedOut ? () => { } : handleKeypadClear} // Disable clear if locked out
-                            onBackspace={isLockedOut ? () => { } : handleKeypadBackspace} // Disable backspace if locked out
-                            onConfirm={
-                                step === 'amount' ? handleContinueFromAmount :
-                                    step === 'pin_lock' ? handlePinVerify :
-                                        step === 'create_pin' ? handleCreatePin :
-                                            step === 'confirm_pin' ? handleCreatePinConfirm : // Corrected this line
-                                                undefined // Fallback for other steps
-                            }
-                            confirmDisabled={
-                                isLockedOut ||
-                                (step === 'amount' && parseCurrency(amount) <= 0) ||
-                                (step === 'pin_lock' && pinEntry.length !== (terminal?.pin_code?.length || 4)) ||
-                                (step === 'create_pin' && !isNewPinValid) ||
-                                (step === 'confirm_pin' && !isConfirmPinValid)
-                            }
-                            showConfirm={step === 'pin_lock' || step === 'create_pin' || step === 'confirm_pin' || step === 'amount'}
-                        />
-                    </div>
-                )}
-                <ReactJoyride
-                    steps={tutorialSteps}
-                    run={runTutorial}
-                    continuous
-                    showSkipButton
-                    styles={{
-                        options: {
-                            zIndex: 10000,
-                            primaryColor: '#ea1d2c',
-                        }
-                    }}
-                    callback={(data) => {
-                        if (data.status === 'finished' || data.status === 'skipped') {
-                            setRunTutorial(false);
-                            // Set a flag in localStorage so it doesn't run every time?
-                            // localStorage.setItem('tutorial_seen', 'true'); 
-                        }
-                    }}
-                />
-                {showSummaryModal && (
-                    <SummaryReportModal
-                        onClose={() => setShowSummaryModal(false)}
-                        data={history} // Pass real history data
-                    />
-                )}
-                {showLogsModal && (
-                    <QrCodeLogsModal
-                        onClose={() => setShowLogsModal(false)}
-                    />
-                )}
-
+                {renderPaymentOverlay()}
             </div>
+            <WhatsAppReceiptModal
+                isOpen={isWhatsAppModalOpen}
+                onClose={() => setWhatsAppModalOpen(false)}
+                onSend={handleSendWhatsAppReceipt}
+            />
+            {isDeactivateModalOpen && (
+                <div className="absolute inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+                        <div className="text-center">
+                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/20">
+                                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" aria-hidden="true" />
+                            </div>
+                            <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-white">Desativar Terminal?</h3>
+                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                Tem certeza? A ZéPoint será desativada e apenas um administrador poderá reativá-la.
+                            </p>
+                        </div>
+                        <div className="mt-6 flex gap-3">
+                            <Button onClick={() => setDeactivateModalOpen(false)} variant="outline" className="w-full">
+                                Cancelar
+                            </Button>
+                            <Button onClick={confirmDeactivation} className="w-full bg-red-600 text-white hover:bg-red-700">
+                                Sim, Desativar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showFooter && (
+                <div>
+                    {step === 'split_config' && (
+                        <div className="p-3 bg-white rounded-lg animate-in slide-in-from-bottom-2 grid grid-cols-2 gap-2 mb-2">
+                            <Button onClick={addPartialAmount} className="w-full rounded-lg h-14 text-lg bg-yellow-500 text-gray-900 hover:bg-yellow-600 border-none" disabled={parseCurrency(amount) <= 0}>
+                                Adicionar
+                            </Button>
+                            <Button onClick={() => setStep('payment_list')} className="w-full rounded-lg h-14 text-lg bg-green-500 hover:bg-green-600 shadow-lg" disabled={remainingToSplit > 0}>
+                                Pagar
+                            </Button>
+                        </div>
+                    )}
+                    {step === 'payment_list' && (
+                        <div className="p-3 bg-white rounded-lg animate-in slide-in-from-bottom-2 ">
+                            <Button onClick={handleFinalizeSale} disabled={!allPaymentsDone || processing} className="w-full h-14 text-lg bg-green-600 hover:bg-green-600 disabled:bg-green-700 dark:disabled:bg-gray-700 rounded-lg">
+                                {processing ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Finalizar Venda'}
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {showKeypad && (
+                <div className="animate-in slide-in-from-bottom-10">
+                    <Keypad
+                        onKeyPress={isLockedOut ? () => { } : handleKeypadPress} // Disable key presses if locked out
+                        onClear={isLockedOut ? () => { } : handleKeypadClear} // Disable clear if locked out
+                        onBackspace={isLockedOut ? () => { } : handleKeypadBackspace} // Disable backspace if locked out
+                        onConfirm={
+                            step === 'amount' ? handleContinueFromAmount :
+                                step === 'pin_lock' ? handlePinVerify :
+                                    step === 'create_pin' ? handleCreatePin :
+                                        step === 'confirm_pin' ? handleCreatePinConfirm : // Corrected this line
+                                            undefined // Fallback for other steps
+                        }
+                        confirmDisabled={
+                            isLockedOut ||
+                            (step === 'amount' && parseCurrency(amount) <= 0) ||
+                            (step === 'pin_lock' && pinEntry.length !== (terminal?.pin_code?.length || 4)) ||
+                            (step === 'create_pin' && !isNewPinValid) ||
+                            (step === 'confirm_pin' && !isConfirmPinValid)
+                        }
+                        showConfirm={step === 'pin_lock' || step === 'create_pin' || step === 'confirm_pin' || step === 'amount'}
+                    />
+                </div>
+            )}
+            <ReactJoyride
+                steps={tutorialSteps}
+                run={runTutorial}
+                continuous
+                showSkipButton
+                styles={{
+                    options: {
+                        zIndex: 10000,
+                        primaryColor: '#ea1d2c',
+                    }
+                }}
+                callback={(data) => {
+                    if (data.status === 'finished' || data.status === 'skipped') {
+                        setRunTutorial(false);
+                        // Set a flag in localStorage so it doesn't run every time?
+                        // localStorage.setItem('tutorial_seen', 'true'); 
+                    }
+                }}
+            />
+            {showSummaryModal && (
+                <SummaryReportModal
+                    onClose={() => setShowSummaryModal(false)}
+                    data={history} // Pass real history data
+                />
+            )}
+            {showLogsModal && (
+                <QrCodeLogsModal
+                    onClose={() => setShowLogsModal(false)}
+                />
+            )}
+
         </div>
     );
 };
-

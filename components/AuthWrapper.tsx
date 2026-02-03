@@ -669,7 +669,23 @@ export const AuthWrapper: React.FC = () => {
     );
   }
 
+  // PUBLIC PARTNER ROUTES (Permite ver sem estar logado)
+  const currentTab = getTabFromUrl(currentPath);
+  const isPublicPartnerRoute = currentTab === 'partner_store' || currentTab === 'partner_delivery';
+  if (isPublicPartnerRoute) {
+    return (
+      <TourProvider>
+        <App
+          userId="guest"
+          userRole="delivery_person"
+          initialUserStatus="active"
+        />
+      </TourProvider>
+    );
+  }
+
   if (view === 'landing') {
+
     const isHome = currentPath === '/' || currentPath === '/home';
     const isInternalRoute = getTabFromUrl(currentPath) !== null;
 

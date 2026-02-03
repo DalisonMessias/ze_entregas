@@ -12,7 +12,6 @@ import { FuelCalculator } from './FuelCalculator';
 import { RouteCalculator } from './RouteCalculator';
 import { Maintenance } from './Maintenance';
 import { Switch } from './Switch';
-import { MerchantPOS } from './MerchantPOS';
 import { useDialog } from '../utils/dialogService';
 import { PromoSlider } from './PromoSlider';
 import { TipOfTheDay } from './TipOfTheDay';
@@ -68,7 +67,6 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
     const [showFuelCalc, setShowFuelCalc] = useState(false);
     const [showRouteCalc, setShowRouteCalc] = useState(false);
     const [showMaintenance, setShowMaintenance] = useState(false);
-    const [showMerchantPOS, setShowMerchantPOS] = useState(false);
 
     // Forms
     const [startForm, setStartForm] = useState({ fixed: '', goal: '' });
@@ -582,7 +580,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                         </div>
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Loja</span>
                     </button>
-                    <button onClick={() => setShowMerchantPOS(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                    <button onClick={() => onNavigate('zepoint')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600 dark:text-indigo-400">
                             <Smartphone className="w-5 h-5" />
                         </div>
@@ -835,7 +833,6 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
             {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
             {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
-            {showMerchantPOS && <MerchantPOS onClose={() => setShowMerchantPOS(false)} />}
         </div>
     );
 };

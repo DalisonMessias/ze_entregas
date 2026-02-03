@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StoreProduct, Category } from '../types';
 import { StoreAIGenerator } from './StoreAIGenerator';
 import { SuperStoreModal } from './SuperStoreModal';
-import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera, Eye } from 'lucide-react';
+import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera, Eye, Image as ImageIcon } from 'lucide-react';
 import { Loading } from './Loading';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
@@ -46,6 +46,7 @@ const isFuzzyMatch = (text: string, search: string) => {
 
     return searchWords.every(word => cleanText.includes(word));
 };
+
 
 export const StoreCatalog: React.FC = () => {
     // ... (rest of imports/hooks)
@@ -325,6 +326,17 @@ export const StoreCatalog: React.FC = () => {
                                     >
                                         <Plus className="w-5 h-5 mr-2" />
                                         Novo Produto
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            const event = new CustomEvent('navigateToTab', { detail: { tab: 'store_print_catalog' } });
+                                            window.dispatchEvent(event);
+                                        }}
+                                        className="flex-1 md:flex-none rounded-2xl h-14"
+                                    >
+                                        <ImageIcon className="w-5 h-5 mr-2" />
+                                        Catálogo Impresso
                                     </Button>
                                 </div>
                             </div>

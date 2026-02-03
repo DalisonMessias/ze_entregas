@@ -15,6 +15,26 @@ As abas "Entrega" e "Retirada" no carrinho são renderizadas incondicionalmente,
     *   Se nenhuma estiver ativa (caso raro/erro): Mostrar mensagem ou bloquear.
 3.  **Estado Inicial**: Garantir que o `deliveryType` seja inicializado com a opção válida disponível.
 
+### 1. Branding do Sistema
+- **Rodapé Fixo (Cor Total)**: O logo do Zé Entregas será movido para o rodapé e exibido com **opacidade 100% (cor total)**, deixando de ser semitransparente.
+
+### 2. Identidade da Loja e Uploads
+- **Upload de Logo**: Adicionar um botão de upload para que o lojista possa subir sua própria imagem de logo diretamente no gerador.
+- **Upload de Fundo**: Adicionar suporte para upload de uma imagem de fundo para as páginas do catálogo.
+- **Toggle Nome vs Logo**: Interface clara para escolher se o cabeçalho exibe o nome (texto) ou o logo (imagem).
+
+### 3. Design de Página
+- **Fundo Dinâmico**: O usuário poderá alternar entre usar uma **cor sólida** ou uma **imagem de fundo** personalizada.
+- **Espaçamento (Gap)**: Refinar o controle de espaçamento para garantir que os blocos de produtos tenham "respiro" visual.
+
+### 4. Fontes e Estilos
+- **Tipografia**: Suporte a diferentes famílias de fontes para títulos e preços.
+
+## Detalhes Técnicos
+- Utilizar `FileReader` para pré-visualização instantânea de logos e fundos carregados.
+- Atualizar `CatalogSettings` para persistir os caminhos/base64 das imagens.
+- Ajustar o CSS do rodapé no `PrintCatalogGenerator`.
+
 ## Arquivos Afetados
 *   `components/DigitalMenu/DigitalMenu.tsx`
 
