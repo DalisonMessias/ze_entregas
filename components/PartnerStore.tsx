@@ -80,7 +80,7 @@ export const PartnerStore: React.FC = () => {
                         A plataforma número 1 para o seu negócio
                     </div>
                     <h1 className="text-5xl md:text-7xl font-black text-white mb-8 leading-tight tracking-tighter">
-                        Venda mais com a <br /><span className="text-brand-100">Partner Store</span>
+                        Venda mais com o <br /><span className="text-brand-100">Zé Entregas</span>
                     </h1>
                     <p className="text-xl md:text-2xl text-brand-50 mb-12 max-w-3xl mx-auto leading-relaxed">
                         A solução completa para digitalizar sua loja, gerir pedidos e alcançar milhares de clientes com agilidade e inteligência artificial.
@@ -161,7 +161,7 @@ export const PartnerStore: React.FC = () => {
                 <div className="max-w-7xl mx-auto">
                     <div className="flex flex-col lg:flex-row items-center gap-16">
                         <div className="flex-1 text-left">
-                            <h2 className="text-4xl md:text-5xl font-black mb-10 leading-tight">Por que ser um parceiro <br />Partner Store?</h2>
+                            <h2 className="text-4xl md:text-5xl font-black mb-10 leading-tight">Por que ser um parceiro <br />Zé Entregas?</h2>
                             <div className="space-y-6">
                                 {[
                                     "Taxas justas e competitivas",
@@ -217,7 +217,7 @@ export const PartnerStore: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
                     <Logo className="h-6 w-auto opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all" />
                     <p className="text-gray-400 text-sm font-medium uppercase tracking-widest">
-                        © {new Date().getFullYear()} Partner Store &bull; Zé Entregas Corp
+                        © {new Date().getFullYear()}  &bull; Zé Entregas
                     </p>
                 </div>
             </footer>
