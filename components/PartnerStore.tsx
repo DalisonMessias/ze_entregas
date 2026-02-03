@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Store, Zap, Shield, BarChart3, MessageCircle, ArrowRight, CheckCircle,
     Smartphone, LayoutGrid, Users, DollarSign, Crown, HelpCircle, ChevronDown,
-    ChevronUp, Star, Rocket, MapPin, Grid
+    ChevronUp, Star, Rocket, MapPin, Grid, Sparkles, CreditCard, Truck
 } from 'lucide-react';
 import { Button } from './Button';
 import { Logo } from './Logo';
@@ -20,7 +20,7 @@ export const PartnerStore: React.FC = () => {
         const handleScroll = () => setScrolled(window.scrollY > 20);
         window.addEventListener('scroll', handleScroll, { passive: true });
 
-        // Fetch public fee settings
+        // Buscando configurações reais do sistema
         const loadFees = async () => {
             try {
                 const data = await cloud.getPublicFeeSettings();
@@ -65,15 +65,16 @@ export const PartnerStore: React.FC = () => {
                         <Button
                             onClick={onLoginClick}
                             variant={scrolled ? "ghost" : "ghost"}
-                            className={`font-bold transition-all ${scrolled ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800' : 'text-white hover:bg-white/10'}`}
+                            className={`font-bold transition-all text-xs sm:text-base px-2 sm:px-4 ${scrolled ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800' : '!text-white hover:!bg-white/10'}`}
                         >
                             Entrar
                         </Button>
                         <Button
                             onClick={onSignupClick}
-                            className={`font-bold px-6 rounded-xl transition-all ${scrolled ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-white text-brand-600 hover:bg-gray-100'}`}
+                            className={`font-bold text-xs sm:text-base px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all ${scrolled ? '!bg-brand-600 !text-white hover:!bg-brand-700' : '!bg-white !text-brand-600 hover:!bg-gray-100'}`}
                         >
-                            Começar Grátis
+                            <span className="sm:hidden">Criar Loja</span>
+                            <span className="hidden sm:inline">Começar Grátis</span>
                         </Button>
                     </div>
                 </div>
@@ -89,125 +90,137 @@ export const PartnerStore: React.FC = () => {
                     <div className="flex-1 text-center md:text-left">
                         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-bold mb-8 border border-white/20 shadow-lg">
                             <Rocket className="w-4 h-4 text-yellow-300 animate-pulse" />
-                            Acelere suas vendas hoje mesmo
+                            A solução completa para sua logística
                         </div>
                         <h1 className="text-5xl md:text-7xl font-black text-white mb-6 leading-tight tracking-tighter">
-                            Venda mais e gerencie melhor com o <span className="text-yellow-300">Zé Entregas</span>
+                            A tecnologia que sua entrega <span className="text-yellow-300">precisa</span>
                         </h1>
                         <p className="text-xl text-brand-50 mb-10 max-w-2xl mx-auto md:mx-0 leading-relaxed font-medium">
-                            A plataforma completa que une entregas rápidas, gestão financeira e inteligência artificial para transformar o seu negócio.
+                            Conecte sua loja à maior rede de entregadores, gerencie pedidos e automatize seu catálogo com Inteligência Artificial.
                         </p>
                         <div className="flex flex-col sm:flex-row flex-wrap gap-4 justify-center md:justify-start">
-                            <Button onClick={onSignupClick} className="bg-white text-brand-600 hover:bg-brand-50 hover:scale-105 active:scale-95 py-6 px-8 text-lg font-black flex items-center gap-3 shadow-xl rounded-2xl transition-all">
+                            <Button onClick={onSignupClick} className="!bg-gray-100 !text-brand-600 hover:!bg-gray-200 hover:scale-105 active:scale-95 py-6 px-8 text-lg font-black flex items-center gap-3 shadow-xl rounded-2xl transition-all">
                                 Criar Loja Grátis <ArrowRight className="w-6 h-6" />
                             </Button>
                             <Button onClick={() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' })} className="bg-brand-700 text-white hover:bg-brand-800 py-6 px-8 text-lg font-bold flex items-center gap-3 rounded-2xl shadow-lg transition-all border border-white/10">
-                                Ver Planos
+                                Conheça o Super Lojista
                             </Button>
                         </div>
                         <div className="mt-8 flex items-center justify-center md:justify-start gap-6 text-brand-100 text-sm font-medium">
-                            <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Sem taxa de adesão</span>
-                            <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Cadastro em 2 minutos</span>
+                            <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Sem mensalidade obrigatória</span>
+                            <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Cadastro simplificado</span>
                         </div>
                     </div>
 
                     <div className="flex-1 relative w-full max-w-lg md:max-w-none">
                         <div className="relative z-10 bg-white dark:bg-gray-900 rounded-[2.5rem] p-6 shadow-2xl border border-gray-100 dark:border-gray-800 rotate-1 hover:rotate-0 transition-transform duration-500">
+                            {/* Mockup Realista baseado em StoreReports */}
                             <div className="bg-gray-100 dark:bg-gray-800 rounded-3xl p-6 mb-6">
                                 <div className="flex items-center justify-between mb-8">
                                     <div>
-                                        <p className="text-sm text-gray-500 font-bold uppercase tracking-wider">Faturamento Hoje</p>
+                                        <p className="text-sm text-gray-500 font-bold uppercase tracking-wider">Desempenho Hoje</p>
                                         <h3 className="text-3xl font-black text-gray-900 dark:text-white">R$ 1.240,50</h3>
                                     </div>
                                     <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
-                                        <ArrowRight className="w-3 h-3 -rotate-45" /> +15%
+                                        <BarChart3 className="w-4 h-4" /> Relatórios
                                     </div>
                                 </div>
                                 <div className="space-y-3">
-                                    {[1, 2, 3].map((_, i) => (
-                                        <div key={i} className="flex items-center gap-4 bg-white dark:bg-gray-700 p-3 rounded-xl shadow-sm">
-                                            <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">
-                                                <Store className="w-5 h-5" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="font-bold text-gray-800 dark:text-gray-200">Novo Pedido #{4820 + i}</p>
-                                                <p className="text-xs text-gray-500">Aguardando confirmação</p>
-                                            </div>
-                                            <Button size="sm" className="bg-brand-600 text-white">Ver</Button>
+                                    <div className="flex items-center gap-3 bg-white dark:bg-gray-700 p-3 rounded-xl shadow-sm">
+                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold"><Truck className="w-5 h-5" /></div>
+                                        <div className="flex-1">
+                                            <p className="font-bold text-gray-800 dark:text-gray-200">Entrega #3920</p>
+                                            <p className="text-xs text-green-600 font-bold">Concluída em 18 min</p>
                                         </div>
-                                    ))}
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-white dark:bg-gray-700 p-3 rounded-xl shadow-sm opacity-60">
+                                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold"><Truck className="w-5 h-5" /></div>
+                                        <div className="flex-1">
+                                            <p className="font-bold text-gray-800 dark:text-gray-200">Entrega #3919</p>
+                                            <p className="text-xs text-gray-500">Finalizada</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex items-center justify-between bg-brand-50 dark:bg-brand-900/20 p-4 rounded-2xl border border-brand-100 dark:border-brand-800/30">
                                 <div className="flex items-center gap-3">
-                                    <div className="bg-brand-600 p-2 rounded-lg text-white"><Crown className="w-5 h-5" /></div>
+                                    <div className="bg-brand-600 p-2 rounded-lg text-white"><Sparkles className="w-5 h-5" /></div>
                                     <div>
-                                        <p className="font-bold text-brand-900 dark:text-brand-100 text-sm">Modo Super Lojista</p>
-                                        <p className="text-xs text-brand-700 dark:text-brand-300">Taxas Reduzidas Ativas</p>
+                                        <p className="font-bold text-brand-900 dark:text-brand-100 text-sm">IA Criativa Ativa</p>
+                                        <p className="text-xs text-brand-700 dark:text-brand-300">Catálogo Otimizado</p>
                                     </div>
                                 </div>
                                 <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
                             </div>
                         </div>
-                        {/* Decorative elements behind */}
-                        <div className="absolute -top-10 -right-10 w-40 h-40 bg-yellow-300 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-                        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-brand-600 rounded-full blur-3xl opacity-20"></div>
                     </div>
                 </div>
             </header>
 
-            {/* Features Grid */}
+            {/* Features Realistas (Baseadas na Auditoria de Código) */}
             <section className="py-24 px-4 bg-gray-50 dark:bg-gray-900/50">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-20">
-                        <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight text-gray-900 dark:text-white">O ecossistema completo</h2>
+                        <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight text-gray-900 dark:text-white">Ferramentas Reais para seu Negócio</h2>
                         <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-                            Tudo o que você precisa para operar, vender e crescer, em um só lugar.
+                            Funcionalidades desenvolvidas pensando na operação real de delivery.
                         </p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         {[
                             {
-                                icon: <MessageCircle className="w-8 h-8" />,
-                                title: "IA de Atendimento (Zé)",
-                                description: "Nosso robô inteligente atende seus clientes no WhatsApp, tira dúvidas e fecha pedidos automaticamente.",
-                                color: "bg-blue-500"
+                                icon: <Truck className="w-8 h-8" />,
+                                title: "Rede de Entregadores",
+                                description: "Chame entregadores parceiros da plataforma diretamente pelo seu painel. O sistema localiza o parceiro mais próximo automaticamente.",
+                                color: "bg-brand-500",
+                                tag: "Essencial"
                             },
                             {
-                                icon: <Users className="w-8 h-8" />,
-                                title: "Entregadores Parceiros",
-                                description: "Acesso imediato a uma rede de milhares de entregadores verificados. Aceite o pedido e acompanhe a entrega em tempo real.",
-                                color: "bg-brand-500"
+                                icon: <Sparkles className="w-8 h-8" />,
+                                title: "IA Criativa de Produtos",
+                                description: "Use nossa Inteligência Artificial para gerar descrições atraentes e profissionais para os itens do seu catálogo em segundos.",
+                                color: "bg-purple-500",
+                                tag: "Super Lojista"
                             },
                             {
-                                icon: <DollarSign className="w-8 h-8" />,
-                                title: "ZéPay Integrado",
-                                description: "Receba seus pagamentos com segurança, controle o fluxo de caixa, faça transferências Pix e pague contas.",
-                                color: "bg-green-500"
+                                icon: <CreditCard className="w-8 h-8" />,
+                                title: "ZéPay Corporativo",
+                                description: "Crie cartões virtuais para despesas da sua equipe e faça transferências B2B diretamente do saldo das suas vendas.",
+                                color: "bg-green-500",
+                                tag: "Super Lojista"
                             },
                             {
                                 icon: <Grid className="w-8 h-8" />,
-                                title: "Catálogo & Loja Virtual",
-                                description: "Seu próprio site de delivery personalizável. Crie promoções, cupons de desconto e organize seus produtos.",
-                                color: "bg-purple-500"
+                                title: "Catálogo Digital",
+                                description: "Tenha sua própria loja online. Configure produtos, adicionais e receba pedidos organizados no seu gestor.",
+                                color: "bg-blue-500",
+                                tag: "Grátis"
                             },
                             {
                                 icon: <BarChart3 className="w-8 h-8" />,
-                                title: "Relatórios & Insights",
-                                description: "Saiba quais são seus horários de pico, produtos mais vendidos e entregadores mais eficientes.",
-                                color: "bg-orange-500"
+                                title: "Relatórios Avançados",
+                                description: "Visualize horários de pico, faturamento detalhado e desempenho individual de cada entregador (entregas realizadas).",
+                                color: "bg-orange-500",
+                                tag: "Super Lojista"
                             },
                             {
                                 icon: <Users className="w-8 h-8" />,
-                                title: "Gestão de Equipe",
-                                description: "Cadastre seus funcionários como gerentes, com acessos personalizados para ajudar na operação da loja.",
-                                color: "bg-indigo-500"
+                                title: "Gestão de Colaboradores",
+                                description: "Cadastre garçons e equipe de cozinha. Acompanhe a produtividade e organize o fluxo de pedidos internos.",
+                                color: "bg-indigo-500",
+                                tag: "Grátis"
                             }
                         ].map((item, idx) => (
-                            <div key={idx} className="group p-8 bg-white dark:bg-gray-800 rounded-[32px] border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                            <div key={idx} className="group p-8 bg-white dark:bg-gray-800 rounded-[32px] border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
+                                {item.tag && (
+                                    <span className={`absolute top-6 right-6 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${item.tag === 'Super Lojista' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+                                        {item.tag}
+                                    </span>
+                                )}
                                 <div className={`w-14 h-14 ${item.color} text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
                                     {item.icon}
+
                                 </div>
                                 <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white">{item.title}</h3>
                                 <p className="text-gray-500 dark:text-gray-400 leading-relaxed text-sm">
@@ -219,16 +232,16 @@ export const PartnerStore: React.FC = () => {
                 </div>
             </section>
 
-            {/* Plans Comparison */}
+            {/* Plans Comparison - Baseado Estritamente no Código */}
             <section id="plans" className="py-24 px-4 bg-white dark:bg-gray-950">
                 <div className="max-w-6xl mx-auto">
                     <div className="text-center mb-16">
                         <div className="inline-block px-4 py-1.5 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 font-bold text-sm mb-4">
-                            Escolha o melhor para você
+                            Investimento Inteligente
                         </div>
-                        <h2 className="text-4xl md:text-5xl font-black mb-6 text-gray-900 dark:text-white">Planos que cabem no bolso</h2>
+                        <h2 className="text-4xl md:text-5xl font-black mb-6 text-gray-900 dark:text-white">Compare e Decida</h2>
                         <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-                            Comece grátis e escale com o plano Super Lojista para ter taxas reduzidas, relatórios avançados e recursos exclusivos.
+                            Do básico ao avançado, temos a solução certa para o estágio da sua empresa.
                         </p>
                     </div>
 
@@ -236,13 +249,17 @@ export const PartnerStore: React.FC = () => {
                         {/* Free Plan */}
                         <div className="p-8 rounded-[40px] border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/20 relative">
                             <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Lojista Parceiro</h3>
-                            <p className="text-gray-500 text-sm mb-6">Ideal para quem está começando</p>
+                            <p className="text-gray-500 text-sm mb-6">Start sem custos fixos</p>
                             <div className="text-4xl font-black text-gray-900 dark:text-white mb-8">Grátis</div>
 
                             <ul className="space-y-4 mb-8">
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                                    <span className="text-gray-700 dark:text-gray-300">Loja Online e App Gestor</span>
+                                    <span className="text-gray-700 dark:text-gray-300">Acesso à Rede de Entregadores</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                    <span className="text-gray-700 dark:text-gray-300">Catálogo Digital Completo</span>
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
@@ -250,19 +267,15 @@ export const PartnerStore: React.FC = () => {
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                                    <span className="text-gray-700 dark:text-gray-300">Acesso a Rede de Entregadores</span>
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                                    <span className="text-gray-700 dark:text-gray-300">ZéPay Básico (Recebimentos)</span>
+                                    <span className="text-gray-700 dark:text-gray-300">Gestão de Equipe (Colaboradores)</span>
                                 </li>
                                 <li className="flex items-center gap-3 opacity-50">
                                     <div className="w-5 h-5 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div></div>
-                                    <span className="text-gray-400">Relatórios de Pico e Performance</span>
+                                    <span className="text-gray-400">IA Criativa para Produtos</span>
                                 </li>
                                 <li className="flex items-center gap-3 opacity-50">
                                     <div className="w-5 h-5 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div></div>
-                                    <span className="text-gray-400">Regras de Frete Avançadas</span>
+                                    <span className="text-gray-400">Taxa ZERO de Serviço na Entrega</span>
                                 </li>
                             </ul>
 
@@ -272,61 +285,74 @@ export const PartnerStore: React.FC = () => {
                         </div>
 
                         {/* Super Plan */}
-                        <div className="p-8 rounded-[40px] border-2 border-brand-500 bg-white dark:bg-gray-900 shadow-2xl relative overflow-hidden transform md:-translate-y-4">
-                            <div className="absolute top-0 right-0 bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-bl-2xl">
-                                MAIS VANTAJOSO
-                            </div>
-                            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-400 to-yellow-400"></div>
+                        {/* Super Plan - Redesign Premium */}
+                        <div className="relative group">
+                            {/* Gradient Border Glow */}
+                            <div className="absolute -inset-[2px] bg-gradient-to-b from-brand-500 to-brand-600 rounded-[42px] blur sm opacity-20 group-hover:opacity-40 transition-opacity"></div>
 
-                            <div className="flex items-center gap-2 mb-2">
-                                <h3 className="text-2xl font-black text-gray-900 dark:text-white">Super Lojista</h3>
-                                <Crown className="w-6 h-6 text-yellow-400 fill-current" />
-                            </div>
-                            <p className="text-gray-500 text-sm mb-6">Para quem quer crescer de verdade</p>
-                            <div className="flex items-baseline gap-1 mb-8">
-                                {loadingFees ? (
-                                    <div className="h-10 w-32 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg"></div>
-                                ) : (
-                                    <>
-                                        <span className="text-5xl font-black text-brand-600">
-                                            {fees?.super_store_monthly_fee ? formatCurrency(fees.super_store_monthly_fee) : 'R$ 99,90'}
-                                        </span>
-                                        <span className="text-gray-500">/mês</span>
-                                    </>
-                                )}
-                            </div>
+                            <div className="relative bg-white dark:bg-gray-900 rounded-[40px] p-1 shadow-2xl transform md:-translate-y-4 h-full border border-brand-100 dark:border-brand-900/30">
+                                {/* Border Gradient Wrapper */}
+                                <div className="absolute inset-0 rounded-[40px] bg-gradient-to-b from-brand-500/20 to-transparent pointer-events-none"></div>
 
-                            <ul className="space-y-4 mb-10">
-                                <li className="flex items-center gap-3">
-                                    <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
-                                    <span className="text-gray-900 dark:text-gray-100 font-medium">Tudo do plano Grátis</span>
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
-                                    <span className="text-gray-900 dark:text-gray-100 font-medium">Taxas de entrega reduzidas</span>
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
-                                    <span className="text-gray-900 dark:text-gray-100 font-medium">Relatórios Completos (Horários de Pico)</span>
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
-                                    <span className="text-gray-900 dark:text-gray-100 font-medium">Gestão de Gerentes Adicionais</span>
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
-                                    <span className="text-gray-900 dark:text-gray-100 font-medium">Regras de Frete Personalizadas</span>
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
-                                    <span className="text-gray-900 dark:text-gray-100 font-medium">Suporte Prioritário via WhatsApp</span>
-                                </li>
-                            </ul>
+                                {/* Badge Flutuante */}
+                                <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20">
+                                    <div className="bg-gradient-to-r from-brand-600 to-brand-500 text-white text-xs font-black px-6 py-2 rounded-full uppercase tracking-widest shadow-lg shadow-brand-500/30 flex items-center gap-2 ring-4 ring-white dark:ring-gray-950">
+                                        <Star className="w-3 h-3 fill-current text-yellow-300" />
+                                        Recomendado
+                                    </div>
+                                </div>
 
-                            <Button onClick={onSignupClick} className="w-full py-6 rounded-2xl font-bold text-lg bg-brand-600 hover:bg-brand-700 text-white shadow-xl shadow-brand-500/30">
-                                Quero ser Super Lojista
-                            </Button>
-                            <p className="text-center text-xs text-gray-400 mt-4">Cancele quando quiser, sem multa.</p>
+                                <div className="p-8 pt-12 relative h-full flex flex-col">
+                                    {/* Top Light Effect */}
+                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-24 bg-brand-500/10 blur-[60px] rounded-full pointer-events-none"></div>
+
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <h3 className="text-2xl font-black text-gray-900 dark:text-white">Super Lojista</h3>
+                                        <Crown className="w-6 h-6 text-yellow-400 fill-current" />
+                                    </div>
+                                    <p className="text-gray-500 text-sm mb-6">Para máxima eficiência e economia</p>
+                                    <div className="flex items-baseline gap-1 mb-8">
+                                        {loadingFees ? (
+                                            <div className="h-10 w-32 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg"></div>
+                                        ) : (
+                                            <>
+                                                <span className="text-5xl font-black text-brand-600">
+                                                    {fees?.super_store_monthly_fee ? formatCurrency(fees.super_store_monthly_fee) : 'R$ 99,90'}
+                                                </span>
+                                                <span className="text-gray-500">/mês</span>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <ul className="space-y-4 mb-10">
+                                        <li className="flex items-center gap-3">
+                                            <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
+                                            <span className="text-gray-900 dark:text-gray-100 font-bold">Taxa ZERO de Serviço por Entrega</span>
+                                        </li>
+                                        <li className="flex items-center gap-3">
+                                            <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
+                                            <span className="text-gray-900 dark:text-gray-100 font-medium">IA Criativa para Produtos</span>
+                                        </li>
+                                        <li className="flex items-center gap-3">
+                                            <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
+                                            <span className="text-gray-900 dark:text-gray-100 font-medium">Relatórios Completos de Performance</span>
+                                        </li>
+                                        <li className="flex items-center gap-3">
+                                            <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
+                                            <span className="text-gray-900 dark:text-gray-100 font-medium">Cartões Corporativos & Transferências</span>
+                                        </li>
+                                        <li className="flex items-center gap-3">
+                                            <div className="bg-brand-100 p-1 rounded-full text-brand-600"><CheckCircle className="w-4 h-4" /></div>
+                                            <span className="text-gray-900 dark:text-gray-100 font-medium">Regras de Frete Promocionais</span>
+                                        </li>
+                                    </ul>
+
+                                    <Button onClick={onSignupClick} className="w-full py-6 rounded-2xl font-bold text-lg bg-brand-600 hover:bg-brand-700 text-white shadow-xl shadow-brand-500/30">
+                                        Quero ser Super Lojista
+                                    </Button>
+                                    <p className="text-center text-xs text-gray-400 mt-4">Economia estimada de +20% em custos logísticos.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -336,31 +362,27 @@ export const PartnerStore: React.FC = () => {
             <section className="py-24 px-4 bg-gray-50 dark:bg-gray-900/30">
                 <div className="max-w-3xl mx-auto">
                     <div className="text-center mb-12">
-                        <h2 className="text-3xl font-black mb-4 text-gray-900 dark:text-white">Perguntas Frequentes</h2>
-                        <p className="text-gray-500">Tire suas dúvidas sobre como funciona a parceria.</p>
+                        <h2 className="text-3xl font-black mb-4 text-gray-900 dark:text-white">Dúvidas Comuns</h2>
+                        <p className="text-gray-500">Entenda os detalhes operacionais.</p>
                     </div>
 
                     <div className="space-y-4">
                         {[
                             {
-                                q: "Preciso pagar para me cadastrar?",
-                                a: "Não! O cadastro é 100% gratuito. Você pode começar a usar a plataforma imediatamente no plano Lojista Parceiro sem mensalidade e pagar apenas pelos serviços utilizados (taxas de entrega)."
+                                q: "Como funciona a 'Taxa Zero' do Super Lojista?",
+                                a: "No plano gratuito, cada entrega solicitada inclui uma pequena taxa de serviço da plataforma além do valor do entregador. Como Super Lojista, removemos essa taxa, e você paga apenas o valor líquido do quilômetro e do entregador. Para quem tem alto volume, a economia paga a assinatura."
                             },
                             {
-                                q: "Como funcionam as entregas?",
-                                a: "Ao receber um pedido, você clica em 'Chamar Entregador' no seu painel. Nossa plataforma localiza o parceiro mais próximo e ele vai até sua loja retirar o pedido. Você acompanha o trajeto em tempo real no mapa."
+                                q: "O que a IA faz pelo meu catálogo?",
+                                a: "Nossa IA analisa o nome e categoria do seu produto e gera descrições vendedoras automaticamente. Isso ajuda a profissionalizar seu cardápio e aumentar a conversão de vendas, sem você perder tempo escrevendo textos."
                             },
                             {
-                                q: "O que é o plano Super Lojista?",
-                                a: `É uma assinatura mensal de ${fees?.super_store_monthly_fee ? formatCurrency(fees.super_store_monthly_fee) : 'valor reduzido'} que desbloqueia taxas de entrega reduzidas, relatórios detalhados de performance, gestão de equipe de gerentes e prioridade no suporte. Vale muito a pena para quem tem volume de vendas.`
+                                q: "Posso cancelar o plano Super Lojista?",
+                                a: `Sim, você pode cancelar a assinatura a qualquer momento. Ao cancelar, você volta para o plano Gratuito e perde o acesso às taxas reduzidas, IA e relatórios avançados ao fim do ciclo atual.`
                             },
                             {
-                                q: "O dinheiro cai na hora?",
-                                a: "As vendas feitas no dinheiro ficam com você na hora. Vendas online ou via ZéPay caem na sua carteira digital, onde você pode usar para pagar entregadores, contas ou transferir para seu banco."
-                            },
-                            {
-                                q: "Preciso ter CNPJ?",
-                                a: "Recomendamos, mas você pode começar o cadastro com CPF e regularizar depois conforme suas vendas aumentarem. A validação de identidade é obrigatória para segurança."
+                                q: "O ZéPay Corporativo é uma conta bancária?",
+                                a: "Funciona como uma carteira digital empresarial. Você usa o saldo das suas vendas para criar cartões virtuais para sua equipe (ex: cartão para compras da cozinha) ou para transferir valores para outros parceiros da rede."
                             }
                         ].map((item, i) => (
                             <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -386,11 +408,11 @@ export const PartnerStore: React.FC = () => {
             <section className="py-20 px-4 bg-brand-600 relative overflow-hidden text-center">
                 <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
                 <div className="max-w-4xl mx-auto relative z-10">
-                    <h2 className="text-4xl md:text-5xl font-black text-white mb-8">Pronto para transformar seu negócio?</h2>
-                    <Button onClick={onSignupClick} className="bg-white text-brand-600 hover:bg-gray-100 py-5 px-10 text-xl font-black rounded-2xl shadow-xl hover:scale-105 transition-transform">
-                        Criar Minha Loja Agora
+                    <h2 className="text-4xl md:text-5xl font-black text-white mb-8">Comece agora, evolua sempre.</h2>
+                    <Button onClick={onSignupClick} className="!bg-white !text-brand-600 hover:!bg-gray-100 py-5 px-10 text-xl font-black rounded-2xl shadow-xl hover:scale-105 transition-transform">
+                        Criar Minha Loja
                     </Button>
-                    <p className="text-brand-100 mt-6 text-sm font-medium">Junte-se a mais de 5.000 lojistas parceiros.</p>
+                    <p className="text-brand-100 mt-6 text-sm font-medium">Junte-se à revolução do delivery profissional.</p>
                 </div>
             </section>
 
