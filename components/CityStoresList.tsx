@@ -143,57 +143,61 @@ export const CityStoresList: React.FC<CityStoresListProps> = ({ citySlug }) => {
                 ) : stores.length > 0 ? (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                         {/* Categories Carousel */}
-                        <div className="relative group/carousel -mx-6 px-6">
-                            <div className="relative py-2">
-                                <div
-                                    ref={scrollContainerRef}
-                                    className="flex gap-4 overflow-x-auto no-scrollbar pb-4 -mb-4 snap-x scroll-smooth"
+                        <div className="relative">
+                            <div className="flex items-center gap-3">
+                                {/* Botão Esquerdo */}
+                                <button
+                                    onClick={() => scroll('left')}
+                                    className={`flex-shrink-0 w-12 h-12 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-800 dark:text-white transition-all duration-300 hover:scale-105 active:scale-95 ${!canScrollLeft ? 'opacity-0 pointer-events-none translate-x-4' : 'opacity-100 translate-x-0'}`}
+                                    title="Anterior"
                                 >
-                                    <button
-                                        onClick={() => setSelectedCategoryId(null)}
-                                        className={`flex-shrink-0 px-6 py-3 rounded-2xl font-black text-sm transition-all snap-start ${!selectedCategoryId ? 'bg-brand-600 text-white shadow-lg' : 'bg-white dark:bg-gray-900 text-gray-500 border border-gray-100 dark:border-gray-800'}`}
+                                    <ChevronLeft className="w-6 h-6" />
+                                </button>
+
+                                {/* Área de Scroll */}
+                                <div className="flex-1 overflow-hidden">
+                                    <div
+                                        ref={scrollContainerRef}
+                                        className="flex gap-4 overflow-x-auto no-scrollbar snap-x scroll-smooth py-2"
                                     >
-                                        Todos
-                                    </button>
-                                    {categories.map(cat => (
                                         <button
-                                            key={cat.id}
-                                            onClick={() => setSelectedCategoryId(cat.id)}
-                                            className={`flex-shrink-0 flex items-center gap-3 pr-6 pl-2 py-2 rounded-2xl font-black text-sm transition-all snap-start ${selectedCategoryId === cat.id ? 'bg-brand-600 text-white shadow-lg' : 'bg-white dark:bg-gray-900 text-gray-500 border border-gray-100 dark:border-gray-800 hover:border-brand-200'}`}
+                                            onClick={() => setSelectedCategoryId(null)}
+                                            className={`flex-shrink-0 px-6 py-3 rounded-2xl font-black text-sm transition-all snap-start ${!selectedCategoryId ? 'bg-brand-600 text-white shadow-lg' : 'bg-white dark:bg-gray-900 text-gray-500 border border-gray-100 dark:border-gray-800'}`}
                                         >
-                                            <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex-shrink-0 overflow-hidden">
-                                                {cat.image_url ? (
-                                                    <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center">
-                                                        <Store className="w-5 h-5 opacity-20" />
-                                                    </div>
-                                                )}
-                                            </div>
-                                            {cat.name}
+                                            Todos
                                         </button>
-                                    ))}
+                                        {categories.map(cat => (
+                                            <button
+                                                key={cat.id}
+                                                onClick={() => setSelectedCategoryId(cat.id)}
+                                                className={`flex-shrink-0 flex items-center gap-3 pr-6 pl-2 py-2 rounded-2xl font-black text-sm transition-all snap-start ${selectedCategoryId === cat.id ? 'bg-brand-600 text-white shadow-lg' : 'bg-white dark:bg-gray-900 text-gray-500 border border-gray-100 dark:border-gray-800 hover:border-brand-200'}`}
+                                            >
+                                                <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex-shrink-0 overflow-hidden">
+                                                    {cat.image_url ? (
+                                                        <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center">
+                                                            <Store className="w-5 h-5 opacity-20" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {cat.name}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
-                                {/* Navigation Buttons */}
-                                {canScrollLeft && (
-                                    <button
-                                        onClick={() => scroll('left')}
-                                        className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full shadow-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-center text-gray-800 dark:text-white hover:text-brand-600 transition-all z-20 hover:scale-110 active:scale-95"
-                                    >
-                                        <ChevronLeft className="w-6 h-6" />
-                                    </button>
-                                )}
-                                {canScrollRight && (
-                                    <button
-                                        onClick={() => scroll('right')}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full shadow-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-center text-gray-800 dark:text-white hover:text-brand-600 transition-all z-20 hover:scale-110 active:scale-95"
-                                    >
-                                        <ChevronRight className="w-6 h-6" />
-                                    </button>
-                                )}
+                                {/* Botão Direito */}
+                                <button
+                                    onClick={() => scroll('right')}
+                                    className={`flex-shrink-0 w-12 h-12 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-800 dark:text-white transition-all duration-300 hover:scale-105 active:scale-95 ${!canScrollRight ? 'opacity-0 pointer-events-none -translate-x-4' : 'opacity-100 translate-x-0'}`}
+                                    title="Próximo"
+                                >
+                                    <ChevronRight className="w-6 h-6" />
+                                </button>
                             </div>
                         </div>
+
 
 
 
