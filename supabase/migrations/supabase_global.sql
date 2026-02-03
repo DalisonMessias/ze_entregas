@@ -10376,6 +10376,7 @@ BEGIN
     SELECT 
         id, name, store_name, store_logo_url, cover_url, is_open, 
         phone_number, chat_number, description, pix_key,
+        opening_hours, preparation_time_min, preparation_time_max, preparation_time,
         store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,
         receive_orders_via_chat, receive_orders_via_platform,
         city, store_address_state AS state, store_address_zip,

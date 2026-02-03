@@ -731,7 +731,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         )}
                     </div>
 
-                    <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white mb-2 z-10 md:mt-2">
+                    <div className="flex-1 text-center md:text-left text-gray-900 dark:text-white mb-2 z-10">
                         <div className="flex flex-col md:flex-row md:items-center justify-center md:justify-start gap-2 mb-2">
                             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 md:text-white dark:text-white">
                                 {store.store_name || store.name}
@@ -753,21 +753,29 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     <Clock className="w-4 h-4 text-gray-500 dark:text-gray-300" /> {store.opening_hours}
                                 </div>
                             )}
-                            {(store.preparation_time_min || store.preparation_time_max) && (
+                            {(store.preparation_time_min || store.preparation_time_max || store.preparation_time) && (
                                 <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-200 border border-amber-200/60 dark:border-amber-800/60 px-3 py-1.5 rounded-full shadow-sm">
                                     <ChefHat className="w-4 h-4" />
-                                    Preparo: {store.preparation_time_min || 0}-{store.preparation_time_max || 0} min
+                                    {store.preparation_time_min || store.preparation_time_max
+                                        ? `Preparo: ${store.preparation_time_min || 0}-${store.preparation_time_max || 0} min`
+                                        : `Preparo: ${store.preparation_time} min`}
                                 </div>
                             )}
-                            {canDeliver && deliverySettings && (
-                                <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">
-                                    <Bike className="w-4 h-4 text-gray-500 dark:text-gray-300" />
-                                    {deliverySettings.delivery_time_min}-{deliverySettings.delivery_time_max} min
+                            {canDeliver && (
+                                <div className="flex items-center gap-1.5 bg-gray-900 text-white border border-gray-900 px-3 py-1.5 rounded-full shadow-sm">
+                                    <Bike className="w-4 h-4 text-white" />
+                                    Entrega
                                 </div>
                             )}
                             {canPickup && (
                                 <div className="flex items-center gap-1.5 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-200 border border-brand-200/60 dark:border-brand-800/50 px-3 py-1.5 rounded-full shadow-sm">
                                     <StoreIcon className="w-4 h-4" /> Retirada
+                                </div>
+                            )}
+                            {canDeliver && deliverySettings && (
+                                <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">
+                                    <Clock className="w-4 h-4 text-gray-500 dark:text-gray-300" />
+                                    {deliverySettings.delivery_time_min}-{deliverySettings.delivery_time_max} min
                                 </div>
                             )}
                             <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">
