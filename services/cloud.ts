@@ -5301,6 +5301,27 @@ export const adminListInstitutionalContents = async (filters: { pageKey?: string
     }));
 };
 
+export const listInstitutionalPublic = async (pageKey: string): Promise<InstitutionalContent[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('institutional_contents')
+        .select('*')
+        .eq('page_key', pageKey)
+        .eq('status', 'published')
+        .eq('is_active', true)
+        .order('order_index', { ascending: true })
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error listing public institutional contents:', error);
+        return [];
+    }
+
+    return data || [];
+};
+
 export const adminCreateInstitutionalContent = async ({ base, images, tagIds }: { base: Partial<InstitutionalContent>; images: any[]; tagIds: string[] }) => {
     const sb = getClient();
     if (!sb) throw new Error("No client");

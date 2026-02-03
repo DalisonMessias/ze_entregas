@@ -451,6 +451,57 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [navigationKey, setNavigationKey] = useState(0);
 
+    // --- Constants & Config ---
+    const generalTabs = new Set<ActiveTab>([
+        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'internal_chat',
+        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat', 'street_request', 'not_found'
+    ]);
+
+    const defaultTabByRole: Record<UserRole, ActiveTab> = {
+        admin: 'admin_dashboard',
+        store_partner: 'wallet',
+        delivery_partner: 'partner',
+        delivery_person: 'daily_panel',
+        collaborator: 'collaborator_area',
+        user: 'home'
+    };
+
+    const storeTabTitles: Partial<Record<ActiveTab, string>> = {
+        wallet: 'Início',
+        history: 'Pedidos',
+        new_request: 'Nova Entrega',
+        internal_orders: 'Comandas',
+        store_catalog: 'Produtos',
+        store_product_import: 'Importar Produtos',
+        store_print_catalog: 'Catálogo Impresso',
+        store_promotions: 'Promoções',
+        store_status: 'Status da Loja',
+        store_team: 'Equipe',
+        store_reports: 'Relatórios',
+        store_marketing: 'Marketing',
+        store_integrations: 'Integrações',
+        store_settings: 'Configurações',
+        store_receiving_payment: 'Recebimento PIX',
+        store_finance_panel: 'Financeiro',
+        zepay_store: 'ZéPay',
+        zebank: 'ZéBank',
+        store_loans: 'Empréstimos',
+        store_api_docs: 'Docs API',
+        internal_chat: 'Chat com Clientes',
+        store_drivers_chat: 'Chat com Entregadores',
+        zepoint: 'ZéPoint'
+    };
+
+    const storeRootTabs = new Set<ActiveTab>(['wallet', 'history', 'store_catalog', 'zebank']);
+    const storeOrdersTabs = new Set<ActiveTab>(['history', 'new_request', 'internal_orders', 'my_orders']);
+    const storeProductsTabs = new Set<ActiveTab>(['store_catalog', 'store_product_import', 'store_print_catalog', 'store_promotions']);
+    const storeFinanceTabs = new Set<ActiveTab>(['zebank', 'zepay_store', 'store_finance_panel', 'store_loans', 'store_receiving_payment']);
+    const driverRootTabs = new Set<ActiveTab>(['daily_panel', 'partner']);
+    const driverOrdersTabs = new Set<ActiveTab>(['associate_orders']);
+    const driverRoutesTabs = new Set<ActiveTab>(['route_tools', 'route_list']);
+    const driverRidesTabs = new Set<ActiveTab>(['partner']);
+    const driverFinanceTabs = new Set<ActiveTab>(['zebank']);
+
     // Shop Cart State
     const [cart, setCart] = useState<any[]>([]);
 
@@ -493,8 +544,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             media.addEventListener('change', handleResize);
             return () => media.removeEventListener('change', handleResize);
         }
-        media.addListener(handleResize);
-        return () => media.removeListener(handleResize);
+        // Fallback para navegadores antigos
+        (media as any).addListener(handleResize);
+        return () => (media as any).removeListener(handleResize);
     }, []);
 
 
@@ -854,6 +906,12 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         setIsStoreMoreOpen(false);
     };
 
+    const isAdmin = effectiveRole === 'admin';
+    const isStore = effectiveRole === 'store_partner';
+    const isPartner = effectiveRole === 'delivery_partner';
+    const isNormalDriver = effectiveRole === 'delivery_person';
+    const isDriver = isNormalDriver || isPartner;
+
     const markNotificationRead = async (id: string) => {
         await cloud.markNotificationRead(id);
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
@@ -880,61 +938,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         }
     };
 
-    const isAdmin = effectiveRole === 'admin';
-    const isStore = effectiveRole === 'store_partner';
-    const isPartner = effectiveRole === 'delivery_partner';
-    const isNormalDriver = effectiveRole === 'delivery_person';
-    const isDriver = isNormalDriver || isPartner;
 
-    const storeRootTabs = new Set<ActiveTab>(['wallet', 'history', 'store_catalog', 'zebank']);
-    const storeOrdersTabs = new Set<ActiveTab>(['history', 'new_request', 'internal_orders', 'my_orders']);
-    const storeProductsTabs = new Set<ActiveTab>(['store_catalog', 'store_product_import', 'store_print_catalog', 'store_promotions']);
-    const storeFinanceTabs = new Set<ActiveTab>(['zebank', 'zepay_store', 'store_finance_panel', 'store_loans', 'store_receiving_payment']);
-    const driverRootTabs = new Set<ActiveTab>(['daily_panel', 'partner']);
-    const driverOrdersTabs = new Set<ActiveTab>(['associate_orders']);
-    const driverRoutesTabs = new Set<ActiveTab>(['route_tools', 'route_list']);
-    const driverRidesTabs = new Set<ActiveTab>(['partner']);
-    const driverFinanceTabs = new Set<ActiveTab>(['zebank']);
-
-    const storeTabTitles: Partial<Record<ActiveTab, string>> = {
-        wallet: 'Início',
-        history: 'Pedidos',
-        new_request: 'Nova Entrega',
-        internal_orders: 'Comandas',
-        store_catalog: 'Produtos',
-        store_product_import: 'Importar Produtos',
-        store_print_catalog: 'Catálogo Impresso',
-        store_promotions: 'Promoções',
-        store_status: 'Status da Loja',
-        store_team: 'Equipe',
-        store_reports: 'Relatórios',
-        store_marketing: 'Marketing',
-        store_integrations: 'Integrações',
-        store_settings: 'Configurações',
-        store_receiving_payment: 'Recebimento PIX',
-        store_finance_panel: 'Financeiro',
-        zepay_store: 'ZéPay',
-        zebank: 'ZéBank',
-        store_loans: 'Empréstimos',
-        store_api_docs: 'Docs API',
-        internal_chat: 'Chat com Clientes',
-        store_drivers_chat: 'Chat com Entregadores',
-        zepoint: 'ZéPoint'
-    };
-
-    const generalTabs = new Set<ActiveTab>([
-        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'internal_chat',
-        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat', 'street_request', 'not_found'
-    ]);
-
-    const defaultTabByRole: Record<UserRole, ActiveTab> = {
-        admin: 'admin_dashboard',
-        store_partner: 'wallet',
-        delivery_partner: 'partner',
-        delivery_person: 'daily_panel',
-        collaborator: 'collaborator_area',
-        user: 'home'
-    };
 
     const storeNavKey = (() => {
         if (!isStore) return null;

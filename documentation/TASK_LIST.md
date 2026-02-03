@@ -10,4 +10,6 @@ O sistema está redirecionando rotas inexistentes para a Home em vez de exibir a
 - [x] Corrigir a lógica para exibir `NotFound` em vez de redirecionar para Home no `App.tsx`.
 - [x] Corrigir a lógica de redirecionamento de URL no `AuthWrapper.tsx`.
 - [x] Validar a correção acessando URLs inexistentes.
+- [x] Corrigir erros de lint (addListener/removeListener) no `App.tsx`.
+- [x] Garantir que `NotFound` seja pública para todos os usuários.
 - [x] Atualizar `checklist.txt`.
