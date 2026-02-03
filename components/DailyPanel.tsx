@@ -431,7 +431,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-2xl text-center">
                             <Package className="w-5 h-5 mx-auto mb-1 text-blue-500" />
                             <p className="text-lg font-black text-gray-800 dark:text-white leading-none">{summary.count}</p>
@@ -503,7 +503,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             {/* Quick Access & Tools Sections */}
             <div>
                 <h3 className="font-bold text-gray-800 dark:text-white mb-4 mt-4 text-sm px-2">Acessos Rápidos</h3>
-                <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
                     <button onClick={() => onNavigate('local_history')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                             <History className="w-5 h-5" />
@@ -543,7 +543,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                 </div>
 
                 <h3 className="font-bold text-gray-800 dark:text-white mb-4 text-sm px-2">Ferramentas</h3>
-                <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
                     <button onClick={() => setShowFuelCalc(true)} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
                             <Fuel className="w-5 h-5" />

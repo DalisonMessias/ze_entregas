@@ -137,6 +137,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/upgrade': 'upgrade_to_partner',
     '/ruas': 'streets_list',
     '/home': 'home',
+    '/': 'home',
     '/partner-store': 'partner_store',
     '/partner-delivery': 'partner_delivery',
     // User Routes (Novas)

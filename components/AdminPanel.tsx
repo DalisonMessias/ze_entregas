@@ -783,7 +783,7 @@ const PartnerVerification: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in">
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
                         <tr>
@@ -1016,7 +1016,7 @@ const CityManagement: React.FC = () => {
                     </div>
 
                     {/* List */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
                                 <tr>
@@ -1062,7 +1062,7 @@ const CityManagement: React.FC = () => {
             )}
 
             {activeTab === 'requests' && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
                             <tr>

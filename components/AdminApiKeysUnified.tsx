@@ -235,7 +235,7 @@ export const AdminApiKeysUnified: React.FC = () => {
 
     const renderIntegrationsTab = () => (
         <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden overflow-x-auto">
                 {dataLoading ? <div className="p-8 text-center"><Loader2 className="animate-spin mx-auto w-8 h-8" /></div> : (
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
@@ -321,7 +321,7 @@ export const AdminApiKeysUnified: React.FC = () => {
 
             {/* Tab Navigation */}
             <div className="border-b border-gray-200 dark:border-gray-700">
-                <nav className="flex space-x-8">
+                <nav className="flex space-x-8 overflow-x-auto no-scrollbar whitespace-nowrap">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         return (

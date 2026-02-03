@@ -477,7 +477,7 @@ export const ProfileData: React.FC<ProfileDataProps> = ({ onBack }) => {
                                 <p className="text-sm text-gray-600 dark:text-gray-300">Chave PIX: <span className="font-mono bg-white dark:bg-gray-800 px-2 py-0.5 rounded border dark:border-gray-600">{bankDetails.pixKey}</span></p>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                                 <button
                                     onClick={() => setShowBankModal(true)}
                                     className="flex flex-col items-center justify-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"

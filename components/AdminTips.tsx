@@ -120,7 +120,7 @@ export const AdminTips: React.FC = () => {
                 </Button>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 font-bold uppercase text-xs">
                         <tr>
@@ -194,7 +194,7 @@ export const AdminTips: React.FC = () => {
 
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase ml-1">Público Alvo</label>
-                                <div className="grid grid-cols-4 gap-2 mt-1">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
                                     <button
                                         type="button"
                                         onClick={() => setFormRole('all')}

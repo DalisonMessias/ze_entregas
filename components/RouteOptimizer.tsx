@@ -349,7 +349,7 @@ const RouteOptimizer: React.FC = () => {
         {optimizedRoute && (
           <div className="mt-6 p-4 bg-white rounded-lg shadow-inner space-y-4">
             <h3 className="text-lg font-bold text-gray-800">Rota Otimizada</h3>
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-sm text-gray-500">Paradas</p>
                 <p className="text-xl font-bold">{optimizedRoute.stops.length}</p>

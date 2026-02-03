@@ -48,6 +48,7 @@ const getAuthViewFromUrl = (): AuthView => {
   if (path === '/login') return 'login';
   if (path === '/cadastro') return 'signup_type_selection';
   if (path === '/recuperar-senha') return 'forgot_password';
+  if (path === '/' || path === '/home') return 'landing';
   return 'landing';
 };
 
@@ -80,9 +81,6 @@ export const AuthWrapper: React.FC = () => {
   // Sincroniza URL quando view muda e NÃO temos sessão ativa
   useEffect(() => {
     if (!session && !userId) {
-      if (window.location.pathname === '/') {
-        window.history.replaceState({ authView: 'landing' }, '', '/home');
-      }
       updateAuthUrl(view);
     }
   }, [view, session, userId]);
@@ -1016,9 +1014,9 @@ export const AuthWrapper: React.FC = () => {
                   <CustomInput type="text" placeholder="Nome Comercial da Loja" icon={StoreIcon} value={storeName} onChange={e => setStoreName(e.target.value)} />
                   <CustomInput type="text" placeholder="CPF/CNPJ do Negócio" icon={FileText} value={storeDocument} onChange={e => setStoreDocument(formatCnpjCpf(e.target.value))} maxLength={18} />
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <CustomInput type="text" placeholder="CEP" icon={MapPin} value={addressZip} onChange={e => setAddressZip(e.target.value)} className="col-span-1" />
-                    <div className="col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <CustomInput type="text" placeholder="CEP" icon={MapPin} value={addressZip} onChange={e => setAddressZip(e.target.value)} className="sm:col-span-1" />
+                    <div className="sm:col-span-2">
                       <StreetSearchSelect
                         city={selectedCity.split(' - ')[0]}
                         value={addressStreet}
@@ -1028,9 +1026,9 @@ export const AuthWrapper: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <CustomInput type="text" placeholder="Número" value={addressNumber} onChange={e => setAddressNumber(e.target.value)} className="col-span-1" />
-                    <CustomInput type="text" placeholder="Bairro" value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} className="col-span-2" />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <CustomInput type="text" placeholder="Número" value={addressNumber} onChange={e => setAddressNumber(e.target.value)} className="sm:col-span-1" />
+                    <CustomInput type="text" placeholder="Bairro" value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} className="sm:col-span-2" />
                   </div>
                 </div>
               )}

@@ -827,7 +827,7 @@ export const AdminBaseCatalog: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="grid grid-cols-3 gap-2">
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                         <div className="bg-white/10 rounded-2xl p-2.5 text-center">
                                                             <div className="text-[8px] uppercase font-black opacity-60 mb-0.5">Conteúdo</div>
                                                             <div className="text-xs font-black">{analysisReport.metrics.descriptionQuality}%</div>

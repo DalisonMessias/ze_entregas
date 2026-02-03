@@ -403,7 +403,7 @@ export const PartnerDocumentation: React.FC<PartnerDocumentationProps> = ({
                             <h3 className="font-black text-xl text-gray-900 dark:text-white">Escolha seu Veículo</h3>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 md:gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                             {[
                                 { id: 'moto', icon: <Zap className="w-8 h-8" />, label: 'Moto' },
                                 { id: 'bike', icon: <Bike className="w-8 h-8" />, label: 'Bike' },

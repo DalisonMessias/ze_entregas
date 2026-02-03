@@ -1,6 +1,8 @@
-# Plano de Tarefas - Galeria de Imagens (Remoção de IA)
+# Lista de Tarefas - Correção de Rotas
 
-- [x] Criado novo serviço `services/galleryService.ts` para funções manuais.
-- [x] Limpo componente `AdminImageGallery.tsx`.
-- [x] Excluído `services/geminiImageService.ts`.
-- [x] Atualizado `checklist.txt`.
+- [ ] Analisar arquivos de rotas (`index.tsx`, `App.tsx`)
+- [ ] Verificar configuração do Vite e Vercel (`vite.config.ts`, `vercel.json`)
+- [ ] Implementar redirecionamento de `/` para `/home` ou configurar Home em `/`
+- [ ] Garantir que o refresh das páginas funcione em produção
+- [ ] Validar o build e a navegação
+- [ ] Atualizar `checklist.txt`

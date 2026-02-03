@@ -307,8 +307,48 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
             </div>
 
             {/* Loans Table */}
-            <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+            <div className="md:hidden space-y-3">
+                {sortedAndFilteredLoans.map(loan => (
+                    <div key={loan.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-gray-400">Mutuário</p>
+                                <p className="font-bold text-gray-900 dark:text-white">{loan.borrowerName}</p>
+                            </div>
+                            <span className={`px-2 py-1 text-[10px] font-bold rounded-full ${getLoanStatusClass(loan.status)}`}>
+                                {loan.status === 'ACTIVE' ? 'Em Dia' : loan.status === 'OVERDUE' ? 'Vencido' : loan.status === 'PAID' ? 'Pago' : loan.status}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mt-4 text-xs">
+                            <div>
+                                <p className="text-gray-400 uppercase font-bold text-[10px]">Valor</p>
+                                <p className="font-semibold text-gray-800 dark:text-gray-100">{formatCurrency(loan.amount)}</p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400 uppercase font-bold text-[10px]">Saldo</p>
+                                <p className="font-semibold text-red-500">{formatCurrency(loan.outstandingBalance)}</p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400 uppercase font-bold text-[10px]">Contratação</p>
+                                <p className="font-semibold text-gray-700 dark:text-gray-200">{new Date(loan.startDate).toLocaleDateString('pt-BR')}</p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400 uppercase font-bold text-[10px]">Vencimento</p>
+                                <p className="font-semibold text-gray-700 dark:text-gray-200">{new Date(loan.dueDate).toLocaleDateString('pt-BR')}</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                {sortedAndFilteredLoans.length === 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 text-center text-gray-400">
+                        <FileText className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                        Nenhum empréstimo encontrado com os filtros atuais.
+                    </div>
+                )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+                <table className="min-w-[720px] w-full text-sm text-left text-gray-500 dark:text-gray-400">
                     <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                         <tr>
                             <th scope="col" className="px-6 py-3">

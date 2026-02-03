@@ -102,7 +102,7 @@ export const ApiManagement: React.FC = () => {
             {loading ? <Loader2 className="animate-spin mx-auto" /> : (
                 <>
                     {activeTab === 'keys' && (
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500">
                                     <tr>

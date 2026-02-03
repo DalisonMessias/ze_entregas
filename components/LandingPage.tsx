@@ -95,7 +95,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                     <Logo
                         className="h-8 w-auto"
                         variant={scrolled ? 'default' : 'full-white'}
-                        onClick={() => window.location.href = '/home'}
+                        onClick={() => window.location.href = '/'}
                     />
                     {!isAuthenticated ? (
                         <div className="flex items-center gap-2 sm:gap-4">

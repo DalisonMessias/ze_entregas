@@ -380,7 +380,7 @@ export const ProductImportExport: React.FC<ProductImportExportProps> = ({ target
                     <h2 className="text-3xl font-black mb-2 dark:text-white">Importação Concluída!</h2>
                     <p className="text-gray-500 mb-8">O processamento do arquivo foi finalizado.</p>
 
-                    <div className="grid grid-cols-3 gap-4 mb-8 max-w-lg mx-auto">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8 max-w-lg mx-auto">
                         <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
                             <div className="text-2xl font-bold text-green-700 dark:text-green-400">{results.success}</div>
                             <div className="text-xs text-green-600 dark:text-green-500">Descartados/Novos</div>

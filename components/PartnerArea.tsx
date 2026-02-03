@@ -628,7 +628,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     {/* Quick Access & Tools Sections for Partners */}
                     <div>
                         <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2 mt-6">Acessos Rápidos</h3>
-                        <div className="grid grid-cols-4 gap-2 mb-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
                             <Button onClick={() => setActiveTab('financial')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
                                     <Wallet className="w-5 h-5" />
@@ -674,7 +674,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                         </div>
 
                         <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2">Ferramentas</h3>
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                             <Button onClick={() => setShowFuelCalc(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
                                     <Fuel className="w-5 h-5" />
