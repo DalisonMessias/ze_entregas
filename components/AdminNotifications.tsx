@@ -80,12 +80,12 @@ export const AdminNotifications: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in">
             {/* Tabs for switching mode */}
-            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full overflow-x-auto no-scrollbar">
                 <button
                     onClick={() => {
                         setActiveType('global');
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeType === 'global' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeType === 'global' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                 >
                     <Megaphone className="w-4 h-4" /> Global
                 </button>
@@ -93,7 +93,7 @@ export const AdminNotifications: React.FC = () => {
                     onClick={() => {
                         setActiveType('individual');
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeType === 'individual' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeType === 'individual' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                 >
                     <User className="w-4 h-4" /> Individual
                 </button>

@@ -100,7 +100,7 @@ export const AdminWalletControl: React.FC = () => {
         <div className="space-y-6 animate-in fade-in">
             {/* Header / Controls */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-                <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+                <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar">
                     <button onClick={() => setFilter('ALL')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'ALL' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Todos</button>
                     <button onClick={() => setFilter('store_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'store_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojistas</button>
                     <button onClick={() => setFilter('DELIVERY')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'DELIVERY' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregadores</button>

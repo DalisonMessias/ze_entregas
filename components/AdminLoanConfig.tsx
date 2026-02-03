@@ -168,9 +168,9 @@ export const AdminLoanConfig: React.FC = () => {
 
     const renderTypesTab = () => (
         <div className="space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <h4 className="font-bold text-gray-700 dark:text-gray-300">Tipos de Empréstimo</h4>
-                <Button onClick={() => setEditingType({ name: '', description: '', interest_rate_monthly: 0, max_installments: 1, target_audience: 'BOTH', is_active: true })}>
+                <Button onClick={() => setEditingType({ name: '', description: '', interest_rate_monthly: 0, max_installments: 1, target_audience: 'BOTH', is_active: true })} className="w-full sm:w-auto">
                     <Plus className="w-4 h-4 mr-2" /> Novo Tipo
                 </Button>
             </div>
@@ -202,7 +202,7 @@ export const AdminLoanConfig: React.FC = () => {
                             placeholder="Selecione o Público"
                         />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label className="text-xs text-gray-500">Taxa Mensal (%)</label>
                             <input
@@ -235,7 +235,7 @@ export const AdminLoanConfig: React.FC = () => {
 
             <div className="space-y-2">
                 {loanTypes.map(type => (
-                    <div key={type.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <div key={type.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
                             <h5 className="font-bold text-gray-800 dark:text-white">{type.name}</h5>
                             <p className="text-sm text-gray-500">{type.description}</p>

@@ -1141,11 +1141,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                             />
                                         </div>
 
-                                        <div className="grid grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
                                                 <CustomInput label="Número" value={addressNumber} onChange={e => setAddressNumber(e.target.value)} placeholder="123" />
                                             </div>
-                                            <div className="col-span-2">
+                                            <div className="sm:col-span-2">
                                                 <CustomInput label="Complemento" value={addressComplement} onChange={e => setAddressComplement(e.target.value)} placeholder="Apto, Bloco" />
                                             </div>
                                         </div>
@@ -1181,7 +1181,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             <section className="space-y-4">
                                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Pagamento</h3>
 
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                     {/* PIX: Show if Store has PIX enabled (Auto or Manual) */}
                                     {/* User Request Correction: "independe se ativo ou nao vai motra o pix... se ativo abreo o modal... se noa tivo ainda mostar o botao... e vindo como forma de pagamento sem abrir o modal" */}
 

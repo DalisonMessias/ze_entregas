@@ -251,7 +251,7 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({ history, onClear, on
                 {isExpanded && (
                   <div className="pt-4 border-t border-gray-100 dark:border-gray-700 animate-in fade-in slide-in-from-top-2">
                     {/* Stats Row */}
-                    <div className="grid grid-cols-3 gap-2 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-2xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-2xl">
                       <div className="text-center flex-1 border-r border-gray-200 dark:border-gray-600">
                         <div className="text-[10px] uppercase font-bold text-gray-400 flex items-center justify-center gap-1"><Wallet className="w-3 h-3" /> Dinheiro</div>
                         <div className="font-bold text-green-600 text-sm">{formatCurrency(record.paymentBreakdown?.cash)}</div>

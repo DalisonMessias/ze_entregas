@@ -358,7 +358,7 @@ export const PrintCatalogGenerator: React.FC = () => {
                     display: none;
                 }
             `}</style>
-            <div className="flex flex-col h-[calc(100vh-140px)] animate-in fade-in">
+            <div className="flex flex-col md:h-[calc(100vh-140px)] animate-in fade-in">
                 {/* Header / Toolbar */}
                 <div className="flex items-center justify-between mb-6 bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <div className="flex items-center gap-4">
@@ -388,16 +388,16 @@ export const PrintCatalogGenerator: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex flex-1 gap-6 min-h-0 overflow-hidden">
+                <div className="flex flex-1 flex-col md:flex-row gap-6 min-h-0 md:overflow-hidden">
                     {/* Left Panel: Settings & Product List */}
-                    <div className="w-80 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="w-full md:w-80 flex flex-col gap-6 overflow-y-auto md:pr-2 custom-scrollbar">
                         {/* Settings Section */}
                         <div className="bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm">
                             <h3 className="font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
                                 <Palette className="w-4 h-4" /> Estilo & Templates
                             </h3>
 
-                            <div className="grid grid-cols-5 gap-2 mb-6">
+                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-6">
                                 {TEMPLATES.map(t => (
                                     <button
                                         key={t.id}

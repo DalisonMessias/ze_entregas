@@ -358,7 +358,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendMedia, onSend
                     <X size={16} />
                   </button>
                 </div>
-                <div className="grid grid-cols-6 sm:grid-cols-9 gap-1 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-9 gap-1 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
                   {commonEmojis.map(emoji => (
                     <button
                       key={emoji}

@@ -88,7 +88,7 @@ export const StickerPickerModal: React.FC<StickerPickerModalProps> = ({ isOpen, 
                     </div>
                 </label>
 
-                <div className="grid grid-cols-4 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar p-2">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar p-2">
                     {loading ? (
                         <div className="col-span-4 flex justify-center py-8"><Loader2 className="animate-spin text-teal-500" /></div>
                     ) : stickers.length === 0 ? (

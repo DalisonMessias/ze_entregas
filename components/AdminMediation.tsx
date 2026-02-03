@@ -71,7 +71,7 @@ export const AdminMediation: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Lista de Sessões */}
-                <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col h-[600px]">
+                <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col md:h-[600px]">
                     <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                         <h3 className="font-bold text-gray-700 dark:text-gray-200 text-sm uppercase">Sessões Recentes</h3>
                     </div>
@@ -102,7 +102,7 @@ export const AdminMediation: React.FC = () => {
                 </div>
 
                 {/* Detalhes e Logs */}
-                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex flex-col h-[600px]">
+                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex flex-col md:h-[600px]">
                     {selectedSession ? (
                         <>
                             <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">

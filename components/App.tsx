@@ -354,7 +354,7 @@ const UpgradeToPartnerPage: React.FC = () => {
                 {/* Section 1 */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                     <Skeleton className="h-6 w-32 mb-4" />
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         <Skeleton className="h-24 w-full" />
                         <Skeleton className="h-24 w-full" />
                         <Skeleton className="h-24 w-full" />

@@ -168,15 +168,15 @@ export const AdminInsuranceConfig: React.FC = () => {
 
             {activeTab === 'partners' && (
                 <div className="bg-white dark:bg-gray-800 rounded-[32px] p-8 border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div className="flex justify-between items-center mb-8">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-8">
                         <h3 className="font-black text-xl">Seguradoras Parceiras</h3>
-                        <Button size="sm" onClick={() => setEditingPartner({ name: '', is_active: true })} className="h-9"><Plus className="w-4 h-4 mr-2" /> Adicionar Empresa</Button>
+                        <Button size="sm" onClick={() => setEditingPartner({ name: '', is_active: true })} className="h-9 w-full sm:w-auto"><Plus className="w-4 h-4 mr-2" /> Adicionar Empresa</Button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {partners.map(p => (
                             <div key={p.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700 group">
                                 <div className="flex items-center gap-3"><Building2 className="w-5 h-5 text-gray-400" /><span className="font-bold text-sm">{p.name}</span></div>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => setEditingPartner(p)} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"><Edit2 className="w-4 h-4" /></button>
                                     <button onClick={() => handleDeletePartner(p.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                                 </div>
@@ -245,15 +245,15 @@ export const AdminInsuranceConfig: React.FC = () => {
                     <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-[40px] shadow-2xl p-8 max-h-[90vh] overflow-y-auto no-scrollbar">
                         <header className="flex justify-between items-center mb-8"><h3 className="text-2xl font-black">{editingPlan.id ? 'Editar Plano' : 'Novo Plano'}</h3><button onClick={() => setEditingPlan(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><X className="w-6 h-6 text-gray-400" /></button></header>
                         <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Título do Plano</label><CustomInput value={editingPlan.title || ''} onChange={e => setEditingPlan({ ...editingPlan, title: (e as any).target.value })} placeholder="Ex: Proteção Total" /></div>
                                 <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Preço Mensal (R$)</label><input type="number" step="0.01" value={editingPlan.price_mensal} onChange={e => setEditingPlan({ ...editingPlan, price_mensal: parseFloat(e.target.value) })} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl outline-none border border-transparent focus:border-brand-500 font-bold" placeholder="0,00" /></div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Taxa de Franquia (% FIPE)</label><input type="number" step="0.1" value={editingPlan.deductible_percent || 0} onChange={e => setEditingPlan({ ...editingPlan, deductible_percent: parseFloat(e.target.value) })} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl outline-none border border-transparent focus:border-brand-500 font-bold" placeholder="Ex: 5.0" /></div>
                                 <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Info Adicional Franquia</label><input value={editingPlan.deductible_info || ''} onChange={e => setEditingPlan({ ...editingPlan, deductible_info: e.target.value })} className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl outline-none border border-transparent focus:border-brand-500 text-sm" placeholder="Ex: Mínimo de R$ 500,00 para reparos." /></div>
                             </div>
-                            <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl">
                                 <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={editingPlan.is_popular} onChange={e => setEditingPlan({ ...editingPlan, is_popular: e.target.checked })} className="w-5 h-5 rounded accent-brand-600" /><span className="text-sm font-bold">Destaque (Mais Popular)</span></label>
                                 <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={editingPlan.is_active} onChange={e => setEditingPlan({ ...editingPlan, is_active: e.target.checked })} className="w-5 h-5 rounded accent-brand-600" /><span className="text-sm font-bold">Ativo</span></label>
                             </div>

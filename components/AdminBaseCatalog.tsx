@@ -586,7 +586,7 @@ export const AdminBaseCatalog: React.FC = () => {
     }, [debouncedSearch, products]);
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] animate-in fade-in duration-500">
+        <div className="flex flex-col lg:flex-row gap-6 md:h-[calc(100vh-140px)] animate-in fade-in duration-500">
             {/* Left Column: AI Assistant */}
             <div className="w-full lg:w-96 flex flex-col bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden h-full">
                 <div className="p-4 border-b dark:border-gray-700 bg-brand-50/50 dark:bg-brand-900/10 flex items-center justify-between">

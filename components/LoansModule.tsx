@@ -354,7 +354,7 @@ const LoansModule: React.FC = () => {
 
                         return (
                             <div className="space-y-3">
-                                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
                                     {Array.from({ length: finalMax }, (_, i) => i + 1).map(n => (
                                         <button
                                             key={n}

@@ -203,17 +203,17 @@ export const StreetRequestsAdmin: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <h1 className="text-2xl font-black">Solicitações de Ruas</h1>
-                <div className="flex gap-2">
-                    <Button onClick={() => setIsManualModalOpen(true)} size="sm">Adicionar Manual</Button>
-                    <Button onClick={fetchRequests} variant="outline" size="sm">Atualizar</Button>
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <Button onClick={() => setIsManualModalOpen(true)} size="sm" className="w-full sm:w-auto">Adicionar Manual</Button>
+                    <Button onClick={fetchRequests} variant="outline" size="sm" className="w-full sm:w-auto">Atualizar</Button>
                 </div>
             </div>
 
-            <div className="flex bg-gray-100 p-1 rounded-2xl w-fit">
-                <button onClick={() => setActiveTab('REQUESTS')} className={`px-6 py-2 rounded-xl text-sm font-bold ${activeTab === 'REQUESTS' ? 'bg-white text-brand-600 shadow' : 'text-gray-500'}`}>Solicitações</button>
-                <button onClick={() => setActiveTab('CATALOG')} className={`px-6 py-2 rounded-xl text-sm font-bold ${activeTab === 'CATALOG' ? 'bg-white text-brand-600 shadow' : 'text-gray-500'}`}>Catálogo</button>
+            <div className="flex bg-gray-100 p-1 rounded-2xl w-full overflow-x-auto no-scrollbar">
+                <button onClick={() => setActiveTab('REQUESTS')} className={`px-6 py-2 rounded-xl text-sm font-bold whitespace-nowrap ${activeTab === 'REQUESTS' ? 'bg-white text-brand-600 shadow' : 'text-gray-500'}`}>Solicitações</button>
+                <button onClick={() => setActiveTab('CATALOG')} className={`px-6 py-2 rounded-xl text-sm font-bold whitespace-nowrap ${activeTab === 'CATALOG' ? 'bg-white text-brand-600 shadow' : 'text-gray-500'}`}>Catálogo</button>
             </div>
 
             <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
@@ -223,13 +223,13 @@ export const StreetRequestsAdmin: React.FC = () => {
             <div className="grid gap-4">
                 {loading ? <Skeleton className="h-32 w-full rounded-3xl" /> : activeTab === 'REQUESTS' ? (
                     filteredRequests.map(req => (
-                        <div key={req.id} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex justify-between items-center">
+                        <div key={req.id} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                                 <h3 className="font-bold">{req.street_name}</h3>
                                 <p className="text-xs text-brand-500 font-bold">{req.city}</p>
                             </div>
                             {req.status === 'PENDING' && (
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 w-full sm:w-auto justify-end">
                                     <button onClick={() => handleAction(req, 'APPROVED')} className="p-3 bg-green-500 text-white rounded-2xl"><Check className="w-5 h-5" /></button>
                                     <button onClick={() => handleAction(req, 'REJECTED')} className="p-3 bg-red-500 text-white rounded-2xl"><X className="w-5 h-5" /></button>
                                 </div>
@@ -238,12 +238,12 @@ export const StreetRequestsAdmin: React.FC = () => {
                     ))
                 ) : (
                     filteredApproved.map(street => (
-                        <div key={street.id} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex justify-between items-center">
+                        <div key={street.id} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                                 <h3 className="font-bold">{street.name}</h3>
                                 <p className="text-xs text-brand-500 font-bold">{street.city}</p>
                             </div>
-                            <button onClick={() => cloud.adminDeleteApprovedStreet(street.id).then(fetchRequests)} className="p-2 text-red-500"><X /></button>
+                            <button onClick={() => cloud.adminDeleteApprovedStreet(street.id).then(fetchRequests)} className="p-2 text-red-500 self-end sm:self-auto"><X /></button>
                         </div>
                     ))
                 )}

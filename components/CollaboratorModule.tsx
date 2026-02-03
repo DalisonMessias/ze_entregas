@@ -1267,8 +1267,8 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
 
                                         {deliveryMethod === 'DELIVERY' && (
                                             <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    <div className="col-span-2">
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                    <div className="sm:col-span-2">
                                                         <StreetAutocomplete
                                                             city={storeCity}
                                                             value={addressStreet}

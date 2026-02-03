@@ -90,11 +90,11 @@ export const ApiManagement: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-fit">
-                <button onClick={() => setActiveTab('keys')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 ${activeTab === 'keys' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-full overflow-x-auto no-scrollbar">
+                <button onClick={() => setActiveTab('keys')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'keys' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>
                     <Shield className="w-4 h-4" /> Chaves de API
                 </button>
-                <button onClick={() => setActiveTab('logs')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 ${activeTab === 'logs' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>
+                <button onClick={() => setActiveTab('logs')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'logs' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>
                     <Activity className="w-4 h-4" /> Logs de Uso
                 </button>
             </div>
@@ -148,7 +148,7 @@ export const ApiManagement: React.FC = () => {
                     )}
 
                     {activeTab === 'logs' && (
-                        <div className="bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-xs h-[500px] overflow-y-auto">
+                        <div className="bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-xs h-[360px] sm:h-[440px] md:h-[500px] overflow-y-auto">
                             {logs.map(l => (
                                 <div key={l.id} className="border-b border-gray-800 py-2 flex gap-4">
                                     <span className="text-gray-500">[{new Date(l.created_at).toLocaleTimeString()}]</span>

@@ -31,7 +31,7 @@ export const TransitionMonitor: React.FC = () => {
         <BarChart3 className="w-5 h-5 text-brand-600" />
         <h3 className="font-bold">Monitoramento da Transição Financeira</h3>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
           <p className="text-xs font-bold text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3"/> Latência (ms)</p>
           <p className="text-2xl font-black">{latency ?? '---'}</p>

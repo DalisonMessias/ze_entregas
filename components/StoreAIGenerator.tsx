@@ -991,7 +991,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                                                     </div>
                                                 </div>
 
-                                                <div className="grid grid-cols-3 gap-2">
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                                     <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
                                                         <div className="text-[8px] uppercase font-bold opacity-70">Descrições</div>
                                                         <div className="text-sm font-black">{analysisReport.metrics.descriptionQuality}%</div>

@@ -1118,7 +1118,7 @@ export const InternalOrders: React.FC = () => {
     }
 
     return (
-        <div className="h-[calc(100vh-100px)] flex flex-col animate-in fade-in">
+        <div className="md:h-[calc(100vh-100px)] flex flex-col animate-in fade-in">
 
             {/* Header Tabs */}
             <div className="flex gap-2 mb-4">
@@ -1255,7 +1255,7 @@ export const InternalOrders: React.FC = () => {
 
                             <div className="space-y-4 mb-4">
                                 {/* Order Type Selector */}
-                                <div className="grid grid-cols-3 gap-2 bg-gray-100 dark:bg-gray-700/50 p-1 rounded-xl mb-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-gray-100 dark:bg-gray-700/50 p-1 rounded-xl mb-4">
                                     <button
                                         onClick={() => setOrderType('LOCAL')}
                                         className={`flex flex-col items-center justify-center py-2 rounded-lg text-xs font-bold transition-all ${orderType === 'LOCAL' ? 'bg-white dark:bg-gray-800 text-brand-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600'}`}

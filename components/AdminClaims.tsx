@@ -153,14 +153,14 @@ export const AdminClaims: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit overflow-x-auto no-scrollbar">
                 <button onClick={() => setActiveTab('claims')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'claims' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Chamados</button>
                 <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'settings' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Configurações</button>
             </div>
 
             {activeTab === 'claims' && (
                 <>
-                    <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit mb-4">
+                    <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit mb-4 overflow-x-auto no-scrollbar">
                         <button onClick={() => setStatusFilter('all')} className={`px-4 py-2 rounded-lg text-sm font-bold ${statusFilter === 'all' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Todos</button>
                         <button onClick={() => setStatusFilter('open')} className={`px-4 py-2 rounded-lg text-sm font-bold ${statusFilter === 'open' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Abertos</button>
                         <button onClick={() => setStatusFilter('resolved')} className={`px-4 py-2 rounded-lg text-sm font-bold ${statusFilter === 'resolved' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Resolvidos</button>
