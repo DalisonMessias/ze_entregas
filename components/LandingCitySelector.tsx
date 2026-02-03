@@ -6,12 +6,14 @@ import * as cloud from '../services/cloud';
 interface LandingCitySelectorProps {
     value: string;
     onSelect: (city: City) => void;
+    onClear?: () => void;
     placeholder?: string;
 }
 
 export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
     value,
     onSelect,
+    onClear,
     placeholder = "Qual sua cidade ou endereço?"
 }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -25,7 +27,9 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
     useEffect(() => {
         if (value) {
             setSearchTerm(value.split(' - ')[0]); // Mostra apenas o nome da cidade no input
+            return;
         }
+        setSearchTerm('');
     }, [value]);
 
     useEffect(() => {
@@ -57,7 +61,9 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
             }
         };
 
-        const timer = setTimeout(fetchCities, 200);
+        const delay = searchTerm.length >= 2 ? 200 : 0;
+
+        const timer = setTimeout(fetchCities, delay);
         return () => {
             clearTimeout(timer);
             controller.abort();
@@ -116,6 +122,7 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
                                 <button
                                     onClick={() => {
                                         setSearchTerm('');
+                                        onClear?.();
                                         setIsOpen(true);
                                     }}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
@@ -132,7 +139,7 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
             {isOpen && (
                 <div className="absolute z-[1000] top-full left-0 w-full bg-white dark:bg-gray-900 border-x border-b border-gray-100 dark:border-gray-800 rounded-b-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] animate-in fade-in duration-200 overflow-hidden">
                     <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                        {loading && searchTerm.length > 0 && (
+                        {loading && (
                             <div className="p-10 text-center">
                                 <Loader2 className="w-8 h-8 animate-spin text-brand-500 mx-auto" />
                                 <p className="text-sm text-gray-500 mt-3 font-bold">Buscando as melhores opções...</p>

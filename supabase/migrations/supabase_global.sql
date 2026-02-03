@@ -9527,6 +9527,8 @@ INSERT INTO public.institutional_categories (name, slug)
 VALUES 
     ('Pizzaria', 'pizzaria'),
     ('Hamburgueria', 'hamburgueria'),
+    ('Lanchonete', 'lanchonete'),
+    ('Mercado', 'mercado'),
     ('Cafeteria', 'cafeteria'),
     ('Farmácia', 'farmacia'),
     ('Supermercado', 'supermercado'),
