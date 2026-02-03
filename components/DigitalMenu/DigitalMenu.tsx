@@ -761,15 +761,19 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         : `Preparo: ${store.preparation_time} min`}
                                 </div>
                             )}
-                            {canDeliver && (
-                                <div className="flex items-center gap-1.5 bg-gray-900 text-white border border-gray-900 px-3 py-1.5 rounded-full shadow-sm">
-                                    <Bike className="w-4 h-4 text-white" />
-                                    Entrega
-                                </div>
-                            )}
-                            {canPickup && (
-                                <div className="flex items-center gap-1.5 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-200 border border-brand-200/60 dark:border-brand-800/50 px-3 py-1.5 rounded-full shadow-sm">
-                                    <StoreIcon className="w-4 h-4" /> Retirada
+                            {(canDeliver || canPickup) && (
+                                <div className="flex items-center gap-2 flex-nowrap">
+                                    {canDeliver && (
+                                        <div className="flex items-center gap-1.5 bg-gray-900 text-white border border-gray-900 px-3 py-1.5 rounded-full shadow-sm">
+                                            <Bike className="w-4 h-4 text-white" />
+                                            Entrega
+                                        </div>
+                                    )}
+                                    {canPickup && (
+                                        <div className="flex items-center gap-1.5 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-200 border border-brand-200/60 dark:border-brand-800/50 px-3 py-1.5 rounded-full shadow-sm">
+                                            <StoreIcon className="w-4 h-4" /> Retirada
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             {canDeliver && deliverySettings && (

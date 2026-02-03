@@ -573,18 +573,22 @@ export const StoreSettings: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <CustomInput
                                         label="Preparo Mínimo (min)"
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
                                         value={form.preparation_time_min}
-                                        onChange={e => handleChange('preparation_time_min', e.target.value)}
+                                        onChange={e => handleChange('preparation_time_min', e.target.value.replace(/\D/g, ''))}
                                         placeholder="Min"
                                         icon={Zap}
                                         helperText="Ex: 10 min"
                                     />
                                     <CustomInput
                                         label="Preparo Máximo (min)"
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
                                         value={form.preparation_time_max}
-                                        onChange={e => handleChange('preparation_time_max', e.target.value)}
+                                        onChange={e => handleChange('preparation_time_max', e.target.value.replace(/\D/g, ''))}
                                         placeholder="Max"
                                         icon={Zap}
                                         helperText="Ex: 20 min"
