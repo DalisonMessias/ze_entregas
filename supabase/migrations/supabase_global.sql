@@ -11774,3 +11774,8 @@ DROP POLICY IF EXISTS "Admins can update access logs" ON public.admin_store_acce
 CREATE POLICY "Admins can update access logs" ON public.admin_store_access_logs
     FOR UPDATE USING (public.is_admin());
 
+-- Grants
+GRANT ALL ON public.admin_store_access_logs TO authenticated;
+GRANT ALL ON public.admin_store_access_logs TO service_role;
+
+
