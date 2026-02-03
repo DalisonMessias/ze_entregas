@@ -624,6 +624,18 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
         return () => clearTimeout(timer);
     }, [partialAmounts, step]); // Re-check when amounts change or when step changes
 
+    // Define showKeypad logic based on steps where input is needed
+    // Modified to NOT show keypad at bottom if it's already shown on side (Desktop + amount step)
+    const showKeypad = useMemo(() => {
+        const keypadSteps = ['amount', 'pin_lock', 'create_pin', 'confirm_pin', 'sales_simulator'];
+        if (!keypadSteps.includes(step)) return false;
+
+        // If desktop and step is 'amount', we show it on the side, not bottom
+        if (isDesktop && step === 'amount') return false;
+
+        return true;
+    }, [step, isDesktop]);
+
     // Lockout effects removed (handled by hook)
 
 
@@ -1313,8 +1325,8 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 return (
                     <div className="flex-1 flex flex-col justify-center text-center p-4 relative pt-20 bg-white dark:bg-gray-900">
                         <SubPageHeader title="Nova Venda" onBack={handleGoBack} />
-                        <div className={`${isDesktop ? 'flex flex-row items-center justify-around gap-8' : 'flex flex-col'}`}>
-                            <div className="flex-1">
+                        <div className={`${isDesktop ? 'flex flex-row items-center justify-center gap-12 h-full' : 'flex flex-col'}`}>
+                            <div className="flex-1 max-w-md">
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor a Cobrar</p>
                                 <h1
                                     className="font-black text-gray-900 dark:text-white my-4 tracking-tighter transition-all duration-200"
@@ -1335,8 +1347,40 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                                     >
                                         <Users className="w-4 h-4 mr-2" /> Dividir Conta
                                     </Button>
+
+                                    {/* Add Continue Button for Desktop here if needed, or rely on Keypad Confirm */}
+                                    {isDesktop && parseCurrency(amount) > 0 && (
+                                        <div className="mt-8">
+                                            <Button
+                                                onClick={handleContinueFromAmount}
+                                                className="w-full h-14 text-xl bg-green-600 hover:bg-green-700 shadow-xl rounded-xl"
+                                            >
+                                                Cobrar {formatCurrency(parseCurrency(amount))}
+                                                <ArrowRight className="ml-2 w-6 h-6" />
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
+
+                            {/* Desktop Side Keypad */}
+                            {isDesktop && (
+                                <div className="w-[350px] shrink-0 animate-in slide-in-from-right-10">
+                                    <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-3xl shadow-inner">
+                                        <Keypad
+                                            onKeyPress={handleKeypadPress}
+                                            onClear={handleKeypadClear}
+                                            onBackspace={handleKeypadBackspace}
+                                            onConfirm={handleContinueFromAmount} // Enter key confirms
+                                            confirmDisabled={parseCurrency(amount) <= 0}
+                                            showConfirm={false} // Hide confirm button inside keypad as we have the big one or physical enter
+                                        />
+                                        <div className="mt-4 text-center">
+                                            <p className="text-xs text-gray-400">Use o teclado numérico ou clique acima</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
@@ -1412,9 +1456,8 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                                     </div>
 
                                     {p.status !== 'paid' && (
-                                        <div className="grid grid-cols-3 gap-2">
+                                        <div className="grid grid-cols-2 gap-2">
                                             <button title="Gerar Pix" onClick={() => initiatePayment(p.id, p.amount, 'PIX')} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors flex justify-center"><QrCode className="w-5 h-5" /></button>
-                                            <button title="Ler Cartão" onClick={() => initiatePayment(p.id, p.amount, 'SCAN')} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors flex justify-center"><CreditCard className="w-5 h-5" /></button>
                                             <button title="Código Cliente" onClick={() => initiatePayment(p.id, p.amount, 'USER_CODE')} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors flex justify-center"><User className="w-5 h-5" /></button>
                                         </div>
                                     )}
@@ -1746,7 +1789,7 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
         }
     };
 
-    const showKeypad = false; // Teclado virtual desativado no Desktop
+
     const showFooter = step === 'amount' || step === 'split_config' || step === 'payment_list';
 
     if (step === 'loading') {
@@ -1881,6 +1924,7 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 </div>
             )}
 
+            {/* Bottom Sheet Keypad - Only shown if enabled by logic (ie. Mobile or non-amount steps) */}
             {showKeypad && (
                 <div className="animate-in slide-in-from-bottom-10">
                     <Keypad
