@@ -9812,6 +9812,8 @@ RETURNS TABLE (
     store_logo_url TEXT,
     description TEXT,
     is_open BOOLEAN,
+    is_currently_open BOOLEAN,
+    opening_hours TEXT,
     store_category_id UUID,
     preparation_time_min INTEGER,
     preparation_time_max INTEGER,
@@ -9830,6 +9832,8 @@ BEGIN
         up.store_logo_url,
         up.description,
         up.is_open,
+        up.is_currently_open,
+        up.opening_hours,
         up.store_category_id,
         up.preparation_time_min,
         up.preparation_time_max,
@@ -10386,7 +10390,7 @@ DECLARE
     v_store record;
 BEGIN
     SELECT 
-        id, name, store_name, store_logo_url, cover_url, is_open, 
+        id, name, store_name, store_logo_url, cover_url, is_open, is_currently_open,
         phone_number, chat_number, description, pix_key,
         opening_hours, preparation_time_min, preparation_time_max, preparation_time,
         store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,

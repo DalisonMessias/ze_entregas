@@ -13,6 +13,7 @@ import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 import { useNotification } from '../contexts/NotificationContext';
 import { Logo } from './Logo';
+import { getStoreOpenState } from '../utils/storeHours';
 
 const ChatContainer = React.lazy(() => import('./InternalChat/InternalChatContainer'));
 
@@ -482,7 +483,15 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
         if (cart.length === 0) return;
 
         // --- TRAVA DE LOJA FECHADA ---
-        if (storeProfile && !storeProfile.is_open) {
+        const isStoreOpen = storeProfile
+            ? getStoreOpenState({
+                openingHours: storeProfile.opening_hours,
+                isOpen: storeProfile.is_open,
+                isCurrentlyOpen: storeProfile.is_currently_open
+            }).isOpen
+            : true;
+
+        if (storeProfile && !isStoreOpen) {
             await alert({
                 title: 'Loja Fechada',
                 message: 'Não é possível realizar pedidos enquanto a loja estiver marcada como fechada no sistema.'

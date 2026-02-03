@@ -9,6 +9,7 @@ import { StreetSearchSelect } from '../StreetSearchSelect';
 import { CitySearchSelect } from '../CitySearchSelect';
 import { useDialog } from '../../utils/dialogService';
 import { formatMinutes, formatMinuteRange } from '../../utils/formatMinutes';
+import { getStoreOpenState } from '../../utils/storeHours';
 import { StoreRatingModal } from './StoreRatingModal';
 import { PixPaymentModal } from '../PixPaymentModal';
 import { ShippingRulesModal } from './ShippingRulesModal';
@@ -550,42 +551,13 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             }
         }
     };
-
     const isStoreOpen = useMemo(() => {
         if (!store) return true;
-        // Check Manual Override (is_currently_open)
-        // Se is_currently_open for false, a loja tá fechada manualmente.
-        // Se for true (ou null), respeita o horário.
-        if (store.is_currently_open === false) return false;
-
-        // Check Schedule
-        if (!store.opening_hours) return true;
-
-        try {
-            const now = new Date();
-            const days = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-            const currentDay = days[now.getDay()];
-            const currentTime = now.getHours() * 100 + now.getMinutes();
-
-            const dayConfigs = store.opening_hours.toLowerCase().split(',').map(s => s.trim());
-            const todayConfig = dayConfigs.find(c => c.startsWith(currentDay));
-
-            if (!todayConfig) return true; // Sem config pro dia = Aberto? (Ou fechado? Backend assume aberto se não tem config especifica mas tem string)
-
-            const timeRange = todayConfig.split(':')[1]?.trim();
-            if (!timeRange || timeRange === 'fechado') return false;
-            if (timeRange === '24h') return true;
-
-            const [start, end] = timeRange.split('-').map(t => {
-                const [h, m] = t.trim().split(':').map(Number);
-                return h * 100 + m;
-            });
-
-            return currentTime >= start && currentTime <= end;
-        } catch (e) {
-            console.error("Error parsing opening hours", e);
-            return true;
-        }
+        return getStoreOpenState({
+            openingHours: store.opening_hours,
+            isOpen: store.is_open,
+            isCurrentlyOpen: store.is_currently_open
+        }).isOpen;
     }, [store]);
 
     // --- COMPUTED DATA ---

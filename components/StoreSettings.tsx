@@ -112,7 +112,7 @@ export const StoreSettings: React.FC = () => {
                     address_state: useStoreAddr ? (p.store_address_state || '') : (p.address_state || p.city?.split(' - ')[1] || ''),
                     address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.address_complement || ''),
                     description: p.description || '',
-                    is_open: p.is_open ?? true,
+                    is_open: p.is_currently_open ?? p.is_open ?? true,
                     delivery_time_max: String(p.delivery_time_max || 0),
                     delivery_status: p.is_available ?? true,
                     store_category_id: p.store_category_id || ''
@@ -207,12 +207,14 @@ export const StoreSettings: React.FC = () => {
                 store_address_complement: form.address_complement,
                 description: form.description,
                 is_open: form.is_open,
+                is_currently_open: form.is_open,
                 delivery_time_max: Number(form.delivery_time_max),
                 is_available: form.delivery_status,
                 store_category_id: form.store_category_id || null
             });
 
-            if (profile && profile.is_open && !form.is_open) {
+            const wasManualOpen = (profile?.is_currently_open ?? profile?.is_open) === true;
+            if (profile && wasManualOpen && !form.is_open) {
                 try {
                     await cloud.generateDailyStoreReport(profile.id);
                     await alert({ title: 'Relatório Gerado', message: 'O relatório de fechamento de caixa foi gerado com sucesso.' });

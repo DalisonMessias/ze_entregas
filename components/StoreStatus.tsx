@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import * as cloud from '../services/cloud';
 import { supabase } from '../services/cloud';
-import { Store, Lock, History, ChevronDown, ChevronUp, FileText, Calendar, DollarSign, Package, AlertTriangle } from 'lucide-react';
+import { Store, Lock, History, ChevronDown, ChevronUp, FileText, Calendar, DollarSign, Package } from 'lucide-react';
 import { StoreDailyReport, PartnerProfile } from '../types';
 import { useDialog } from '../utils/dialogService';
+import { getStoreOpenState } from '../utils/storeHours';
 
 // Utilitário simples de formatação
 const formatCurrency = (value: number) => {
@@ -30,7 +31,7 @@ export const StoreStatus: React.FC = () => {
             const p = await cloud.getMyPartnerProfile();
             if (p) {
                 setProfile(p);
-                setIsOpen(!!p.is_open);
+                setIsOpen(p.is_currently_open ?? p.is_open ?? false);
             }
         } finally {
             setInitialLoading(false);
@@ -67,7 +68,7 @@ export const StoreStatus: React.FC = () => {
             // 1. Atualizar status no perfil
             const { error: profileError } = await supabase
                 .from('user_profiles')
-                .update({ is_open: newState })
+                .update({ is_open: newState, is_currently_open: newState })
                 .eq('id', profile.id);
 
             if (profileError) throw profileError;
@@ -85,7 +86,7 @@ export const StoreStatus: React.FC = () => {
 
             // Atualizar perfil localmente sem re-fetch completo para evitar race condition
             // ou fazer o refetch com delay se necessário, mas o estado local manda por enquanto
-            setProfile(prev => prev ? { ...prev, is_open: newState } : null);
+            setProfile(prev => prev ? { ...prev, is_open: newState, is_currently_open: newState } : null);
 
         } catch (error) {
             // console.error("Erro ao alterar status da loja:", error);
@@ -159,54 +160,51 @@ export const StoreStatus: React.FC = () => {
         );
     }
 
+    const openState = getStoreOpenState({
+        openingHours: profile.opening_hours,
+        isOpen
+    });
+    const isStoreOpen = openState.isOpen;
+
     return (
         <div className="space-y-4">
-            {profile.opening_hours && (
-                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/30 flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                        <strong>Atenção:</strong> A tela de status é manual e não está compatível com o horário automático definido em "Horário de Funcionamento"
-                        em <strong>/loja/configuracoes</strong>. Ajuste o horário automático por lá.
-                    </p>
-                </div>
-            )}
-
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
-            <div className="p-4 md:p-6 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-full ${isOpen ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
-                        {isOpen ? <Store className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+                <div className="p-4 md:p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-full ${isStoreOpen ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
+                            {isStoreOpen ? <Store className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{isStoreOpen ? 'Loja Aberta' : 'Loja Fechada'}</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {isStoreOpen ? 'Sua loja esta visivel para clientes.' : (isOpen ? 'Fora do horario automatico.' : 'Loja fechada manualmente.')}
+                            </p>
+                            {profile.opening_hours && (
+                                <p className="text-xs text-gray-400 mt-1">Horario automatico: {profile.opening_hours}</p>
+                            )}
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                            {isOpen ? 'Loja Aberta' : 'Loja Fechada'}
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {isOpen ? 'Sua loja está visível para clientes.' : 'Sua loja não está recebendo pedidos.'}
-                        </p>
+
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <button
+                            onClick={handleToggleStore}
+                            disabled={isLoading}
+                            className={`px-4 py-2 rounded-lg text-white font-medium transition-colors w-full md:w-auto ${isLoading ? 'opacity-70 cursor-not-allowed' : ''} ${isOpen ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
+                        >
+                            {isLoading ? 'Processando...' : (isOpen ? 'Fechar Manualmente' : 'Abrir Manualmente')}
+                        </button>
+
+                        <button
+                            onClick={toggleHistory}
+                            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                            title="Historico de Fechamentos"
+                        >
+                            {showHistory ? <ChevronUp className="w-5 h-5" /> : <History className="w-5 h-5" />}
+                        </button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <button
-                        onClick={handleToggleStore}
-                        disabled={isLoading}
-                        className={`px-4 py-2 rounded-lg text-white font-medium transition-colors w-full md:w-auto ${isLoading ? 'opacity-70 cursor-not-allowed' : ''} ${isOpen ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
-                    >
-                        {isLoading ? 'Processando...' : (isOpen ? 'Encerrar Dia' : 'Abrir Loja')}
-                    </button>
 
-                    <button
-                        onClick={toggleHistory}
-                        className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                        title="Histórico de Fechamentos"
-                    >
-                        {showHistory ? <ChevronUp className="w-5 h-5" /> : <History className="w-5 h-5" />}
-                    </button>
-                </div>
-            </div>
-
-            {/* Área de Histórico (Expansível) */}
             {showHistory && (
                 <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
                     <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">

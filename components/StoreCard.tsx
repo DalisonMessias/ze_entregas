@@ -1,6 +1,7 @@
 import React from 'react';
 import { Store, Clock, MapPin, ChevronRight, Star } from 'lucide-react';
 import { PublicStoreProfile } from '../types';
+import { getStoreOpenState } from '../utils/storeHours';
 
 interface StoreCardProps {
     store: PublicStoreProfile;
@@ -8,7 +9,11 @@ interface StoreCardProps {
 }
 
 export const StoreCard: React.FC<StoreCardProps> = ({ store, onClick }) => {
-    const isOpen = store.is_open;
+    const isOpen = getStoreOpenState({
+        openingHours: store.opening_hours,
+        isOpen: store.is_open,
+        isCurrentlyOpen: store.is_currently_open
+    }).isOpen;
 
     return (
         <div

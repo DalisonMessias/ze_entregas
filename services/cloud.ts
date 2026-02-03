@@ -765,6 +765,7 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         is_super_store: userData.is_super_store,
         store_name: userData.store_name,
         is_open: userData.is_open,
+        is_currently_open: userData.is_currently_open,
         pix_key: userData.pix_key,
         city_slug: userData.city_slug,
         store_slug: userData.store_slug
@@ -6258,6 +6259,7 @@ export const getStoreById = async (storeId: string): Promise<PartnerProfile | nu
         is_super_store: userData.is_super_store,
         store_name: userData.store_name,
         is_open: userData.is_open,
+        is_currently_open: userData.is_currently_open,
         pix_key: userData.pix_key,
         city_slug: userData.city_slug,
         store_slug: userData.store_slug
