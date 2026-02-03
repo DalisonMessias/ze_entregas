@@ -142,7 +142,9 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
                         {loading && (
                             <div className="p-10 text-center">
                                 <Loader2 className="w-8 h-8 animate-spin text-brand-500 mx-auto" />
-                                <p className="text-sm text-gray-500 mt-3 font-bold">Buscando as melhores opções...</p>
+                                <p className="text-sm text-gray-500 mt-3 font-bold">
+                                    {searchTerm.length >= 2 ? 'Buscando as melhores op????es...' : 'Carregando cidades...'}
+                                </p>
                             </div>
                         )}
 

@@ -30,6 +30,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
     const [loadingStores, setLoadingStores] = useState(false);
     const [featuredOffset, setFeaturedOffset] = useState(0);
     const storesRef = useRef<HTMLElement>(null);
+    const cityRequestId = useRef(0);
 
     // Modals State
     const [showTerms, setShowTerms] = useState(false);
@@ -117,6 +118,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
     }, []);
 
     const handleCitySelect = async (city: City) => {
+        const requestId = ++cityRequestId.current;
         const cityFullName = `${city.name} - ${city.state}`;
         setSelectedCity(cityFullName);
         setLoadingStores(true);
@@ -131,17 +133,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
             }
 
             const data = await cloud.getPublicStoresByCity(slug);
+            if (requestId !== cityRequestId.current) return;
             setStores(data || []);
 
             setTimeout(() => {
+                if (requestId !== cityRequestId.current) return;
                 storesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
         } catch (e) {
             console.error("Error loading stores:", e);
         } finally {
-            setLoadingStores(false);
+            if (requestId === cityRequestId.current) {
+                setLoadingStores(false);
+            }
         }
     };
+
+
+    const handleCityClear = useCallback(() => {
+        cityRequestId.current += 1;
+        setSelectedCity('');
+        setStores([]);
+        setLoadingStores(false);
+        setFeaturedOffset(0);
+    }, []);
 
     const handleStoreClick = (store: PublicStoreProfile) => {
         // Use pushState to avoid full reload and maintain SPA state
