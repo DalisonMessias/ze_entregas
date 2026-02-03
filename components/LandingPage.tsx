@@ -271,6 +271,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                         <LandingCitySelector
                             value={selectedCity}
                             onSelect={handleCitySelect}
+                            onClear={handleCityClear}
                             placeholder="Em qual cidade você está?"
                         />
 
@@ -292,66 +293,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                     </div>
                 </section>
 
-                {/* Community spotlight section */}
-                <section className="py-16 bg-white dark:bg-gray-950">
-                    <div className="max-w-7xl mx-auto px-6">
-                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-                            <div>
-                                <p className="text-xs font-black uppercase tracking-widest text-brand-600">Comunidade</p>
-                                <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white">
-                                    Aqui só tem gente boa!
-                                </h2>
-                                <p className="text-gray-500 dark:text-gray-400 font-medium">
-                                    Uma seleção rápida de lojas para você conhecer.
-                                </p>
-                            </div>
-                            {stores.length > 4 && (
-                                <div className="text-xs font-black uppercase tracking-widest text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-full">
-                                    Mostrando 4 de {stores.length} • Alternando
-                                </div>
-                            )}
-                        </div>
-
-                        {!selectedCity && (
-                            <div className="text-center py-10 px-4 bg-gray-50 dark:bg-gray-900/60 rounded-3xl border border-gray-100 dark:border-gray-800">
-                                <p className="text-gray-500 dark:text-gray-400 font-medium">
-                                    Escolha uma cidade acima para ver as lojas em destaque.
-                                </p>
-                            </div>
-                        )}
-
-                        {selectedCity && loadingStores && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {[1, 2, 3, 4].map(i => (
-                                    <div key={i} className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-                                        <div className="w-full h-28 bg-gray-100 dark:bg-gray-700 rounded-2xl animate-pulse mb-5"></div>
-                                        <div className="h-5 w-3/4 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse mb-2"></div>
-                                        <div className="h-4 w-1/2 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse"></div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {selectedCity && !loadingStores && featuredStores.length > 0 && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-700">
-                                {featuredStores.map((store, index) => (
-                                    <div key={`${store.id}-${index}`} className="animate-in fade-in slide-in-from-bottom-4">
-                                        <StoreCard store={store} onClick={() => handleStoreClick(store)} />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {selectedCity && !loadingStores && featuredStores.length === 0 && (
-                            <div className="text-center py-10 px-4 bg-gray-50 dark:bg-gray-900/60 rounded-3xl border border-gray-100 dark:border-gray-800">
-                                <p className="text-gray-500 dark:text-gray-400 font-medium">
-                                    Ainda não encontramos lojas nessa cidade.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </section>
-
                 {/* Store Listing Section with better responsiveness and visual feedback */}
                 <section
                     ref={storesRef}
@@ -365,10 +306,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                                     <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
                                         Lojas em <span className="text-brand-600">{selectedCity.split(' - ')[0]}</span>
                                     </h2>
-                                    <p className="text-gray-500 font-bold flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                                        {stores.length} lojas encontradas na sua região
-                                    </p>
+                                    <div className="text-gray-500 font-bold flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                        <span>{stores.length} lojas encontradas na sua regi?o</span>
+                                    </div>
                                 </div>
                                 <div className="hidden md:flex gap-2">
                                     <div className="px-4 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 text-xs font-black uppercase text-gray-400">
