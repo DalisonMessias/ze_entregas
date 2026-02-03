@@ -656,7 +656,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800">
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                        <Logo className="h-8 w-auto" onClick={() => window.location.href = '/home'} />
+                        <Logo className="h-8 w-auto" onClick={() => window.location.href = '/'} />
                         {recentOrders.length > 0 && (
                             <button
                                 onClick={() => setIsRecentOrdersModalOpen(true)}

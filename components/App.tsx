@@ -650,16 +650,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     // Lógica principal de Roteamento / Aba Inicial
     useEffect(() => {
         let path = window.location.pathname;
-
-        // REDIRECIONAMENTO GLOBAL: URL base (/) sempre vai para /home
-        if (path === '/') {
-            window.history.replaceState({}, '', '/home');
-            path = '/home';
-        }
-
         const tabFromUrl = getTabFromUrl(path);
 
-        // Se a rota não existe e não é a raiz (que vai para home), define 404
         if (!tabFromUrl && path !== '/' && path !== '/home' && !path.startsWith('/track/')) {
             setActiveTab('not_found');
             return;
