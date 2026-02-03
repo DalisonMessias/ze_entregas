@@ -1,11 +1,13 @@
+# Tarefas: Reformulação da Página Seja Parceiro (Lojista) - Auditoria de Realidade
 
-# Lista de Tarefas - Correção de Navegação Home -> Loja
+## 🔍 Auditoria em Progresso
+- [x] Relatórios Avançados (StoreReports) -> **Super**
+- [x] Regras de Frete (StoreShippingRules) -> **Super**
+- [x] IA de Catálogo (StoreAIGenerator) -> **Super**
+- [x] ZéPay Corporativo (Cards/Transfer) -> **Super**
+- [x] Gestão de Equipe (StoreTeam) -> **Confirmado (Verificando se é Super Only)**
 
-## Objetivo
-Corrigir o comportamento onde a URL é revertida para `/home` ao acessar uma loja a partir da página inicial.
-
-## Tarefas
-- [x] Atualizar `utils/routeMap.ts` para reconhecer a rota `/:city/:store/produtos` como aba `digital_menu`.
-- [x] Refatorar navegação em `components/LandingPage.tsx` para usar `window.history.pushState` em vez de reload.
-- [x] Verificar se a URL persiste corretamente ao navegar para uma loja (Validado via Código).
-- [x] Garantir que o botão "Voltar" funcione corretamente (Validado via Código).
+## 🛠️ Implementação (Próximo Passo)
+- [ ] Reescrever `PartnerStore.tsx` com lista exata de features auditadas.
+- [ ] Remover "IA de Atendimento" se não for encontrada no código base.
+- [ ] Enfatizar "Entregas a Preço de Custo" para Super (validado no cálculo de frete).
