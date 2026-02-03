@@ -681,6 +681,20 @@ export const AuthWrapper: React.FC = () => {
     );
   }
 
+  const cleanPublicPath = currentPath.length > 1 && currentPath.endsWith('/') ? currentPath.slice(0, -1) : currentPath;
+  const isPublicFaqRoute = cleanPublicPath === '/faq' || cleanPublicPath === '/loja/faq' || cleanPublicPath === '/entregador/faq';
+  if (isPublicFaqRoute) {
+    return (
+      <TourProvider>
+        <App
+          userId="guest"
+          userRole="delivery_person"
+          initialUserStatus="active"
+        />
+      </TourProvider>
+    );
+  }
+
   // PUBLIC PARTNER ROUTES (Permite ver sem estar logado)
   const currentTab = getTabFromUrl(currentPath);
   const isPublicPartnerRoute = currentTab === 'partner_store' || currentTab === 'partner_delivery';

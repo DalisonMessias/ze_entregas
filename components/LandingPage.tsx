@@ -37,6 +37,69 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
     const [companyModal, setCompanyModal] = useState<'about' | 'careers' | 'press' | 'contact' | null>(null);
     const [showInstallModal, setShowInstallModal] = useState(false);
 
+    const paymentLabels = [
+        shopSettings?.payment_methods?.pix ? 'PIX' : null,
+        shopSettings?.payment_methods?.credit_card ? 'Cartão' : null,
+        shopSettings?.payment_methods?.boleto ? 'Boleto' : null
+    ].filter(Boolean) as string[];
+
+    const supportLine = shopSettings?.support_hours_start && shopSettings?.support_hours_end
+        ? `Atendimento: ${shopSettings.support_hours_start} às ${shopSettings.support_hours_end}`
+        : 'Atendimento rápido pelo app';
+
+    const supportContact = shopSettings?.support_phone
+        ? `Contato: ${shopSettings.support_phone}`
+        : 'Contato via chat e e-mail';
+
+    const highlightItems = [
+        {
+            title: 'Lojas da sua cidade',
+            description: 'Encontre lojas locais prontas para entregar perto de você.',
+            icon: MapPin
+        },
+        {
+            title: 'Acompanhamento do pedido',
+            description: 'Acompanhe o status e cada etapa da entrega em tempo real.',
+            icon: Navigation
+        },
+        {
+            title: 'Instale como app',
+            description: 'Use no celular ou no PC com o PWA leve e rápido.',
+            icon: Smartphone
+        },
+        {
+            title: 'Suporte e ajuda',
+            description: `${supportLine}. ${supportContact}.`,
+            icon: Headphones
+        }
+    ];
+
+    const faqItems = [
+        {
+            question: 'Preciso baixar o app?',
+            answer: 'Não. Você pode usar direto no navegador e, se quiser, instalar como PWA em segundos.'
+        },
+        {
+            question: 'Como acompanho o pedido?',
+            answer: 'Você recebe atualizações no app e pode ver o status a qualquer momento.'
+        },
+        {
+            question: 'Quais cidades atendem?',
+            answer: 'Digite sua cidade no campo acima para ver as lojas disponíveis na região.'
+        },
+        {
+            question: 'Sou lojista ou entregador, como entro?',
+            answer: 'Use os botões de cadastro e siga o passo a passo para começar.'
+        }
+    ];
+
+    const handleFaqClick = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        window.history.pushState({ tab: 'faq' }, '', '/faq');
+        window.dispatchEvent(new CustomEvent('pushstate_changed'));
+        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'faq' } }));
+    }, []);
+
     useEffect(() => {
         const handleScroll = () => setScrolled(window.scrollY > 20);
         window.addEventListener('scroll', handleScroll, { passive: true });
@@ -266,6 +329,55 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                     </div>
                 </section>
 
+                {/* Bloco "Destaques" - Mais Informações */}
+                <section className="py-20 px-4 bg-white dark:bg-gray-950">
+                    <div className="max-w-6xl mx-auto">
+                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-widest text-brand-600">Mais informações</p>
+                                <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white leading-tight">
+                                    Experiência completa do início ao fim.
+                                </h2>
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 font-medium max-w-xl">
+                                Do pedido ao acompanhamento, tudo acontece no mesmo lugar com clareza e praticidade.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {highlightItems.map((item) => {
+                                const Icon = item.icon;
+                                return (
+                                    <div
+                                        key={item.title}
+                                        className="bg-gray-50 dark:bg-gray-900/60 p-6 rounded-[28px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all"
+                                    >
+                                        <div className="w-12 h-12 rounded-2xl bg-white dark:bg-gray-900 flex items-center justify-center border border-gray-200 dark:border-gray-800 mb-4">
+                                            <Icon className="w-6 h-6 text-brand-600" />
+                                        </div>
+                                        <h3 className="text-lg font-black text-gray-900 dark:text-white mb-2">{item.title}</h3>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{item.description}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {paymentLabels.length > 0 && (
+                            <div className="mt-10 flex flex-wrap items-center justify-center gap-2 text-xs font-black uppercase text-gray-400">
+                                <span className="tracking-widest">Formas de pagamento:</span>
+                                {paymentLabels.map((label) => (
+                                    <span
+                                        key={label}
+                                        className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                                    >
+                                        {label}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </section>
+
                 {/* Bloco "Como Funciona" - Novo */}
                 <section className="py-24 px-4 bg-white dark:bg-gray-900 overflow-hidden">
                     <div className="max-w-6xl mx-auto">
@@ -454,6 +566,39 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                                     <p className="text-gray-600 dark:text-gray-400 font-medium">Saques descomplicados. Seu dinheiro na conta no momento que você precisar.</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* FAQ Rápido */}
+                <section className="py-24 px-4 bg-gray-50 dark:bg-gray-950">
+                    <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-widest text-brand-600">FAQ rápido</p>
+                            <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white leading-tight mb-6">
+                                Dúvidas comuns, respostas diretas.
+                            </h2>
+                            <p className="text-gray-600 dark:text-gray-400 text-lg font-medium mb-8">
+                                Se quiser mais detalhes, acesse a página completa de perguntas frequentes.
+                            </p>
+                            <Button
+                                onClick={handleFaqClick}
+                                variant="outline"
+                                className="px-10 py-4 rounded-2xl text-base font-black border-gray-300 dark:border-gray-700"
+                            >
+                                Ver FAQ completo
+                            </Button>
+                        </div>
+                        <div className="space-y-4">
+                            {faqItems.map((item) => (
+                                <div
+                                    key={item.question}
+                                    className="bg-white dark:bg-gray-900 p-6 rounded-[28px] border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all"
+                                >
+                                    <h3 className="text-base font-black text-gray-900 dark:text-white mb-2">{item.question}</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{item.answer}</p>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </section>

@@ -699,7 +699,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             return;
         }
         const authTabs = ['login', 'signup', 'forgot_password'];
-        const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
+        const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq'];
         const isAuthenticated = userId && userId !== 'guest';
 
         // DEBUG ROUTING
@@ -1600,7 +1600,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     // Verificação de rotas públicas internas que devem renderizar sem sidebar (Full Width)
-    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
+    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq'];
     const isPublicTab = publicTabs.includes(activeTab);
     const showStoreBottomNav = isStore && !isPublicTab;
     const showDriverBottomNav = isDriver && !isPublicTab;

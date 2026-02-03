@@ -204,6 +204,11 @@ export const getUrlFromTab = (tab: ActiveTab, role?: UserRole): string | null =>
     const paths = tabToPaths[tab];
     if (!paths || paths.length === 0) return null;
 
+    // Canonical public path for FAQ (avoid role-specific prefixes)
+    if (tab === 'faq') {
+        return paths.find(p => p === '/faq') || paths[0];
+    }
+
     // Se houver Role, tenta encontrar o caminho com o prefixo ideal
     if (role === 'admin') {
         const found = paths.find(p => p.startsWith('/admin/'));
