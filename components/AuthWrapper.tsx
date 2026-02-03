@@ -40,7 +40,8 @@ const updateAuthUrl = (view: AuthView) => {
   else if (view === 'forgot_password') path = '/recuperar-senha';
   else if (view === 'landing' && !isAppRoute) {
     if (window.location.pathname === '/cidades') path = '/cidades';
-    else path = '/';
+    else if (window.location.pathname === '/' || window.location.pathname === '/home') path = '/';
+    else return; // Don't redirect URL for unknown paths (let App handle 404)
   }
 
   if (window.location.pathname !== path && authRoutes.includes(path)) {

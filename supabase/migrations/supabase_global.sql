@@ -11799,4 +11799,9 @@ INSERT INTO public.institutional_contents (
 ('faq', 'Sou lojista ou entregador, como entrar?', 'Escolha o tipo de cadastro na home e preencha seus dados para iniciar o processo.', 'como-entrar', 'published', TRUE, 6)
 ON CONFLICT (slug) DO NOTHING;
 
+-- Grants para leitura pÃºblica de relacionamentos institucionais (FAQ)
+GRANT SELECT ON public.institutional_tags TO anon, authenticated;
+GRANT SELECT ON public.institutional_content_tags TO anon, authenticated;
+GRANT SELECT ON public.institutional_content_images TO anon, authenticated;
+
 

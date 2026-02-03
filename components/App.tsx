@@ -412,6 +412,11 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         const tabFromUrl = getTabFromUrl(window.location.pathname);
         const authTabs = ['login', 'signup', 'forgot_password'];
 
+        // If URL doesn't map to a valid tab and it's not root, it's a 404
+        if (!tabFromUrl && window.location.pathname !== '/' && window.location.pathname !== '/home') {
+            return 'not_found';
+        }
+
         if (tabFromUrl && !authTabs.includes(tabFromUrl)) return tabFromUrl;
 
         // Default tabs by role
@@ -919,7 +924,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     const generalTabs = new Set<ActiveTab>([
         'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'internal_chat',
-        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat', 'street_request'
+        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat', 'street_request', 'not_found'
     ]);
 
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
