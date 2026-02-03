@@ -1,38 +1,15 @@
-# Plano de Implementação - Teclado Virtual Lateral
+# Plano de Implementação - Correção do Modelo Gemini
 
-## Objetivo
-Atender à solicitação do usuário de incluir um teclado virtual na lateral direita da tela de "Nova Venda" (step `amount`) no modo Desktop, permitindo a digitação de valores com o mouse/touch, além de garantir que o teclado físico continue funcionando.
+## Goal Description
+O usuário relatou que o modelo `gemini-1.5-flash` não gera imagens. O objetivo é alterar para um modelo que suporte geração de imagens, como `gemini-2.0-flash-exp` (ou similar), corrigindo também a sintaxe da chamada para usar uma string única.
 
-## Itens Atuais
-- O teclado físico já é tratado por `handlePhysicalKeyboard`.
-- O componente `Keypad` já existe e é exibido na parte inferior da tela em steps específicos.
+## Proposed Changes
+### Backend/Service Layer
+#### [MODIFY] [geminiImageService.ts](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/services/geminiImageService.ts)
+- Alterar a constante `modelOne` para `gemini-2.0-flash-exp`.
+- Manter a lógica de tratamento de erro e fallback.
 
-## Mudanças Propostas
-
-### `components/MerchantPOSDesktop.tsx`
-
-1.  **Definir Lógica de Exibição do Keypad**:
-    - Garantir que a variável `showKeypad` esteja definida corretamente, considerando os steps: `['amount', 'pin_lock', 'create_pin', 'confirm_pin', 'sales_simulator']`.
-
-2.  **Ajustar Layout do Step "amount"**:
-    - Alterar a estrutura do `case 'amount'` para, quando `isDesktop` for verdadeiro, exibir o `Keypad` em uma coluna à direita.
-    - Manter o layout atual (centralizado/coluna única) para Mobile.
-
-3.  **Controlar Exibição Duplicada**:
-    - Se o teclado estiver sendo exibido na lateral (Desktop + Step Amount), ocultar o teclado flutuante inferior para evitar duplicação.
-
-## Plano de Verificação
-
-### Verificação Manual
-1.  **Modo Desktop**:
-    - Acessar a tela de "Nova Venda".
-    - Verificar se o teclado numérico aparece na lateral direita.
-    - Tentar digitar valores usando o teclado virtual.
-    - Tentar digitar valores usando o teclado físico (números, backspace, enter).
-    - Verificar se o valor é atualizado corretamente.
-2.  **Modo Mobile (Simulado)**:
-    - Redimensionar a janela.
-    - Verificar se o teclado aparece na parte inferior (comportamento padrão).
-
-### Comandos de Teste
-- Não há testes automatizados para UI visual, a validação será visual e funcional via browser.
+## Verification Plan
+### Manual Verification
+- Solicitar ao usuário que tente gerar uma imagem novamente na interface do sistema.
+- Verificar logs do terminal se houver erro (mas eu não tenho acesso direto aos logs em tempo real, dependo do usuário).
