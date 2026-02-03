@@ -19,16 +19,67 @@ As abas "Entrega" e "Retirada" no carrinho são renderizadas incondicionalmente,
 - **Rodapé Fixo (Cor Total)**: O logo do Zé Entregas será movido para o rodapé e exibido com **opacidade 100% (cor total)**, deixando de ser semitransparente.
 
 ### 2. Identidade da Loja e Uploads
-- **Upload de Logo**: Adicionar um botão de upload para que o lojista possa subir sua própria imagem de logo diretamente no gerador.
-- **Upload de Fundo**: Adicionar suporte para upload de uma imagem de fundo para as páginas do catálogo.
-- **Toggle Nome vs Logo**: Interface clara para escolher se o cabeçalho exibe o nome (texto) ou o logo (imagem).
+- **Upload de Logo**: Adicionar um botão de upload para que# Implementação de Categorias de Loja com Imagem e Carrossel
 
-### 3. Design de Página
-- **Fundo Dinâmico**: O usuário poderá alternar entre usar uma **cor sólida** ou uma **imagem de fundo** personalizada.
-- **Espaçamento (Gap)**: Refinar o controle de espaçamento para garantir que os blocos de produtos tenham "respiro" visual.
+Este plano detalha as alterações para permitir que categorias de lojas tenham imagens, sejam selecionáveis no cadastro e exibidas em um carrossel na página da cidade.
 
-### 4. Fontes e Estilos
-- **Tipografia**: Suporte a diferentes famílias de fontes para títulos e preços.
+## Mudanças Propostas
+
+---
+
+### [Componente] Banco de Dados (Supabase)
+
+#### [MODIFY] [supabase_global.sql](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/supabase/migrations/supabase_global.sql)
+- Adicionar coluna `image_url` à tabela `institutional_categories`.
+- Adicionar coluna `store_category_id` à tabela `user_profiles` (referenciando `institutional_categories.id`).
+
+---
+
+### [Componente] Tipos e Serviços
+
+#### [MODIFY] [types.ts](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/types.ts)
+- Atualizar interface `InstitutionalCategory` para incluir `image_url?: string;`.
+
+#### [MODIFY] [services/cloud.ts](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/services/cloud.ts)
+- Adicionar função `uploadInstitutionalCategoryImage` para fazer upload da imagem da categoria.
+- Garantir que `createInstitutionalCategory` e `updateInstitutionalCategory` suportem o campo `image_url`.
+- Atualizar `registerUserWithType` e `updateMyPartnerProfile` para salvar `store_category_id`.
+
+---
+
+### [Componente] Painel Administrativo
+
+#### [MODIFY] [AdminStoreCategories.tsx](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/AdminStoreCategories.tsx)
+- Adicionar funcionalidade de upload de imagem no modal de criação/edição de categoria.
+- Exibir miniatura da imagem na listagem e no modal.
+
+---
+
+### [Componente] Cadastro e Configurações da Loja
+
+#### [MODIFY] [AuthWrapper.tsx](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/AuthWrapper.tsx)
+- Adicionar campo de seleção de categoria (usando `CustomSelect`) no formulário de cadastro de lojista.
+
+#### [MODIFY] [StoreSettings.tsx](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/StoreSettings.tsx)
+- Adicionar campo de seleção de categoria nas configurações básicas da loja.
+
+---
+
+### [Componente] Página da Cidade
+
+#### [MODIFY] [CityStoresList.tsx](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/CityStoresList.tsx)
+- Implementar carrossel de categorias no topo da página.
+- Cada card deve exibir a imagem e o nome da categoria.
+- Adicionar botões de navegação lateral (< e >) para o carrossel.
+
+## Plano de Verificação
+
+### Testes Manuais
+- [ ] Criar uma nova categoria no Painel Admin e fazer upload de uma imagem.
+- [ ] Realizar um novo cadastro de lojista selecionando uma categoria.
+- [ ] Alterar a categoria de uma loja existente nas configurações.
+- [ ] Acessar a página de uma cidade e verificar se o carrossel de categorias é exibido corretamente com imagens e navegação.
+ítulos e preços.
 
 ## Detalhes Técnicos
 - Utilizar `FileReader` para pré-visualização instantânea de logos e fundos carregados.

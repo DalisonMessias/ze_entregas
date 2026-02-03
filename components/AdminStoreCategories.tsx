@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Loader2, Edit2, Trash2, X, Check, LayoutGrid } from 'lucide-react';
+import { Search, Plus, Loader2, Edit2, Trash2, X, Check, LayoutGrid, Camera } from 'lucide-react';
+
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { InstitutionalCategory } from '../types';
@@ -13,8 +14,11 @@ export const AdminStoreCategories: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Partial<InstitutionalCategory>>({
         name: '',
-        slug: ''
+        slug: '',
+        image_url: ''
     });
+    const [uploadingImage, setUploadingImage] = useState(false);
+
 
     const { confirm, alert: showMessage } = useDialog();
 
@@ -31,6 +35,21 @@ export const AdminStoreCategories: React.FC = () => {
             console.error('Erro ao carregar categorias:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setUploadingImage(true);
+        try {
+            const url = await cloud.uploadInstitutionalCategoryImage(file);
+            setEditingCategory(prev => ({ ...prev, image_url: url }));
+            showMessage({ title: 'Sucesso', message: 'Imagem carregada!' });
+        } catch (error: any) {
+            showMessage({ title: 'Erro', message: error.message || 'Erro no upload.' });
+        } finally {
+            setUploadingImage(false);
         }
     };
 
@@ -54,7 +73,7 @@ export const AdminStoreCategories: React.FC = () => {
             }
 
             setIsModalOpen(false);
-            setEditingCategory({ name: '', slug: '' });
+            setEditingCategory({ name: '', slug: '', image_url: '' });
             loadData();
         } catch (error: any) {
             showMessage({ title: 'Erro', message: error.message || 'Erro ao salvar categoria.' });
@@ -62,6 +81,7 @@ export const AdminStoreCategories: React.FC = () => {
             setIsSaving(false);
         }
     };
+
 
     const handleDelete = async (category: InstitutionalCategory) => {
         const isConfirmed = await confirm({
@@ -115,10 +135,12 @@ export const AdminStoreCategories: React.FC = () => {
                     <table className="w-full text-left">
                         <thead>
                             <tr className="bg-gray-50 dark:bg-gray-900/50 border-b dark:border-gray-700">
+                                <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Imagem</th>
                                 <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Nome</th>
                                 <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Slug</th>
                                 <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400 text-right">Ações</th>
                             </tr>
+
                         </thead>
                         <tbody className="divide-y dark:divide-gray-700">
                             {loading ? (
@@ -134,6 +156,15 @@ export const AdminStoreCategories: React.FC = () => {
                             ) : (
                                 filteredCategories.map(cat => (
                                     <tr key={cat.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                        <td className="px-6 py-4">
+                                            {cat.image_url ? (
+                                                <img src={cat.image_url} alt={cat.name} className="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-800" />
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400">
+                                                    <LayoutGrid className="w-5 h-5" />
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="px-6 py-4 font-bold text-sm dark:text-white">{cat.name}</td>
                                         <td className="px-6 py-4 text-xs font-medium text-gray-500">{cat.slug}</td>
                                         <td className="px-6 py-4 text-right">
@@ -153,6 +184,7 @@ export const AdminStoreCategories: React.FC = () => {
                                             </div>
                                         </td>
                                     </tr>
+
                                 ))
                             )}
                         </tbody>
@@ -162,7 +194,8 @@ export const AdminStoreCategories: React.FC = () => {
 
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] w-full max-w-md shadow-2xl space-y-4 border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] w-full max-w-lg shadow-2xl space-y-4 border border-gray-100 dark:border-gray-700 max-h-[90vh] overflow-y-auto">
+
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="font-black text-xl dark:text-white">
                                 {editingCategory.id ? 'Editar Categoria' : 'Nova Categoria'}
@@ -173,6 +206,31 @@ export const AdminStoreCategories: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
+                            <div className="flex flex-col items-center gap-4 py-2">
+                                <div className="relative group">
+                                    <div className="w-32 h-32 rounded-2xl bg-gray-50 dark:bg-gray-900 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-200 dark:border-gray-700 group-hover:border-brand-500 transition-colors relative">
+                                        {editingCategory.image_url ? (
+                                            <img src={editingCategory.image_url} alt="Previa" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="flex flex-col items-center text-gray-400">
+                                                <LayoutGrid className="w-8 h-8 mb-1" />
+                                                <span className="text-[10px] font-bold uppercase">Sem Imagem</span>
+                                            </div>
+                                        )}
+                                        {uploadingImage && (
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                                <Loader2 className="w-6 h-6 animate-spin text-white" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <label className="absolute -bottom-2 -right-2 bg-brand-600 hover:bg-brand-700 text-white p-2 rounded-xl cursor-pointer shadow-lg transition-all">
+                                        <Camera className="w-4 h-4" />
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                                    </label>
+                                </div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Icone da Categoria</p>
+                            </div>
+
                             <div>
                                 <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Nome da Categoria</label>
                                 <input
@@ -193,6 +251,7 @@ export const AdminStoreCategories: React.FC = () => {
                                     placeholder="Ex: restaurantes-premium (opcional)"
                                 />
                             </div>
+
 
                             <Button fullWidth onClick={handleSave} disabled={isSaving}>
                                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}

@@ -1023,7 +1023,9 @@ export const registerUserWithType = async (
         address_district?: string;
         address_zip?: string;
         address_state?: string;
+        store_category_id?: string;
     }
+
 ) => {
     const sb = getClient();
     if (!sb) return;
@@ -1047,7 +1049,9 @@ export const registerUserWithType = async (
         if (additionalData.address_district) userData.address_district = additionalData.address_district;
         if (additionalData.address_zip) userData.address_zip = additionalData.address_zip;
         if (additionalData.address_state) userData.address_state = additionalData.address_state;
+        if (additionalData.store_category_id) userData.store_category_id = additionalData.store_category_id;
     }
+
 
     const { data, error } = await sb.auth.signUp({
         email,
@@ -5213,6 +5217,8 @@ export const getServiceConfig = async (serviceName: string): Promise<ServiceConf
 };
 
 export const saveServiceConfig = async (serviceName: string, config: ServiceConfig) => {
+    const sb = getClient();
+    if (!sb) return;
     await updatePaymentGateway(serviceName, { credentials: config as any });
 };
 
@@ -5221,31 +5227,52 @@ export const saveServiceConfig = async (serviceName: string, config: ServiceConf
 export const getInstitutionalCategories = async (): Promise<InstitutionalCategory[]> => {
     const sb = getClient();
     if (!sb) return [];
-    const { data, error } = await sb.from('institutional_categories').select('*').order('name');
+    const { data, error } = await sb.from('institutional_categories').select('*').order('name', { ascending: true });
     if (error) {
-        console.error('Error listing institutional categories:', error);
+        console.error('Error fetching institutional categories:', error);
         return [];
     }
     return data || [];
 };
 
+export const uploadInstitutionalCategoryImage = async (file: File): Promise<string> => {
+    const sb = getClient();
+    if (!sb) throw new Error("Client not ready");
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error("Not logged in");
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `category_${Date.now()}.${fileExt}`;
+    // Usando bucket avatars como padrão do sistema
+    const filePath = `categories/${fileName}`;
+
+    const { error: uploadError } = await sb.storage.from('avatars').upload(filePath, file, { upsert: true });
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = sb.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+    return publicUrl;
+};
+
 export const createInstitutionalCategory = async (category: Partial<InstitutionalCategory>) => {
     const sb = getClient();
-    if (!sb) throw new Error('Client not initialized');
+    if (!sb) return;
     const { error } = await sb.from('institutional_categories').insert(category);
     if (error) throw error;
 };
 
 export const updateInstitutionalCategory = async (id: string, category: Partial<InstitutionalCategory>) => {
     const sb = getClient();
-    if (!sb) throw new Error('Client not initialized');
+    if (!sb) return;
     const { error } = await sb.from('institutional_categories').update(category).eq('id', id);
     if (error) throw error;
 };
 
 export const deleteInstitutionalCategory = async (id: string) => {
     const sb = getClient();
-    if (!sb) throw new Error('Client not initialized');
+    if (!sb) return;
     const { error } = await sb.from('institutional_categories').delete().eq('id', id);
     if (error) throw error;
 };
@@ -5262,6 +5289,7 @@ export const adminListInstitutionalTags = async (): Promise<InstitutionalTag[]> 
     }
     return data || [];
 };
+
 
 export const adminListInstitutionalContents = async (filters: { pageKey?: string; status?: string; categoryId?: string | null; search?: string }): Promise<InstitutionalContent[]> => {
     const sb = getClient();

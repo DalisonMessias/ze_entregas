@@ -1230,6 +1230,15 @@ export interface CollaboratorOrderItem {
     product?: Product;
 }
 
+export interface InstitutionalCategory {
+    id: string;
+    name: string;
+    slug: string;
+    image_url?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface UserTerminalHistoryItem {
     id: string;
     amount: number;

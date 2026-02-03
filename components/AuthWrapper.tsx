@@ -15,7 +15,9 @@ import { NotFound } from '../src/pages/NotFound';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Logo } from './Logo';
 import { CustomInput } from './CustomInput';
+import { CustomSelect } from './CustomSelect';
 import { CollaboratorModule } from './CollaboratorModule';
+
 import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
 import { getTabFromUrl } from '../utils/routeMap';
 
@@ -114,6 +116,8 @@ export const AuthWrapper: React.FC = () => {
   const [email, setEmail] = useState('');
   const [cpf, setCpf] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
+  const [storeCategoryId, setStoreCategoryId] = useState('');
+  const [institutionalCategories, setInstitutionalCategories] = useState<any[]>([]);
 
   // Store-specific fields
   const [storeName, setStoreName] = useState('');
@@ -563,6 +567,7 @@ export const AuthWrapper: React.FC = () => {
         userData.address_district = addressNeighborhood;
         userData.address_zip = zipDigits;
         userData.address_state = state;
+        userData.store_category_id = storeCategoryId; // Novo campo
       }
 
       const res = await cloud.registerUserWithType(
@@ -582,8 +587,10 @@ export const AuthWrapper: React.FC = () => {
           address_district: signupType === 'STORE_PARTNER' ? addressNeighborhood : undefined,
           address_zip: signupType === 'STORE_PARTNER' ? zipDigits : undefined,
           address_state: signupType === 'STORE_PARTNER' ? state : undefined,
+          store_category_id: signupType === 'STORE_PARTNER' ? storeCategoryId : undefined, // Novo campo
         }
       );
+
       logger.info('AUTH_SIGNUP_SUCCESS', {
         type: signupType,
         email,
@@ -976,8 +983,12 @@ export const AuthWrapper: React.FC = () => {
               <div className="pt-2">
                 <CitySearchSelect
                   value={selectedCity}
-                  onSelect={(city) => {
+                  onSelect={async (city) => {
                     setSelectedCity(`${city.name} - ${city.state}`);
+                    if (signupType === 'STORE_PARTNER') {
+                      const cats = await cloud.getInstitutionalCategories();
+                      setInstitutionalCategories(cats);
+                    }
                     setView('signup_form');
                   }}
                   placeholder="Selecione sua cidade..."
@@ -985,6 +996,7 @@ export const AuthWrapper: React.FC = () => {
               </div>
             </div>
           )}
+
 
           {view === 'signup_form' && (
             <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -1040,8 +1052,18 @@ export const AuthWrapper: React.FC = () => {
               {signupType === 'STORE_PARTNER' && (
                 <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                   <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest pl-1">Informações da Loja</h3>
-                  <CustomInput type="text" placeholder="Nome Comercial da Loja" icon={StoreIcon} value={storeName} onChange={e => setStoreName(e.target.value)} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <CustomInput type="text" placeholder="Nome Comercial da Loja" icon={StoreIcon} value={storeName} onChange={e => setStoreName(e.target.value)} />
+                    <CustomSelect
+                      label="Categoria da Loja"
+                      value={storeCategoryId}
+                      onChange={setStoreCategoryId}
+                      options={institutionalCategories.map(c => ({ label: c.name, value: c.id }))}
+                      placeholder="Selecione a categoria..."
+                    />
+                  </div>
                   <CustomInput type="text" placeholder="CPF/CNPJ do Negócio" icon={FileText} value={storeDocument} onChange={e => setStoreDocument(formatCnpjCpf(e.target.value))} maxLength={18} />
+
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <CustomInput type="text" placeholder="CEP" icon={MapPin} value={addressZip} onChange={e => setAddressZip(e.target.value)} className="sm:col-span-1" />

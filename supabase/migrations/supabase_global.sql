@@ -835,9 +835,19 @@ CREATE TABLE IF NOT EXISTS public.institutional_categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL UNIQUE,
     slug VARCHAR(255) NOT NULL UNIQUE,
+    image_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Garantir que a coluna image_url exista (caso a tabela já existisse sem ela)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'institutional_categories' AND column_name = 'image_url') THEN
+        ALTER TABLE public.institutional_categories ADD COLUMN image_url TEXT;
+    END IF;
+END $$;
+
 DROP TRIGGER IF EXISTS handle_institutional_categories_updated_at ON public.institutional_categories;
 CREATE TRIGGER handle_institutional_categories_updated_at BEFORE UPDATE ON public.institutional_categories
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -11808,3 +11818,10 @@ GRANT SELECT ON public.institutional_content_tags TO anon, authenticated;
 GRANT SELECT ON public.institutional_content_images TO anon, authenticated;
 
 
+-- Adicionar store_category_id à user_profiles se não existir
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_category_id') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN store_category_id UUID REFERENCES public.institutional_categories(id) ON DELETE SET NULL;
+    END IF;
+END $$;
