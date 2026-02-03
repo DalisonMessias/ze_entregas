@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as cloud from '../services/cloud';
 import { supabase } from '../services/cloud';
-import { Store, Lock, History, ChevronDown, ChevronUp, FileText, Calendar, DollarSign, Package } from 'lucide-react';
+import { Store, Lock, History, ChevronDown, ChevronUp, FileText, Calendar, DollarSign, Package, AlertTriangle } from 'lucide-react';
 import { StoreDailyReport, PartnerProfile } from '../types';
 import { useDialog } from '../utils/dialogService';
 
@@ -160,7 +160,18 @@ export const StoreStatus: React.FC = () => {
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
+        <div className="space-y-4">
+            {profile.opening_hours && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/30 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                        <strong>Atenção:</strong> A tela de status é manual e não está compatível com o horário automático definido em "Horário de Funcionamento"
+                        em <strong>/loja/configuracoes</strong>. Ajuste o horário automático por lá.
+                    </p>
+                </div>
+            )}
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
             <div className="p-4 md:p-6 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className={`p-3 rounded-full ${isOpen ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
@@ -236,6 +247,7 @@ export const StoreStatus: React.FC = () => {
                     )}
                 </div>
             )}
+            </div>
         </div>
     );
 };
