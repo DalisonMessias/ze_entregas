@@ -29,14 +29,14 @@ import { PublicSupportPage } from './PublicSupportPage';
 const updateAuthUrl = (view: AuthView) => {
   // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
   const isAppRoute = getTabFromUrl(window.location.pathname) !== null;
-  const authRoutes = ['/login', '/cadastro', '/recuperar-senha', '/home'];
+  const authRoutes = ['/login', '/cadastro', '/recuperar-senha', '/'];
 
   // Se for uma rota de autenticação, forçamos o path correto
   let path = window.location.pathname;
   if (view === 'login') path = '/login';
   else if (view === 'signup_type_selection' || view === 'signup_city' || view === 'signup_form') path = '/cadastro';
   else if (view === 'forgot_password') path = '/recuperar-senha';
-  else if (view === 'landing' && !isAppRoute) path = '/home';
+  else if (view === 'landing' && !isAppRoute) path = '/';
 
   if (window.location.pathname !== path && authRoutes.includes(path)) {
     window.history.pushState({ authView: view }, '', path);
@@ -736,7 +736,7 @@ export const AuthWrapper: React.FC = () => {
 
           <div className="text-center mb-10">
             <div className="inline-flex p-4 bg-brand-50 dark:bg-brand-900/30 rounded-3xl mb-6 shadow-sm">
-              <Logo className="h-10 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />
+              <Logo className="h-10 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/'} />
             </div>
             <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
               {view === 'login' && 'Olá novamente! 👋'}

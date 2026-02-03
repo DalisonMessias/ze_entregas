@@ -964,7 +964,7 @@ export const CollaboratorModule: React.FC<Props> = ({ collaborator, onLogout }) 
                     {view !== 'dashboard' ? (
                         <button onClick={() => setView('dashboard')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-500"><ArrowLeft className="w-6 h-6" /></button>
                     ) : (
-                        <Logo className="h-9 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />
+                        <Logo className="h-9 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/'} />
                     )}
                     <div>
                         <h1 className="font-black text-gray-800 dark:text-white leading-tight">ZÉ ENTREGA</h1>

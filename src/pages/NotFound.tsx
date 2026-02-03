@@ -5,7 +5,7 @@ import { Logo } from '../../components/Logo';
 export const NotFound: React.FC = () => {
     const goHome = () => {
         // Dispara evento para App.tsx ou recarrega para root
-        window.location.href = '/home';
+        window.location.href = '/';
     };
 
     const goBack = () => {

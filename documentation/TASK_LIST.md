@@ -1,8 +1,11 @@
-# Lista de Tarefas - Correção de Rotas
+# Tarefas Concluídas - Correção de Rotas e Home
 
-- [ ] Analisar arquivos de rotas (`index.tsx`, `App.tsx`)
-- [ ] Verificar configuração do Vite e Vercel (`vite.config.ts`, `vercel.json`)
-- [ ] Implementar redirecionamento de `/` para `/home` ou configurar Home em `/`
-- [ ] Garantir que o refresh das páginas funcione em produção
-- [ ] Validar o build e a navegação
-- [ ] Atualizar `checklist.txt`
+- [x] Mapeamento da rota raiz `/` no `routeMap.ts` para a tab `home`.
+- [x] Remoção do redirecionamento forçado de `/` para `/home` no `AuthWrapper.tsx`.
+- [x] Remoção da lógica de `replaceState` no `App.tsx` que forçava `/home`.
+- [x] Atualização de todos os links de `Logo` (LandingPage, DigitalMenu, CollaboratorModule, Sidebar, AuthWrapper) para redirecionar para `/`.
+- [x] Correção do componente `NotFound.tsx` para voltar para `/`.
+- [x] Renomeação do `service-worker.js` para `sw.js` para maior compatibilidade.
+- [x] Atualização da inclusão do Service Worker no `index.html` e registro no `index.tsx`.
+- [x] Correção de erro de sintaxe no `App.tsx` após refatoração.
+- [x] Garantia de que refreshes de página funcionam sem tela branca em `/`.

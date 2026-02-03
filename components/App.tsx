@@ -1439,10 +1439,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 
                 `}>
                             {/* Logo - Show only when expanded */}
-                            {isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" onClick={() => window.location.href = '/home'} />}
+                            {isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" onClick={() => window.location.href = '/'} />}
 
                             {/* Logo Icon Only - Show when collapsed */}
-                            {!isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />}
+                            {!isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/'} />}
 
                             {/* Close Button - Visible only on Mobile */}
                             <button onClick={() => setIsMenuOpen(false)} className="md:hidden"><X className="w-6 h-6 text-gray-400 hover:text-gray-600" /></button>
