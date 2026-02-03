@@ -229,6 +229,21 @@ export const getPendingTicketsCount = async (): Promise<number> => {
     return count || 0;
 };
 
+// --- IMPERSONATION HELPER ---
+const getImpersonationId = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const stored = localStorage.getItem('ze_impersonation_mode');
+        if (!stored) return null;
+        const state = JSON.parse(stored);
+        // Validação básica se expirou
+        if (Date.now() - state.startedAt > 30 * 60 * 1000) return null;
+        return state.storeId;
+    } catch {
+        return null;
+    }
+};
+
 export const getInitialUserData = async (): Promise<{ role: UserRole, status: UserStatus }> => {
     const sb = getClient();
     if (!sb) return { role: 'delivery_person' as UserRole, status: 'error' as UserStatus };
@@ -236,6 +251,29 @@ export const getInitialUserData = async (): Promise<{ role: UserRole, status: Us
     try {
         const { user } = await getUserWithCache();
         if (!user) return { role: 'delivery_person' as UserRole, status: 'not_found' as any };
+
+        // IMPERSONATION CHECK
+        const impersonatedStoreId = getImpersonationId();
+        // Verificar se realmente somos admin para permitir (camada extra de segurança no client)
+        // Mas como getInitialUserData é chamado muito cedo, vamos confiar no localStorage momentaneamente 
+        // e validar se o usuário real tem permissão se necessário. 
+        // Na prática, se o token do Supabase for de Admin, o RLS permite ler a loja alvo.
+
+        if (impersonatedStoreId) {
+            // Se estamos em modo impersonation, simulamos que somos a loja
+            // Precisamos buscar o status da loja alvo para não quebrar a UI
+            const { data: storeData } = await sb.from('user_profiles')
+                .select('role, status')
+                .eq('id', impersonatedStoreId)
+                .single();
+
+            if (storeData) {
+                return {
+                    role: 'store_partner', // Força papel de loja
+                    status: (storeData.status as UserStatus) || 'active'
+                };
+            }
+        }
 
         const { data, error } = await sb.from('user_profiles').select('role, status').eq('id', user.id).single();
 
@@ -667,11 +705,15 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return null;
 
+    // IMPERSONATION: Se houver ID simulado, usamos ele.
+    const impersonatedStoreId = getImpersonationId();
+    const targetUserId = impersonatedStoreId || user.id;
+
     // Fetch from user_profiles as partner_profiles table does not exist
     const { data: userData, error } = await sb
         .from('user_profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', targetUserId)
         .single();
 
     if (error) {
@@ -800,33 +842,57 @@ export const getStoreStickers = async (storeId: string) => {
 export const uploadSticker = async (file: File, storeId: string): Promise<string | null> => {
     const sb = getClient();
     if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
 
-    // Upload image
     const fileExt = file.name.split('.').pop();
-    const fileName = `sticker_${Date.now()}.${fileExt}`;
-    const filePath = `stickers/${storeId}/${fileName}`; // Assuming avatars bucket or public bucket?
-    // Let's use 'avatars' bucket as it is likely public/configured
-    const { error: uploadError } = await sb.storage.from('avatars').upload(filePath, file);
+    const fileName = `sticker_${storeId}_${Date.now()}.${fileExt}`;
+    const filePath = `stickers/${storeId}/${fileName}`;
 
-    if (uploadError) {
-        console.error('Error uploading sticker:', uploadError);
+    const { error } = await sb.storage.from('avatars').upload(filePath, file); // Usando avatars como bucket genérico conforme padrão do projeto
+    if (error) {
+        console.error('Upload Sticker Error:', error);
         return null;
     }
 
     const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(filePath);
+    return publicUrl;
+};
 
-    // Save to DB
-    const { error: dbError } = await sb.from('store_stickers').insert({
+// --- IMPERSONATION AUDIT LOGS ---
+
+export const adminLogImpersonationStart = async (storeId: string, reason: string): Promise<string | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+
+    // Snapshot do nome da loja
+    const { data: store } = await sb.from('user_profiles').select('name').eq('id', storeId).single();
+    const storeName = store?.name || 'Unknown Store';
+
+    const { data, error } = await sb.from('admin_store_access_logs').insert({
+        admin_id: user.id,
         store_id: storeId,
-        url: publicUrl
-    });
+        store_name_snapshot: storeName,
+        reason: reason,
+        started_at: new Date().toISOString()
+    }).select('id').single();
 
-    if (dbError) {
-        console.error('Error saving sticker to DB:', dbError);
+    if (error) {
+        console.error('Error logging impersonation start:', error);
         return null;
     }
+    return data?.id;
+};
 
-    return publicUrl;
+export const adminLogImpersonationEnd = async (logId: string): Promise<void> => {
+    const sb = getClient();
+    if (!sb) return;
+
+    await sb.from('admin_store_access_logs')
+        .update({ ended_at: new Date().toISOString() })
+        .eq('id', logId);
 };
 
 export const deleteSticker = async (stickerId: string) => {

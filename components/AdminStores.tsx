@@ -14,6 +14,7 @@ import { useDebounce } from '../hooks/useDebounce';
 // import { ProductImportExport } from './ProductImportExport'; // Substituído pelo Manager Completo
 import { StoreProductManager } from './StoreProductManager';
 import { StoreEditModal } from './StoreEditModal';
+import { startImpersonation } from '../services/impersonation';
 
 const getStatusColor = (status: string) => {
     switch (status) {
@@ -50,6 +51,10 @@ export const AdminStores: React.FC = () => {
     const [isProductManagerOpen, setIsProductManagerOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Impersonation States
+    const [isImpersonationModalOpen, setIsImpersonationModalOpen] = useState(false);
+    const [impersonationReason, setImpersonationReason] = useState('');
 
     const { confirm, alert } = useDialog();
 
@@ -322,6 +327,17 @@ export const AdminStores: React.FC = () => {
                                 </Button>
                                 <Button
                                     variant="outline"
+                                    onClick={() => {
+                                        setImpersonationReason('');
+                                        setIsImpersonationModalOpen(true);
+                                    }}
+                                    className="flex flex-col gap-2 py-6 rounded-3xl border-2 border-brand-500/20 hover:bg-brand-50 dark:hover:bg-brand-900/10 text-brand-600 h-auto"
+                                >
+                                    <ExternalLink className="w-6 h-6" />
+                                    <span className="font-bold">Acessar Loja</span>
+                                </Button>
+                                <Button
+                                    variant="outline"
                                     onClick={() => setIsEditModalOpen(true)}
                                     className="flex flex-col gap-2 py-6 rounded-3xl border-2 border-gray-500/20 hover:bg-gray-50 dark:hover:bg-gray-900/10 text-gray-600 h-auto"
                                 >
@@ -530,6 +546,67 @@ export const AdminStores: React.FC = () => {
                                     }`}
                             >
                                 {isSaving ? <Loading variant="inline" size="sm" className="mx-auto" /> : 'Confirmar Alteração'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Impersonation */}
+            {isImpersonationModalOpen && selectedStore && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[130] flex items-center justify-center p-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-white dark:bg-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl space-y-6 border border-brand-100 dark:border-brand-900/30">
+                        <div className="text-center">
+                            <div className="mx-auto w-20 h-20 rounded-3xl mb-6 flex items-center justify-center bg-brand-100 text-brand-600 dark:bg-brand-900/30">
+                                <ExternalLink className="w-10 h-10" />
+                            </div>
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Acessar Loja</h3>
+                            <p className="text-gray-500 font-medium">
+                                Você entrará no painel da loja <strong className="text-brand-600">{selectedStore.name}</strong>. Todas as ações serão registradas.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest pl-2">Motivo do Acesso *</label>
+                            <textarea
+                                value={impersonationReason}
+                                onChange={e => setImpersonationReason(e.target.value)}
+                                className="w-full p-5 bg-gray-50 dark:bg-gray-800 border-2 border-transparent focus:border-brand-500 rounded-3xl min-h-[100px] dark:text-white font-bold transition-all outline-none"
+                                placeholder="Ex: Suporte técnico ticket #123..."
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="flex gap-4">
+                            <Button
+                                fullWidth
+                                variant="outline"
+                                onClick={() => setIsImpersonationModalOpen(false)}
+                                className="py-4 border-2 rounded-2xl font-bold"
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                fullWidth
+                                onClick={async () => {
+                                    if (!impersonationReason.trim()) return;
+                                    setIsSaving(true);
+                                    const success = await startImpersonation(
+                                        'admin_current',
+                                        selectedStore,
+                                        impersonationReason
+                                    );
+                                    setIsSaving(false);
+                                    if (success) {
+                                        window.location.href = '/wallet';
+                                    } else {
+                                        await alert('Erro ao iniciar acesso à loja.');
+                                    }
+                                }}
+                                disabled={!impersonationReason.trim() || isSaving}
+                                className="py-4 rounded-2xl font-black shadow-lg bg-brand-600 hover:bg-brand-700 text-white shadow-brand-500/30"
+                            >
+                                {isSaving ? <Loading variant="inline" size="sm" className="mx-auto" /> : 'Confirmar Acesso'}
                             </Button>
                         </div>
                     </div>

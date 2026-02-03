@@ -11737,3 +11737,40 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==================================================================
+-- 3.x AUDITORIA DE ACESSO DE ADMIN (IMPERSONATION)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.admin_store_access_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    admin_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    store_name_snapshot TEXT, -- Nome da loja no momento do acesso (para histÃ³rico)
+    reason TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb, -- IP, User Agent, etc.
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    ended_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ãndices para performance em consultas de auditoria
+CREATE INDEX IF NOT EXISTS idx_admin_access_admin_id ON public.admin_store_access_logs(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_access_store_id ON public.admin_store_access_logs(store_id);
+CREATE INDEX IF NOT EXISTS idx_admin_access_started_at ON public.admin_store_access_logs(started_at);
+
+-- RLS: Apenas Admins podem ver e criar logs
+ALTER TABLE public.admin_store_access_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view access logs" ON public.admin_store_access_logs;
+CREATE POLICY "Admins can view access logs" ON public.admin_store_access_logs
+    FOR SELECT USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can insert access logs" ON public.admin_store_access_logs;
+CREATE POLICY "Admins can insert access logs" ON public.admin_store_access_logs
+    FOR INSERT WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can update access logs" ON public.admin_store_access_logs;
+CREATE POLICY "Admins can update access logs" ON public.admin_store_access_logs
+    FOR UPDATE USING (public.is_admin());
+

@@ -11,6 +11,7 @@ import { useTour } from '../components/Tour/TourContext';
 import TourComponent from './Tour/Tour';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { tourSteps } from '../components/Tour/tourSteps';
+import { getImpersonationState, stopImpersonation } from '../services/impersonation';
 
 // Components
 import { Logo } from './Logo';
@@ -215,6 +216,56 @@ const isMaintenanceActive = (settings: MaintenanceSettings): boolean => {
 
     // Lógica padrão (mesmo dia)
     return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+};
+
+// Componente Banner de Impersonation (Local)
+const ImpersonationBanner = () => {
+    const [state, setState] = useState(getImpersonationState());
+
+    useEffect(() => {
+        const check = () => setState(getImpersonationState());
+        window.addEventListener('impersonation_change', check);
+        // Check inicial caso já esteja ativo
+        check();
+        return () => window.removeEventListener('impersonation_change', check);
+    }, []);
+
+    if (!state?.isActive) return null;
+
+    return (
+        <div className="fixed bottom-4 right-4 z-[9999] max-w-sm w-full animate-in slide-in-from-bottom-10 fade-in duration-300">
+            <div className="bg-red-600 text-white p-4 rounded-3xl shadow-2xl border-4 border-white/20 flex flex-col gap-3 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <ShieldAlert className="w-24 h-24" />
+                </div>
+
+                <div className="flex items-center gap-3 relative z-10">
+                    <div className="bg-white/20 p-2 rounded-xl">
+                        <UserCheck className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                        <p className="text-xs font-medium text-red-100 uppercase tracking-wider">Modo de Acesso</p>
+                        <p className="font-bold text-lg leading-tight line-clamp-1">{state.storeName}</p>
+                    </div>
+                </div>
+
+                <div className="text-xs text-red-100 font-medium bg-black/10 p-2 rounded-lg relative z-10">
+                    Motivo: "{state.reason}"
+                </div>
+
+                <button
+                    onClick={async () => {
+                        await stopImpersonation();
+                        window.location.href = '/admin/lojas';
+                    }}
+                    className="w-full bg-white text-red-600 py-3 rounded-xl text-sm font-black uppercase tracking-wider hover:bg-gray-100 transition-colors shadow-sm active:scale-95 duration-200 relative z-10 flex items-center justify-center gap-2"
+                >
+                    <LogOut className="w-4 h-4" />
+                    Sair do Acesso
+                </button>
+            </div>
+        </div>
+    );
 };
 
 // Componente wrapper para o fluxo de upgrade
@@ -1082,9 +1133,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
     const isPublicTab = publicTabs.includes(activeTab);
 
-    if (isPublicTab) {
-        return (
-            <div className="min-h-screen bg-white dark:bg-gray-950">
+    if (isPublicTab) return (
+        <div className={theme === 'dark' ? 'dark' : ''}>
+            <ImpersonationBanner />
+            <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 font-sans selection:bg-brand-500/20 selection:text-brand-700 transition-colors duration-300">
                 {renderContent()}
 
                 {showPrivacy && (
@@ -1093,79 +1145,81 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     </Suspense>
                 )}
             </div>
-        );
-    }
+        </div>
+    );
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-            {/* TOUR COMPONENT */}
-            <SectionErrorBoundary componentName="Tour">
-                <TourComponent />
-            </SectionErrorBoundary>
+        <div className={theme === 'dark' ? 'dark' : ''}>
+            <ImpersonationBanner />
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+                {/* TOUR COMPONENT */}
+                <SectionErrorBoundary componentName="Tour">
+                    <TourComponent />
+                </SectionErrorBoundary>
 
-            {/* CONNECTION STATUS BAR RE MOVED per user request */}
-            <SectionErrorBoundary componentName="PWA Manager">
-                <PwaManager />
-            </SectionErrorBoundary>
+                {/* CONNECTION STATUS BAR RE MOVED per user request */}
+                <SectionErrorBoundary componentName="PWA Manager">
+                    <PwaManager />
+                </SectionErrorBoundary>
 
-            {/* Header */}
-            <SectionErrorBoundary componentName="Header">
-                <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 shadow-sm z-40 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800">
-                    <div className="flex items-center gap-3">
-                        <button
-                            id="header-menu-button"
-                            onClick={() => {
-                                // Mobile: Toggle Modal Drawer
-                                if (window.innerWidth < 768) {
-                                    setIsMenuOpen(true);
-                                } else {
-                                    // Desktop: Toggle Collapse
-                                    setIsSidebarExpanded(!isSidebarExpanded);
-                                }
-                            }}
-                            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
-                        >
-                            <Menu className="w-6 h-6" />
-                        </button>
-                        {/* Back Button for Sub-Views if not root views */}
-                        {activeTab !== 'daily_panel' && activeTab !== 'shop' && activeTab !== 'wallet' && activeTab !== 'partner' && activeTab !== 'admin_dashboard' && (
-                            <button onClick={() => navigate(isDriver ? 'daily_panel' : 'shop')} className="p-1 rounded-full text-gray-400 hover:text-gray-600 md:hidden">
-                                <ArrowLeft className="w-5 h-5" />
+                {/* Header */}
+                <SectionErrorBoundary componentName="Header">
+                    <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 shadow-sm z-40 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800">
+                        <div className="flex items-center gap-3">
+                            <button
+                                id="header-menu-button"
+                                onClick={() => {
+                                    // Mobile: Toggle Modal Drawer
+                                    if (window.innerWidth < 768) {
+                                        setIsMenuOpen(true);
+                                    } else {
+                                        // Desktop: Toggle Collapse
+                                        setIsSidebarExpanded(!isSidebarExpanded);
+                                    }
+                                }}
+                                className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                            >
+                                <Menu className="w-6 h-6" />
                             </button>
-                        )}
+                            {/* Back Button for Sub-Views if not root views */}
+                            {activeTab !== 'daily_panel' && activeTab !== 'shop' && activeTab !== 'wallet' && activeTab !== 'partner' && activeTab !== 'admin_dashboard' && (
+                                <button onClick={() => navigate(isDriver ? 'daily_panel' : 'shop')} className="p-1 rounded-full text-gray-400 hover:text-gray-600 md:hidden">
+                                    <ArrowLeft className="w-5 h-5" />
+                                </button>
+                            )}
 
-                    </div>
-
-                    <div className="flex items-center gap-5 md:gap-2">
-                        <button id="header-emergency-button" onClick={() => setShowEmergency(true)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full animate-pulse">
-                            <ShieldAlert className="w-6 h-6" />
-                        </button>
-                        <div id="header-notifications-bell">
-                            <NotificationsBell unreadCount={unreadCount} onClick={() => setShowNotifications(true)} />
                         </div>
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="p-2 text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                            title="Recarregar dados"
-                        >
-                            <RefreshCw className="w-5 h-5" />
-                        </button>
-                    </div>
-                </header>
-            </SectionErrorBoundary>
 
-            {/* Sidebar Menu */}
-            {/* Mobile Backdrop - Only visible on mobile when menu is open */}
-            {isMenuOpen && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden animate-in fade-in duration-300"
-                    onClick={() => setIsMenuOpen(false)}
-                ></div>
-            )}
+                        <div className="flex items-center gap-5 md:gap-2">
+                            <button id="header-emergency-button" onClick={() => setShowEmergency(true)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full animate-pulse">
+                                <ShieldAlert className="w-6 h-6" />
+                            </button>
+                            <div id="header-notifications-bell">
+                                <NotificationsBell unreadCount={unreadCount} onClick={() => setShowNotifications(true)} />
+                            </div>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="p-2 text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                                title="Recarregar dados"
+                            >
+                                <RefreshCw className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </header>
+                </SectionErrorBoundary>
 
-            {/* Sidebar Container */}
-            <SectionErrorBoundary componentName="Menu Lateral">
-                <div className={`
+                {/* Sidebar Menu */}
+                {/* Mobile Backdrop - Only visible on mobile when menu is open */}
+                {isMenuOpen && (
+                    <div
+                        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden animate-in fade-in duration-300"
+                        onClick={() => setIsMenuOpen(false)}
+                    ></div>
+                )}
+
+                {/* Sidebar Container */}
+                <SectionErrorBoundary componentName="Menu Lateral">
+                    <div className={`
                     fixed z-50 
                     /* Mobile Styles: Inset-0 (Drawer), driven by isMenuOpen */
                     ${isMenuOpen ? 'inset-y-0 left-0 translate-x-0' : '-translate-x-full'} 
@@ -1176,271 +1230,272 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     
                     bg-white dark:bg-gray-900 shadow-2xl transition-all duration-300 flex flex-col
                 `}>
-                    {/* Header (Logo + Close Button) - Mobile Only mostly, or adapted for desktop */}
-                    <div className={`
+                        {/* Header (Logo + Close Button) - Mobile Only mostly, or adapted for desktop */}
+                        <div className={`
                     flex items-center w-full
                     justify-between p-6
                     md:min-h-[4rem]
                     ${isSidebarExpanded ? 'md:justify-between md:p-6' : 'md:justify-center md:p-4'}
                     border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 
                 `}>
-                        {/* Logo - Show only when expanded */}
-                        {isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" onClick={() => window.location.href = '/home'} />}
+                            {/* Logo - Show only when expanded */}
+                            {isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" onClick={() => window.location.href = '/home'} />}
 
-                        {/* Logo Icon Only - Show when collapsed */}
-                        {!isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />}
+                            {/* Logo Icon Only - Show when collapsed */}
+                            {!isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/home'} />}
 
-                        {/* Close Button - Visible only on Mobile */}
-                        <button onClick={() => setIsMenuOpen(false)} className="md:hidden"><X className="w-6 h-6 text-gray-400 hover:text-gray-600" /></button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
-
-                        {/* --- ADMIN MENU --- */}
-                        {isAdmin && (
-                            <>
-                                <MenuSection title="Visão Geral" />
-                                <MenuButton icon={LayoutDashboard} label="Dashboard BI" tab="admin_dashboard" id="admin-dashboard-link" />
-                                <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
-                                <MenuButton icon={ShoppingBag} label="Acessar Loja" tab="shop" />
-
-                                <MenuSection title="Gestão de Usuários" />
-                                <MenuButton icon={Users} label="Todos os Usuários" tab="admin_users" />
-                                <MenuButton icon={Store} label="Gerenciar Lojas" tab="admin_lojas" />
-                                <MenuButton icon={MapPin} label="Solicitações de Ruas" tab="admin_street_requests" />
-                                <MenuButton icon={FileCheck} label="Validação de Parceiros" tab="admin_validation" />
-                                <MenuButton icon={Wallet} label="Controle de Saldos" tab="admin_wallet_control" />
-                                <MenuButton icon={ShieldAlert} label="Segurança & Fraude" tab="admin_security" />
-                                <MenuButton icon={UserX} label="Lista Negra" tab="admin_blacklist" />
-
-                                <MenuSection title="Operacional" />
-                                <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
-                                <MenuButton icon={Package} label="Catálogo Base" tab="admin_base_catalog" />
-                                <MenuButton icon={ImageIcon} label="Galeria de Imagens" tab="admin_image_gallery" />
-                                <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
-
-                                <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
-                                <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
-                                <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
-                                <MenuButton icon={MessageSquare} label="Chat Interno" tab="admin_chat" />
-
-                                <MenuSection title="Conteúdo & App" />
-                                <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
-                                {/* <MenuButton icon={Newspaper} label="Notícias" tab="admin_platform_news" /> */}
-                                <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
-                                <MenuButton icon={Layout} label="Banners/Slides" tab="admin_slides" />
-                                <MenuButton icon={Construction} label="Manutenção" tab="admin_maintenance" />
-
-                                <MenuSection title="Financeiro" />
-                                <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
-                                <MenuButton icon={Banknote} label="Cupons Globais (Plataforma)" tab="admin_global_coupons" />
-                                <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
-                                <MenuButton icon={CreditCard} label="Config. Empréstimos" tab="admin_loan_config" />
-                                <MenuButton icon={DollarSign} label="Financeiro das Lojas" tab="admin_store_finance" />
-                                <MenuButton icon={CreditCard} label="Gateways de Pagamento" tab="admin_payment_gateways" />
-                                <MenuButton icon={Link2} label="Mercado Pago" tab="admin_mercadopago" />
-                                <MenuButton icon={Smartphone} label="Configurar PIX" tab="admin_pix_config" />
-                                <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
-                                <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
-
-                                <MenuSection title="Marketing & Conteúdo" />
-                                <MenuButton icon={Megaphone} label="Indicações" tab="admin_referrals" />
-                                <MenuButton icon={Bell} label="Notificações Globais" tab="admin_notifications" />
-                                <MenuButton icon={Shield} label="Config. Seguros" tab="admin_insurance" />
-                                <MenuButton icon={FileText} label="Institucional" tab="admin_institutional" />
-                                <MenuButton icon={Newspaper} label="Novidades da Plataforma" tab="admin_platform_news" />
-
-                                <MenuSection title="Configurações do Sistema" />
-                                <MenuButton icon={Bot} label="Inteligência Artificial" tab="admin_ai_config" />
-                                <MenuButton icon={Cloud} label="APIs & Integrações" tab="admin_api_keys" />
-                                <MenuButton icon={Smartphone} label="App PWA" tab="admin_pwa" />
-                                <MenuButton icon={Headphones} label="Suporte & Tickets" tab="admin_support" />
-                                <MenuButton icon={Route} label="Config. Roteamento" tab="admin_routing" />
-                                <MenuButton icon={TrendingUp} label="Gestão de Investimentos" tab="admin_investments" />
-                            </>
-                        )}
-
-                        {/* --- STORE PARTNER MENU --- */}
-                        {isStore && (
-                            <>
-                                <MenuSection title="Minha Loja" />
-                                <MenuButton icon={Power} label="Status da Loja" tab="store_status" />
-                                <MenuButton icon={LayoutDashboard} label="Painel" tab="wallet" id="store-wallet-link" />
-                                <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
-                                <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
-                                <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
-                                <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
-                                <MenuButton icon={MessageSquare} label="Chat com Clientes" tab="internal_chat" />
-                                <MenuButton icon={MessageCircle} label="Chat c/ Entregadores" tab="store_drivers_chat" />
-                                <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
-                                <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
-                                <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
-
-                                <MenuSection title="Gestão" />
-                                <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
-                                <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
-                                <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
-                                <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
-                                <MenuButton icon={Smartphone} label="Recebimento PIX" tab="store_receiving_payment" />
-                                <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
-                                <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
-                                <MenuButton icon={Banknote} label="Promoções e Cupons" tab="store_promotions" />
-                                <MenuButton icon={FileText} label="Comanda" tab="internal_orders" badge={pendingTicketsCount} />
-                                <MenuButton icon={CreditCard} label="Financeiro ZéPay" tab="zepay_store" />
-                                <MenuButton icon={Key} label="Docs API / Integradores" tab="store_api_docs" />
-                            </>
-                        )}
-
-                        {/* --- USER MENU --- */}
-                        {effectiveRole === 'user' && (
-                            <>
-                                <MenuSection title="Minha Conta" />
-                                <MenuButton icon={Home} label="Início" tab="home" />
-                                <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
-                                <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
-                            </>
-                        )}
-
-                        {/* --- SHARED DRIVER MENU (PARTNER + NORMAL) --- */}
-                        {(isPartner || isNormalDriver) && (
-                            <>
-                                <MenuSection title="Plataforma Zé" />
-                                <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
-                                <MenuButton icon={Package} label="Pedidos da Loja" tab="associate_orders" />
-                                <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
-                                <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
-                                <MenuButton icon={Star} label="Meu Score" tab="score" />
-                                <MenuButton icon={History} label="Histórico Local" tab="local_history" />
-                                <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
-                                <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
-                                <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
-                                <MenuButton icon={Shield} label="Seguro Parceiro" tab="insurance" />
-
-                                <MenuSection title="Crescimento" />
-                                <MenuButton icon={Store} label="Lojas Vinculadas" tab="associate_driver" />
-
-                                <MenuSection title="Ferramentas" />
-                                <MenuButton icon={ListPlus} label="Lista de Rotas" tab="route_list" />
-                                <MenuButton icon={FileCheck} label="Tarefas" tab="tasks" />
-                                <MenuButton icon={BarChart3} label="Relatórios Pessoais" tab="reports" />
-                                <MenuButton icon={Flame} label="Mapa de Calor" tab="heatmap" />
-                                <MenuButton icon={MapPin} label="Meus Endereços" tab="addresses" />
-                                <MenuButton icon={Zap} label="Ferramentas de Rota" tab="route_tools" />
-                                <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
-                            </>
-                        )}
-
-
-                        {/* --- GENERAL MENU (ALL USERS) --- */}
-                        <MenuSection title="Geral" />
-                        {/* Exibe Ruas para todos EXCETO colaborador e usuário comum */}
-                        {effectiveRole !== 'collaborator' && effectiveRole !== 'user' && (
-                            <MenuButton icon={Map} label="Ruas" tab="streets_list" />
-                        )}
-
-                        {/* Loja de Peças apenas para Entregadores */}
-                        {(isPartner || isNormalDriver) && (
-                            <MenuButton icon={ShoppingBag} label="Loja de Peças" tab="shop" />
-                        )}
-
-                        <MenuButton icon={User} label="Meu Perfil" tab="profile" />
-                        <MenuButton icon={Headphones} label="Suporte" tab="support" />
-                        <MenuButton icon={HelpCircle} label="Perguntas Frequentes (FAQ)" tab="faq" />
-                        <MenuButton icon={Bell} label="Notificações" tab="notifications" />
-                        <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
-
-                        {/* Backup Nuvem apenas para quem opera offline (Entregadores/Lojistas) */}
-                        {effectiveRole !== 'user' && (
-                            <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
-                        )}
-
-                        <MenuButton icon={Info} label="Sobre o App" tab="about" />
-                        {effectiveRole === 'user' && ( // Apenas user vê instalar app aqui, para outros já tem fluxo próprio ou não precisa
-                            <MenuButton icon={Smartphone} label="Instalar App" tab="install_app" />
-                        )}
-
-                        {/* --- FOOTER ACTIONS --- */}
-                        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
-                            {/* Idioma removido: app opera exclusivamente em PT-BR */}
-                            <MenuButton icon={Share2} label="Compartilhar App" onClick={handleShareApp} />
-                            <MenuButton icon={Lock} label="Política de Privacidade" onClick={() => setShowPrivacy(true)} /> {/* DIRECT ACCESS */}
-
-                            {effectiveRole !== 'user' && (
-                                <MenuButton icon={UserCheck} label="Verificar Status" onClick={() => navigate('status')} />
-                            )}
+                            {/* Close Button - Visible only on Mobile */}
+                            <button onClick={() => setIsMenuOpen(false)} className="md:hidden"><X className="w-6 h-6 text-gray-400 hover:text-gray-600" /></button>
                         </div>
-                    </div>
 
-                    <div className={`
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+
+                            {/* --- ADMIN MENU --- */}
+                            {isAdmin && (
+                                <>
+                                    <MenuSection title="Visão Geral" />
+                                    <MenuButton icon={LayoutDashboard} label="Dashboard BI" tab="admin_dashboard" id="admin-dashboard-link" />
+                                    <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
+                                    <MenuButton icon={ShoppingBag} label="Acessar Loja" tab="shop" />
+
+                                    <MenuSection title="Gestão de Usuários" />
+                                    <MenuButton icon={Users} label="Todos os Usuários" tab="admin_users" />
+                                    <MenuButton icon={Store} label="Gerenciar Lojas" tab="admin_lojas" />
+                                    <MenuButton icon={MapPin} label="Solicitações de Ruas" tab="admin_street_requests" />
+                                    <MenuButton icon={FileCheck} label="Validação de Parceiros" tab="admin_validation" />
+                                    <MenuButton icon={Wallet} label="Controle de Saldos" tab="admin_wallet_control" />
+                                    <MenuButton icon={ShieldAlert} label="Segurança & Fraude" tab="admin_security" />
+                                    <MenuButton icon={UserX} label="Lista Negra" tab="admin_blacklist" />
+
+                                    <MenuSection title="Operacional" />
+                                    <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
+                                    <MenuButton icon={Package} label="Catálogo Base" tab="admin_base_catalog" />
+                                    <MenuButton icon={ImageIcon} label="Galeria de Imagens" tab="admin_image_gallery" />
+                                    <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
+
+                                    <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
+                                    <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
+                                    <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
+                                    <MenuButton icon={MessageSquare} label="Chat Interno" tab="admin_chat" />
+
+                                    <MenuSection title="Conteúdo & App" />
+                                    <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
+                                    {/* <MenuButton icon={Newspaper} label="Notícias" tab="admin_platform_news" /> */}
+                                    <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
+                                    <MenuButton icon={Layout} label="Banners/Slides" tab="admin_slides" />
+                                    <MenuButton icon={Construction} label="Manutenção" tab="admin_maintenance" />
+
+                                    <MenuSection title="Financeiro" />
+                                    <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
+                                    <MenuButton icon={Banknote} label="Cupons Globais (Plataforma)" tab="admin_global_coupons" />
+                                    <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
+                                    <MenuButton icon={CreditCard} label="Config. Empréstimos" tab="admin_loan_config" />
+                                    <MenuButton icon={DollarSign} label="Financeiro das Lojas" tab="admin_store_finance" />
+                                    <MenuButton icon={CreditCard} label="Gateways de Pagamento" tab="admin_payment_gateways" />
+                                    <MenuButton icon={Link2} label="Mercado Pago" tab="admin_mercadopago" />
+                                    <MenuButton icon={Smartphone} label="Configurar PIX" tab="admin_pix_config" />
+                                    <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
+                                    <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
+
+                                    <MenuSection title="Marketing & Conteúdo" />
+                                    <MenuButton icon={Megaphone} label="Indicações" tab="admin_referrals" />
+                                    <MenuButton icon={Bell} label="Notificações Globais" tab="admin_notifications" />
+                                    <MenuButton icon={Shield} label="Config. Seguros" tab="admin_insurance" />
+                                    <MenuButton icon={FileText} label="Institucional" tab="admin_institutional" />
+                                    <MenuButton icon={Newspaper} label="Novidades da Plataforma" tab="admin_platform_news" />
+
+                                    <MenuSection title="Configurações do Sistema" />
+                                    <MenuButton icon={Bot} label="Inteligência Artificial" tab="admin_ai_config" />
+                                    <MenuButton icon={Cloud} label="APIs & Integrações" tab="admin_api_keys" />
+                                    <MenuButton icon={Smartphone} label="App PWA" tab="admin_pwa" />
+                                    <MenuButton icon={Headphones} label="Suporte & Tickets" tab="admin_support" />
+                                    <MenuButton icon={Route} label="Config. Roteamento" tab="admin_routing" />
+                                    <MenuButton icon={TrendingUp} label="Gestão de Investimentos" tab="admin_investments" />
+                                </>
+                            )}
+
+                            {/* --- STORE PARTNER MENU --- */}
+                            {isStore && (
+                                <>
+                                    <MenuSection title="Minha Loja" />
+                                    <MenuButton icon={Power} label="Status da Loja" tab="store_status" />
+                                    <MenuButton icon={LayoutDashboard} label="Painel" tab="wallet" id="store-wallet-link" />
+                                    <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
+                                    <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
+                                    <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
+                                    <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
+                                    <MenuButton icon={MessageSquare} label="Chat com Clientes" tab="internal_chat" />
+                                    <MenuButton icon={MessageCircle} label="Chat c/ Entregadores" tab="store_drivers_chat" />
+                                    <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
+                                    <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
+                                    <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
+
+                                    <MenuSection title="Gestão" />
+                                    <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
+                                    <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
+                                    <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
+                                    <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
+                                    <MenuButton icon={Smartphone} label="Recebimento PIX" tab="store_receiving_payment" />
+                                    <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
+                                    <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
+                                    <MenuButton icon={Banknote} label="Promoções e Cupons" tab="store_promotions" />
+                                    <MenuButton icon={FileText} label="Comanda" tab="internal_orders" badge={pendingTicketsCount} />
+                                    <MenuButton icon={CreditCard} label="Financeiro ZéPay" tab="zepay_store" />
+                                    <MenuButton icon={Key} label="Docs API / Integradores" tab="store_api_docs" />
+                                </>
+                            )}
+
+                            {/* --- USER MENU --- */}
+                            {effectiveRole === 'user' && (
+                                <>
+                                    <MenuSection title="Minha Conta" />
+                                    <MenuButton icon={Home} label="Início" tab="home" />
+                                    <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
+                                    <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
+                                </>
+                            )}
+
+                            {/* --- SHARED DRIVER MENU (PARTNER + NORMAL) --- */}
+                            {(isPartner || isNormalDriver) && (
+                                <>
+                                    <MenuSection title="Plataforma Zé" />
+                                    <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
+                                    <MenuButton icon={Package} label="Pedidos da Loja" tab="associate_orders" />
+                                    <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
+                                    <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
+                                    <MenuButton icon={Star} label="Meu Score" tab="score" />
+                                    <MenuButton icon={History} label="Histórico Local" tab="local_history" />
+                                    <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
+                                    <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
+                                    <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
+                                    <MenuButton icon={Shield} label="Seguro Parceiro" tab="insurance" />
+
+                                    <MenuSection title="Crescimento" />
+                                    <MenuButton icon={Store} label="Lojas Vinculadas" tab="associate_driver" />
+
+                                    <MenuSection title="Ferramentas" />
+                                    <MenuButton icon={ListPlus} label="Lista de Rotas" tab="route_list" />
+                                    <MenuButton icon={FileCheck} label="Tarefas" tab="tasks" />
+                                    <MenuButton icon={BarChart3} label="Relatórios Pessoais" tab="reports" />
+                                    <MenuButton icon={Flame} label="Mapa de Calor" tab="heatmap" />
+                                    <MenuButton icon={MapPin} label="Meus Endereços" tab="addresses" />
+                                    <MenuButton icon={Zap} label="Ferramentas de Rota" tab="route_tools" />
+                                    <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
+                                </>
+                            )}
+
+
+                            {/* --- GENERAL MENU (ALL USERS) --- */}
+                            <MenuSection title="Geral" />
+                            {/* Exibe Ruas para todos EXCETO colaborador e usuário comum */}
+                            {effectiveRole !== 'collaborator' && effectiveRole !== 'user' && (
+                                <MenuButton icon={Map} label="Ruas" tab="streets_list" />
+                            )}
+
+                            {/* Loja de Peças apenas para Entregadores */}
+                            {(isPartner || isNormalDriver) && (
+                                <MenuButton icon={ShoppingBag} label="Loja de Peças" tab="shop" />
+                            )}
+
+                            <MenuButton icon={User} label="Meu Perfil" tab="profile" />
+                            <MenuButton icon={Headphones} label="Suporte" tab="support" />
+                            <MenuButton icon={HelpCircle} label="Perguntas Frequentes (FAQ)" tab="faq" />
+                            <MenuButton icon={Bell} label="Notificações" tab="notifications" />
+                            <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
+
+                            {/* Backup Nuvem apenas para quem opera offline (Entregadores/Lojistas) */}
+                            {effectiveRole !== 'user' && (
+                                <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
+                            )}
+
+                            <MenuButton icon={Info} label="Sobre o App" tab="about" />
+                            {effectiveRole === 'user' && ( // Apenas user vê instalar app aqui, para outros já tem fluxo próprio ou não precisa
+                                <MenuButton icon={Smartphone} label="Instalar App" tab="install_app" />
+                            )}
+
+                            {/* --- FOOTER ACTIONS --- */}
+                            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                                {/* Idioma removido: app opera exclusivamente em PT-BR */}
+                                <MenuButton icon={Share2} label="Compartilhar App" onClick={handleShareApp} />
+                                <MenuButton icon={Lock} label="Política de Privacidade" onClick={() => setShowPrivacy(true)} /> {/* DIRECT ACCESS */}
+
+                                {effectiveRole !== 'user' && (
+                                    <MenuButton icon={UserCheck} label="Verificar Status" onClick={() => navigate('status')} />
+                                )}
+                            </div>
+                        </div>
+
+                        <div className={`
                     border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50
                     p-4
                     ${isSidebarExpanded ? 'md:space-y-3' : 'md:space-y-2 md:p-2'}
                 `}>
-                        <div className={`flex items-center justify-between md:justify-center w-full ${isSidebarExpanded ? 'md:justify-between md:px-2 md:flex-row' : 'md:flex-col md:gap-2'}`}>
-                            <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-                            </button>
-                            <button
-                                onClick={() => navigate('settings')}
-                                aria-label="Configurações"
-                                className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
-                            >
-                                <Settings className="w-5 h-5" />
-                            </button>
-                            <button onClick={handleLogout} disabled={isLoggingOut} className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 disabled:opacity-50">
-                                {isLoggingOut ? <Loading variant="inline" size="sm" /> : <LogOut className="w-5 h-5" />}
-                            </button>
-                        </div>
-                        {isSidebarExpanded && (
-                            <div className="text-center text-[10px] text-gray-400">
-                                Versão 3.2.0 • Build 2025
+                            <div className={`flex items-center justify-between md:justify-center w-full ${isSidebarExpanded ? 'md:justify-between md:px-2 md:flex-row' : 'md:flex-col md:gap-2'}`}>
+                                <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                    {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                                </button>
+                                <button
+                                    onClick={() => navigate('settings')}
+                                    aria-label="Configurações"
+                                    className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                >
+                                    <Settings className="w-5 h-5" />
+                                </button>
+                                <button onClick={handleLogout} disabled={isLoggingOut} className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 disabled:opacity-50">
+                                    {isLoggingOut ? <Loading variant="inline" size="sm" /> : <LogOut className="w-5 h-5" />}
+                                </button>
                             </div>
-                        )}
+                            {isSidebarExpanded && (
+                                <div className="text-center text-[10px] text-gray-400">
+                                    Versão 3.2.0 • Build 2025
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
 
-            </SectionErrorBoundary>
-
-            {/* Main Content Area */}
-            <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
-                {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
-                <Suspense fallback={<Loading variant="container" size="md" />}>
-                    {renderContent()}
-                </Suspense>
-            </main>
-
-            {/* Modals */}
-            <EmergencyModal isOpen={showEmergency} onClose={() => setShowEmergency(false)} />
-            {showNotifications && (
-                <SectionErrorBoundary componentName="Notificações">
-                    <NotificationsPanel
-                        notifications={notifications}
-                        onMarkAsRead={markNotificationRead}
-                        onClose={() => setShowNotifications(false)}
-                    />
                 </SectionErrorBoundary>
-            )}
-            {showSettings && (
-                <SectionErrorBoundary componentName="Configurações de Notificação">
-                    <NotificationSettings onClose={() => setShowSettings(false)} />
-                </SectionErrorBoundary>
-            )}
-            {showPrivacy && (
-                <Suspense fallback={<Loading variant="container" size="md" />}>
-                    <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
-                </Suspense>
-            )}
 
-            {/* Botão Voltar ao Topo */}
-            {showScrollTop && (
-                <button
-                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                    className="fixed bottom-6 right-6 z-50 p-4 bg-brand-600 text-white rounded-full shadow-2xl hover:bg-brand-700 transition-all animate-in fade-in slide-in-from-bottom-4 active:scale-90"
-                    aria-label="Voltar ao Topo"
-                >
-                    <ChevronUp className="w-6 h-6" />
-                </button>
-            )}
+                {/* Main Content Area */}
+                <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
+                    {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
+                    <Suspense fallback={<Loading variant="container" size="md" />}>
+                        {renderContent()}
+                    </Suspense>
+                </main>
+
+                {/* Modals */}
+                <EmergencyModal isOpen={showEmergency} onClose={() => setShowEmergency(false)} />
+                {showNotifications && (
+                    <SectionErrorBoundary componentName="Notificações">
+                        <NotificationsPanel
+                            notifications={notifications}
+                            onMarkAsRead={markNotificationRead}
+                            onClose={() => setShowNotifications(false)}
+                        />
+                    </SectionErrorBoundary>
+                )}
+                {showSettings && (
+                    <SectionErrorBoundary componentName="Configurações de Notificação">
+                        <NotificationSettings onClose={() => setShowSettings(false)} />
+                    </SectionErrorBoundary>
+                )}
+                {showPrivacy && (
+                    <Suspense fallback={<Loading variant="container" size="md" />}>
+                        <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
+                    </Suspense>
+                )}
+
+                {/* Botão Voltar ao Topo */}
+                {showScrollTop && (
+                    <button
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="fixed bottom-6 right-6 z-50 p-4 bg-brand-600 text-white rounded-full shadow-2xl hover:bg-brand-700 transition-all animate-in fade-in slide-in-from-bottom-4 active:scale-90"
+                        aria-label="Voltar ao Topo"
+                    >
+                        <ChevronUp className="w-6 h-6" />
+                    </button>
+                )}
+            </div>
         </div>
     );
 };
