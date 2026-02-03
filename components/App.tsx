@@ -1185,7 +1185,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         <p className={`text-[10px] font-bold text-gray-400 uppercase ml-3 mt-4 mb-2 tracking-wider transition-opacity duration-300 ${!isSidebarExpanded ? 'md:hidden' : ''}`}>{title}</p>
     );
 
-    const storeBottomNavItems = [
+    const storeBottomNavItems: Array<{ key: string; label: string; tab?: ActiveTab; onClick?: () => void; icon: any }> = [
         { key: 'home', label: 'Início', tab: 'wallet' as ActiveTab, icon: Home },
         { key: 'orders', label: 'Pedidos', tab: 'history' as ActiveTab, icon: ClipboardList },
         { key: 'products', label: 'Produtos', tab: 'store_catalog' as ActiveTab, icon: ShoppingBag },
@@ -1273,7 +1273,13 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         return (
                             <button
                                 key={item.key}
-                                onClick={() => item.onClick ? item.onClick() : navigate(item.tab)}
+                                onClick={() => {
+                                    if (item.onClick) {
+                                        item.onClick();
+                                    } else if (item.tab) {
+                                        navigate(item.tab);
+                                    }
+                                }}
                                 className={`flex flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all ${isActive ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                                 aria-current={isActive ? 'page' : undefined}
                             >
@@ -1323,6 +1329,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     // Verificação de rotas públicas internas que devem renderizar sem sidebar (Full Width)
     const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
     const isPublicTab = publicTabs.includes(activeTab);
+    const showStoreBottomNav = isStore && !isPublicTab;
 
     if (isPublicTab) return (
         <div className={theme === 'dark' ? 'dark' : ''}>
@@ -1657,14 +1664,14 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 </SectionErrorBoundary>
 
                 {/* Main Content Area */}
-                <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'} ${isStore ? 'pb-24 md:pb-6' : 'pb-6'}`}>
+                <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'} ${showStoreBottomNav ? 'pb-24 md:pb-6' : 'pb-6'}`}>
                     {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
                     <Suspense fallback={<Loading variant="container" size="md" />}>
                         {renderContent()}
                     </Suspense>
                 </main>
 
-                {isStore && !isPublicTab && <StoreBottomNav />}
+                {showStoreBottomNav && <StoreBottomNav />}
                 {isStore && isStoreMoreOpen && <StoreMoreSheet />}
 
                 {/* Modals */}
