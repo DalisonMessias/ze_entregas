@@ -7,6 +7,7 @@ import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
 import { StoreDeliverySettings as IDeliverySettings, StoreNeighborhoodFee } from '../types';
 import { useDialog } from '../utils/dialogService';
+import { formatMinutes } from '../utils/formatMinutes';
 import { ProfileValidationAlert } from './ProfileValidationAlert';
 import { validateStoreProfile } from '../utils/profileValidation';
 
@@ -144,6 +145,9 @@ export const StoreDeliverySettings: React.FC = () => {
         }
     };
 
+    const deliveryMinLabel = formatMinutes(settings.delivery_time_min);
+    const deliveryMaxLabel = formatMinutes(settings.delivery_time_max);
+
     if (loading) return <div className="flex justify-center p-8"><Loading variant="container" size="md" message="Carregando configurações de entrega..." /></div>;
 
     if (profileValid === false) {
@@ -271,17 +275,29 @@ export const StoreDeliverySettings: React.FC = () => {
                             </div>
                             <CustomInput
                                 label="Mínimo (min)"
-                                type="number"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 value={settings.delivery_time_min !== undefined && settings.delivery_time_min !== null ? String(settings.delivery_time_min) : ''}
-                                onChange={e => setSettings(prev => ({ ...prev, delivery_time_min: parseInt(e.target.value) || 0 }))}
+                                onChange={e => {
+                                    const digits = e.target.value.replace(/\D/g, '');
+                                    setSettings(prev => ({ ...prev, delivery_time_min: digits ? parseInt(digits, 10) : 0 }));
+                                }}
                                 placeholder="30"
+                                helperText={deliveryMinLabel ? `Equivale a ${deliveryMinLabel}` : 'Ex: 30 min'}
                             />
                             <CustomInput
                                 label="Máximo (min)"
-                                type="number"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 value={settings.delivery_time_max !== undefined && settings.delivery_time_max !== null ? String(settings.delivery_time_max) : ''}
-                                onChange={e => setSettings(prev => ({ ...prev, delivery_time_max: parseInt(e.target.value) || 0 }))}
+                                onChange={e => {
+                                    const digits = e.target.value.replace(/\D/g, '');
+                                    setSettings(prev => ({ ...prev, delivery_time_max: digits ? parseInt(digits, 10) : 0 }));
+                                }}
                                 placeholder="60"
+                                helperText={deliveryMaxLabel ? `Equivale a ${deliveryMaxLabel}` : 'Ex: 60 min'}
                             />
                         </div>
 

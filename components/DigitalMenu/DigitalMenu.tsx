@@ -8,6 +8,7 @@ import { CustomInput } from '../CustomInput';
 import { StreetSearchSelect } from '../StreetSearchSelect';
 import { CitySearchSelect } from '../CitySearchSelect';
 import { useDialog } from '../../utils/dialogService';
+import { formatMinutes, formatMinuteRange } from '../../utils/formatMinutes';
 import { StoreRatingModal } from './StoreRatingModal';
 import { PixPaymentModal } from '../PixPaymentModal';
 import { ShippingRulesModal } from './ShippingRulesModal';
@@ -626,6 +627,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     // 4. Delivery Availability
     const canDeliver = useMemo(() => deliverySettings?.is_own_delivery_enabled || deliverySettings?.is_partner_delivery_enabled, [deliverySettings]);
     const canPickup = useMemo(() => deliverySettings?.is_pickup_enabled, [deliverySettings]);
+    const preparationLabel = formatMinuteRange(store?.preparation_time_min, store?.preparation_time_max) || formatMinutes(store?.preparation_time);
+    const deliveryLabel = formatMinuteRange(deliverySettings?.delivery_time_min, deliverySettings?.delivery_time_max);
 
     // --- RENDER ---
 
@@ -753,12 +756,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     <Clock className="w-4 h-4 text-gray-500 dark:text-gray-300" /> {store.opening_hours}
                                 </div>
                             )}
-                            {(store.preparation_time_min || store.preparation_time_max || store.preparation_time) && (
+                            {preparationLabel && (
                                 <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-200 border border-amber-200/60 dark:border-amber-800/60 px-3 py-1.5 rounded-full shadow-sm">
                                     <ChefHat className="w-4 h-4" />
-                                    {store.preparation_time_min || store.preparation_time_max
-                                        ? `Preparo: ${store.preparation_time_min || 0}-${store.preparation_time_max || 0} min`
-                                        : `Preparo: ${store.preparation_time} min`}
+                                    Preparo: {preparationLabel}
                                 </div>
                             )}
                             {(canDeliver || canPickup) && (
@@ -776,10 +777,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     )}
                                 </div>
                             )}
-                            {canDeliver && deliverySettings && (
+                            {canDeliver && deliveryLabel && (
                                 <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">
                                     <Clock className="w-4 h-4 text-gray-500 dark:text-gray-300" />
-                                    {deliverySettings.delivery_time_min}-{deliverySettings.delivery_time_max} min
+                                    {deliveryLabel}
                                 </div>
                             )}
                             <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">

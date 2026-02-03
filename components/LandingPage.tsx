@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Shield, Zap, Star, Instagram, Facebook, Twitter, Linkedin, ChevronLeft, ChevronRight, ArrowRight, Activity, DollarSign, Users, BarChart, Store, Bike, CheckCircle, Smartphone, Download, BarChart3, MessageCircle, Gift, Bell, Map, Headphones, Newspaper, Wallet, Megaphone, ShoppingBag, Bot, Navigation, MapPin, X } from 'lucide-react';
 import { Button } from './Button';
 import { TermsOfService } from './TermsOfService';
@@ -237,7 +237,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                         <LandingCitySelector
                             value={selectedCity}
                             onSelect={handleCitySelect}
-                            placeholder="Qual sua cidade ou endereço?"
+                            placeholder="Em qual cidade você está?"
                         />
 
                         {/* Trust Badges or Microcopy */}

@@ -15,6 +15,7 @@ import * as cloud from '../services/cloud';
 import { PartnerProfile, City } from '../types';
 import { formatPhoneNumber } from '../utils/mapHelpers';
 import { useDialog } from '../utils/dialogService';
+import { formatMinutes } from '../utils/formatMinutes';
 
 // --- TOAST COMPONENT ---
 
@@ -292,6 +293,9 @@ export const StoreSettings: React.FC = () => {
     const handleToggleOpen = () => {
         setForm(prev => ({ ...prev, is_open: !prev.is_open }));
     };
+
+    const preparationMinLabel = formatMinutes(form.preparation_time_min);
+    const preparationMaxLabel = formatMinutes(form.preparation_time_max);
 
     const handleDetectPrinter = async () => {
         setDetectingPrinter(true);
@@ -580,7 +584,7 @@ export const StoreSettings: React.FC = () => {
                                         onChange={e => handleChange('preparation_time_min', e.target.value.replace(/\D/g, ''))}
                                         placeholder="Min"
                                         icon={Zap}
-                                        helperText="Ex: 10 min"
+                                        helperText={preparationMinLabel ? `Equivale a ${preparationMinLabel}` : 'Ex: 10 min'}
                                     />
                                     <CustomInput
                                         label="Preparo Máximo (min)"
@@ -591,7 +595,7 @@ export const StoreSettings: React.FC = () => {
                                         onChange={e => handleChange('preparation_time_max', e.target.value.replace(/\D/g, ''))}
                                         placeholder="Max"
                                         icon={Zap}
-                                        helperText="Ex: 20 min"
+                                        helperText={preparationMaxLabel ? `Equivale a ${preparationMaxLabel}` : 'Ex: 20 min'}
                                     />
                                     <CustomInput
                                         label="Telefone / WhatsApp da Loja"
