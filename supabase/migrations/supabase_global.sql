@@ -11778,4 +11778,25 @@ CREATE POLICY "Admins can update access logs" ON public.admin_store_access_logs
 GRANT ALL ON public.admin_store_access_logs TO authenticated;
 GRANT ALL ON public.admin_store_access_logs TO service_role;
 
+-- ==================================================================
+-- SEED FAQ PUBLICO (Perguntas Frequentes)
+-- ==================================================================
+
+INSERT INTO public.institutional_contents (
+    page_key,
+    title,
+    description,
+    slug,
+    status,
+    is_active,
+    order_index
+) VALUES
+('faq', 'Como fazer um pedido?', 'Escolha a loja, adicione os itens ao carrinho e finalize o pedido. Voce recebe atualizacoes em tempo real.', 'como-fazer-um-pedido', 'published', TRUE, 1),
+('faq', 'Quais formas de pagamento aceitamos?', 'Aceitamos PIX e cartao. Algumas lojas tambem aceitam dinheiro. As opcoes aparecem no checkout.', 'formas-de-pagamento', 'published', TRUE, 2),
+('faq', 'Como acompanhar meu pedido?', 'Acompanhe pelo app na area "Meus Pedidos" ou pelo link de rastreamento enviado apos a compra.', 'acompanhar-meu-pedido', 'published', TRUE, 3),
+('faq', 'Esqueci minha senha', 'Na tela de login, clique em "Esqueci minha senha" e siga as instrucoes enviadas por e-mail.', 'esqueci-minha-senha', 'published', TRUE, 4),
+('faq', 'Em quais cidades atendemos?', 'Digite sua cidade na busca da home para ver as lojas disponiveis na sua regiao.', 'cidades-atendidas', 'published', TRUE, 5),
+('faq', 'Sou lojista ou entregador, como entrar?', 'Escolha o tipo de cadastro na home e preencha seus dados para iniciar o processo.', 'como-entrar', 'published', TRUE, 6)
+ON CONFLICT (slug) DO NOTHING;
+
 
