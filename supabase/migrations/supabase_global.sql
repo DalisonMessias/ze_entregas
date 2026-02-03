@@ -11588,3 +11588,45 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_coupons TO authenticated;
 GRANT SELECT ON public.store_promotions TO anon;
 GRANT SELECT ON public.promotion_products TO anon;
 GRANT SELECT ON public.store_coupons TO anon;
+
+-- ==================================================================
+-- 4.x SETTINGS & FEES (Adicionado para persistência real de taxas)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.partner_fee_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    global_tax_fixed NUMERIC(10, 2) DEFAULT 0.50,
+    global_tax_percent NUMERIC(10, 2) DEFAULT 2.0,
+    super_store_monthly_fee NUMERIC(10, 2) DEFAULT 99.00,
+    association_fee NUMERIC(10, 2) DEFAULT 10.00,
+    base_delivery_value NUMERIC(10, 2) DEFAULT 5.00,
+    base_delivery_km NUMERIC(10, 2) DEFAULT 3.00,
+    extra_km_value NUMERIC(10, 2) DEFAULT 1.50,
+    additional_stop_fee NUMERIC(10, 2) DEFAULT 2.00,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Garantir apenas uma linha (Singleton)
+CREATE UNIQUE INDEX IF NOT EXISTS partner_fee_settings_singleton_idx ON public.partner_fee_settings ((TRUE));
+
+-- Trigger update_at
+DROP TRIGGER IF EXISTS handle_partner_fee_settings_updated_at ON public.partner_fee_settings;
+CREATE TRIGGER handle_partner_fee_settings_updated_at BEFORE UPDATE ON public.partner_fee_settings
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS
+ALTER TABLE public.partner_fee_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read access to fees" ON public.partner_fee_settings;
+CREATE POLICY "Public read access to fees" ON public.partner_fee_settings FOR SELECT USING (TRUE);
+
+DROP POLICY IF EXISTS "Admin write access to fees" ON public.partner_fee_settings;
+CREATE POLICY "Admin write access to fees" ON public.partner_fee_settings FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.partner_fee_settings TO anon, authenticated;
+GRANT ALL ON public.partner_fee_settings TO service_role;
+
+-- Inserir valores padrão se não existir
+INSERT INTO public.partner_fee_settings (base_delivery_value, extra_km_value)
+VALUES (5.00, 1.50)
+ON CONFLICT DO NOTHING;

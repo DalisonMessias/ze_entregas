@@ -1,26 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Bike, Zap, Shield, Map, History, ArrowRight, CheckCircle, Navigation, Wallet, Clock, TrendingUp, Smartphone } from 'lucide-react';
+import { Bike, Zap, Shield, Map, History, ArrowRight, CheckCircle, Navigation, Wallet, Clock, TrendingUp, Smartphone, Star, Crown, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 import { Logo } from './Logo';
-import * as cloud from '../services/cloud';
+import { getPublicFeeSettings, getPlatformStats } from '../services/cloud';
 import { PartnerFeeSettings } from '../types';
 
-export const PartnerDelivery: React.FC = () => {
+
+export const PartnerDelivery = () => {
+    // const navigate = useNavigate(); // Removido pois não estamos usando react-router-dom neste projeto
     const [scrolled, setScrolled] = useState(false);
     const [feeSettings, setFeeSettings] = useState<PartnerFeeSettings | null>(null);
+    const [platformStats, setPlatformStats] = useState<{ cities: number | null, partners: number | null, deliveries: number | null } | null>(null);
 
     useEffect(() => {
         const handleScroll = () => setScrolled(window.scrollY > 20);
         window.addEventListener('scroll', handleScroll, { passive: true });
 
-        const loadFees = async () => {
+        const loadData = async () => {
             try {
-                const fees = await cloud.getPublicFeeSettings();
+                // Carregar em paralelo para performance
+                const [fees, stats] = await Promise.all([
+                    getPublicFeeSettings(),
+                    getPlatformStats()
+                ]);
                 setFeeSettings(fees);
-            } catch (e) { }
+                setPlatformStats(stats);
+            } catch (e) {
+                console.error('Error loading partner data:', e);
+            }
         };
 
-        loadFees();
+        loadData();
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
@@ -48,15 +58,16 @@ export const PartnerDelivery: React.FC = () => {
                             <>
                                 <Button
                                     onClick={onLoginClick}
-                                    className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl transition-all"
+                                    className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold text-xs sm:text-base px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all"
                                 >
                                     Entrar
                                 </Button>
                                 <Button
                                     onClick={onSignupClick}
-                                    className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl hidden md:block transition-all"
+                                    className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold text-xs sm:text-base px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all"
                                 >
-                                    Cadastrar
+                                    <span className="sm:hidden">Cadastro</span>
+                                    <span className="hidden sm:inline">Cadastrar</span>
                                 </Button>
                             </>
                         ) : (
@@ -64,112 +75,179 @@ export const PartnerDelivery: React.FC = () => {
                                 <Button
                                     onClick={onLoginClick}
                                     variant="ghost"
-                                    className="text-white font-bold hover:bg-white/10 hover:text-white"
+                                    className="text-white font-bold hover:bg-white/10 hover:text-white text-xs sm:text-base px-2 sm:px-4"
                                 >
                                     Entrar
                                 </Button>
                                 <Button
                                     onClick={onSignupClick}
                                     variant="ghost"
-                                    className="text-white font-bold hover:bg-white/10 hover:text-white hidden md:block"
+                                    className="text-white font-bold hover:bg-white/10 hover:text-white text-xs sm:text-base px-2 sm:px-4 border border-white/20 sm:border-none rounded-lg"
                                 >
-                                    Cadastrar
+                                    <span className="sm:hidden">Cadastro</span>
+                                    <span className="hidden sm:inline">Cadastrar</span>
                                 </Button>
                             </>
                         )}
                     </div>
                 </div>
             </nav>
-            {/* Hero Section */}
-            <header className="relative pt-32 pb-20 px-4 overflow-hidden bg-green-600">
+
+            {/* Hero Section Reformulado */}
+            <header className="relative pt-32 pb-24 px-4 overflow-hidden bg-gradient-to-br from-green-600 to-green-700">
                 <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
                 <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-                <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-green-400/20 rounded-full blur-3xl delay-1000 animate-pulse"></div>
+                <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-white dark:from-gray-950 to-transparent"></div>
 
                 <div className="max-w-6xl mx-auto relative z-10 text-center">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-bold mb-8 border border-white/20">
-                        <Bike className="w-4 h-4 text-white" />
-                        Faça seu próprio horário e ganhe mais
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-bold mb-8 border border-white/20 shadow-lg">
+                        <Crown className="w-4 h-4 text-yellow-300" />
+                        Seja dono da sua própria jornada
                     </div>
-                    <h1 className="text-5xl md:text-7xl font-black text-white mb-8 leading-tight tracking-tighter">
-                        Entregue com a <br /><span className="text-green-100">Partner Delivery</span>
+                    <h1 className="text-5xl md:text-7xl font-black text-white mb-8 leading-tight tracking-tighter drop-shadow-lg">
+                        Sua liberdade <br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-200 to-white">tem valor aqui.</span>
                     </h1>
-                    <p className="text-xl md:text-2xl text-green-50 mb-12 max-w-3xl mx-auto leading-relaxed">
-                        A plataforma que valoriza o entregador. Ganhe dinheiro com total liberdade, rotas inteligentes e transparência absoluta nos pagamentos.
+                    <p className="text-xl md:text-2xl text-green-50 mb-12 max-w-3xl mx-auto leading-relaxed font-medium">
+                        Escolha como quer trabalhar: comece com liberdade total ou torne-se um Associado Elite para desbloquear benefícios exclusivos.
                     </p>
-                    <div className="flex flex-col sm:flex-row justify-center gap-6">
-                        <Button onClick={onSignupClick} className="bg-white !text-green-700 hover:bg-white/90 py-6 px-10 text-lg rounded-2xl shadow-xl shadow-green-900/40 font-black flex items-center gap-3">
-                            Quero Ser Entregador <ArrowRight className="w-6 h-6 !text-green-700" />
+                    <div className="flex flex-col sm:flex-row justify-center gap-4">
+                        <Button onClick={onSignupClick} className="bg-white !text-green-700 hover:bg-gray-100 py-4 px-8 text-lg rounded-2xl shadow-xl font-black flex items-center justify-center gap-2 transform hover:scale-105 transition-all">
+                            Quero me Cadastrar <ArrowRight className="w-5 h-5 !text-green-700" />
+                        </Button>
+                        <Button onClick={() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' })} variant="outline" className="border-white/30 text-white hover:bg-white/10 py-4 px-8 text-lg rounded-2xl font-bold backdrop-blur-sm">
+                            Ver Benefícios
                         </Button>
                     </div>
                 </div>
             </header>
 
-            {/* Stats Grid */}
-            <section className="py-16 bg-white dark:bg-gray-950 px-4 border-b border-gray-100 dark:border-gray-800">
+            {/* Comparativo de Níveis (Nova Seção) */}
+            <section id="plans" className="py-20 px-4 bg-white dark:bg-gray-950">
                 <div className="max-w-6xl mx-auto">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-                        {[
-                            { value: `R$ ${feeSettings?.base_delivery_value || '4,00 a 7'},00`, label: "Por Entrega" },
-                            { value: "0% Taxa", label: "Plataforma Grátis" },
-                            { value: "D+0", label: "Saque Instantâneo" },
-                            { value: "Seguro", label: "Proteção Opcional" }
-                        ].map((stat, i) => (
-                            <div key={i} className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                                <p className="text-3xl md:text-4xl font-black text-green-600 mb-1">{stat.value}</p>
-                                <p className="text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest text-xs">{stat.label}</p>
+                    <div className="text-center mb-16">
+                        <h2 className="text-3xl md:text-5xl font-black mb-4 text-gray-900 dark:text-white tracking-tight">Escolha seu nível</h2>
+                        <p className="text-lg text-gray-500 dark:text-gray-400">Comece grátis e evolua conforme seu desempenho.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                        {/* Card Entregador Padrão */}
+                        <div className="bg-gray-50 dark:bg-gray-900 rounded-[40px] p-8 md:p-12 border border-gray-100 dark:border-gray-800 relative">
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Entregador Padrão</h3>
+                            <p className="text-gray-500 font-medium mb-8">Ideal para renda extra com total flexibilidade.</p>
+                            <div className="text-4xl font-black text-gray-900 dark:text-white mb-8">Grátis<span className="text-base font-medium text-gray-400">/sempre</span></div>
+
+                            <ul className="space-y-4 mb-10">
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                    <span className="font-bold text-gray-700 dark:text-gray-300">Pagamentos D+1 (PIX)</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                    <span className="font-bold text-gray-700 dark:text-gray-300">Acesso a todas as regiões</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                    <span className="font-bold text-gray-700 dark:text-gray-300">Suporte via Chat</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                    <span className="font-bold text-gray-700 dark:text-gray-300">Sem horários fixos</span>
+                                </li>
+                            </ul>
+                            <Button onClick={onSignupClick} variant="outline" className="w-full py-4 rounded-xl font-black border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800">
+                                Começar Grátis
+                            </Button>
+                        </div>
+
+                        {/* Card Associado Elite */}
+                        <div className="bg-white dark:bg-gray-900 rounded-[40px] p-1 relative border-2 border-transparent bg-clip-padding" style={{ backgroundImage: 'linear-gradient(white, white), linear-gradient(to bottom right, #22c55e, #15803d)', backgroundOrigin: 'border-box', backgroundClip: 'content-box, border-box' }}>
+                            {/* Gradient Border Glow Mock - usando div absoluta para garantir visual */}
+                            <div className="absolute inset-0 rounded-[40px] border-2 border-green-500 opacity-50 blur-sm -z-10"></div>
+
+                            <div className="bg-white dark:bg-gray-900 rounded-[36px] p-8 md:p-12 h-full relative overflow-hidden">
+                                <div className="absolute top-0 right-0 bg-green-500 text-white text-xs font-black px-4 py-2 rounded-bl-2xl">
+                                    RECOMENDADO
+                                </div>
+                                <div className="absolute top-0 left-0 w-full h-24 bg-green-500/5 blur-3xl"></div>
+
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Crown className="w-6 h-6 text-yellow-500 fill-current" />
+                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white">Parceiro Associado</h3>
+                                </div>
+                                <p className="text-green-600 font-medium mb-8">Para quem quer viver de entregas e maximizar ganhos.</p>
+                                <div className="text-4xl font-black text-gray-900 dark:text-white mb-8">VIP<span className="text-base font-medium text-gray-400">/acesso</span></div>
+
+                                <ul className="space-y-4 mb-10">
+                                    <li className="flex items-center gap-3">
+                                        <div className="bg-green-100 dark:bg-green-900/30 p-1 rounded-full"><CheckCircle className="w-4 h-4 text-green-600" /></div>
+                                        <span className="font-bold text-gray-900 dark:text-white">Saques Instantâneos (D+0)</span>
+                                    </li>
+                                    <li className="flex items-center gap-3">
+                                        <div className="bg-green-100 dark:bg-green-900/30 p-1 rounded-full"><CheckCircle className="w-4 h-4 text-green-600" /></div>
+                                        <span className="font-bold text-gray-900 dark:text-white">Taxas Reduzidas (Ganhe mais)</span>
+                                    </li>
+                                    <li className="flex items-center gap-3">
+                                        <div className="bg-green-100 dark:bg-green-900/30 p-1 rounded-full"><CheckCircle className="w-4 h-4 text-green-600" /></div>
+                                        <span className="font-bold text-gray-900 dark:text-white">Prioridade na Fila de Pedidos</span>
+                                    </li>
+                                    <li className="flex items-center gap-3">
+                                        <div className="bg-green-100 dark:bg-green-900/30 p-1 rounded-full"><CheckCircle className="w-4 h-4 text-green-600" /></div>
+                                        <span className="font-bold text-gray-900 dark:text-white">Seguro de Vida e Acidentes Completo</span>
+                                    </li>
+                                    <li className="flex items-center gap-3">
+                                        <div className="bg-green-100 dark:bg-green-900/30 p-1 rounded-full"><CheckCircle className="w-4 h-4 text-green-600" /></div>
+                                        <span className="font-bold text-gray-900 dark:text-white">Suporte WhatsApp 24h Exclusivo</span>
+                                    </li>
+                                </ul>
+                                <Button onClick={onSignupClick} className="w-full py-4 rounded-xl font-black bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-500/30">
+                                    Quero ser Associado
+                                </Button>
                             </div>
-                        ))}
+                        </div>
                     </div>
                 </div>
             </section>
 
-            {/* Advantages Section */}
+            {/* Advantages Grid */}
             <section className="py-24 px-4 bg-gray-50 dark:bg-gray-900/50">
                 <div className="max-w-7xl mx-auto">
-                    <div className="text-center mb-20">
-                        <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">O que faz a Partner ser diferente?</h2>
-                        <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-                            Tecnologia de ponta a serviço de quem realmente faz a entrega acontecer.
-                        </p>
-                    </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         {[
                             {
                                 icon: <Navigation className="w-10 h-10" />,
-                                title: "Rotas Inteligentes",
-                                description: "Menos tempo no trânsito, mais dinheiro no bolso. Nosso algoritmo otimiza cada entrega para você rodar menos.",
+                                title: "Rotas Otimizadas",
+                                description: "Nosso algoritmo garante que você rode menos e ganhe mais, agrupando entregas próximas.",
                                 color: "bg-blue-500"
                             },
                             {
                                 icon: <Wallet className="w-10 h-10" />,
                                 title: "ZeBank Integrado",
-                                description: "Receba seus pagamentos instantaneamente. Controle seus ganhos e faça saques via PIX em segundos.",
+                                description: "Conta digital gratuita integrada ao app. Controle ganhos, faça recargas e pague contas.",
                                 color: "bg-emerald-500"
+                            },
+                            {
+                                icon: <Shield className="w-10 h-10" />,
+                                title: "Segurança Total",
+                                description: "Monitoramento em tempo real e seguro contra acidentes para todos os parceiros ativos.",
+                                color: "bg-orange-500"
                             },
                             {
                                 icon: <Smartphone className="w-10 h-10" />,
                                 title: "App Nota 10",
-                                description: "Interface intuitiva, mapa de calor com as melhores zonas e todos os detalhes do pedido na ponta do dedo.",
+                                description: "Interface intuitiva, mapa de calor e modo escuro. Feito de entregador para entregador.",
                                 color: "bg-purple-500"
                             },
                             {
-                                icon: <Shield className="w-10 h-10" />,
-                                title: "Seguro Parceiro",
-                                description: "Proteção para você e seu veículo durante as entregas. Segurança em primeiro lugar, sempre.",
-                                color: "bg-orange-500"
-                            },
-                            {
                                 icon: <Clock className="w-10 h-10" />,
-                                title: "Liberdade Real",
-                                description: "Trabalhe quando quiser, onde quiser. Você é o chefe da sua própria jornada e meta de ganhos.",
+                                title: "Flexibilidade",
+                                description: "Sem chefe, sem horário. Ligue o app quando quiser trabalhar e desligue quando terminar.",
                                 color: "bg-indigo-500"
                             },
                             {
                                 icon: <TrendingUp className="w-10 h-10" />,
-                                title: "Plano de Carreira",
-                                description: "Cresça na plataforma! Parceiros de Elite têm taxas menores e prioridade nas melhores corridas.",
+                                title: "Bonus e Metas",
+                                description: "Campanhas semanais de incentivo e taxas dinâmicas em horários de pico e chuva.",
                                 color: "bg-green-500"
                             }
                         ].map((item, idx) => (
@@ -178,7 +256,7 @@ export const PartnerDelivery: React.FC = () => {
                                     {item.icon}
                                 </div>
                                 <h3 className="text-2xl font-black mb-4">{item.title}</h3>
-                                <p className="text-gray-500 dark:text-gray-400 leading-relaxed">
+                                <p className="text-gray-500 dark:text-gray-400 leading-relaxed font-medium">
                                     {item.description}
                                 </p>
                             </div>
@@ -187,25 +265,52 @@ export const PartnerDelivery: React.FC = () => {
                 </div>
             </section>
 
-            {/* Testimony Section */}
-            <section className="py-24 px-4">
-                <div className="max-w-4xl mx-auto bg-green-600 rounded-[50px] p-12 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-2xl"></div>
-                    <div className="relative z-10 flex flex-col items-center text-center">
-                        <History className="w-16 h-16 mb-8 text-green-200" />
-                        <p className="text-2xl md:text-3xl font-medium mb-10 leading-relaxed italic">
-                            "A Partner mudou a forma como eu trabalho. As taxas são as melhores do mercado e o PIX cai na hora. Rodar com segurança e liberdade faz toda a diferença no meu dia."
-                        </p>
-                        <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center">
-                                <Bike className="w-8 h-8" />
+            {/* Stats Section Simplified */}
+            <section className="py-20 bg-white dark:bg-gray-950 px-4">
+                <div className="max-w-4xl mx-auto text-center">
+                    <h2 className="text-3xl font-black mb-12">Transparência em números</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                        {[
+                            {
+                                value: feeSettings ? `R$ ${feeSettings.base_delivery_value.toFixed(2).replace('.', ',')}` : '...',
+                                label: "Mínimo por Entrega"
+                            },
+                            {
+                                value: feeSettings ? `R$ ${feeSettings.extra_km_value.toFixed(2).replace('.', ',')}` : '...',
+                                label: "Km Rodado Adicional"
+                            },
+                            { value: "100%", label: "Da Gorjeta é Sua" },
+                            { value: "24h", label: "Suporte Humano" }
+                        ].map((stat, i) => (
+                            <div key={i} className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-3xl">
+                                <p className="text-3xl font-black text-green-600 mb-1">{stat.value}</p>
+                                <p className="text-gray-500 dark:text-gray-400 font-bold uppercase text-[10px] tracking-widest">{stat.label}</p>
                             </div>
-                            <div className="text-left">
-                                <p className="font-bold text-xl">Carlos Silva</p>
-                                <p className="text-green-100 text-sm">Entregador Parceiro Elite</p>
-                            </div>
+                        ))}
+                    </div>
+
+                    {/* New Platform Stats Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12 pt-12 border-t border-gray-100 dark:border-gray-800">
+                        <div className="flex flex-col items-center">
+                            <p className="text-4xl font-black text-gray-900 dark:text-white mb-1">
+                                {platformStats?.cities ? `+${platformStats.cities}` : '...'}
+                            </p>
+                            <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Cidades Atendidas</p>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <p className="text-4xl font-black text-gray-900 dark:text-white mb-1">
+                                {platformStats?.partners ? `+${platformStats.partners}` : '...'}
+                            </p>
+                            <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Parceiros Ativos</p>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <p className="text-4xl font-black text-gray-900 dark:text-white mb-1">
+                                {platformStats?.deliveries ? `+${platformStats.deliveries}` : '...'}
+                            </p>
+                            <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Entregas Realizadas</p>
                         </div>
                     </div>
+                    <p className="text-sm text-gray-400 mt-8 italic">*Valores base podem variar conforme cidade e demanda dinâmica.</p>
                 </div>
             </section>
 
@@ -213,22 +318,21 @@ export const PartnerDelivery: React.FC = () => {
             <section className="py-24 px-4 bg-gray-900 relative overflow-hidden text-center">
                 <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
                 <div className="max-w-4xl mx-auto relative z-10">
-                    <h2 className="text-4xl md:text-6xl font-black text-white mb-8">Ligue o motor <br />e faça o seu futuro.</h2>
+                    <h2 className="text-4xl md:text-6xl font-black text-white mb-8">Pronto para começar?</h2>
                     <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto font-medium">
-                        O processo de cadastro leva menos de 5 minutos. Comece a entregar ainda hoje.
+                        Baixe o app, faça seu cadastro em 5 minutos e aguarde a aprovação.
                     </p>
                     <Button onClick={onSignupClick} className="bg-green-600 text-white hover:bg-green-700 py-6 px-12 text-2xl rounded-3xl shadow-2xl font-black transition-transform hover:scale-105 active:scale-95 border-none">
-                        Cadastrar Meu Veículo
+                        Cadastrar Agora
                     </Button>
                 </div>
             </section>
 
-            {/* Simple Footer */}
-            <footer className="py-12 border-t border-gray-100 dark:border-gray-800 text-center">
-                <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <footer className="py-12 border-t border-gray-100 dark:border-gray-800 text-center bg-white dark:bg-gray-950">
+                <div className="max-w-7xl mx-auto px-4 flex flex-col items-center gap-4">
                     <Logo className="h-6 w-auto opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all" />
                     <p className="text-gray-400 text-sm font-medium uppercase tracking-widest">
-                        © {new Date().getFullYear()} Partner Delivery &bull; Zé Entregas Corp
+                        © {new Date().getFullYear()} &bull; Zé Entregas
                     </p>
                 </div>
             </footer>

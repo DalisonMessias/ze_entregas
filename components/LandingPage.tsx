@@ -98,20 +98,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                         onClick={() => window.location.href = '/home'}
                     />
                     {!isAuthenticated ? (
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 sm:gap-4">
                             {scrolled ? (
                                 <>
                                     <Button
                                         onClick={onLoginClick}
-                                        className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl transition-all"
+                                        className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold text-xs sm:text-base px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all"
                                     >
                                         Entrar
                                     </Button>
                                     <Button
                                         onClick={() => onSignupClick()}
-                                        className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold px-6 rounded-xl hidden md:block transition-all"
+                                        className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold text-xs sm:text-base px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all"
                                     >
-                                        Cadastrar
+                                        <span className="sm:hidden">Criar Conta</span>
+                                        <span className="hidden sm:inline">Cadastrar</span>
                                     </Button>
                                 </>
                             ) : (
@@ -119,16 +120,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                                     <Button
                                         onClick={onLoginClick}
                                         variant="ghost"
-                                        className="text-white font-bold hover:bg-white/10 hover:text-white"
+                                        className="text-white font-bold hover:bg-white/10 hover:text-white text-xs sm:text-base px-2 sm:px-4"
                                     >
                                         Entrar
                                     </Button>
                                     <Button
                                         onClick={() => onSignupClick()}
                                         variant="ghost"
-                                        className="text-white font-bold hover:bg-white/10 hover:text-white hidden md:block"
+                                        className="text-white font-bold hover:bg-white/10 hover:text-white text-xs sm:text-base px-2 sm:px-4 border border-white/20 sm:border-none rounded-lg"
                                     >
-                                        Cadastrar
+                                        <span className="sm:hidden">Criar Conta</span>
+                                        <span className="hidden sm:inline">Cadastrar</span>
                                     </Button>
                                 </>
                             )}
@@ -137,10 +139,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                         <div className="flex items-center gap-4">
                             <Button
                                 onClick={onDashboardClick}
-                                className={`${scrolled ? 'bg-[#EA1D2C] text-white' : 'bg-white/20 text-white hover:bg-white/30'} font-bold px-6 rounded-xl transition-all flex items-center gap-2`}
+                                className={`${scrolled ? 'bg-[#EA1D2C] text-white' : 'bg-white/20 text-white hover:bg-white/30'} font-bold px-3 sm:px-6 rounded-xl transition-all flex items-center gap-2`}
                             >
                                 <Users className="w-5 h-5" />
-                                <span>Meu Painel</span>
+                                <span className="hidden sm:inline">Meu Painel</span>
                             </Button>
                         </div>
                     )}

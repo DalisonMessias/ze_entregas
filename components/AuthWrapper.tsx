@@ -726,15 +726,15 @@ export const AuthWrapper: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] dark:bg-gray-950 flex items-center justify-center p-4 md:p-6 relative overflow-x-hidden overflow-y-auto py-12 md:py-0">
+    <div className="min-h-screen bg-white md:bg-[#f8fafc] dark:bg-gray-950 flex items-center justify-center p-0 md:p-6 relative overflow-x-hidden overflow-y-auto">
       {/* Background Decorative Elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-500/10 dark:bg-brand-500/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-600/10 dark:bg-brand-600/5 rounded-full blur-[120px] pointer-events-none" />
 
       {renderBack()}
 
-      <div className="w-full max-w-md sm:max-w-xl md:max-w-md relative z-10 transition-all duration-500 animate-in fade-in zoom-in-95">
-        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl p-6 md:p-10 rounded-[40px] md:rounded-[48px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-white/20 dark:border-gray-800/50">
+      <div className="w-full max-w-md sm:max-w-xl md:max-w-md relative z-10 transition-all duration-500 animate-in fade-in zoom-in-95 min-h-screen md:min-h-0 flex flex-col justify-center">
+        <div className="bg-white md:bg-white/80 dark:bg-gray-900 md:dark:bg-gray-900/80 backdrop-blur-2xl px-6 py-12 md:p-10 md:rounded-[48px] shadow-none md:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border-none md:border border-white/20 dark:border-gray-800/50 h-full md:h-auto flex flex-col justify-center">
 
           <div className="text-center mb-10">
             <div className="inline-flex p-4 bg-brand-50 dark:bg-brand-900/30 rounded-3xl mb-6 shadow-sm">

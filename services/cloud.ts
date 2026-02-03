@@ -1864,12 +1864,7 @@ export const adminUpdateFeeSettings = async (settings: Partial<PartnerFeeSetting
     if (error) throw error;
 };
 
-export const getPublicFeeSettings = async (): Promise<PartnerFeeSettings | null> => {
-    const sb = getClient();
-    if (!sb) return null;
-    const { data } = await sb.from('partner_fee_settings').select('*').single();
-    return data;
-};
+// function duplicate removed (getPublicFeeSettings)
 
 // --- LEVELS ---
 
@@ -6689,21 +6684,91 @@ export const validateTerminalPin = async (terminalId: string, pin: string): Prom
     return data.pin_code === pin;
 };
 
+const defaultFees: PartnerFeeSettings = {
+    global_tax_fixed: 0.50,
+    global_tax_percent: 2.0,
+    super_store_monthly_fee: 99.00,
+    association_fee: 10.00,
+    base_delivery_value: 5.00,
+    base_delivery_km: 3,
+    extra_km_value: 1.50,
+    additional_stop_fee: 2.00
+};
+
 export const getPartnerFeeSettings = async (): Promise<PartnerFeeSettings> => {
     const sb = getClient();
-    // Try to fetch from a settings table if it exists, otherwise return defaults
-    // Assuming 'system_settings' or generic config table might exist, but for now returning defaults
-    // based on common values seen in the app.
-    return {
-        global_tax_fixed: 0.50,
-        global_tax_percent: 2.0,
-        super_store_monthly_fee: 99.00,
-        association_fee: 10.00,
-        base_delivery_value: 5.00,
-        base_delivery_km: 3,
-        extra_km_value: 1.50,
-        additional_stop_fee: 2.00
-    };
+    if (!sb) return defaultFees;
+
+    try {
+        const { data, error } = await sb.from('partner_fee_settings').select('*').limit(1).single();
+        if (error) {
+            // Se tabela não existe ou erro, retorna default silenciosamente (fallback)
+            // console.warn('Fee settings fallback:', error.message);
+            return defaultFees;
+        }
+        return data || defaultFees;
+    } catch (e) {
+        return defaultFees;
+    }
+};
+
+export const getPublicFeeSettings = getPartnerFeeSettings;
+
+export const updateFeeSettings = async (settings: Partial<PartnerFeeSettings>) => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    try {
+        // Update the singleton row (we rely on the fact that there is only one row from migration)
+        // We act on the first row found or insert if missing (upsert logic via migration was singleton)
+        // Since we don't know the ID, we can fetch it or just update all (only 1 exists).
+        // Postgres: UPDATE partner_fee_settings SET ...
+        const { error } = await sb
+            .from('partner_fee_settings')
+            .update({ ...settings, updated_at: new Date().toISOString() })
+            .gt('global_tax_fixed', -1); // Update all rows (hacky but safe for singleton table)
+
+        if (error) throw error;
+        return { success: true };
+    } catch (e: any) {
+        console.error('Error updating fees:', e);
+        return { success: false, error: e.message };
+    }
+};
+
+export const getPlatformStats = async () => {
+    const sb = getClient();
+    if (!sb) return { cities: null, partners: null, deliveries: null };
+
+    try {
+        // 1. Buscando Cidades (distintas em approved_streets)
+        // Usamos count de approved_streets como indicativo de locais atendidos
+        const { count: citiesCount } = await sb
+            .from('approved_streets')
+            .select('*', { count: 'exact', head: true });
+
+        // 2. Buscando Parceiros (apenas ativos para não inflar artificialmente)
+        const { count: partnersCount } = await sb
+            .from('user_profiles')
+            .select('*', { count: 'exact', head: true })
+            .in('role', ['store_partner', 'delivery_partner'])
+            .eq('is_active', true);
+
+        // 3. Entregas (Contagem total da tabela orders status completed/delivered)
+        const { count: deliveriesCount } = await sb
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .in('status', ['DELIVERED', 'COMPLETED']);
+
+        return {
+            cities: citiesCount || 1, // Fallback visual 1
+            partners: partnersCount || 0,
+            deliveries: deliveriesCount || 0
+        };
+    } catch (e) {
+        console.error('Error fetching platform stats:', e);
+        return { cities: 1, partners: 0, deliveries: 0 };
+    }
 };
 
 
