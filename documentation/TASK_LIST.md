@@ -1,10 +1,9 @@
+# Plano de Implementação - Grupo de Adicionais nos Produtos
 
-# TASK_LIST
-
-- [x] Aplicar alterações no banco de dados (SQL) e Tipos
-- [x] Implementar upload de imagem de categoria no Admin
-- [x] Adicionar seleção de categoria no cadastro (AuthWrapper)
-- [x] Adicionar seleção de categoria nas configurações (StoreSettings)
-- [x] Implementar carrossel de categorias na página da cidade
-- [x] Adicionar botões de navegação ao carrossel (< >)
-- [x] Verificar e validar todas as alterações
+- [x] Adicionar coluna `addon_group_id` na tabela `products` em `supabase_global.sql`
+- [x] Atualizar interface `StoreProduct` em `types.ts`
+- [x] Adicionar seleção de Grupo de Adicionais no `ProductModal.tsx`
+- [ ] Implementar Modal de Seleção de Adicionais no Cardápio Digital
+- [ ] Lógica para abrir o modal ao adicionar produto com adicionais
+- [ ] Lógica para editar adicionais dos itens no Carrinho
+- [ ] Testar fluxo completo de compra com adicionais

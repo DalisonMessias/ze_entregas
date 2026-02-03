@@ -9801,6 +9801,7 @@ GRANT SELECT ON public.user_profiles TO anon, authenticated;
 -- ==================================================================
 -- RPC PARA BUSCA PUBLICA DE LOJAS (Bypass RLS Seguro) - 24/01/2026
 -- ==================================================================
+DROP FUNCTION IF EXISTS public.get_public_stores_by_city(TEXT);
 CREATE OR REPLACE FUNCTION public.get_public_stores_by_city(p_city_slug TEXT)
 RETURNS TABLE (
     id UUID,
@@ -11827,5 +11828,13 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'store_category_id') THEN
         ALTER TABLE public.user_profiles ADD COLUMN store_category_id UUID REFERENCES public.institutional_categories(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Adicionar addon_group_id à tabela products (03/02/2026)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'addon_group_id') THEN
+        ALTER TABLE public.products ADD COLUMN addon_group_id UUID REFERENCES public.store_addon_groups(id) ON DELETE SET NULL;
     END IF;
 END $$;

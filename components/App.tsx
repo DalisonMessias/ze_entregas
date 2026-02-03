@@ -1649,17 +1649,15 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 <SectionErrorBoundary componentName="Header">
                     <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 shadow-sm z-40 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800">
                         <div className="flex items-center gap-3">
-                            {!hideMobileMenuButton && (
+                            {!isMobileViewport && (
+                                <div className="p-2" /> // Espaçador para manter o alinhamento sem o botão
+                            )}
+                            {isMobileViewport && !hideMobileMenuButton && (
                                 <button
                                     id="header-menu-button"
                                     onClick={() => {
                                         // Mobile: Toggle Modal Drawer
-                                        if (window.innerWidth < 768) {
-                                            setIsMenuOpen(true);
-                                        } else {
-                                            // Desktop: Toggle Collapse
-                                            setIsSidebarExpanded(!isSidebarExpanded);
-                                        }
+                                        setIsMenuOpen(true);
                                     }}
                                     className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
                                 >
@@ -1714,7 +1712,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                 {/* Sidebar Container */}
                 <SectionErrorBoundary componentName="Menu Lateral">
-                    <div className={`
+                    <div
+                        onMouseEnter={() => !isMobileViewport && setIsSidebarExpanded(true)}
+                        onMouseLeave={() => !isMobileViewport && setIsSidebarExpanded(false)}
+                        className={`
                     fixed z-50 
                     /* Mobile Styles: Inset-0 (Drawer), driven by isMenuOpen */
                     ${isMenuOpen ? 'inset-y-0 left-0 translate-x-0' : '-translate-x-full'} 

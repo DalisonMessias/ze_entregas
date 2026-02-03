@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as cloud from '../services/cloud';
 import { supabase } from '../services/cloud';
-import { Store, Lock, History, ChevronDown, ChevronUp, FileText, Calendar, DollarSign, Package } from 'lucide-react';
+import { Store, Lock, History, ChevronUp, FileText, Calendar, DollarSign, Package } from 'lucide-react';
 import { StoreDailyReport, PartnerProfile } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { getStoreOpenState } from '../utils/storeHours';

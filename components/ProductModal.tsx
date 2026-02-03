@@ -5,6 +5,7 @@ import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
 import { CategorySelector } from './CategorySelector';
+import { AddonGroupSelector } from './AddonGroupSelector';
 import { Toast } from './Toast';
 
 interface ProductModalProps {
@@ -31,6 +32,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     const [uploadingImage, setUploadingImage] = useState(false);
     const [wasUploaded, setWasUploaded] = useState(false);
     const [categories, setCategories] = useState<any[]>([]);
+    const [addonGroups, setAddonGroups] = useState<any[]>([]);
     const [toast, setToast] = useState<ToastState | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -41,6 +43,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             // or if it was just uploaded in this session.
             setWasUploaded(!!product.image_url?.includes('/storage/v1/object/public/products/'));
             loadCategories();
+            loadAddonGroups();
         }
     }, [isOpen, product]);
 
@@ -50,6 +53,15 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             setCategories(data);
         } catch (error) {
             // console.error("Erro ao carregar categorias:", error);
+        }
+    };
+
+    const loadAddonGroups = async () => {
+        try {
+            const data = await cloud.getStoreAddonGroups();
+            setAddonGroups(data);
+        } catch (error) {
+            // console.error("Erro ao carregar adicionais:", error);
         }
     };
 
@@ -176,6 +188,14 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                             categories={categories}
                             selectedCategory={editingProduct.category_id || null}
                             onSelect={(catId) => setEditingProduct({ ...editingProduct, category_id: catId })}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        <AddonGroupSelector
+                            groups={addonGroups}
+                            selectedGroup={editingProduct.addon_group_id || null}
+                            onSelect={(groupId) => setEditingProduct({ ...editingProduct, addon_group_id: groupId })}
                         />
                     </div>
 
