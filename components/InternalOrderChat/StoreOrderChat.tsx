@@ -121,7 +121,7 @@ export const StoreOrderChat: React.FC<StoreOrderChatProps> = ({ isOpen, onClose,
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 w-full max-w-md h-[600px] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in scale-95" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-900 w-full max-w-md h-[80vh] sm:h-[600px] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in scale-95" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800">

@@ -132,7 +132,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ userRole }) => {
                     Visualize as áreas com maior concentração de entregas com base no seu histórico de endereços visitados.
                 </p>
             </div>
-            <div className="relative h-[600px] rounded-2xl overflow-hidden bg-gray-200 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+            <div className="relative h-[360px] sm:h-[480px] md:h-[600px] rounded-2xl overflow-hidden bg-gray-200 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
                 <div ref={mapContainerRef} className="w-full h-full" />
                 {loading && (
                     <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/70 flex flex-col items-center justify-center gap-4 z-20">

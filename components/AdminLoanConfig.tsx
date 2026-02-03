@@ -262,9 +262,9 @@ export const AdminLoanConfig: React.FC = () => {
 
     const renderLevelsTab = () => (
         <div className="space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <h4 className="font-bold text-gray-700 dark:text-gray-300">Limites por Nível</h4>
-                <Button onClick={() => setEditingLimit({ user_type: 'DELIVERY', partner_level: '', max_limit: 0, max_installments: 12, allow_negative_balance: false })}>
+                <Button onClick={() => setEditingLimit({ user_type: 'DELIVERY', partner_level: '', max_limit: 0, max_installments: 12, allow_negative_balance: false })} className="w-full sm:w-auto">
                     <Plus className="w-4 h-4 mr-2" /> Novo Limite
                 </Button>
             </div>
@@ -338,7 +338,7 @@ export const AdminLoanConfig: React.FC = () => {
 
             <div className="space-y-2">
                 {levelLimits.map(limit => (
-                    <div key={limit.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <div key={limit.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
                             <div className="flex items-center gap-2">
                                 <h5 className="font-bold text-gray-800 dark:text-white">{limit.partner_level}</h5>
@@ -377,7 +377,7 @@ export const AdminLoanConfig: React.FC = () => {
             <div className="space-y-2">
                 {loans.map(loan => (
                     <div key={loan.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                        <div className="flex justify-between items-start">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                             <div>
                                 <h5 className="font-bold text-gray-800 dark:text-white">{loan.user?.name || 'Usuário'}</h5>
                                 <p className="text-sm text-gray-500">{loan.user?.email}</p>
@@ -422,16 +422,16 @@ export const AdminLoanConfig: React.FC = () => {
     return (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6">
 
-            <div className="flex gap-2 border-b border-gray-100 dark:border-gray-700 pb-4 overflow-x-auto">
-                <Button variant={activeTab === 'types' ? 'primary' : 'ghost'} onClick={() => setActiveTab('types')}>
+            <div className="flex gap-2 border-b border-gray-100 dark:border-gray-700 pb-4 overflow-x-auto no-scrollbar">
+                <Button variant={activeTab === 'types' ? 'primary' : 'ghost'} onClick={() => setActiveTab('types')} className="whitespace-nowrap">
                     <Settings className="w-4 h-4 mr-2" />
                     Tipos de Empréstimo
                 </Button>
-                <Button variant={activeTab === 'levels' ? 'primary' : 'ghost'} onClick={() => setActiveTab('levels')}>
+                <Button variant={activeTab === 'levels' ? 'primary' : 'ghost'} onClick={() => setActiveTab('levels')} className="whitespace-nowrap">
                     <DollarSign className="w-4 h-4 mr-2" />
                     Limites por Nível
                 </Button>
-                <Button variant={activeTab === 'loans' ? 'primary' : 'ghost'} onClick={() => setActiveTab('loans')}>
+                <Button variant={activeTab === 'loans' ? 'primary' : 'ghost'} onClick={() => setActiveTab('loans')} className="whitespace-nowrap">
                     <Clock className="w-4 h-4 mr-2" />
                     Solicitações
                 </Button>
@@ -602,7 +602,7 @@ export const AdminLoanConfig: React.FC = () => {
                                         <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Dados Bancários</h4>
                                         {loanToApprove.user?.bank_details ? (
                                             <div className="bg-gray-50 dark:bg-gray-900/30 rounded-xl p-4 text-sm space-y-2 border border-gray-200 dark:border-gray-700">
-                                                <div className="grid grid-cols-2 gap-2">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                     <div>
                                                         <span className="block text-xs text-gray-500">Banco</span>
                                                         <span className="font-medium">{loanToApprove.user.bank_details.bankName}</span>
@@ -785,7 +785,7 @@ export const AdminLoanConfig: React.FC = () => {
                                         <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Dados Bancários</h4>
                                         {loanToView.user?.bank_details ? (
                                             <div className="bg-gray-50 dark:bg-gray-900/30 rounded-xl p-4 text-sm space-y-2 border border-gray-200 dark:border-gray-700">
-                                                <div className="grid grid-cols-2 gap-2">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                     <div>
                                                         <span className="block text-xs text-gray-500">Banco</span>
                                                         <span className="font-medium">{loanToView.user.bank_details.bankName}</span>

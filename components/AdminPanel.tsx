@@ -997,11 +997,11 @@ const CityManagement: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in">
 
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-fit flex-wrap">
-                <button onClick={() => setActiveTab('active')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'active' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Ativas</button>
-                <button onClick={() => setActiveTab('inactive')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'inactive' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Desativadas</button>
-                <button onClick={() => setActiveTab('requests')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Solicitações</button>
-                <button onClick={() => setActiveTab('districts')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'districts' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Bairros / API</button>
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-full overflow-x-auto no-scrollbar">
+                <button onClick={() => setActiveTab('active')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'active' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Ativas</button>
+                <button onClick={() => setActiveTab('inactive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'inactive' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Desativadas</button>
+                <button onClick={() => setActiveTab('requests')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Solicitações</button>
+                <button onClick={() => setActiveTab('districts')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'districts' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Bairros / API</button>
             </div>
 
             {activeTab === 'districts' && <CitiesAndDistricts />}

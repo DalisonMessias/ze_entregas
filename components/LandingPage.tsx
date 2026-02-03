@@ -7,7 +7,7 @@ import { CookiePreferencesModal } from './CookiePreferencesModal';
 import { CompanyModal } from './CompanyModals';
 import { Logo } from './Logo';
 import { Footer } from './Footer';
-import { CitySearchSelect } from './CitySearchSelect';
+import { LandingCitySelector } from './LandingCitySelector';
 import { StoreCard } from './StoreCard';
 import { InstallApp } from './InstallApp';
 import * as cloud from '../services/cloud';
@@ -150,77 +150,116 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
             </nav>
 
             <main className="flex-1">
-                {/* Hero iFood Style */}
-                <section className="relative h-[600px] flex items-center justify-center z-40">
-                    <div className="absolute inset-0 bg-black/40 z-10 pointer-events-none"></div>
-                    <img
-                        src="https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=2070&auto=format&fit=crop"
-                        alt="Background"
-                        className="absolute inset-0 w-full h-full object-cover z-0"
-                    />
+                {/* Hero section redesigned with modern gradient and better typography */}
+                <section className="relative min-h-[600px] flex items-center justify-center">
+                    {/* Background layers */}
+                    <div className="absolute inset-0 bg-gray-900 dark:bg-black z-0">
+                        <img
+                            src="https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=2070&auto=format&fit=crop"
+                            alt="Background"
+                            className="absolute inset-0 w-full h-full object-cover opacity-50 transition-scale duration-[10s] hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-gray-900 dark:to-black z-10"></div>
+                    </div>
 
-                    <div className="relative z-50 w-full max-w-4xl px-4 text-center">
-                        <h1 className="text-4xl md:text-6xl font-black text-white mb-8 tracking-tighter drop-shadow-xl">
-                            Tudo para facilitar seu dia.
+                    <div className="relative z-20 w-full max-w-5xl px-6 text-center animate-in fade-in slide-in-from-bottom-8 duration-1000">
+                        <h1 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tight leading-tight">
+                            Tudo para o seu dia <br />
+                            <span className="text-brand-500">mais fácil.</span>
                         </h1>
-                        <p className="text-lg md:text-xl text-white/90 mb-12 font-medium max-w-2xl mx-auto drop-shadow-md">
-                            O Zé Entregas leva o melhor da sua cidade até você.
+                        <p className="text-xl md:text-2xl text-white/80 mb-12 font-medium max-w-2xl mx-auto">
+                            O Zé Entregas leva o melhor da sua cidade <br className="hidden md:block" /> até o conforto da sua casa.
                         </p>
 
-                        <div className="relative z-[60] bg-white p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row gap-2 max-w-2xl mx-auto transform transition-all hover:scale-[1.01]">
-                            <div className="flex-1 relative">
-                                <CitySearchSelect
-                                    value={selectedCity}
-                                    onSelect={handleCitySelect}
-                                    placeholder="Informe seu endereço ou cidade"
-                                    className="!bg-transparent !border-none !p-1"
-                                />
+                        <LandingCitySelector
+                            value={selectedCity}
+                            onSelect={handleCitySelect}
+                            placeholder="Qual sua cidade ou endereço?"
+                        />
+
+                        {/* Trust Badges or Microcopy */}
+                        <div className="mt-10 flex flex-wrap justify-center gap-6 text-white/60 text-sm font-bold opacity-80">
+                            <div className="flex items-center gap-2">
+                                <Shield className="w-4 h-4 text-green-400" />
+                                <span>Entregas Seguras</span>
                             </div>
-                            <Button
-                                className="bg-[#EA1D2C] text-white hover:bg-red-700 py-4 px-10 rounded-xl text-lg font-black shrink-0 relative z-10"
-                                onClick={() => storesRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                            >
-                                Buscar
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-yellow-400" />
+                                <span>Rápido e Prático</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Star className="w-4 h-4 text-orange-400 fill-orange-400" />
+                                <span>Melhores Lojas</span>
+                            </div>
                         </div>
                     </div>
                 </section>
 
-                {/* Listagem de Lojas - Dinâmica */}
+                {/* Store Listing Section with better responsiveness and visual feedback */}
                 <section
                     ref={storesRef}
-                    className={`bg-gray-50 dark:bg-gray-950 overflow-hidden transition-all duration-700 ease-in-out ${selectedCity ? 'max-h-[2000px] py-16 opacity-100' : 'max-h-0 py-0 opacity-0'
+                    className={`bg-gray-50 dark:bg-gray-900 overflow-hidden transition-all duration-700 ease-in-out ${selectedCity ? 'max-h-[5000px] py-16 md:py-24 opacity-100' : 'max-h-0 py-0 opacity-0'
                         }`}
                 >
-                    <div className="max-w-6xl mx-auto px-4">
+                    <div className="max-w-7xl mx-auto px-6">
                         {selectedCity && (
-                            <div className="mb-12">
-                                <h2 className="text-2xl md:text-4xl font-black text-gray-900 dark:text-white mb-2">
-                                    Lojas em <span className="text-[#EA1D2C]">{selectedCity.split(' - ')[0]}</span>
-                                </h2>
-                                <p className="text-gray-500 font-medium font-sans">As melhores opções da sua região</p>
+                            <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                                <div>
+                                    <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
+                                        Lojas em <span className="text-brand-600">{selectedCity.split(' - ')[0]}</span>
+                                    </h2>
+                                    <p className="text-gray-500 font-bold flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                                        {stores.length} lojas encontradas na sua região
+                                    </p>
+                                </div>
+                                <div className="hidden md:flex gap-2">
+                                    <div className="px-4 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 text-xs font-black uppercase text-gray-400">
+                                        Filtros rápidos
+                                    </div>
+                                </div>
                             </div>
                         )}
 
                         {loadingStores ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {[1, 2, 3, 4].map(i => (
-                                    <div key={i} className="bg-white dark:bg-gray-800 h-[300px] rounded-3xl animate-pulse" />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                                {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                                    <div key={i} className="bg-white dark:bg-gray-800 rounded-[32px] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                                        <div className="w-full h-32 bg-gray-100 dark:bg-gray-700 rounded-2xl animate-pulse mb-6"></div>
+                                        <div className="h-6 w-3/4 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse mb-3"></div>
+                                        <div className="h-4 w-1/2 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse mb-6"></div>
+                                        <div className="flex justify-between items-center mt-auto">
+                                            <div className="w-20 h-8 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+                                            <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         ) : stores.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {stores.map(store => (
-                                    <StoreCard key={store.id} store={store} onClick={() => handleStoreClick(store)} />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 animate-in fade-in duration-700">
+                                {stores.map((store, index) => (
+                                    <div key={store.id} className="animate-in fade-in slide-in-from-bottom-4" style={{ animationDelay: `${index * 50}ms` }}>
+                                        <StoreCard store={store} onClick={() => handleStoreClick(store)} />
+                                    </div>
                                 ))}
                             </div>
                         ) : selectedCity && (
-                            <div className="text-center py-12">
-                                <div className="bg-white dark:bg-gray-800 p-8 rounded-[32px] shadow-sm max-w-sm mx-auto">
-                                    <Store className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                    <p className="text-gray-500 font-bold">Nenhuma loja encontrada nesta região ainda.</p>
-                                    <p className="text-sm text-gray-400 mt-2">Que tal ser o primeiro parceiro da sua cidade?</p>
-                                    <Button onClick={() => onSignupClick('STORE_PARTNER')} className="mt-6 text-[#EA1D2C] font-bold">Quero ser parceiro</Button>
+                            <div className="text-center py-20 px-4">
+                                <div className="bg-white dark:bg-gray-800 p-12 rounded-[48px] shadow-2xl max-w-lg mx-auto border border-gray-50 dark:border-gray-700 transform hover:scale-[1.02] transition-transform">
+                                    <div className="w-24 h-24 bg-brand-50 dark:bg-brand-900/20 rounded-full flex items-center justify-center mx-auto mb-8">
+                                        <Store className="w-12 h-12 text-brand-500" />
+                                    </div>
+                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Ainda não estamos por aqui</h3>
+                                    <p className="text-gray-500 font-medium mb-10 leading-relaxed">
+                                        Infelizmente não encontramos lojas em <span className="font-bold">{selectedCity.split(' - ')[0]}</span>. <br />
+                                        Seja o primeiro a levar o Zé Entregas para sua cidade!
+                                    </p>
+                                    <Button
+                                        onClick={() => onSignupClick('STORE_PARTNER')}
+                                        className="w-full bg-brand-600 text-white hover:bg-brand-700 py-5 rounded-2xl text-lg font-black shadow-xl shadow-brand-600/20 transition-all font-sans"
+                                    >
+                                        Quero ser um parceiro
+                                    </Button>
                                 </div>
                             </div>
                         )}

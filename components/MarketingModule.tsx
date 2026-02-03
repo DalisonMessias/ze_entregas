@@ -164,16 +164,16 @@ export const MarketingModule: React.FC = () => {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2 mt-8 p-1 bg-gray-50 dark:bg-gray-900/50 rounded-2xl w-fit">
+                <div className="flex items-center gap-2 mt-8 p-1 bg-gray-50 dark:bg-gray-900/50 rounded-2xl w-full overflow-x-auto no-scrollbar">
                     <button
                         onClick={() => setActiveTab('templates')}
-                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'templates' ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'templates' ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
                         <Layout className="w-4 h-4" /> Templates Prontos
                     </button>
                     <button
                         onClick={() => setActiveTab('my_designs')}
-                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'my_designs' ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'my_designs' ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
                         <Save className="w-4 h-4" /> Meus Designs
                     </button>

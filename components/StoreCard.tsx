@@ -13,7 +13,7 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onClick }) => {
     return (
         <div
             onClick={onClick}
-            className="group bg-white dark:bg-gray-800 rounded-[32px] overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col h-full"
+            className="group bg-white dark:bg-gray-800 rounded-[32px] overflow-hidden border border-gray-100 dark:border-gray-700 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2 transition-all duration-500 cursor-pointer flex flex-col h-full relative"
         >
             {/* Cover Image */}
             <div className="relative h-32 w-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
@@ -30,11 +30,11 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onClick }) => {
                 )}
 
                 {/* Status Badge */}
-                <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-sm ${isOpen
-                        ? 'bg-green-500/90 text-white'
-                        : 'bg-gray-500/90 text-white'
+                <div className={`absolute top-4 right-4 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-lg ${isOpen
+                    ? 'bg-green-500/90 text-white'
+                    : 'bg-gray-500/90 text-white'
                     }`}>
-                    {isOpen ? 'Aberto' : 'Fechado'}
+                    {isOpen ? 'Aberto agora' : 'Fechado'}
                 </div>
             </div>
 
@@ -51,11 +51,11 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onClick }) => {
                     </div>
 
                     <div className="flex-1 pt-2">
-                        <h3 className="font-black text-xl text-gray-900 dark:text-white leading-tight group-hover:text-brand-600 transition-colors">
+                        <h3 className="font-black text-xl text-gray-900 dark:text-white leading-tight group-hover:text-brand-600 transition-colors tracking-tight">
                             {store.store_name}
                         </h3>
                         {store.description && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1.5 line-clamp-1 font-medium italic opacity-80">
                                 {store.description}
                             </p>
                         )}
@@ -75,12 +75,15 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onClick }) => {
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-gray-700">
-                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <MapPin className="w-3.5 h-3.5" />
+                    <div className="flex items-center justify-between pt-5 border-t border-gray-50 dark:border-gray-700">
+                        <div className="flex items-center gap-2 text-xs text-gray-400 font-bold">
+                            <div className="p-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <MapPin className="w-3.5 h-3.5" />
+                            </div>
                             <span className="line-clamp-1">{store.store_address_district || store.city || 'Bairro indefinido'}</span>
                         </div>
-                        <div className="p-2 bg-brand-50 dark:bg-brand-900/30 text-brand-600 rounded-xl group-hover:bg-brand-600 group-hover:text-white transition-all">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-brand-50 dark:bg-brand-900/30 text-brand-600 rounded-2xl group-hover:bg-brand-600 group-hover:text-white group-hover:px-6 transition-all duration-300 font-black text-xs uppercase tracking-wider">
+                            <span>Ver Loja</span>
                             <ChevronRight className="w-4 h-4" />
                         </div>
                     </div>

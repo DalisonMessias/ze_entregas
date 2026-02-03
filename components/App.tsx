@@ -28,6 +28,7 @@ import { PartnerDocumentation } from './PartnerDocumentation';
 import { ExclusiveLock } from './ExclusiveLock';
 import { UserStatusBanner } from './UserStatusBanner';
 import { AccessDenied } from './AccessDenied';
+import { DesktopOnlyGate } from './DesktopOnlyGate';
 
 // Lazy Loaded Components
 const AdminPanel = React.lazy(() => import('./AdminPanel').then(module => ({ default: module.AdminPanel })));
@@ -430,6 +431,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Default collapsed on desktop per user request
     const [isStoreMoreOpen, setIsStoreMoreOpen] = useState(false);
+    const [isDriverMoreOpen, setIsDriverMoreOpen] = useState(false);
+    const [isMobileViewport, setIsMobileViewport] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -474,6 +477,19 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         return () => {
             window.removeEventListener('chat_unread_update', handleUnreadUpdate as EventListener);
         };
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const media = window.matchMedia('(max-width: 767px)');
+        const handleResize = () => setIsMobileViewport(media.matches);
+        handleResize();
+        if ('addEventListener' in media) {
+            media.addEventListener('change', handleResize);
+            return () => media.removeEventListener('change', handleResize);
+        }
+        media.addListener(handleResize);
+        return () => media.removeListener(handleResize);
     }, []);
 
 
@@ -869,6 +885,11 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const storeOrdersTabs = new Set<ActiveTab>(['history', 'new_request', 'internal_orders', 'my_orders']);
     const storeProductsTabs = new Set<ActiveTab>(['store_catalog', 'store_product_import', 'store_print_catalog', 'store_promotions']);
     const storeFinanceTabs = new Set<ActiveTab>(['zebank', 'zepay_store', 'store_finance_panel', 'store_loans', 'store_receiving_payment']);
+    const driverRootTabs = new Set<ActiveTab>(['daily_panel', 'partner']);
+    const driverOrdersTabs = new Set<ActiveTab>(['associate_orders']);
+    const driverRoutesTabs = new Set<ActiveTab>(['route_tools', 'route_list']);
+    const driverRidesTabs = new Set<ActiveTab>(['partner']);
+    const driverFinanceTabs = new Set<ActiveTab>(['zebank']);
 
     const storeTabTitles: Partial<Record<ActiveTab, string>> = {
         wallet: 'Início',
@@ -919,9 +940,18 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         return 'more';
     })();
 
+    const driverNavKey = (() => {
+        if (!isDriver) return null;
+        if (driverRidesTabs.has(activeTab)) return 'rides';
+        if (driverOrdersTabs.has(activeTab)) return 'orders';
+        if (driverRoutesTabs.has(activeTab)) return 'routes';
+        if (driverFinanceTabs.has(activeTab)) return 'finance';
+        if (driverRootTabs.has(activeTab)) return 'home';
+        return 'more';
+    })();
+
     const headerTitle = isStore ? (storeTabTitles[activeTab] || 'Painel da Loja') : '';
 
-    const driverRootTabs = new Set<ActiveTab>(['daily_panel', 'partner']);
     const adminRootTabs = new Set<ActiveTab>(['admin_dashboard']);
     const userRootTabs = new Set<ActiveTab>(['home']);
 
@@ -1074,23 +1104,85 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'history': return <OrderHistory userRole={effectiveRole as 'store_partner'} />;
                 case 'store_team': return <StoreTeam />;
                 case 'store_reports': return <StoreReports />;
-                case 'store_marketing': return <StoreMarketing />;
-                case 'store_integrations': return <StoreIntegrations onNavigate={navigate} />;
+                case 'store_marketing':
+                    return (
+                        <DesktopOnlyGate
+                            isMobile={isMobileViewport}
+                            title="Marketing no desktop"
+                            message="O estúdio de marketing possui muitos elementos de edição e exportação."
+                            hint="Para ter a melhor experiência, acesse pelo computador ou notebook."
+                            actionLabel="Voltar ao início"
+                            onAction={() => navigate(defaultTabByRole[effectiveRole])}
+                        >
+                            <StoreMarketing />
+                        </DesktopOnlyGate>
+                    );
+                case 'store_integrations':
+                    return (
+                        <DesktopOnlyGate
+                            isMobile={isMobileViewport}
+                            title="Integrações no desktop"
+                            message="Esta tela é voltada para configurações avançadas e uso interno."
+                            hint="Para ter a melhor experiência, acesse pelo computador ou notebook."
+                            actionLabel="Voltar ao início"
+                            onAction={() => navigate(defaultTabByRole[effectiveRole])}
+                        >
+                            <StoreIntegrations onNavigate={navigate} />
+                        </DesktopOnlyGate>
+                    );
                 case 'store_settings': return <StoreSettings />;
                 case 'store_receiving_payment': return <StoreReceivingPayment />;
-                case 'store_product_import': return <StoreProductImport />;
+                case 'store_product_import':
+                    return (
+                        <DesktopOnlyGate
+                            isMobile={isMobileViewport}
+                            title="Importação no desktop"
+                            message="A importação/exportação de planilhas exige tela maior para mapear colunas e revisar dados."
+                            hint="Para ter a melhor experiência, acesse pelo computador ou notebook."
+                            actionLabel="Voltar ao início"
+                            onAction={() => navigate(defaultTabByRole[effectiveRole])}
+                        >
+                            <StoreProductImport />
+                        </DesktopOnlyGate>
+                    );
                 case 'store_finance_panel': return <ZePayStore />;
                 case 'zepay_store': return <ZePayStore />; // ZéPay Module
                 case 'internal_orders': return <InternalOrders />;
                 case 'store_catalog': return <StoreCatalog />;
-                case 'store_print_catalog': return <PrintCatalogGenerator />;
+                case 'store_print_catalog':
+                    return (
+                        <DesktopOnlyGate
+                            isMobile={isMobileViewport}
+                            title="Catálogo impresso no desktop"
+                            message="Este gerador trabalha com layouts grandes e exportação em PDF."
+                            hint="Para ter a melhor experiência, acesse pelo computador ou notebook."
+                            actionLabel="Voltar ao início"
+                            onAction={() => navigate(defaultTabByRole[effectiveRole])}
+                        >
+                            <PrintCatalogGenerator />
+                        </DesktopOnlyGate>
+                    );
                 case 'store_promotions': return <StorePromotions storeId={userId} />;
-                case 'store_api_docs': return <StoreApiDocs onNavigate={navigate} />;
+                case 'store_api_docs':
+                    return (
+                        <DesktopOnlyGate
+                            isMobile={isMobileViewport}
+                            title="Docs de API no desktop"
+                            message="A documentação contém exemplos de código e muitos detalhes técnicos."
+                            hint="Para ter a melhor experiência, acesse pelo computador ou notebook."
+                            actionLabel="Voltar ao início"
+                            onAction={() => navigate(defaultTabByRole[effectiveRole])}
+                        >
+                            <StoreApiDocs onNavigate={navigate} />
+                        </DesktopOnlyGate>
+                    );
                 case 'store_loans': return <LoansModule />;
                 case 'collaborator_area': return <CollaboratorWrapper userId={userId} onLogout={handleLogout} />;
                 case 'zepoint':
                     if (isStore || isAdmin) {
-                        return <MerchantPOSDesktop onClose={() => navigate(defaultTabByRole[effectiveRole])} />;
+                        return isMobileViewport
+                            ? <MerchantPOSMobile onClose={() => navigate(defaultTabByRole[effectiveRole])} />
+                            : <MerchantPOSDesktop onClose={() => navigate(defaultTabByRole[effectiveRole])} />;
                     }
                     return <MerchantPOSMobile onClose={() => navigate(defaultTabByRole[effectiveRole])} />;
 
@@ -1185,7 +1277,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         { key: 'more', label: 'Mais', onClick: () => setIsStoreMoreOpen(true), icon: LayoutGrid }
     ];
 
-    const storeMoreSections: Array<{ title: string; items: Array<{ label: string; tab: ActiveTab; icon: any; badge?: number }> }> = [
+    const storeMoreSections: Array<{ title: string; items: Array<{ label: string; tab?: ActiveTab; onClick?: () => void; icon: any; badge?: number }> }> = [
         {
             title: 'Operações',
             items: [
@@ -1234,12 +1326,34 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 { label: 'Chat c/ Entregadores', tab: 'store_drivers_chat', icon: MessageCircle },
                 { label: 'ZéPoint (POS)', tab: 'zepoint', icon: Smartphone }
             ]
+        },
+        {
+            title: 'Conta & Suporte',
+            items: [
+                { label: 'Meu Perfil', tab: 'profile', icon: User },
+                { label: 'Suporte', tab: 'support', icon: Headphones },
+                { label: 'Assistente Zé', tab: 'assistant', icon: Bot },
+                { label: 'Perguntas Frequentes', tab: 'faq', icon: HelpCircle },
+                { label: 'Backup Nuvem', tab: 'cloud', icon: Cloud },
+                { label: 'Ruas', tab: 'streets_list', icon: Map },
+                { label: 'Loja de Peças', tab: 'shop', icon: ShoppingBag },
+                { label: 'Verificar Status', tab: 'status', icon: UserCheck },
+                { label: 'Configurações do App', tab: 'settings', icon: Settings },
+                { label: 'Sobre o App', tab: 'about', icon: Info },
+                { label: 'Instalar App', tab: 'install_app', icon: Smartphone },
+                { label: 'Compartilhar App', onClick: handleShareApp, icon: Share2 },
+                { label: 'Política de Privacidade', onClick: () => setShowPrivacy(true), icon: Lock }
+            ]
         }
     ];
 
-    const StoreMoreItem = ({ icon: Icon, label, tab, badge }: { icon: any; label: string; tab: ActiveTab; badge?: number }) => (
+    const StoreMoreItem = ({ icon: Icon, label, tab, onClick, badge }: { icon: any; label: string; tab?: ActiveTab; onClick?: () => void; badge?: number }) => (
         <button
-            onClick={() => navigate(tab)}
+            onClick={() => {
+                if (onClick) onClick();
+                if (tab) navigate(tab);
+                setIsStoreMoreOpen(false);
+            }}
             className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.99] transition-all"
         >
             <div className="flex items-center gap-3">
@@ -1303,16 +1417,183 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     </div>
                 </div>
                 <div className="p-4 space-y-5">
-                    {storeMoreSections.map(section => (
-                        <div key={section.title} className="space-y-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{section.title}</p>
-                            <div className="grid grid-cols-1 gap-2">
-                                {section.items.map(item => (
-                                    <StoreMoreItem key={item.tab} icon={item.icon} label={item.label} tab={item.tab} badge={item.badge} />
-                                ))}
+                    {storeMoreSections.map(section => {
+                        const visibleItems = section.items.filter(item => !item.tab || canAccessTab(item.tab));
+                        if (visibleItems.length === 0) return null;
+                        return (
+                            <div key={section.title} className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{section.title}</p>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {visibleItems.map(item => (
+                                        <StoreMoreItem
+                                            key={`${section.title}-${item.label}`}
+                                            icon={item.icon}
+                                            label={item.label}
+                                            tab={item.tab}
+                                            onClick={item.onClick}
+                                            badge={item.badge}
+                                        />
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+
+    const driverBottomNavItems: Array<{ key: string; label: string; tab?: ActiveTab; onClick?: () => void; icon: any }> = [
+        { key: 'home', label: 'Início', tab: 'daily_panel' as ActiveTab, icon: Home },
+        { key: 'rides', label: 'Corridas', tab: 'partner' as ActiveTab, icon: Truck },
+        { key: 'routes', label: 'Rotas', tab: 'route_tools' as ActiveTab, icon: Route },
+        { key: 'finance', label: 'ZéBank', tab: 'zebank' as ActiveTab, icon: Wallet },
+        { key: 'more', label: 'Mais', onClick: () => setIsDriverMoreOpen(true), icon: LayoutGrid }
+    ];
+
+    const driverMoreSections: Array<{ title: string; items: Array<{ label: string; tab?: ActiveTab; onClick?: () => void; icon: any }> }> = [
+        {
+            title: 'Operação',
+            items: [
+                { label: 'Painel Diário', tab: 'daily_panel', icon: ClipboardList },
+                { label: 'Corridas', tab: 'partner', icon: Truck },
+                { label: 'Pedidos da Loja', tab: 'associate_orders', icon: Package }
+            ]
+        },
+        {
+            title: 'Rota & Produtividade',
+            items: [
+                { label: 'Ferramentas de Rota', tab: 'route_tools', icon: Zap },
+                { label: 'Lista de Rotas', tab: 'route_list', icon: ListPlus },
+                { label: 'Tarefas', tab: 'tasks', icon: FileCheck },
+                { label: 'Relatórios', tab: 'reports', icon: BarChart3 },
+                { label: 'Mapa de Calor', tab: 'heatmap', icon: Flame },
+                { label: 'Meus Endereços', tab: 'addresses', icon: MapPin }
+            ]
+        },
+        {
+            title: 'Finanças & Benefícios',
+            items: [
+                { label: 'ZéBank', tab: 'zebank', icon: Landmark },
+                { label: 'Empréstimos', tab: 'loans', icon: DollarSign },
+                { label: 'Seguro Parceiro', tab: 'insurance', icon: Shield },
+                { label: 'Meu Score', tab: 'score', icon: Star }
+            ]
+        },
+        {
+            title: 'Crescimento',
+            items: [
+                { label: 'Lojas Vinculadas', tab: 'associate_driver', icon: Store },
+                { label: 'Divulgação', tab: 'driver_marketing', icon: Megaphone },
+                { label: 'Histórico Local', tab: 'local_history', icon: History },
+                { label: 'ZéPoint (POS)', tab: 'zepoint', icon: Smartphone }
+            ]
+        },
+        {
+            title: 'Conta & Suporte',
+            items: [
+                { label: 'Meu Perfil', tab: 'profile', icon: User },
+                { label: 'Suporte', tab: 'support', icon: Headphones },
+                { label: 'Assistente Zé', tab: 'assistant', icon: Bot },
+                { label: 'Perguntas Frequentes', tab: 'faq', icon: HelpCircle },
+                { label: 'Backup Nuvem', tab: 'cloud', icon: Cloud },
+                { label: 'Ruas', tab: 'streets_list', icon: Map },
+                { label: 'Loja de Peças', tab: 'shop', icon: ShoppingBag },
+                { label: 'Verificar Status', tab: 'status', icon: UserCheck },
+                { label: 'Configurações do App', tab: 'settings', icon: Settings },
+                { label: 'Sobre o App', tab: 'about', icon: Info },
+                { label: 'Instalar App', tab: 'install_app', icon: Smartphone },
+                { label: 'Compartilhar App', onClick: handleShareApp, icon: Share2 },
+                { label: 'Política de Privacidade', onClick: () => setShowPrivacy(true), icon: Lock }
+            ]
+        }
+    ];
+
+    const DriverMoreItem = ({ icon: Icon, label, tab, onClick }: { icon: any; label: string; tab?: ActiveTab; onClick?: () => void }) => (
+        <button
+            onClick={() => {
+                if (onClick) onClick();
+                if (tab) navigate(tab);
+                setIsDriverMoreOpen(false);
+            }}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.99] transition-all"
+        >
+            <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                </div>
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{label}</span>
+            </div>
+        </button>
+    );
+
+    const DriverBottomNav = () => (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" aria-label="Navegação principal do entregador">
+            <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-800 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0)+0.75rem)]">
+                <div className="grid grid-cols-5 gap-1">
+                    {driverBottomNavItems.map(item => {
+                        const isActive = driverNavKey === item.key;
+                        return (
+                            <button
+                                key={item.key}
+                                onClick={() => {
+                                    if (item.onClick) {
+                                        item.onClick();
+                                    } else if (item.tab) {
+                                        navigate(item.tab);
+                                    }
+                                }}
+                                className={`flex flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all ${isActive ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                aria-current={isActive ? 'page' : undefined}
+                            >
+                                <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`} />
+                                <span className={`text-[10px] font-bold ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`}>{item.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </nav>
+    );
+
+    const DriverMoreSheet = () => (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Mais opções do entregador">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsDriverMoreOpen(false)} />
+            <div className="absolute inset-x-0 bottom-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto">
+                <div className="sticky top-0 bg-white dark:bg-gray-900 p-4 border-b border-gray-100 dark:border-gray-800">
+                    <div className="w-10 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-3" />
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-base font-black text-gray-900 dark:text-white">Mais opções</h3>
+                        <button
+                            onClick={() => setIsDriverMoreOpen(false)}
+                            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+                            aria-label="Fechar"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+                <div className="p-4 space-y-5">
+                    {driverMoreSections.map(section => {
+                        const visibleItems = section.items.filter(item => !item.tab || canAccessTab(item.tab));
+                        if (visibleItems.length === 0) return null;
+                        return (
+                            <div key={section.title} className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{section.title}</p>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {visibleItems.map(item => (
+                                        <DriverMoreItem
+                                            key={`${section.title}-${item.label}`}
+                                            icon={item.icon}
+                                            label={item.label}
+                                            tab={item.tab}
+                                            onClick={item.onClick}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -1322,6 +1603,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
     const isPublicTab = publicTabs.includes(activeTab);
     const showStoreBottomNav = isStore && !isPublicTab;
+    const showDriverBottomNav = isDriver && !isPublicTab;
+    const showBottomNav = showStoreBottomNav || showDriverBottomNav;
+    const hideMobileMenuButton = isMobileViewport && showBottomNav;
 
     if (isPublicTab) return (
         <div className={theme === 'dark' ? 'dark' : ''}>
@@ -1356,21 +1640,23 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 <SectionErrorBoundary componentName="Header">
                     <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 shadow-sm z-40 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800">
                         <div className="flex items-center gap-3">
-                            <button
-                                id="header-menu-button"
-                                onClick={() => {
-                                    // Mobile: Toggle Modal Drawer
-                                    if (window.innerWidth < 768) {
-                                        setIsMenuOpen(true);
-                                    } else {
-                                        // Desktop: Toggle Collapse
-                                        setIsSidebarExpanded(!isSidebarExpanded);
-                                    }
-                                }}
-                                className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
-                            >
-                                <Menu className="w-6 h-6" />
-                            </button>
+                            {!hideMobileMenuButton && (
+                                <button
+                                    id="header-menu-button"
+                                    onClick={() => {
+                                        // Mobile: Toggle Modal Drawer
+                                        if (window.innerWidth < 768) {
+                                            setIsMenuOpen(true);
+                                        } else {
+                                            // Desktop: Toggle Collapse
+                                            setIsSidebarExpanded(!isSidebarExpanded);
+                                        }
+                                    }}
+                                    className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                                >
+                                    <Menu className="w-6 h-6" />
+                                </button>
+                            )}
                             {/* Back Button for Sub-Views if not root views */}
                             {shouldShowBack() && (
                                 <button
@@ -1656,7 +1942,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 </SectionErrorBoundary>
 
                 {/* Main Content Area */}
-                <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'} ${showStoreBottomNav ? 'pb-24 md:pb-6' : 'pb-6'}`}>
+                <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'} ${showBottomNav ? 'pb-24 md:pb-6' : 'pb-6'}`}>
                     {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
                     <Suspense fallback={<Loading variant="container" size="md" />}>
                         {renderContent()}
@@ -1664,7 +1950,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 </main>
 
                 {showStoreBottomNav && <StoreBottomNav />}
+                {showDriverBottomNav && <DriverBottomNav />}
                 {isStore && isStoreMoreOpen && <StoreMoreSheet />}
+                {isDriver && isDriverMoreOpen && <DriverMoreSheet />}
 
                 {/* Modals */}
                 <EmergencyModal isOpen={showEmergency} onClose={() => setShowEmergency(false)} />
@@ -1692,7 +1980,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 {showScrollTop && (
                     <button
                         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                        className="fixed bottom-6 right-6 z-50 p-4 bg-brand-600 text-white rounded-full shadow-2xl hover:bg-brand-700 transition-all animate-in fade-in slide-in-from-bottom-4 active:scale-90"
+                        className={`fixed right-6 z-50 p-4 bg-brand-600 text-white rounded-full shadow-2xl hover:bg-brand-700 transition-all animate-in fade-in slide-in-from-bottom-4 active:scale-90 ${showBottomNav && isMobileViewport ? 'bottom-24' : 'bottom-6'} md:bottom-6`}
                         aria-label="Voltar ao Topo"
                     >
                         <ChevronUp className="w-6 h-6" />

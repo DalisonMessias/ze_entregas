@@ -79,15 +79,19 @@ export const CitySearchSelect: React.FC<CitySearchSelectProps> = ({
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border-2 border-gray-100 dark:border-gray-700 rounded-2xl text-base text-left focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all hover:border-gray-200 dark:hover:border-gray-600 group"
+                className="w-full flex items-center justify-between p-4 bg-transparent border-none rounded-2xl text-base text-left outline-none transition-all group"
             >
-                <div className="flex items-center gap-2">
-                    <MapPin className={`w-4 h-4 ${value ? 'text-brand-500' : 'text-gray-400'}`} />
-                    <span className={`font-bold ${value ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl transition-colors ${value ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-500' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 group-hover:bg-gray-100'}`}>
+                        <MapPin className="w-5 h-5" />
+                    </div>
+                    <span className={`font-bold tracking-tight text-lg ${value ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
                         {value || placeholder}
                     </span>
                 </div>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-brand-500' : ''}`} />
+                <div className="p-1 px-2 text-gray-300 group-hover:text-brand-500 transition-all">
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-500 ${isOpen ? 'rotate-180 text-brand-500' : ''}`} />
+                </div>
             </button>
 
             {isOpen && (

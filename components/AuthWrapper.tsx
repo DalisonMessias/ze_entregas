@@ -25,6 +25,7 @@ type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_pa
 import { DigitalMenu } from './DigitalMenu/DigitalMenu';
 import { StoreChatPage } from './DigitalMenu/StoreChatPage';
 import { PublicSupportPage } from './PublicSupportPage';
+import { CitiesList } from './CitiesList';
 
 const updateAuthUrl = (view: AuthView) => {
   // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
@@ -36,7 +37,10 @@ const updateAuthUrl = (view: AuthView) => {
   if (view === 'login') path = '/login';
   else if (view === 'signup_type_selection' || view === 'signup_city' || view === 'signup_form') path = '/cadastro';
   else if (view === 'forgot_password') path = '/recuperar-senha';
-  else if (view === 'landing' && !isAppRoute) path = '/';
+  else if (view === 'landing' && !isAppRoute) {
+    if (window.location.pathname === '/cidades') path = '/cidades';
+    else path = '/';
+  }
 
   if (window.location.pathname !== path && authRoutes.includes(path)) {
     window.history.pushState({ authView: view }, '', path);
@@ -684,7 +688,7 @@ export const AuthWrapper: React.FC = () => {
 
   if (view === 'landing') {
 
-    const isHome = currentPath === '/' || currentPath === '/home';
+    const isHome = currentPath === '/' || currentPath === '/home' || currentPath === '/cidades';
     const isInternalRoute = getTabFromUrl(currentPath) !== null;
 
     if (!isHome && !isInternalRoute) {
@@ -696,6 +700,10 @@ export const AuthWrapper: React.FC = () => {
     if (!isHome && isInternalRoute) {
       setView('login');
       return null; // O próximo ciclo de renderização mostrará o login
+    }
+
+    if (currentPath === '/cidades') {
+      return <CitiesList />;
     }
 
     return (

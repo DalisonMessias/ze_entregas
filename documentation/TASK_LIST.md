@@ -1,11 +1,14 @@
-# Tarefas Concluídas - Correção de Rotas e Home
+# Plano de Manutenção e Melhoria de UI/UX - Página Home
 
-- [x] Mapeamento da rota raiz `/` no `routeMap.ts` para a tab `home`.
-- [x] Remoção do redirecionamento forçado de `/` para `/home` no `AuthWrapper.tsx`.
-- [x] Remoção da lógica de `replaceState` no `App.tsx` que forçava `/home`.
-- [x] Atualização de todos os links de `Logo` (LandingPage, DigitalMenu, CollaboratorModule, Sidebar, AuthWrapper) para redirecionar para `/`.
-- [x] Correção do componente `NotFound.tsx` para voltar para `/`.
-- [x] Renomeação do `service-worker.js` para `sw.js` para maior compatibilidade.
-- [x] Atualização da inclusão do Service Worker no `index.html` e registro no `index.tsx`.
-- [x] Correção de erro de sintaxe no `App.tsx` após refatoração.
-- [x] Garantia de que refreshes de página funcionam sem tela branca em `/`.
+Este plano foca exclusivamente na melhoria do design (UI/UX) da página `/home`, mantendo toda a lógica de negócio intacta.
+
+## Tarefas
+
+- [ ] Melhorar o Hero da LandingPage (Título, Subtítulo e Background)
+- [ ] Otimizar o Seletor de Cidades (Card central, ícones e espaçamento)
+- [ ] Ajustar o Grid de Lojas (Responsividade e Espaçamento)
+- [ ] Refinar o design do StoreCard (Sombras, hover e tipografia)
+- [ ] Implementar Loading Skeletons mais fluidos
+- [ ] Melhorar o feedback visual de "Nenhuma loja encontrada"
+- [ ] Padronizar tons de cores e transições
+- [ ] Validar responsividade em dispositivos mobile

@@ -288,7 +288,7 @@ export const AdminApiKeysUnified: React.FC = () => {
     );
 
     const renderLogsTab = () => (
-        <div className="bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-xs h-[600px] overflow-y-auto">
+        <div className="bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-xs h-[360px] sm:h-[480px] md:h-[600px] overflow-y-auto">
             {dataLoading ? <div className="text-center p-4"><Loader2 className="animate-spin mx-auto w-6 h-6" /></div> : (
                 <>
                     {storeLogs.map(l => (
