@@ -1,3 +1,6 @@
-- [x] Corrigir o modelo da API Gemini e o prompt no serviço de imagem.
-- [x] Atualizar o arquivo geminiImageService.ts com as correções.
-- [x] Marcar a tarefa como concluída.
+# Plano de Tarefas - Galeria de Imagens (Remoção de IA)
+
+- [x] Criado novo serviço `services/galleryService.ts` para funções manuais.
+- [x] Limpo componente `AdminImageGallery.tsx`.
+- [x] Excluído `services/geminiImageService.ts`.
+- [x] Atualizado `checklist.txt`.
