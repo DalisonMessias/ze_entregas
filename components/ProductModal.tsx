@@ -34,6 +34,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     const [categories, setCategories] = useState<any[]>([]);
     const [addonGroups, setAddonGroups] = useState<any[]>([]);
     const [toast, setToast] = useState<ToastState | null>(null);
+    const [newAvulsoName, setNewAvulsoName] = useState('');
+    const [newAvulsoPrice, setNewAvulsoPrice] = useState<number>(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -83,6 +85,32 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         } finally {
             setUploadingImage(false);
         }
+    };
+
+    const handleAddAvulso = () => {
+        if (!newAvulsoName || newAvulsoPrice < 0) return;
+
+        const newOption = {
+            id: crypto.randomUUID(),
+            name: newAvulsoName,
+            price: newAvulsoPrice,
+            is_active: true
+        };
+
+        setEditingProduct(prev => ({
+            ...prev,
+            addon_options: [...(prev.addon_options || []), newOption]
+        }));
+
+        setNewAvulsoName('');
+        setNewAvulsoPrice(0);
+    };
+
+    const handleRemoveAvulso = (id: string) => {
+        setEditingProduct(prev => ({
+            ...prev,
+            addon_options: (prev.addon_options || []).filter(opt => opt.id !== id)
+        }));
     };
 
     if (!isOpen) return null;
@@ -191,12 +219,71 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4">
-                        <AddonGroupSelector
-                            groups={addonGroups}
-                            selectedGroup={editingProduct.addon_group_id || null}
-                            onSelect={(groupId) => setEditingProduct({ ...editingProduct, addon_group_id: groupId })}
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <AddonGroupSelector
+                                groups={addonGroups}
+                                selectedGroup={editingProduct.addon_group_id || null}
+                                onSelect={(groupId) => setEditingProduct({ ...editingProduct, addon_group_id: groupId })}
+                            />
+                            <p className="text-[10px] text-gray-400 uppercase font-medium px-1">Vincular um grupo pré-configurado de opcionais</p>
+                        </div>
+
+                        <div className="space-y-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Adicionais Avulsos (Extras)</label>
+
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <input
+                                        type="text"
+                                        placeholder="Nome"
+                                        className="w-full p-3 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                        value={newAvulsoName}
+                                        onChange={(e) => setNewAvulsoName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="w-24">
+                                    <input
+                                        type="text"
+                                        placeholder="R$ 0,00"
+                                        className="w-full p-3 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                        value={newAvulsoPrice === 0 ? '' : `R$ ${newAvulsoPrice.toFixed(2).replace('.', ',')}`}
+                                        onChange={(e) => {
+                                            const raw = e.target.value.replace(/\D/g, '');
+                                            setNewAvulsoPrice(Number(raw) / 100);
+                                        }}
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleAddAvulso}
+                                    type="button"
+                                    className="p-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl transition-colors shadow-sm"
+                                >
+                                    <Save className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-2 mt-4 max-h-40 overflow-y-auto pr-1">
+                                {(editingProduct.addon_options || []).length === 0 ? (
+                                    <p className="text-xs text-center text-gray-400 py-4 italic">Nenhum adicional avulso cadastrado.</p>
+                                ) : (
+                                    (editingProduct.addon_options || []).map((opt) => (
+                                        <div key={opt.id} className="flex justify-between items-center p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 group">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold dark:text-white">{opt.name}</span>
+                                                <span className="text-xs text-brand-600 font-medium">R$ {opt.price.toFixed(2).replace('.', ',')}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => handleRemoveAvulso(opt.id)}
+                                                className="p-1.5 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="relative">

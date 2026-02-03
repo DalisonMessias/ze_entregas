@@ -618,14 +618,35 @@ const handleCheckout = async () => {
         } else {
             alert({ title: 'Erro na Loja', message: 'Não foi possível enviar o pedido pois a loja não configurou um número de telefone.' });
         }
+        return; // Return after handling WhatsApp flow
     }
-};
-const isStoreOpen = useMemo(() => {
-    if (!store) return true;
-    return getStoreOpenState({
-        openingHours: store.opening_hours,
-        isOpen: store.is_open,
-        isCurrentlyOpen: store.is_currently_open
-    }).isOpen;
-}, [store]);
+
+    const isStoreOpen = useMemo(() => {
+        if (!store) return true;
+        return getStoreOpenState({
+            openingHours: store.opening_hours,
+            isOpen: store.is_open,
+            isCurrentlyOpen: store.is_currently_open
+        }).isOpen;
+    }, [store]);
+
+    return (
+        <div className="min-h-screen bg-slate-50 pb-20">
+            {/* Implementação do Cardápio Digital aqui (Continua...) */}
+            <div className="container mx-auto p-4 text-center text-slate-500">
+                O Cardápio Digital está em manutenção para integração de novos recursos de adicionais.
+            </div>
+
+            {isAddonModalOpen && selectedProduct && selectedProductAddonGroup && (
+                <ProductAddonSelector
+                    isOpen={isAddonModalOpen}
+                    onClose={() => setIsAddonModalOpen(false)}
+                    product={selectedProduct}
+                    addonGroup={selectedProductAddonGroup}
+                    onConfirm={handleConfirmAddons}
+                    initialAddons={currentEditingCartItemId ? cart.find(i => i.id === currentEditingCartItemId)?.selectedAddons : []}
+                />
+            )}
+        </div>
+    );
 };

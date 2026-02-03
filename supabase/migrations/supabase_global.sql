@@ -11838,3 +11838,19 @@ BEGIN
         ALTER TABLE public.products ADD COLUMN addon_group_id UUID REFERENCES public.store_addon_groups(id) ON DELETE SET NULL;
     END IF;
 END $$;
+
+-- Adicionar addon_options à tabela products para adicionais avulsos (03/02/2026)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'addon_options') THEN
+        ALTER TABLE public.products ADD COLUMN addon_options JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+-- Adicionar addon_options à tabela store_products para adicionais avulsos (03/02/2026)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'store_products' AND column_name = 'addon_options') THEN
+        ALTER TABLE public.store_products ADD COLUMN addon_options JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;

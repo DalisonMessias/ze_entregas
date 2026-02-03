@@ -272,6 +272,7 @@ export interface Product {
     origin_prefix?: string;
     store_id?: string;
     addon_group_id?: string | null;
+    addon_options?: StoreAddonOption[] | null;
 }
 
 export interface StoreAddonOption {
@@ -315,6 +316,7 @@ export interface StoreProduct {
     stock_quantity?: number | null;
     base_product_id?: string | null;
     addon_group_id?: string | null;
+    addon_options?: StoreAddonOption[] | null;
 }
 
 export interface CatalogBaseProduct {
