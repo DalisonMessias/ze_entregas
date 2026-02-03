@@ -18,6 +18,7 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
     const [searchTerm, setSearchTerm] = useState(''); // Começa vazio para mostrar todas ao focar
     const [cities, setCities] = useState<City[]>([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Quando o valor muda externamente (seleção concluída), atualiza o campo e fecha
@@ -35,6 +36,7 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
 
         const fetchCities = async () => {
             setLoading(true);
+            setError(null);
             try {
                 // Se searchTerm for vazio, traz as cidades padrão/disponíveis
                 const query = searchTerm.length >= 2 ? searchTerm : '';
@@ -45,6 +47,8 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
             } catch (error) {
                 if (!signal.aborted) {
                     console.error('Failed to fetch cities:', error);
+                    setCities([]);
+                    setError('Não foi possível buscar cidades agora.');
                 }
             } finally {
                 if (!signal.aborted) {
@@ -59,6 +63,13 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
             controller.abort();
         };
     }, [searchTerm, isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setLoading(false);
+            setError(null);
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -128,7 +139,7 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
                             </div>
                         )}
 
-                        {!loading && cities.length > 0 && (
+                        {!loading && !error && cities.length > 0 && (
                             <div className="p-2">
                                 {cities.slice(0, 5).map((city) => {
                                     const cityFullName = `${city.name} - ${city.state}`;
@@ -172,13 +183,34 @@ export const LandingCitySelector: React.FC<LandingCitySelectorProps> = ({
                             </div>
                         )}
 
-                        {!loading && cities.length === 0 && (
+                        {!loading && !error && cities.length === 0 && (
                             <div className="px-6 py-12 text-center">
                                 <div className="w-16 h-16 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <MapPin className="w-8 h-8 text-gray-200" />
                                 </div>
                                 <p className="text-gray-900 dark:text-white font-black">Nenhuma cidade encontrada</p>
                                 <p className="text-sm text-gray-500 mt-1 font-medium italic">Tente buscar por um nome diferente.</p>
+                            </div>
+                        )}
+
+                        {!loading && error && (
+                            <div className="px-6 py-10 text-center">
+                                <div className="w-14 h-14 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <X className="w-6 h-6 text-red-400" />
+                                </div>
+                                <p className="text-gray-900 dark:text-white font-black">Ops! Algo deu errado.</p>
+                                <p className="text-sm text-gray-500 mt-1 font-medium">{error}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setError(null);
+                                        setIsOpen(true);
+                                        setSearchTerm(prev => prev);
+                                    }}
+                                    className="mt-4 px-4 py-2 text-xs font-black uppercase tracking-wider text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-xl transition-all"
+                                >
+                                    Tentar novamente
+                                </button>
                             </div>
                         )}
                     </div>
