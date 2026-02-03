@@ -2282,7 +2282,7 @@ export const InternalOrders: React.FC = () => {
                             <h2 className="text-2xl font-bold dark:text-white mb-6">Histórico de Pedidos</h2>
 
                             {/* Filtros de Data para a aba HISTORY (Intervalo) */}
-                            <div className="flex gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                            <div className="flex flex-col md:flex-row gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Data Inicial</label>
                                     <input
@@ -2301,7 +2301,7 @@ export const InternalOrders: React.FC = () => {
                                         className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
                                     />
                                 </div>
-                                <div className="flex items-end">
+                                <div className="flex items-end gap-2 w-full md:w-auto">
                                     <Button
                                         size="sm"
                                         variant="secondary"
@@ -2310,14 +2310,14 @@ export const InternalOrders: React.FC = () => {
                                             setFilterStartDate(today);
                                             setFilterEndDate(today);
                                         }}
-                                        className="px-4 py-2 h-[38px]"
+                                        className="px-4 py-2 h-[38px] w-full md:w-auto"
                                     >
                                         Hoje
                                     </Button>
                                     <Button
                                         size="sm"
                                         onClick={() => loadHistory(filterStartDate, filterEndDate)}
-                                        className="px-4 py-2 h-[38px] bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2"
+                                        className="px-4 py-2 h-[38px] w-full md:w-auto bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2"
                                     >
                                         <Search className="w-4 h-4" />
                                         Filtrar
@@ -2340,58 +2340,109 @@ export const InternalOrders: React.FC = () => {
                                             <p>Nenhum pedido encontrado para esta data.</p>
                                         </div>
                                     ) : (
-                                        <table className="w-full text-left border-collapse">
-                                            <thead className="text-gray-500 font-bold text-xs bg-gray-50 dark:bg-gray-900">
-                                                <tr>
-                                                    <th className="p-3 rounded-l-xl">Data</th>
-                                                    <th className="p-3">Cliente</th>
-                                                    <th className="p-3">Itens</th>
-                                                    <th className="p-3">Total</th>
-                                                    <th className="p-3">Pagamento</th>
-                                                    <th className="p-3 rounded-r-xl text-center">Ações</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="text-sm">
-                                                {filteredHistory.map(order => (
-                                                    <tr key={order.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                                        <td className="p-3 dark:text-gray-300">
-                                                            {new Date(order.created_at).toLocaleDateString()} <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleTimeString().slice(0, 5)}</span>
-                                                        </td>
-                                                        <td className="p-3 dark:text-white font-bold">{order.customer_name || '-'}</td>
-                                                        <td className="p-3 dark:text-gray-300">
-                                                            {order.items.length} itens
-                                                        </td>
-                                                        <td className="p-3 font-bold dark:text-white">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total_price)}
-                                                        </td>
-                                                        <td className="p-3 dark:text-gray-300 text-xs">
-                                                            {order.payment_method === 'CREDIT_CARD' ? 'Crédito' :
-                                                                order.payment_method === 'DEBIT_CARD' ? 'Débito' :
-                                                                    order.payment_method === 'PIX' ? 'Pix' :
-                                                                        order.payment_method === 'CASH' ? 'Dinheiro' : 'Outro'}
-                                                        </td>
-                                                        <td className="p-3 text-center">
-                                                            <div className="flex justify-center gap-2">
-                                                                <button
-                                                                    onClick={() => { setLastOrder(order); setShowPrintPreview(true); }}
-                                                                    className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-600 dark:text-gray-300"
-                                                                    title="Visualizar/Imprimir"
-                                                                >
-                                                                    <Printer className="w-4 h-4" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleDuplicate(order)}
-                                                                    className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-600 dark:text-gray-300"
-                                                                    title="Duplicar Pedido"
-                                                                >
-                                                                    <Copy className="w-4 h-4" />
-                                                                </button>
+                                        <>
+                                            <div className="space-y-3 md:hidden">
+                                                {filteredHistory.map(order => {
+                                                    const paymentLabel = order.payment_method === 'CREDIT_CARD' ? 'Crédito'
+                                                        : order.payment_method === 'DEBIT_CARD' ? 'Débito'
+                                                            : order.payment_method === 'PIX' ? 'Pix'
+                                                                : order.payment_method === 'CASH' ? 'Dinheiro' : 'Outro';
+
+                                                    return (
+                                                        <div key={order.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                                            <div className="flex justify-between items-start gap-4">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-xs text-gray-400">
+                                                                        {new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString().slice(0, 5)}
+                                                                    </p>
+                                                                    <p className="font-bold text-gray-900 dark:text-white truncate">{order.customer_name || '-'}</p>
+                                                                    <p className="text-xs text-gray-500 mt-1">{order.items.length} itens • {paymentLabel}</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="font-black text-gray-900 dark:text-white">
+                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total_price)}
+                                                                    </p>
+                                                                    <p className="text-[10px] text-gray-400 font-mono">#{order.id.substring(0, 6)}</p>
+                                                                </div>
                                                             </div>
-                                                        </td>
+                                                            <div className="flex gap-2 mt-3">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => { setLastOrder(order); setShowPrintPreview(true); }}
+                                                                    className="flex-1"
+                                                                >
+                                                                    <Printer className="w-4 h-4 mr-2" />
+                                                                    Ver/Imprimir
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleDuplicate(order)}
+                                                                    className="flex-1"
+                                                                >
+                                                                    <Copy className="w-4 h-4 mr-2" />
+                                                                    Duplicar
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            <table className="hidden md:table w-full text-left border-collapse">
+                                                <thead className="text-gray-500 font-bold text-xs bg-gray-50 dark:bg-gray-900">
+                                                    <tr>
+                                                        <th className="p-3 rounded-l-xl">Data</th>
+                                                        <th className="p-3">Cliente</th>
+                                                        <th className="p-3">Itens</th>
+                                                        <th className="p-3">Total</th>
+                                                        <th className="p-3">Pagamento</th>
+                                                        <th className="p-3 rounded-r-xl text-center">Ações</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody className="text-sm">
+                                                    {filteredHistory.map(order => (
+                                                        <tr key={order.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                            <td className="p-3 dark:text-gray-300">
+                                                                {new Date(order.created_at).toLocaleDateString()} <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleTimeString().slice(0, 5)}</span>
+                                                            </td>
+                                                            <td className="p-3 dark:text-white font-bold">{order.customer_name || '-'}</td>
+                                                            <td className="p-3 dark:text-gray-300">
+                                                                {order.items.length} itens
+                                                            </td>
+                                                            <td className="p-3 font-bold dark:text-white">
+                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total_price)}
+                                                            </td>
+                                                            <td className="p-3 dark:text-gray-300 text-xs">
+                                                                {order.payment_method === 'CREDIT_CARD' ? 'Crédito' :
+                                                                    order.payment_method === 'DEBIT_CARD' ? 'Débito' :
+                                                                        order.payment_method === 'PIX' ? 'Pix' :
+                                                                            order.payment_method === 'CASH' ? 'Dinheiro' : 'Outro'}
+                                                            </td>
+                                                            <td className="p-3 text-center">
+                                                                <div className="flex justify-center gap-2">
+                                                                    <button
+                                                                        onClick={() => { setLastOrder(order); setShowPrintPreview(true); }}
+                                                                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-600 dark:text-gray-300"
+                                                                        title="Visualizar/Imprimir"
+                                                                    >
+                                                                        <Printer className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDuplicate(order)}
+                                                                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-600 dark:text-gray-300"
+                                                                        title="Duplicar Pedido"
+                                                                    >
+                                                                        <Copy className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </>
                                     )
                                 })()}
                             </div>

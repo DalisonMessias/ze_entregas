@@ -429,6 +429,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const [isRestrictedMode, setIsRestrictedMode] = useState(['blocked', 'suspended', 'pending'].includes(initialUserStatus || ''));
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Default collapsed on desktop per user request
+    const [isStoreMoreOpen, setIsStoreMoreOpen] = useState(false);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -837,6 +838,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         setNavigationKey(prev => prev + 1);
         setActiveTab(tab);
         setIsMenuOpen(false);
+        setIsStoreMoreOpen(false);
     };
 
     const markNotificationRead = async (id: string) => {
@@ -871,6 +873,37 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const isNormalDriver = effectiveRole === 'delivery_person';
     const isDriver = isNormalDriver || isPartner;
 
+    const storeRootTabs = new Set<ActiveTab>(['wallet', 'history', 'store_catalog', 'zebank']);
+    const storeOrdersTabs = new Set<ActiveTab>(['history', 'new_request', 'internal_orders', 'my_orders']);
+    const storeProductsTabs = new Set<ActiveTab>(['store_catalog', 'store_product_import', 'store_print_catalog', 'store_promotions']);
+    const storeFinanceTabs = new Set<ActiveTab>(['zebank', 'zepay_store', 'store_finance_panel', 'store_loans', 'store_receiving_payment']);
+
+    const storeTabTitles: Partial<Record<ActiveTab, string>> = {
+        wallet: 'Início',
+        history: 'Pedidos',
+        new_request: 'Nova Entrega',
+        internal_orders: 'Comandas',
+        store_catalog: 'Produtos',
+        store_product_import: 'Importar Produtos',
+        store_print_catalog: 'Catálogo Impresso',
+        store_promotions: 'Promoções',
+        store_status: 'Status da Loja',
+        store_team: 'Equipe',
+        store_reports: 'Relatórios',
+        store_marketing: 'Marketing',
+        store_integrations: 'Integrações',
+        store_settings: 'Configurações',
+        store_receiving_payment: 'Recebimento PIX',
+        store_finance_panel: 'Financeiro',
+        zepay_store: 'ZéPay',
+        zebank: 'ZéBank',
+        store_loans: 'Empréstimos',
+        store_api_docs: 'Docs API',
+        internal_chat: 'Chat com Clientes',
+        store_drivers_chat: 'Chat com Entregadores',
+        zepoint: 'ZéPoint'
+    };
+
     const generalTabs = new Set<ActiveTab>([
         'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'internal_chat',
         'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat', 'street_request'
@@ -883,6 +916,29 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         delivery_person: 'daily_panel',
         collaborator: 'collaborator_area',
         user: 'home'
+    };
+
+    const storeNavKey = (() => {
+        if (!isStore) return null;
+        if (storeOrdersTabs.has(activeTab)) return 'orders';
+        if (storeProductsTabs.has(activeTab)) return 'products';
+        if (storeFinanceTabs.has(activeTab)) return 'finance';
+        if (storeRootTabs.has(activeTab)) return 'home';
+        return 'more';
+    })();
+
+    const headerTitle = isStore ? (storeTabTitles[activeTab] || 'Painel da Loja') : '';
+
+    const driverRootTabs = new Set<ActiveTab>(['daily_panel', 'partner']);
+    const adminRootTabs = new Set<ActiveTab>(['admin_dashboard']);
+    const userRootTabs = new Set<ActiveTab>(['home']);
+
+    const shouldShowBack = () => {
+        if (isStore) return !storeRootTabs.has(activeTab);
+        if (isAdmin) return !adminRootTabs.has(activeTab);
+        if (isDriver) return !driverRootTabs.has(activeTab);
+        if (effectiveRole === 'user') return !userRootTabs.has(activeTab);
+        return activeTab !== defaultTabByRole[effectiveRole];
     };
 
     const allowedTabs: Record<UserRole, Set<ActiveTab>> = {
@@ -1129,6 +1185,141 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         <p className={`text-[10px] font-bold text-gray-400 uppercase ml-3 mt-4 mb-2 tracking-wider transition-opacity duration-300 ${!isSidebarExpanded ? 'md:hidden' : ''}`}>{title}</p>
     );
 
+    const storeBottomNavItems = [
+        { key: 'home', label: 'Início', tab: 'wallet' as ActiveTab, icon: Home },
+        { key: 'orders', label: 'Pedidos', tab: 'history' as ActiveTab, icon: ClipboardList },
+        { key: 'products', label: 'Produtos', tab: 'store_catalog' as ActiveTab, icon: ShoppingBag },
+        { key: 'finance', label: 'Financeiro', tab: 'zebank' as ActiveTab, icon: Wallet },
+        { key: 'more', label: 'Mais', onClick: () => setIsStoreMoreOpen(true), icon: LayoutGrid }
+    ];
+
+    const storeMoreSections: Array<{ title: string; items: Array<{ label: string; tab: ActiveTab; icon: any; badge?: number }> }> = [
+        {
+            title: 'Operações',
+            items: [
+                { label: 'Solicitar Entrega', tab: 'new_request', icon: Truck },
+                { label: 'Comanda', tab: 'internal_orders', icon: FileText, badge: pendingTicketsCount },
+                { label: 'Status da Loja', tab: 'store_status', icon: Power }
+            ]
+        },
+        {
+            title: 'Gestão',
+            items: [
+                { label: 'Equipe', tab: 'store_team', icon: Users },
+                { label: 'Relatórios', tab: 'store_reports', icon: BarChart3 },
+                { label: 'Configurações', tab: 'store_settings', icon: Settings }
+            ]
+        },
+        {
+            title: 'Marketing & Vendas',
+            items: [
+                { label: 'Marketing', tab: 'store_marketing', icon: Megaphone },
+                { label: 'Promoções e Cupons', tab: 'store_promotions', icon: Banknote }
+            ]
+        },
+        {
+            title: 'Integrações',
+            items: [
+                { label: 'Integrações', tab: 'store_integrations', icon: Cloud },
+                { label: 'Docs API', tab: 'store_api_docs', icon: Key },
+                { label: 'Importar/Exportar', tab: 'store_product_import', icon: Download },
+                { label: 'Catálogo Impresso', tab: 'store_print_catalog', icon: ImageIcon }
+            ]
+        },
+        {
+            title: 'Financeiro',
+            items: [
+                { label: 'ZéPay', tab: 'zepay_store', icon: CreditCard },
+                { label: 'Painel Financeiro', tab: 'store_finance_panel', icon: Landmark },
+                { label: 'Empréstimos', tab: 'store_loans', icon: DollarSign },
+                { label: 'Recebimento PIX', tab: 'store_receiving_payment', icon: Smartphone }
+            ]
+        },
+        {
+            title: 'Comunicação',
+            items: [
+                { label: 'Chat com Clientes', tab: 'internal_chat', icon: MessageSquare },
+                { label: 'Chat c/ Entregadores', tab: 'store_drivers_chat', icon: MessageCircle },
+                { label: 'ZéPoint (POS)', tab: 'zepoint', icon: Smartphone }
+            ]
+        }
+    ];
+
+    const StoreMoreItem = ({ icon: Icon, label, tab, badge }: { icon: any; label: string; tab: ActiveTab; badge?: number }) => (
+        <button
+            onClick={() => navigate(tab)}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.99] transition-all"
+        >
+            <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                </div>
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{label}</span>
+            </div>
+            {badge !== undefined && badge > 0 && (
+                <span className="min-w-[20px] h-[20px] px-1 rounded-full text-[10px] font-bold bg-red-500 text-white flex items-center justify-center">
+                    {badge > 9 ? '9+' : badge}
+                </span>
+            )}
+        </button>
+    );
+
+    const StoreBottomNav = () => (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" aria-label="Navegação principal da loja">
+            <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-800 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0)+0.75rem)]">
+                <div className="grid grid-cols-5 gap-1">
+                    {storeBottomNavItems.map(item => {
+                        const isActive = storeNavKey === item.key;
+                        return (
+                            <button
+                                key={item.key}
+                                onClick={() => item.onClick ? item.onClick() : navigate(item.tab)}
+                                className={`flex flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all ${isActive ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                aria-current={isActive ? 'page' : undefined}
+                            >
+                                <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`} />
+                                <span className={`text-[10px] font-bold ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`}>{item.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </nav>
+    );
+
+    const StoreMoreSheet = () => (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Mais opções da loja">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsStoreMoreOpen(false)} />
+            <div className="absolute inset-x-0 bottom-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto">
+                <div className="sticky top-0 bg-white dark:bg-gray-900 p-4 border-b border-gray-100 dark:border-gray-800">
+                    <div className="w-10 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-3" />
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-base font-black text-gray-900 dark:text-white">Mais opções</h3>
+                        <button
+                            onClick={() => setIsStoreMoreOpen(false)}
+                            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+                            aria-label="Fechar"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+                <div className="p-4 space-y-5">
+                    {storeMoreSections.map(section => (
+                        <div key={section.title} className="space-y-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{section.title}</p>
+                            <div className="grid grid-cols-1 gap-2">
+                                {section.items.map(item => (
+                                    <StoreMoreItem key={item.tab} icon={item.icon} label={item.label} tab={item.tab} badge={item.badge} />
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
     // Verificação de rotas públicas internas que devem renderizar sem sidebar (Full Width)
     const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat'];
     const isPublicTab = publicTabs.includes(activeTab);
@@ -1182,10 +1373,20 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                 <Menu className="w-6 h-6" />
                             </button>
                             {/* Back Button for Sub-Views if not root views */}
-                            {activeTab !== 'daily_panel' && activeTab !== 'shop' && activeTab !== 'wallet' && activeTab !== 'partner' && activeTab !== 'admin_dashboard' && (
-                                <button onClick={() => navigate(isDriver ? 'daily_panel' : 'shop')} className="p-1 rounded-full text-gray-400 hover:text-gray-600 md:hidden">
+                            {shouldShowBack() && (
+                                <button
+                                    onClick={() => navigate(defaultTabByRole[effectiveRole] || 'home')}
+                                    className="p-1 rounded-full text-gray-400 hover:text-gray-600 md:hidden"
+                                    aria-label="Voltar"
+                                >
                                     <ArrowLeft className="w-5 h-5" />
                                 </button>
+                            )}
+
+                            {isStore && (
+                                <span className="md:hidden text-sm font-bold text-gray-700 dark:text-gray-200 max-w-[180px] truncate">
+                                    {headerTitle}
+                                </span>
                             )}
 
                         </div>
@@ -1456,12 +1657,15 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 </SectionErrorBoundary>
 
                 {/* Main Content Area */}
-                <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
+                <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'} ${isStore ? 'pb-24 md:pb-6' : 'pb-6'}`}>
                     {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
                     <Suspense fallback={<Loading variant="container" size="md" />}>
                         {renderContent()}
                     </Suspense>
                 </main>
+
+                {isStore && !isPublicTab && <StoreBottomNav />}
+                {isStore && isStoreMoreOpen && <StoreMoreSheet />}
 
                 {/* Modals */}
                 <EmergencyModal isOpen={showEmergency} onClose={() => setShowEmergency(false)} />

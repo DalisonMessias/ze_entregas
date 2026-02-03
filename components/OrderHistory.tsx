@@ -286,7 +286,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                 </div>
 
                 {stats || requests.length > 0 ? (
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800">
                             <p className="text-xs text-green-600 dark:text-green-400 font-bold uppercase">{userRole === 'store_partner' ? 'Valor Gasto' : 'Ganhos'}</p>
                             <p className="text-lg font-black text-green-700 dark:text-green-300">{formatCurrency(clientStats.value)}</p>

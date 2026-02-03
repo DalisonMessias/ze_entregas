@@ -262,7 +262,7 @@ export const StoreCatalog: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-140px)] animate-in fade-in duration-500 max-w-full overflow-hidden">
+        <div className="flex flex-col lg:flex-row gap-4 md:h-[calc(100vh-140px)] animate-in fade-in duration-500 max-w-full md:overflow-hidden">
             {/* Left Column: AI Assistant - Peristent across tabs for SuperStore */}
             {isSuperStore && (
                 <div className="w-full lg:w-[400px] flex-shrink-0 h-full">

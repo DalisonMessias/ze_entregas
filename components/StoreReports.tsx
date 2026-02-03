@@ -112,7 +112,7 @@ export const StoreReports: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
                     <p className="text-xs text-gray-400 font-bold uppercase">Faturamento (Frete)</p>
                     <p className="text-3xl font-black text-green-600 dark:text-green-400">{formatCurrency(report.totalValue)}</p>
