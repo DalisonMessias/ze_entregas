@@ -1,4 +1,6 @@
 ﻿import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import axios from 'axios';
+import { getApiBaseUrl } from '../utils/apiConfig';
 import {
     PartnerRequest, UserRole, UserStatus, ManagedUser, PartnerProfile, PartnerDocument,
     City, CityRequest, PayoutSettings, PartnerLevelBenefit, PartnerFeeSettings,
@@ -6107,12 +6109,77 @@ export const sendPublicMessage = async (orderId: string, message: string): Promi
     const sb = getClient();
     if (!sb) return false;
 
+    // 1. Enviar para o Supabase (Source of Truth do Pedido)
     const { data, error } = await sb.rpc('send_public_message', { p_order_id: orderId, p_message: message });
     if (error) {
         console.error('Error sending public message:', error);
         return false;
     }
+
+    // 2. Notificar API de Chat (UnificaÃ§Ã£o do Painel da Loja)
+    try {
+        // Busca dados bÃ¡sicos do pedido para a API de chat
+        const { data: order } = await sb
+            .from('orders')
+            .select('store_id, customer_name')
+            .eq('id', orderId)
+            .single();
+
+        if (order?.store_id) {
+            const visitorId = localStorage.getItem('ze_visitor_id') || ('order_' + orderId);
+            
+            axios.post(getApiBaseUrl() + '/internal/send', {
+                storeId: order.store_id,
+                visitorId: visitorId,
+                content: message,
+                senderId: visitorId,
+                senderName: order.customer_name || 'Cliente (Rastreio)',
+                isFromVisitor: true,
+                orderId: orderId,
+                source: 'order_tracking'
+            }).catch(function(e) { console.warn('Chat API Sync Warning:', e.message); });
+        }
+    } catch (apiErr) {
+        console.warn('Failed to sync message with Chat API:', apiErr);
+    }
+
     return !!data;
+};
+
+
+export const sendStoreReplyToOrderChat = async (orderId: string, message: string, storeId: string) => {
+    const sb = getClient();
+    if (!sb) return;
+
+    try {
+        // Busca ou garante existÃªncia do chat
+        let { data: chat } = await sb
+            .from('order_chats')
+            .select('id')
+            .eq('order_id', orderId)
+            .single();
+
+        if (!chat) {
+            const { data: newChat } = await sb
+                .from('order_chats')
+                .insert({ order_id: orderId, store_id: storeId, status: 'active' })
+                .select('id')
+                .single();
+            chat = newChat;
+        }
+
+        if (chat) {
+            await sb.from('chat_messages').insert({
+                chat_id: chat.id,
+                sender_id: storeId,
+                sender_type: 'store',
+                message: message,
+                type: 'text'
+            });
+        }
+    } catch (e) {
+        console.error('Error sending store reply to Supabase:', e);
+    }
 };
 
 export const createOrderReport = async (orderId: string, storeId: string, type: string, description: string): Promise<boolean> => {

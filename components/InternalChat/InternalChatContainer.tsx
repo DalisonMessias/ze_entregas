@@ -160,6 +160,12 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
         const isNewer = !existing || new Date(conv.last_message_timestamp || 0) > new Date(existing.last_message_timestamp || 0);
 
         if (isNewer) {
+          // IdentificaÃ§Ã£o visual de Pedidos (Rastreio)
+          if (conv.conversation_id.startsWith('order_')) {
+            const shortId = conv.conversation_id.replace('order_', '').slice(0, 8).toUpperCase();
+            conv.contact_name = `Rastreio: Pedido #${shortId}`;
+            conv.customer_type = 'visitor';
+          }
           seen.set(dedupeKey, conv);
         }
       });
@@ -687,6 +693,12 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
           storeId,
           attendantId
         });
+
+        // Loopback para o Supabase se for uma conversa de rastreio
+        if (selectedConversation.conversation_id.startsWith('order_')) {
+          const orderId = selectedConversation.conversation_id.replace('order_', '');
+          await cloud.sendStoreReplyToOrderChat(orderId, text, storeId);
+        }
       } catch (error) {
         console.error('Erro ao enviar mensagem:', error);
         setMessages(prev => prev.map(m => m.message_id === tempId ? { ...m, status: 'error' } : m));

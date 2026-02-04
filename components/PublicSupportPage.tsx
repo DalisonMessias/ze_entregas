@@ -5,7 +5,6 @@ import {
     ChevronRight,
     Clock,
     ExternalLink,
-    FileQuestion,
     Headphones,
     Lock,
     MessageCircle,
@@ -14,42 +13,7 @@ import {
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
 import { Logo } from './Logo';
-
-const checkBusinessHours = (start: string, end: string): boolean => {
-    const now = new Date();
-    const day = now.getDay();
-    const hour = now.getHours();
-    const minute = now.getMinutes();
-
-    const [startH, startM] = start.split(':').map(Number);
-    const [endH, endM] = end.split(':').map(Number);
-
-    const currentMinutes = hour * 60 + minute;
-    const startMinutes = startH * 60 + startM;
-    const endMinutes = endH * 60 + endM;
-
-    const isWeekDay = day >= 1 && day <= 5;
-    const isWorkingHours = currentMinutes >= startMinutes && currentMinutes < endMinutes;
-
-    return isWeekDay && isWorkingHours;
-};
-
-const getNextBusinessDayMessage = (startTime: string = '09:00'): string => {
-    const now = new Date();
-    let nextDate = new Date(now);
-
-    if (now.getDay() === 5 && now.getHours() >= 18) {
-        nextDate.setDate(now.getDate() + 3);
-    } else if (now.getDay() === 6) {
-        nextDate.setDate(now.getDate() + 2);
-    } else {
-        nextDate.setDate(now.getDate() + 1);
-    }
-
-    if (nextDate.getDay() === 0) nextDate.setDate(nextDate.getDate() + 1);
-
-    return `Proximo dia util (${nextDate.toLocaleDateString('pt-BR')}) a partir das ${startTime}h`;
-};
+import { checkBusinessHours, getNextBusinessDayMessage } from '../utils/supportHours';
 
 export const PublicSupportPage: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -138,9 +102,40 @@ export const PublicSupportPage: React.FC = () => {
     const primaryCtaLabel = hasSession ? 'Meu painel' : 'Entrar';
     const primaryCtaLink = hasSession ? '/home' : '/login';
 
+    const accountCards = hasSession
+        ? [
+            { key: 'panel', label: 'Meu painel', desc: 'Acesse pedidos e suporte.', href: '/home', icon: Lock },
+            { key: 'claims', label: 'Meus chamados', desc: 'Acompanhe respostas.', href: '/home', icon: MessageSquare },
+        ]
+        : [
+            { key: 'login', label: 'Entrar para abrir chamado', desc: 'Faça login para atendimento.', href: '/login', icon: Lock },
+        ];
+
+    const supportTips = hasSession
+        ? [
+            { title: 'Abra chamados pelo painel', desc: 'Assim voce acompanha status e respostas.' },
+            { title: 'Informe numero do pedido', desc: 'Ajuda o time a localizar seu caso.' },
+            { title: 'Envie prints quando puder', desc: 'Facilita a analise do suporte.' },
+        ]
+        : [
+            { title: 'Consulte o FAQ primeiro', desc: 'Muitas duvidas sao resolvidas rapidamente.' },
+            { title: 'Tenha dados do pedido', desc: 'Numero e horario ajudam no atendimento.' },
+            { title: 'Entre para abrir chamado', desc: 'Necessario para acompanhar respostas.' },
+        ];
+
+    const faqNotes = hasSession
+        ? [
+            { title: 'Acesse seu painel', body: 'Use /home para abrir chamados e acompanhar respostas.' },
+            { title: 'Status do suporte', body: supportStatusDescription },
+        ]
+        : [
+            { title: 'Entre para abrir chamado', body: 'O atendimento completo fica disponivel apos login.' },
+            { title: 'Horario humano', body: `Seg a sex, ${supportHoursLabel}.` },
+        ];
+
     const renderMenu = () => (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-[1.35fr,1fr] gap-4">
+        <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.4fr,1fr] gap-5">
                 <div className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -161,7 +156,7 @@ export const PublicSupportPage: React.FC = () => {
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <button
                             onClick={handleOpenWhatsapp}
                             className={`group flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${isOpen
@@ -188,70 +183,35 @@ export const PublicSupportPage: React.FC = () => {
                             )}
                         </button>
 
-                        <button
-                            onClick={() => setActiveTab('faq')}
-                            className="group flex items-start gap-4 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all text-left"
-                        >
-                            <div className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                <FileQuestion className="w-6 h-6" />
-                            </div>
-                            <div className="flex-1 space-y-1">
-                                <h3 className="font-black text-gray-900 dark:text-white">Perguntas frequentes</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Autoatendimento rapido.</p>
-                            </div>
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
-                        </button>
-
-                        <a
-                            href="/login"
-                            className="group flex items-start gap-4 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all text-left"
-                        >
-                            <div className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                <Lock className="w-6 h-6" />
-                            </div>
-                            <div className="flex-1 space-y-1">
-                                <h3 className="font-black text-gray-900 dark:text-white">Area do cliente</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Login para abrir chamados.</p>
-                            </div>
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
-                        </a>
-
-                        <a
-                            href="/login"
-                            className="group flex items-start gap-4 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all text-left"
-                        >
-                            <div className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                <MessageSquare className="w-6 h-6" />
-                            </div>
-                            <div className="flex-1 space-y-1">
-                                <h3 className="font-black text-gray-900 dark:text-white">Meus chamados</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Acompanhe status e respostas.</p>
-                            </div>
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
-                        </a>
+                        {accountCards.map((card) => {
+                            const Icon = card.icon;
+                            return (
+                                <a
+                                    key={card.key}
+                                    href={card.href}
+                                    className="group flex items-start gap-4 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all text-left"
+                                >
+                                    <div className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                        <Icon className="w-6 h-6" />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <h3 className="font-black text-gray-900 dark:text-white">{card.label}</h3>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{card.desc}</p>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                                </a>
+                            );
+                        })}
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 space-y-4">
+                <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-5 space-y-4">
                     <div className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-white">
                         <CalendarClock className="w-4 h-4 text-brand-600" />
-                        Como agilizar o atendimento
+                        Antes de falar com a equipe
                     </div>
                     <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                        {[
-                            {
-                                title: 'Use o FAQ primeiro',
-                                desc: 'Muitas duvidas podem ser resolvidas em poucos minutos.'
-                            },
-                            {
-                                title: 'Informe dados do pedido',
-                                desc: 'Numero do pedido e horario ajudam o time.'
-                            },
-                            {
-                                title: 'Acesse sua conta',
-                                desc: 'Logado, voce pode abrir e acompanhar chamados.'
-                            },
-                        ].map((item, index) => (
+                        {supportTips.map((item, index) => (
                             <div key={item.title} className="flex gap-3">
                                 <div className="w-8 h-8 rounded-xl bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200 flex items-center justify-center text-xs font-black">
                                     {index + 1}
@@ -263,69 +223,48 @@ export const PublicSupportPage: React.FC = () => {
                             </div>
                         ))}
                     </div>
-                    <div className={`rounded-xl border p-3 text-xs ${isOpen
-                        ? 'bg-brand-50 dark:bg-brand-900/20 border-brand-100 dark:border-brand-900/40'
-                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                        }`}
-                    >
-                        <div className="font-bold text-gray-900 dark:text-white">Horario do suporte humano</div>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
-                            Seg a sex, {supportHoursLabel}. {isOpen
-                                ? 'Estamos online agora.'
-                                : 'Fora do horario, respondemos no proximo dia util.'}
-                        </p>
-                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Horario humano: {supportHoursLabel}. {isOpen ? 'Equipe online agora.' : 'Fora do horario, respondemos no proximo dia util.'}
+                    </p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
-                        <Clock className="w-4 h-4 text-brand-600" />
-                        Prazo de resposta
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
-                        {isOpen
-                            ? 'Respondemos por ordem de chegada.'
-                            : `Solicitacoes entram na fila. ${nextBusinessMessage}.`}
-                    </p>
+            <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
+                    <Clock className="w-4 h-4 text-brand-600" />
+                    Informacoes importantes
                 </div>
-
-                <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
-                        <Lock className="w-4 h-4 text-brand-600" />
-                        Privacidade
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
-                        Seus dados sao usados apenas para suporte e nao sao compartilhados fora da equipe.
-                    </p>
-                </div>
+                <ul className="mt-2 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                    <li>
+                        <span className="font-bold">Prazo de resposta:</span>{' '}
+                        {isOpen ? 'Respondemos por ordem de chegada.' : `Solicitacoes entram na fila. ${nextBusinessMessage}.`}
+                    </li>
+                    <li>
+                        <span className="font-bold">Privacidade:</span> Seus dados sao usados apenas para suporte.
+                    </li>
+                </ul>
             </div>
         </div>
     );
 
     const renderFAQ = () => (
         <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                    <h2 className="font-black text-xl text-gray-900 dark:text-white">Perguntas frequentes</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Respostas para as principais duvidas do app.
-                    </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h2 className="font-black text-xl text-gray-900 dark:text-white">Perguntas frequentes</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Respostas para as principais duvidas do app.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <a
+                            href={hasSession ? '/home' : '/login'}
+                            className="text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        >
+                            {hasSession ? 'Meu painel' : 'Entrar na conta'}
+                        </a>
+                    </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => setActiveTab('menu')}
-                        className="inline-flex items-center gap-2 text-sm font-bold text-brand-600"
-                    >
-                        <ChevronRight className="w-4 h-4 rotate-180" />
-                        Voltar
-                    </button>
-                    <a href="/login" className="text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                        Entrar na conta
-                    </a>
-                </div>
-            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[1.2fr,0.8fr] gap-6">
                 <div className="space-y-2">
@@ -350,18 +289,14 @@ export const PublicSupportPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                        <div className="font-black text-gray-900 dark:text-white mb-2">Nao encontrou?</div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Acesse sua conta para abrir um chamado e acompanhar a resposta.
-                        </p>
-                    </div>
-                    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                        <div className="font-black text-gray-900 dark:text-white mb-2">Status do suporte</div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {supportStatusDescription}
-                        </p>
-                    </div>
+                    {faqNotes.map((note) => (
+                        <div key={note.title} className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-4">
+                            <div className="font-black text-gray-900 dark:text-white mb-2">{note.title}</div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {note.body}
+                            </p>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -376,7 +311,7 @@ export const PublicSupportPage: React.FC = () => {
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
             {showPublicHeader && (
                 <header className="sticky top-0 z-40 bg-brand-600 text-white backdrop-blur border-b border-brand-700/60">
-                    <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+                    <div data-testid="public-support-topbar" className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
                         <button
                             onClick={() => window.location.href = '/'}
                             className="flex items-center gap-3 text-left"
@@ -407,7 +342,7 @@ export const PublicSupportPage: React.FC = () => {
                     </div>
                 </header>
             )}
-            <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+            <div data-testid="public-support-container" className="max-w-5xl mx-auto px-4 py-8 space-y-8">
                 <header className="relative overflow-hidden rounded-[32px] border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 md:p-8">
                     <div className="absolute -top-32 right-0 w-72 h-72 bg-brand-500/10 blur-[120px]" />
                     <div className="absolute -bottom-24 left-0 w-72 h-72 bg-brand-600/10 blur-[120px]" />
@@ -462,12 +397,12 @@ export const PublicSupportPage: React.FC = () => {
                     </div>
                 </header>
 
-                <nav className="flex flex-wrap gap-2">
+                <nav className="flex gap-2 overflow-x-auto no-scrollbar pb-1 mt-2">
                     {tabs.map((tab) => (
                         <button
                             key={tab.key}
                             onClick={() => setActiveTab(tab.key)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === tab.key
+                            className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === tab.key
                                 ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20'
                                 : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                                 }`}

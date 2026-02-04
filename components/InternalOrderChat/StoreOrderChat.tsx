@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, X, MessageCircle, User, Loader2 } from 'lucide-react';
 import * as cloud from '../../services/cloud';
 import { Button } from '../Button';
+import axios from 'axios';
+import { getApiBaseUrl } from '../../utils/apiConfig';
 
 interface StoreOrderChatProps {
     isOpen: boolean;
@@ -93,7 +95,7 @@ export const StoreOrderChat: React.FC<StoreOrderChatProps> = ({ isOpen, onClose,
                 setChatId(newChat.id);
             }
 
-            // Send Message
+            // Send Message to Supabase
             const { error: msgError } = await sb
                 .from('chat_messages')
                 .insert({
@@ -106,12 +108,27 @@ export const StoreOrderChat: React.FC<StoreOrderChatProps> = ({ isOpen, onClose,
 
             if (msgError) throw msgError;
 
+            // Sync with Chat API (Unified Panel)
+            try {
+                const visitorId = `order_${orderId}`;
+                await axios.post(`${getApiBaseUrl()}/internal/send`, {
+                    storeId: storeId,
+                    visitorId: visitorId,
+                    content: newMessage,
+                    senderId: storeId,
+                    senderName: 'Loja', // Or store name if available
+                    isFromVisitor: false
+                });
+            } catch (apiErr) {
+                console.warn('Chat API Sync Error:', apiErr);
+            }
+
             setNewMessage('');
             loadChat(); // Refresh
 
         } catch (error) {
             console.error('Error sending message:', error);
-            alert('Erro ao enviar mensagem.');
+            // alert('Erro ao enviar mensagem.'); // Using internal Toast or local state is preferred
         } finally {
             setSending(false);
         }
@@ -155,8 +172,8 @@ export const StoreOrderChat: React.FC<StoreOrderChatProps> = ({ isOpen, onClose,
                             return (
                                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${isMe
-                                            ? 'bg-brand-600 text-white rounded-br-none'
-                                            : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-100 dark:border-gray-700 rounded-bl-none'
+                                        ? 'bg-brand-600 text-white rounded-br-none'
+                                        : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-100 dark:border-gray-700 rounded-bl-none'
                                         }`}>
                                         <p>{msg.message}</p>
                                         <span className={`text-[10px] mt-1 block ${isMe ? 'text-brand-200' : 'text-gray-400'}`}>

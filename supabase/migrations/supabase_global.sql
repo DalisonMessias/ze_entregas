@@ -11854,3 +11854,23 @@ BEGIN
         ALTER TABLE public.store_products ADD COLUMN addon_options JSONB DEFAULT '[]'::jsonb;
     END IF;
 END $$;
+
+-- Correção para o Chat (04/02/2026)
+-- 1. Adicionar valores faltantes ao enum chat_message_type
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.chat_message_type'::regtype AND enumlabel = 'text') THEN
+        ALTER TYPE public.chat_message_type ADD VALUE 'text';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.chat_message_type'::regtype AND enumlabel = 'image') THEN
+        ALTER TYPE public.chat_message_type ADD VALUE 'image';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.chat_message_type'::regtype AND enumlabel = 'system') THEN
+        ALTER TYPE public.chat_message_type ADD VALUE 'system';
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
+
+-- 2. Tornar sender_id opcional na tabela chat_messages para permitir mensagens de convidados
+ALTER TABLE public.chat_messages ALTER COLUMN sender_id DROP NOT NULL;

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-    ArrowLeft,
     Bot,
     CalendarClock,
     ChevronDown,
@@ -18,53 +17,20 @@ import {
 import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
-import { Claim } from '../types';
+import { Claim, UserRole } from '../types';
 import * as cloud from '../services/cloud';
 import { ChatWindow } from './ChatWindow';
 import { useDialog } from '../utils/dialogService';
+import { checkBusinessHours, getNextBusinessDayMessage } from '../utils/supportHours';
 
 interface SupportPageProps {
     onBack?: () => void;
     onNavigateToChat?: (tab: 'assistant' | 'support_chat') => void;
+    layout?: 'embedded' | 'standalone';
+    userRole?: UserRole;
 }
 
-const checkBusinessHours = (start: string, end: string): boolean => {
-    const now = new Date();
-    const day = now.getDay();
-    const hour = now.getHours();
-    const minute = now.getMinutes();
-
-    const [startH, startM] = start.split(':').map(Number);
-    const [endH, endM] = end.split(':').map(Number);
-
-    const currentMinutes = hour * 60 + minute;
-    const startMinutes = startH * 60 + startM;
-    const endMinutes = endH * 60 + endM;
-
-    const isWeekDay = day >= 1 && day <= 5;
-    const isWorkingHours = currentMinutes >= startMinutes && currentMinutes < endMinutes;
-
-    return isWeekDay && isWorkingHours;
-};
-
-const getNextBusinessDayMessage = (startTime: string = '09:00'): string => {
-    const now = new Date();
-    let nextDate = new Date(now);
-
-    if (now.getDay() === 5 && now.getHours() >= 18) {
-        nextDate.setDate(now.getDate() + 3);
-    } else if (now.getDay() === 6) {
-        nextDate.setDate(now.getDate() + 2);
-    } else {
-        nextDate.setDate(now.getDate() + 1);
-    }
-
-    if (nextDate.getDay() === 0) nextDate.setDate(nextDate.getDate() + 1);
-
-    return `Proximo dia util (${nextDate.toLocaleDateString('pt-BR')}) a partir das ${startTime}h`;
-};
-
-export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToChat }) => {
+export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layout = 'embedded', userRole }) => {
     const [activeTab, setActiveTab] = useState<'menu' | 'ticket' | 'faq' | 'history'>('menu');
     const [claims, setClaims] = useState<Claim[]>([]);
     const [loadingClaims, setLoadingClaims] = useState(false);
@@ -83,6 +49,16 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
     const [showLiveChat, setShowLiveChat] = useState(false);
 
     const { alert } = useDialog();
+
+    const resolvedRole: UserRole = userRole || 'user';
+    const isStoreRole = resolvedRole === 'store_partner' || resolvedRole === 'collaborator';
+    const isDriverRole = resolvedRole === 'delivery_partner' || resolvedRole === 'delivery_person';
+    const isAdminRole = resolvedRole === 'admin';
+    const roleKey = (isAdminRole ? 'admin' : isStoreRole ? 'store' : isDriverRole ? 'driver' : 'user') as 'admin' | 'store' | 'driver' | 'user';
+
+    const goToTab = (tab: string) => {
+        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
+    };
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -166,6 +142,133 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
             ? 'Equipe humana disponivel agora.'
             : `Equipe humana indisponivel. ${nextBusinessMessage}.`;
 
+    const roleContent = {
+        store: {
+            badge: 'Lojista',
+            headline: 'Suporte para lojistas',
+            subheadline: 'Pedidos, comanda, entregas e financeiro da sua loja.',
+            highlights: [
+                { title: 'Pedidos e comanda', desc: 'Fila, producao e status.' },
+                { title: 'Entregas', desc: 'Solicitacoes e motoristas.' },
+                { title: 'Financeiro', desc: 'ZéBank, repasses e taxas.' },
+            ],
+            tips: [
+                { title: 'Informe o numero do pedido', desc: 'Ajuda a localizar seu chamado rapidamente.' },
+                { title: 'Explique a etapa do fluxo', desc: 'Ex.: producao, saida ou entrega.' },
+                { title: 'Inclua prints quando possivel', desc: 'Facilita a analise do time.' },
+            ],
+            actions: [
+                { label: 'Fila de pedidos', desc: 'Producao e comanda', onClick: () => goToTab('internal_orders') },
+                { label: 'Solicitar entrega', desc: 'Nova entrega', onClick: () => goToTab('new_request') },
+                { label: 'Financeiro', desc: 'Saldo e repasses', onClick: () => goToTab('zebank') },
+            ],
+            faqs: [
+                { q: 'Como solicitar uma entrega?', a: 'Vá em "Solicitar entrega" e preencha os dados do pedido.' },
+                { q: 'Como acompanhar pedidos?', a: 'Acesse "Fila de pedidos" para ver status e producao.' },
+                { q: 'Como ajustar horarios da loja?', a: 'Na tela de configuracoes da loja, atualize o horario.' },
+                { q: 'Como ver repasses?', a: 'No ZéBank voce acompanha saldo, repasses e extratos.' },
+                { q: 'Qual o horario do suporte?', a: `Atendimento humano seg a sex, das ${supportHoursLabel}.` },
+            ],
+            faqNotes: [
+                { title: 'Dica para lojistas', body: 'Inclua numero do pedido e cidade para agilizar o atendimento.' },
+                { title: 'Horario humano', body: `Seg a sex, ${supportHoursLabel}. Fora disso, o assistente 24h ajuda.` },
+            ],
+        },
+        driver: {
+            badge: 'Entregador',
+            headline: 'Suporte para entregadores',
+            subheadline: 'Rotas, pagamentos, bloqueio e performance.',
+            highlights: [
+                { title: 'Rotas e corridas', desc: 'Aceite, retirada e entrega.' },
+                { title: 'Pagamentos', desc: 'Saldo, repasses e extratos.' },
+                { title: 'Score e bloqueio', desc: 'Entenda regras e limites.' },
+            ],
+            tips: [
+                { title: 'Informe a corrida', desc: 'Use codigo ou horario aproximado.' },
+                { title: 'Explique o que ocorreu', desc: 'Ex.: cancelamento, rota ou pagamento.' },
+                { title: 'Envie prints do app', desc: 'Ajuda na analise do time.' },
+            ],
+            actions: [
+                { label: 'Rotas', desc: 'Mapa e ferramentas', onClick: () => goToTab('route_list') },
+                { label: 'Entregas', desc: 'Minhas corridas', onClick: () => goToTab('associate_orders') },
+                { label: 'ZéBank', desc: 'Saldo e repasses', onClick: () => goToTab('zebank') },
+            ],
+            faqs: [
+                { q: 'Como iniciar o dia?', a: 'Abra o painel e ative sua disponibilidade.' },
+                { q: 'Posso recusar uma corrida?', a: 'Sim, mas recusas frequentes afetam seu score.' },
+                { q: 'Como confirmar entrega?', a: 'Use o codigo de entrega informado pelo cliente.' },
+                { q: 'Quando recebo o pagamento?', a: 'Os repasses aparecem no ZéBank conforme sua configuracao.' },
+                { q: 'Qual o horario do suporte?', a: `Atendimento humano seg a sex, das ${supportHoursLabel}.` },
+            ],
+            faqNotes: [
+                { title: 'Dica para entregadores', body: 'Informe codigo da entrega e horario aproximado.' },
+                { title: 'Status do suporte', body: supportStatusDescription },
+            ],
+        },
+        user: {
+            badge: 'Cliente',
+            headline: 'Suporte para clientes',
+            subheadline: 'Pedidos, pagamentos e dados da conta.',
+            highlights: [
+                { title: 'Meus pedidos', desc: 'Acompanhe status e entregas.' },
+                { title: 'Pagamentos', desc: 'PIX, cartao e comprovantes.' },
+                { title: 'Conta', desc: 'Enderecos e dados pessoais.' },
+            ],
+            tips: [
+                { title: 'Informe o numero do pedido', desc: 'Ajuda a localizar o atendimento.' },
+                { title: 'Detalhe o problema', desc: 'Ex.: pagamento, entrega ou item.' },
+                { title: 'Atualize seus dados', desc: 'Enderecos corretos evitam atrasos.' },
+            ],
+            actions: [
+                { label: 'Minha conta', desc: 'Perfil e dados', onClick: () => goToTab('profile') },
+                { label: 'Enderecos', desc: 'Gerencie locais', onClick: () => goToTab('addresses') },
+                { label: 'Lojas', desc: 'Voltar para comprar', onClick: () => goToTab('shop') },
+            ],
+            faqs: [
+                { q: 'Como fazer um pedido?', a: 'Escolha a loja, adicione itens e finalize o carrinho.' },
+                { q: 'Quais formas de pagamento?', a: 'PIX e cartao, conforme disponibilidade da loja.' },
+                { q: 'Como rastrear meu pedido?', a: 'Veja o status na sua conta ou pelo link recebido.' },
+                { q: 'Esqueci minha senha', a: 'Na tela de login, clique em "Esqueci minha senha".' },
+                { q: 'Qual o horario do suporte?', a: `Atendimento humano seg a sex, das ${supportHoursLabel}.` },
+            ],
+            faqNotes: [
+                { title: 'Precisa de ajuda?', body: 'Abra um chamado e descreva o problema com detalhes.' },
+                { title: 'Privacidade', body: 'Seus dados sao usados apenas para suporte.' },
+            ],
+        },
+        admin: {
+            badge: 'Admin',
+            headline: 'Suporte para administracao',
+            subheadline: 'Tickets, chat interno e configuracoes.',
+            highlights: [
+                { title: 'Tickets', desc: 'Triagem e respostas.' },
+                { title: 'Chat interno', desc: 'Contato com times e lojas.' },
+                { title: 'Configuracoes', desc: 'Politicas e parametros.' },
+            ],
+            tips: [
+                { title: 'Use filtros de status', desc: 'Priorize abertos e urgentes.' },
+                { title: 'Documente a resposta', desc: 'Registre sempre a resolucao.' },
+                { title: 'Anexe evidencias', desc: 'Ajuda em auditorias futuras.' },
+            ],
+            actions: [
+                { label: 'Tickets', desc: 'Fila de chamados', onClick: () => goToTab('admin_claims') },
+                { label: 'Suporte admin', desc: 'Config. de suporte', onClick: () => goToTab('admin_support') },
+                { label: 'Chat interno', desc: 'Mensagens', onClick: () => goToTab('admin_chat') },
+            ],
+            faqs: [
+                { q: 'Como responder um ticket?', a: 'Abra o chamado e envie a resposta com status atualizado.' },
+                { q: 'Como ver tickets de lojas?', a: 'Use filtros por loja e status em "Tickets".' },
+                { q: 'Como configurar horario de suporte?', a: 'Atualize em "Suporte admin".' },
+                { q: 'Qual o horario do suporte humano?', a: `Seg a sex, ${supportHoursLabel}.` },
+            ],
+            faqNotes: [
+                { title: 'Boas praticas', body: 'Registre o motivo e a solucao em cada ticket.' },
+            ],
+        },
+    };
+
+    const roleInfo = roleContent[roleKey];
+
     const handleSubmitTicket = async (isScheduling: boolean = false) => {
         if (!ticketDesc.trim()) {
             await alert({ title: "Erro no chamado", message: "Descreva o problema." });
@@ -215,8 +318,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
     };
 
     const renderMenu = () => (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-[1.35fr,1fr] gap-4">
+        <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.4fr,1fr] gap-5">
                 <div className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -237,7 +340,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <button
                             onClick={() => handleInteraction('chat')}
                             className={`group flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${isOpen
@@ -291,63 +394,33 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                         </button>
 
                         <button
-                            onClick={() => handleInteraction('ticket')}
-                            className={`group flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${isOpen
-                                ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
-                                : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                                }`}
+                            onClick={goToAssistant}
+                            className="group flex items-start gap-4 p-5 rounded-2xl border border-brand-100 dark:border-brand-900/40 bg-brand-50 dark:bg-brand-900/20 hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-all text-left"
                         >
-                            <div className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                <PenTool className="w-6 h-6" />
+                            <div className="p-3 rounded-xl bg-brand-600 text-white">
+                                <Bot className="w-6 h-6" />
                             </div>
                             <div className="flex-1 space-y-1">
                                 <div className="flex items-center gap-2">
-                                    <h3 className="font-black text-gray-900 dark:text-white">Abrir chamado</h3>
-                                    {!isOpen && <CalendarClock className="w-3 h-3 text-gray-400" />}
+                                    <h3 className="font-black text-brand-900 dark:text-brand-100">Assistente 24h</h3>
                                 </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {isOpen ? 'Registro oficial com acompanhamento.' : 'Registre agora e retornamos no proximo dia util.'}
+                                <p className="text-xs text-brand-700 dark:text-brand-300">
+                                    Respostas automaticas a qualquer hora.
                                 </p>
                             </div>
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
+                            <ChevronRight className="w-5 h-5 text-brand-400" />
                         </button>
 
-                        <button
-                            onClick={() => setActiveTab('history')}
-                            className="group flex items-start gap-4 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all text-left"
-                        >
-                            <div className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                <Clock className="w-6 h-6" />
-                            </div>
-                            <div className="flex-1 space-y-1">
-                                <h3 className="font-black text-gray-900 dark:text-white">Meus chamados</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Acompanhe respostas e status.</p>
-                            </div>
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
-                        </button>
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 space-y-4">
+                <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-5 space-y-4">
                     <div className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-white">
                         <CalendarClock className="w-4 h-4 text-brand-600" />
-                        Como agilizar o atendimento
+                        Dicas para {roleInfo.badge.toLowerCase()}
                     </div>
                     <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                        {[
-                            {
-                                title: 'Informe o tipo do problema',
-                                desc: 'Ajuda o time a direcionar seu chamado.'
-                            },
-                            {
-                                title: 'Descreva o que aconteceu',
-                                desc: 'Inclua horario, tela e comportamento observado.'
-                            },
-                            {
-                                title: 'Se tiver, informe o numero do pedido',
-                                desc: 'Isso acelera a analise do suporte.'
-                            },
-                        ].map((item, index) => (
+                        {roleInfo.tips.map((item, index) => (
                             <div key={item.title} className="flex gap-3">
                                 <div className="w-8 h-8 rounded-xl bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200 flex items-center justify-center text-xs font-black">
                                     {index + 1}
@@ -359,87 +432,48 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                             </div>
                         ))}
                     </div>
-                    <div className={`rounded-xl border p-3 text-xs ${isOpen
-                        ? 'bg-brand-50 dark:bg-brand-900/20 border-brand-100 dark:border-brand-900/40'
-                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                        }`}
-                    >
-                        <div className="font-bold text-gray-900 dark:text-white">Horario do suporte humano</div>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">
-                            Seg a sex, {supportHoursLabel}. {isOpen
-                                ? 'Se o chat estiver ocupado, abra um chamado.'
-                                : 'Fora do horario, deixe um chamado e use o assistente 24h.'}
-                        </p>
-                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Horario humano: {supportHoursLabel}. {isOpen ? 'Equipe online agora.' : 'Fora do horario, deixe um chamado.'}
+                    </p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button
-                    onClick={() => setActiveTab('faq')}
-                    className="group flex items-center gap-3 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all text-left"
-                >
-                    <div className="p-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                        <FileQuestion className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                        <div className="font-black text-gray-900 dark:text-white text-sm">Central de ajuda</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">Artigos e perguntas frequentes.</div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                </button>
-
-                <button
-                    onClick={goToAssistant}
-                    className="group flex items-center gap-3 p-4 rounded-2xl border border-brand-100 dark:border-brand-900/40 bg-brand-50 dark:bg-brand-900/20 hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-all text-left"
-                >
-                    <div className="p-2 rounded-xl bg-brand-600 text-white">
-                        <Bot className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                        <div className="font-black text-brand-900 dark:text-brand-100 text-sm">Assistente 24h</div>
-                        <div className="text-xs text-brand-700 dark:text-brand-300">Respostas automaticas a qualquer hora.</div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-brand-400" />
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('history')}
-                    className="group flex items-center gap-3 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all text-left"
-                >
-                    <div className="p-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                        <MessageSquare className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                        <div className="font-black text-gray-900 dark:text-white text-sm">Meus chamados</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">Veja respostas e atualizacoes.</div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                </button>
+            <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white">Acoes do seu perfil</h3>
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{roleInfo.badge}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {roleInfo.actions.map((action) => (
+                        <button
+                            key={action.label}
+                            onClick={action.onClick}
+                            className="group flex items-center gap-3 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all text-left"
+                        >
+                            <div className="flex-1">
+                                <div className="font-black text-gray-900 dark:text-white text-sm">{action.label}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">{action.desc}</div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
-                        <Clock className="w-4 h-4 text-brand-600" />
-                        Prazo de resposta
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
-                        {isOpen
-                            ? 'Respondemos por ordem de chegada. Se preferir, abra um chamado para acompanhar o protocolo.'
-                            : 'Chamados abertos fora do horario entram na fila e respondemos no proximo dia util.'}
-                    </p>
+            <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
+                    <Clock className="w-4 h-4 text-brand-600" />
+                    Informacoes importantes
                 </div>
-
-                <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
-                        <Lock className="w-4 h-4 text-brand-600" />
-                        Privacidade
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
-                        Seus dados sao usados apenas para resolver o chamado e nao sao compartilhados fora da equipe.
-                    </p>
-                </div>
+                <ul className="mt-2 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                    <li>
+                        <span className="font-bold">Prazo de resposta:</span>{' '}
+                        {isOpen ? 'Respondemos por ordem de chegada.' : 'Chamados entram na fila e respondemos no proximo dia util.'}
+                    </li>
+                    <li>
+                        <span className="font-bold">Privacidade:</span> Seus dados sao usados apenas para suporte.
+                    </li>
+                </ul>
             </div>
         </div>
     );
@@ -482,9 +516,6 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                         <Button fullWidth onClick={() => handleSubmitTicket(false)} disabled={isSubmitting}>
                             {isSubmitting ? <Loading variant="inline" size="sm" /> : <Send className="w-5 h-5 mr-2" />}
                             {isSubmitting ? 'Enviando...' : 'Enviar chamado'}
-                        </Button>
-                        <Button fullWidth variant="outline" onClick={() => setActiveTab('menu')}>
-                            Voltar
                         </Button>
                     </div>
                 </div>
@@ -555,15 +586,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
 
             <div className="grid grid-cols-1 lg:grid-cols-[1.2fr,0.8fr] gap-6">
                 <div className="space-y-2">
-                    {[
-                        { q: 'Como mudar minha meta diaria?', a: 'Na tela inicial, clique em "Comecar o dia" e defina o valor da meta.' },
-                        { q: 'O app funciona sem internet?', a: 'Sim. Funcoes basicas como registrar entregas e mapa funcionam offline.' },
-                        { q: 'Como salvo um endereco?', a: 'Va na aba "Enderecos" e clique em "Salvar".' },
-                        { q: 'Como acompanho um chamado?', a: 'Acesse "Meus chamados" e veja o status e as respostas.' },
-                        { q: 'Onde vejo os horarios de suporte?', a: `Atendimento humano de seg a sex, das ${supportHoursLabel}.` },
-                        { q: 'Como atualizar meus dados?', a: 'Abra o menu de perfil e edite nome, telefone e enderecos.' },
-                        { q: 'Meus dados estao seguros?', a: 'Sim. Seus dados sao usados apenas para suporte e operacao do app.' },
-                    ].map((item, idx) => (
+                    {roleInfo.faqs.map((item, idx) => (
                         <details key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 group">
                             <summary className="font-bold text-sm dark:text-white cursor-pointer list-none flex justify-between items-center">
                                 {item.q}
@@ -577,18 +600,14 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                 </div>
 
                 <div className="space-y-4">
-                    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                        <div className="font-black text-gray-900 dark:text-white mb-2">Nao encontrou?</div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Abra um chamado e deixe o maximo de detalhes possiveis. Nossa equipe responde no horario util.
-                        </p>
-                    </div>
-                    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                        <div className="font-black text-gray-900 dark:text-white mb-2">Dica rapida</div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Sempre que possivel, envie o numero do pedido e a hora aproximada do ocorrido.
-                        </p>
-                    </div>
+                    {roleInfo.faqNotes.map((note) => (
+                        <div key={note.title} className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-4">
+                            <div className="font-black text-gray-900 dark:text-white mb-2">{note.title}</div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {note.body}
+                            </p>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -657,35 +676,33 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
         { key: 'history' as const, label: 'Meus chamados', icon: Clock }
     ];
 
+    const isStandalone = layout === 'standalone';
+
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-            <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+        <div data-testid="support-root" className={isStandalone ? "min-h-screen bg-gray-50 dark:bg-gray-950" : undefined}>
+            <div
+                data-testid="support-container"
+                className={isStandalone ? "max-w-5xl mx-auto px-4 py-8 space-y-8" : "w-full max-w-5xl mx-auto py-8 space-y-8"}
+            >
                 <header className="relative overflow-hidden rounded-[32px] border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 md:p-8">
                     <div className="absolute -top-32 right-0 w-72 h-72 bg-brand-500/10 blur-[120px]" />
                     <div className="absolute -bottom-24 left-0 w-72 h-72 bg-brand-600/10 blur-[120px]" />
 
                     <div className="relative z-10 space-y-6">
-                        {onBack && (
-                            <button
-                                onClick={onBack}
-                                className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                                Voltar
-                            </button>
-                        )}
-
                         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div>
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 text-xs font-black uppercase tracking-widest">
                                     <Headphones className="w-4 h-4" />
                                     Suporte Ze Entregas
                                 </div>
+                                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-2">
+                                    Perfil: {roleInfo.badge}
+                                </p>
                                 <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mt-4">
-                                    Central de suporte completa
+                                    {roleInfo.headline}
                                 </h1>
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 max-w-xl">
-                                    Resolva duvidas, abra chamados e acompanhe respostas com canais dedicados e autoatendimento.
+                                    {roleInfo.subheadline}
                                 </p>
                             </div>
 
@@ -699,48 +716,22 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-3">
-                            <Button onClick={() => handleInteraction('chat')}>
-                                <MessageCircle className="w-4 h-4 mr-2" />
-                                Chat ao vivo
-                            </Button>
-                            <Button variant="outline" onClick={() => handleInteraction('whatsapp')}>
-                                WhatsApp
-                            </Button>
-                            <Button variant="outline" onClick={() => setActiveTab('ticket')}>
-                                Abrir chamado
-                            </Button>
-                            <Button variant="outline" onClick={() => setActiveTab('faq')}>
-                                FAQ
-                            </Button>
-                        </div>
-
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 text-sm">
-                                <div className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
-                                    Horario humano
+                            {roleInfo.highlights.map((item) => (
+                                <div key={item.title} className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 text-sm">
+                                    <div className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
+                                        {item.title}
+                                    </div>
+                                    <div className="text-sm font-bold text-gray-900 dark:text-white mt-1">
+                                        {item.desc}
+                                    </div>
                                 </div>
-                                <div className="text-base font-black text-gray-900 dark:text-white mt-1">{supportHoursLabel}</div>
-                            </div>
-                            <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 text-sm">
-                                <div className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
-                                    Resposta
-                                </div>
-                                <div className="text-base font-black text-gray-900 dark:text-white mt-1">
-                                    {isOpen ? 'Ordem de chegada' : 'Proximo dia util'}
-                                </div>
-                            </div>
-                            <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 text-sm">
-                                <div className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
-                                    Assistente 24h
-                                </div>
-                                <div className="text-base font-black text-gray-900 dark:text-white mt-1">Disponivel agora</div>
-                            </div>
+                            ))}
                         </div>
                     </div>
                 </header>
 
-                <nav className="flex flex-wrap gap-2">
+                <nav className="flex gap-2 overflow-x-auto no-scrollbar pb-1 mt-2">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.key;
@@ -748,7 +739,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack, onNavigateToCh
                             <button
                                 key={tab.key}
                                 onClick={() => setActiveTab(tab.key)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${isActive
+                                className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${isActive
                                     ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20'
                                     : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                                     }`}

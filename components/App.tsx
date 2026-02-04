@@ -1088,7 +1088,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     }} />;
                 case 'profile': return <ProfileData onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
                 case 'status': return <StatusPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
-                case 'support': return <SupportPage onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} onNavigateToChat={() => navigate('assistant')} />;
+                case 'support': return <SupportPage layout="embedded" userRole={effectiveRole} onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} onNavigateToChat={() => navigate('assistant')} />;
                 case 'shop': return <Shop cart={cart} setCart={setCart} userLoggedIn={true} />;
                 case 'assistant':
                     return <ChatAssistant

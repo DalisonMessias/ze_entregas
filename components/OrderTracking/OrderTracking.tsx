@@ -73,6 +73,39 @@ export const OrderTracking: React.FC = () => {
         };
     }, [orderId]);
 
+    // Realtime Chat Messages Subscription
+    useEffect(() => {
+        if (!chatId) return;
+
+        const sb = cloud.getClient();
+        if (!sb) return;
+
+        const channel = sb
+            .channel(`chat-messages-${chatId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'chat_messages',
+                    filter: `chat_id=eq.${chatId}`
+                },
+                (payload) => {
+                    const newMsg = payload.new as any;
+                    setMessages(prev => {
+                        // Evita duplicatas (mensagens enviadas por mim jÃ¡ estÃ£o no estado)
+                        if (prev.some(m => m.id === newMsg.id)) return prev;
+                        return [...prev, newMsg];
+                    });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            sb.removeChannel(channel);
+        };
+    }, [chatId]);
+
     // Scroll chat
     useEffect(() => {
         if (showChat) {
