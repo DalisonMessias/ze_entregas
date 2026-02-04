@@ -12103,6 +12103,251 @@ BEGIN
     END IF;
 
 END $$;
-= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
- 
- 
+
+-- 4. TABELAS ADICIONAIS (CUPONS E SEGUROS)
+
+-- coupons
+CREATE TABLE IF NOT EXISTS public.coupons (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_id uuid,
+  code text NOT NULL,
+  description text,
+  discount_type text NOT NULL CHECK (discount_type = ANY (ARRAY['FIXED'::text, 'PERCENTAGE'::text, 'FREE_SHIPPING'::text])),
+  discount_value numeric NOT NULL DEFAULT 0,
+  min_order_value numeric DEFAULT 0,
+  max_discount_value numeric,
+  usage_limit integer,
+  usage_count integer DEFAULT 0,
+  user_usage_limit integer,
+  start_date timestamp with time zone NOT NULL,
+  end_date timestamp with time zone,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  is_platform_coupon boolean DEFAULT false,
+  created_by uuid,
+  CONSTRAINT coupons_pkey PRIMARY KEY (id),
+  CONSTRAINT coupons_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.user_profiles(id),
+  CONSTRAINT coupons_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id)
+);
+ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view active coupons" ON public.coupons;
+CREATE POLICY "Public can view active coupons" ON public.coupons FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Stores manage own coupons" ON public.coupons;
+CREATE POLICY "Stores manage own coupons" ON public.coupons FOR ALL USING (auth.uid() = store_id);
+DROP POLICY IF EXISTS "Admins manage all coupons" ON public.coupons;
+CREATE POLICY "Admins manage all coupons" ON public.coupons FOR ALL USING (public.is_admin());
+DROP TRIGGER IF EXISTS handle_coupons_updated_at ON public.coupons;
+CREATE TRIGGER handle_coupons_updated_at BEFORE UPDATE ON public.coupons FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- insurance_partners
+CREATE TABLE IF NOT EXISTS public.insurance_partners (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT insurance_partners_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.insurance_partners ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read insurance partners" ON public.insurance_partners;
+CREATE POLICY "Public read insurance partners" ON public.insurance_partners FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins manage insurance partners" ON public.insurance_partners;
+CREATE POLICY "Admins manage insurance partners" ON public.insurance_partners FOR ALL USING (public.is_admin());
+
+-- insurance_plans
+CREATE TABLE IF NOT EXISTS public.insurance_plans (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  title text NOT NULL,
+  price_mensal numeric NOT NULL,
+  features text[] DEFAULT '{}'::text[],
+  is_popular boolean DEFAULT false,
+  is_active boolean DEFAULT true,
+  deductible_percent numeric DEFAULT 0,
+  deductible_info text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT insurance_plans_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.insurance_plans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read insurance plans" ON public.insurance_plans;
+CREATE POLICY "Public read insurance plans" ON public.insurance_plans FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins manage insurance plans" ON public.insurance_plans;
+CREATE POLICY "Admins manage insurance plans" ON public.insurance_plans FOR ALL USING (public.is_admin());
+DROP TRIGGER IF EXISTS handle_insurance_plans_updated_at ON public.insurance_plans;
+CREATE TRIGGER handle_insurance_plans_updated_at BEFORE UPDATE ON public.insurance_plans FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- insurance_referral_requests
+CREATE TABLE IF NOT EXISTS public.insurance_referral_requests (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  city text NOT NULL,
+  recommended_company text NOT NULL,
+  status text DEFAULT 'PENDING'::text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT insurance_referral_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT insurance_referral_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+ALTER TABLE public.insurance_referral_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users view own referral requests" ON public.insurance_referral_requests;
+CREATE POLICY "Users view own referral requests" ON public.insurance_referral_requests FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins manage referral requests" ON public.insurance_referral_requests;
+CREATE POLICY "Admins manage referral requests" ON public.insurance_referral_requests FOR ALL USING (public.is_admin());
+
+-- insurance_subscriptions
+CREATE TABLE IF NOT EXISTS public.insurance_subscriptions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  plan_id uuid NOT NULL,
+  status text DEFAULT 'ACTIVE'::text,
+  start_date timestamp with time zone,
+  next_billing_date timestamp with time zone,
+  auto_renew boolean DEFAULT true,
+  payment_method_id text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT insurance_subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT insurance_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT insurance_subscriptions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.insurance_plans(id)
+);
+ALTER TABLE public.insurance_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users view own subscriptions" ON public.insurance_subscriptions;
+CREATE POLICY "Users view own subscriptions" ON public.insurance_subscriptions FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins manage subscriptions" ON public.insurance_subscriptions;
+CREATE POLICY "Admins manage subscriptions" ON public.insurance_subscriptions FOR ALL USING (public.is_admin());
+DROP TRIGGER IF EXISTS handle_insurance_subscriptions_updated_at ON public.insurance_subscriptions;
+CREATE TRIGGER handle_insurance_subscriptions_updated_at BEFORE UPDATE ON public.insurance_subscriptions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- 5. COLUNAS ADICIONAIS FALTANTES
+DO $$ 
+BEGIN
+    -- ze_assistant_config
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ze_assistant_config' AND column_name = 'whatsapp_sort_preference') THEN
+        ALTER TABLE public.ze_assistant_config ADD COLUMN whatsapp_sort_preference text DEFAULT 'recent'::text;
+    END IF;
+END $$;
+
+-- 6. TABELAS DE PROMOÇÕES E COMPLEMENTOS
+
+-- store_addon_groups
+CREATE TABLE IF NOT EXISTS public.store_addon_groups (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_id uuid NOT NULL,
+  name text NOT NULL,
+  type text NOT NULL CHECK (type = ANY (ARRAY['SINGLE'::text, 'MULTIPLE'::text])),
+  min integer NOT NULL DEFAULT 0,
+  max integer NOT NULL DEFAULT 1,
+  options jsonb NOT NULL DEFAULT '[]'::jsonb,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT store_addon_groups_pkey PRIMARY KEY (id),
+  CONSTRAINT store_addon_groups_store_id_fkey FOREIGN KEY (store_id) REFERENCES auth.users(id)
+);
+ALTER TABLE public.store_addon_groups ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Stores manage own addon groups" ON public.store_addon_groups;
+CREATE POLICY "Stores manage own addon groups" ON public.store_addon_groups FOR ALL USING (auth.uid() = store_id);
+DROP POLICY IF EXISTS "Admins manage all addon groups" ON public.store_addon_groups;
+CREATE POLICY "Admins manage all addon groups" ON public.store_addon_groups FOR ALL USING (public.is_admin());
+DROP TRIGGER IF EXISTS handle_store_addon_groups_updated_at ON public.store_addon_groups;
+CREATE TRIGGER handle_store_addon_groups_updated_at BEFORE UPDATE ON public.store_addon_groups FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- store_addons
+CREATE TABLE IF NOT EXISTS public.store_addons (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_id uuid NOT NULL,
+  name text NOT NULL,
+  price numeric NOT NULL DEFAULT 0,
+  category text,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT store_addons_pkey PRIMARY KEY (id),
+  CONSTRAINT store_addons_store_id_fkey FOREIGN KEY (store_id) REFERENCES auth.users(id)
+);
+ALTER TABLE public.store_addons ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Stores manage own addons" ON public.store_addons;
+CREATE POLICY "Stores manage own addons" ON public.store_addons FOR ALL USING (auth.uid() = store_id);
+DROP POLICY IF EXISTS "Admins manage all addons" ON public.store_addons;
+CREATE POLICY "Admins manage all addons" ON public.store_addons FOR ALL USING (public.is_admin());
+DROP TRIGGER IF EXISTS handle_store_addons_updated_at ON public.store_addons;
+CREATE TRIGGER handle_store_addons_updated_at BEFORE UPDATE ON public.store_addons FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- promotions
+CREATE TABLE IF NOT EXISTS public.promotions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  discount_type text NOT NULL CHECK (discount_type = ANY (ARRAY['FIXED'::text, 'PERCENTAGE'::text, 'FREE_SHIPPING'::text])),
+  discount_value numeric NOT NULL DEFAULT 0,
+  min_order_value numeric DEFAULT 0,
+  start_date timestamp with time zone NOT NULL,
+  end_date timestamp with time zone,
+  is_active boolean DEFAULT true,
+  applies_to_all_products boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT promotions_pkey PRIMARY KEY (id),
+  CONSTRAINT promotions_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.user_profiles(id)
+);
+ALTER TABLE public.promotions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Stores manage own promotions" ON public.promotions;
+CREATE POLICY "Stores manage own promotions" ON public.promotions FOR ALL USING (auth.uid() = store_id);
+DROP POLICY IF EXISTS "Admins manage all promotions" ON public.promotions;
+CREATE POLICY "Admins manage all promotions" ON public.promotions FOR ALL USING (public.is_admin());
+DROP TRIGGER IF EXISTS handle_promotions_updated_at ON public.promotions;
+CREATE TRIGGER handle_promotions_updated_at BEFORE UPDATE ON public.promotions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- promotion_products
+CREATE TABLE IF NOT EXISTS public.promotion_products (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  promotion_id uuid NOT NULL,
+  product_id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT promotion_products_pkey PRIMARY KEY (id),
+  CONSTRAINT promotion_products_promotion_id_fkey FOREIGN KEY (promotion_id) REFERENCES public.promotions(id),
+  CONSTRAINT promotion_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.store_products(id)
+);
+ALTER TABLE public.promotion_products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Stores manage own promotion products" ON public.promotion_products;
+CREATE POLICY "Stores manage own promotion products" ON public.promotion_products FOR ALL USING (EXISTS (SELECT 1 FROM public.promotions p WHERE p.id = promotion_id AND p.store_id = auth.uid()));
+
+-- shop_platform_categories
+CREATE TABLE IF NOT EXISTS public.shop_platform_categories (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name character varying NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT shop_platform_categories_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.shop_platform_categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read shop categories" ON public.shop_platform_categories;
+CREATE POLICY "Public read shop categories" ON public.shop_platform_categories FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins manage shop categories" ON public.shop_platform_categories;
+CREATE POLICY "Admins manage shop categories" ON public.shop_platform_categories FOR ALL USING (public.is_admin());
+DROP TRIGGER IF EXISTS handle_shop_platform_categories_updated_at ON public.shop_platform_categories;
+CREATE TRIGGER handle_shop_platform_categories_updated_at BEFORE UPDATE ON public.shop_platform_categories FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- shop_platform_products
+CREATE TABLE IF NOT EXISTS public.shop_platform_products (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name character varying NOT NULL,
+  description text,
+  price numeric NOT NULL,
+  category_id uuid,
+  images text[] DEFAULT ARRAY[]::text[],
+  is_active boolean DEFAULT true,
+  stock_quantity integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT shop_platform_products_pkey PRIMARY KEY (id),
+  CONSTRAINT shop_platform_products_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.shop_platform_categories(id)
+);
+ALTER TABLE public.shop_platform_products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read shop products" ON public.shop_platform_products;
+CREATE POLICY "Public read shop products" ON public.shop_platform_products FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Admins manage shop products" ON public.shop_platform_products;
+CREATE POLICY "Admins manage shop products" ON public.shop_platform_products FOR ALL USING (public.is_admin());
+DROP TRIGGER IF EXISTS handle_shop_platform_products_updated_at ON public.shop_platform_products;
+CREATE TRIGGER handle_shop_platform_products_updated_at BEFORE UPDATE ON public.shop_platform_products FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
