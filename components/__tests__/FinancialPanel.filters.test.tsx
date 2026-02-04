@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
 import React from 'react';
 import * as cloud from '../../services/cloud';
-import { FinancialPanel } '../FinancialPanel';
+import { FinancialPanel } from '../FinancialPanel';
 import { LoanItem, UserRole } from '../../types';
 
 // Mock do Zebank para controlar os dados de empréstimo nos testes

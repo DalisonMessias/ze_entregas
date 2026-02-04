@@ -783,11 +783,14 @@ export const updateMyPartnerProfile = async (updates: Partial<PartnerProfile>) =
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return { error: { message: "Not logged in" } };
 
+    // Keep behavior consistent with getMyPartnerProfile() when admin is impersonating a store.
+    const targetUserId = getImpersonationId() || user.id;
+
     // Using user_profiles as partner_profiles table does not exist
     const { error } = await sb.from('user_profiles').update({
         ...updates,
         updated_at: new Date().toISOString()
-    }).eq('id', user.id);
+    }).eq('id', targetUserId);
 
     return { error };
 };

@@ -574,7 +574,7 @@ export const StoreSettings: React.FC = () => {
                 </div>
             )}
 
-            {shippingMounted && (
+            {shippingMounted ? (
                 <div className={activeTab === 'shipping' ? 'space-y-5 md:space-y-6' : 'hidden'}>
                     <div>
                         <h2 className="text-xl font-black text-gray-900 dark:text-white">Entrega e Retirada</h2>
@@ -589,7 +589,17 @@ export const StoreSettings: React.FC = () => {
                             : <ExclusiveLock title="Regras Promocionais" description="Upgrade para Superlogista para acessar regras de frete grátis." />
                     )}
                 </div>
-            )}
+            ) : activeTab === 'shipping' ? (
+                <div className="space-y-5 md:space-y-6">
+                    <div>
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white">Entrega e Retirada</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Configure como seus clientes recebem os pedidos.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex justify-center">
+                        <Loading variant="container" size="sm" message="Carregando opções de entrega..." />
+                    </div>
+                </div>
+            ) : null}
 
             {activeTab === 'printer' && (
                 <div className="space-y-5 md:space-y-6">
