@@ -30,23 +30,100 @@ export const OpeningHoursModal: React.FC<OpeningHoursModalProps> = ({
     const [startTime, setStartTime] = useState('18:00');
     const [endTime, setEndTime] = useState('23:00');
 
-    // Initialize state from existing value
-    React.useEffect(() => {
-        if (isOpen && initialValue) {
-            const timeMatch = initialValue.match(/(\d{2}:\d{2})\s+às\s+(\d{2}:\d{2})/);
-            if (timeMatch) {
-                setStartTime(timeMatch[1]);
-                setEndTime(timeMatch[2]);
-            }
+    const normalizeTime = (value: string) => {
+        const [h, m] = value.split(':');
+        if (!h || !m) return value;
+        return `${h.padStart(2, '0')}:${m}`;
+    };
 
-            if (initialValue.includes('Seg-Sex')) {
-                setSelectedDays(['seg', 'ter', 'qua', 'qui', 'sex']);
-            } else if (initialValue.includes('Todos os dias')) {
-                setSelectedDays(DAYS_OF_WEEK.map(d => d.id));
-            } else if (initialValue.includes('Sáb-Dom')) {
-                setSelectedDays(['sab', 'dom']);
-            }
+    const normalizeKey = (value: string) => {
+        return value
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z]/g, '');
+    };
+
+    const fixCommonMojibake = (value: string) => {
+        // Handle legacy values that may have been saved with mojibake.
+        return value
+            .replace(/Ã¡/g, 'á')
+            .replace(/Ã /g, 'à')
+            .replace(/Ã¢/g, 'â')
+            .replace(/Ã£/g, 'ã')
+            .replace(/Ã§/g, 'ç')
+            .replace(/Ã©/g, 'é')
+            .replace(/Ãª/g, 'ê')
+            .replace(/Ã­/g, 'í')
+            .replace(/Ã³/g, 'ó')
+            .replace(/Ã´/g, 'ô')
+            .replace(/Ãµ/g, 'õ')
+            .replace(/Ãº/g, 'ú')
+            .replace(/Ã‰/g, 'É')
+            .replace(/Ã“/g, 'Ó')
+            .replace(/Ãš/g, 'Ú')
+            .replace(/Ã‡/g, 'Ç');
+    };
+
+    const parseDaysFromLabel = (dayPart: string) => {
+        const normalized = normalizeKey(dayPart);
+
+        // Match only explicit shortcuts. Using "includes" here causes false-positives
+        // (e.g. "Ter, Qua, Qui, Sex, Sáb, Dom" contains "sabdom" at the end).
+        if (normalized === 'todososdias') return DAYS_OF_WEEK.map(d => d.id);
+        if (normalized === 'segsex' || normalized === 'segasex' || normalized === 'segundaasexta' || normalized === 'segundasexta') {
+            return ['seg', 'ter', 'qua', 'qui', 'sex'];
         }
+        if (normalized === 'sabdom' || normalized === 'sabadoadomingo' || normalized === 'sabadoedomingo' || normalized === 'sabadodomingo') {
+            return ['sab', 'dom'];
+        }
+
+        const tokens = dayPart
+            .replace(/[–—]/g, '-')
+            .replace(/\./g, '')
+            .split(/[,/\s-]+/g)
+            .map(t => t.trim())
+            .filter(Boolean);
+
+        const ids = new Set<string>();
+
+        for (const token of tokens) {
+            const key = normalizeKey(token);
+            if (!key || key === 'e') continue;
+
+            if (key.startsWith('seg') || key === 'segunda' || key === 'segundafeira') ids.add('seg');
+            else if (key.startsWith('ter') || key === 'terca' || key === 'tercafeira') ids.add('ter');
+            else if (key.startsWith('qua') || key === 'quarta' || key === 'quartafeira') ids.add('qua');
+            else if (key.startsWith('qui') || key === 'quinta' || key === 'quintafeira') ids.add('qui');
+            else if (key.startsWith('sex') || key === 'sexta' || key === 'sextafeira') ids.add('sex');
+            else if (key.startsWith('sab') || key === 'sabado') ids.add('sab');
+            else if (key.startsWith('dom') || key === 'domingo') ids.add('dom');
+        }
+
+        const order = new Map(DAYS_OF_WEEK.map((d, i) => [d.id, i]));
+        return Array.from(ids).sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+    };
+
+    // Initialize state from existing value (when opening).
+    React.useEffect(() => {
+        if (!isOpen) return;
+
+        const raw = fixCommonMojibake(initialValue || '').trim();
+        if (!raw) {
+            setSelectedDays([]);
+            setStartTime('18:00');
+            setEndTime('23:00');
+            return;
+        }
+
+        const timeMatch = raw.match(/(\d{1,2}:\d{2})\s*(?:às|as|até|[-–—])\s*(\d{1,2}:\d{2})/i);
+        if (timeMatch) {
+            setStartTime(normalizeTime(timeMatch[1]));
+            setEndTime(normalizeTime(timeMatch[2]));
+        }
+
+        const dayPart = timeMatch && timeMatch.index !== undefined ? raw.slice(0, timeMatch.index).trim() : raw;
+        setSelectedDays(parseDaysFromLabel(dayPart));
     }, [isOpen, initialValue]);
 
     if (!isOpen) return null;

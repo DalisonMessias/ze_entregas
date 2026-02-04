@@ -745,11 +745,13 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         preparation_time: userData.preparation_time,
         preparation_time_min: userData.preparation_time_min,
         preparation_time_max: userData.preparation_time_max,
+        description: userData.description,
         address_zip: userData.address_zip,
         address_street: userData.address_street,
         address_number: userData.address_number,
         address_district: userData.address_district,
         address_state: userData.address_state,
+        address_complement: userData.address_complement,
 
         // Mapeamento de novos campos de loja
         cover_url: userData.cover_url,
@@ -766,6 +768,7 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         store_name: userData.store_name,
         is_open: userData.is_open,
         is_currently_open: userData.is_currently_open,
+        store_category_id: userData.store_category_id,
         pix_key: userData.pix_key,
         city_slug: userData.city_slug,
         store_slug: userData.store_slug

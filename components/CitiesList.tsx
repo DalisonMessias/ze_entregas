@@ -56,17 +56,17 @@ export const CitiesList: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
             {/* Header */}
-            <header className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
+            <header className="sticky top-0 z-50 bg-brand-600 text-white backdrop-blur-xl border-b border-brand-700/60">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={handleBack}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                            className="p-2 hover:bg-brand-700 rounded-full transition-colors text-white"
                         >
-                            <ArrowLeft className="w-6 h-6 text-gray-500" />
+                            <ArrowLeft className="w-6 h-6 text-white" />
                         </button>
-                        <Logo className="h-8 w-auto text-brand-600" mode="icon" />
-                        <h1 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+                        <Logo className="h-8 w-auto" mode="icon" variant="full-white" />
+                        <h1 className="text-xl font-black text-white tracking-tight">
                             Nossas Cidades
                         </h1>
                     </div>
@@ -79,7 +79,7 @@ export const CitiesList: React.FC = () => {
                                 placeholder="Qual cidade você procura?"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-12 pr-6 py-3.5 bg-gray-100 dark:bg-gray-800/50 border-2 border-transparent focus:border-brand-500/20 rounded-2xl text-base focus:ring-4 focus:ring-brand-500/10 outline-none w-[400px] transition-all"
+                                className="pl-12 pr-6 py-3.5 bg-white border-2 border-transparent focus:border-brand-500/20 rounded-2xl text-base text-gray-900 placeholder-gray-400 focus:ring-4 focus:ring-brand-500/10 outline-none w-[400px] transition-all"
                             />
                         </div>
                     </div>

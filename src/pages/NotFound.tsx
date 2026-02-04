@@ -28,25 +28,25 @@ export const NotFound: React.FC = () => {
             </div>
 
             <div className="relative z-10 max-w-5xl mx-auto px-6 py-12">
-                <header className="flex items-center justify-between">
+                <header className="flex items-center justify-between bg-brand-600 text-white rounded-2xl px-6 py-4 shadow-sm">
                     <button onClick={goHome} className="flex items-center gap-3">
-                        <Logo className="h-10 w-auto text-brand-600" mode="icon" />
+                        <Logo className="h-10 w-auto" mode="icon" variant="full-white" />
                         <div className="text-left">
-                            <p className="text-xs uppercase tracking-widest text-gray-400 font-black">Pagina perdida</p>
-                            <p className="text-sm font-black text-gray-900 dark:text-white">Ze Entregas</p>
+                            <p className="text-xs uppercase tracking-widest text-white/80 font-black">Pagina perdida</p>
+                            <p className="text-sm font-black text-white">Ze Entregas</p>
                         </div>
                     </button>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={goSupport}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/70 dark:bg-gray-900/70 border border-gray-200 dark:border-gray-800 text-sm font-black text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-900 transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-sm font-black text-white hover:bg-brand-700 transition-colors"
                         >
                             <LifeBuoy className="w-4 h-4" />
                             Suporte
                         </button>
                         <button
                             onClick={goHome}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-black hover:bg-brand-700 transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-white text-sm font-black hover:bg-brand-700 transition-colors"
                         >
                             <Home className="w-4 h-4" />
                             Home

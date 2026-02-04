@@ -161,6 +161,7 @@ export type ActiveTab =
     | 'upgrade_to_partner'
     | 'install_app'
     | 'internal_orders'
+    | 'internal_orders_new'
     | 'store_catalog'
     | 'store_print_catalog'
     | 'store_api_docs'
@@ -470,7 +471,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         wallet: 'Início',
         history: 'Pedidos',
         new_request: 'Nova Entrega',
-        internal_orders: 'Comandas',
+        internal_orders: 'Pedidos',
+        internal_orders_new: 'Novo Pedido',
         store_catalog: 'Produtos',
         store_product_import: 'Importar Produtos',
         store_print_catalog: 'Catálogo Impresso',
@@ -493,7 +495,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     };
 
     const storeRootTabs = new Set<ActiveTab>(['wallet', 'history', 'store_catalog', 'zebank']);
-    const storeOrdersTabs = new Set<ActiveTab>(['history', 'new_request', 'internal_orders', 'my_orders']);
+    const storeOrdersTabs = new Set<ActiveTab>(['history', 'new_request', 'internal_orders', 'internal_orders_new', 'my_orders']);
     const storeProductsTabs = new Set<ActiveTab>(['store_catalog', 'store_product_import', 'store_print_catalog', 'store_promotions']);
     const storeFinanceTabs = new Set<ActiveTab>(['zebank', 'zepay_store', 'store_finance_panel', 'store_loans', 'store_receiving_payment']);
     const driverRootTabs = new Set<ActiveTab>(['daily_panel', 'partner']);
@@ -723,6 +725,14 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     // Lógica principal de Roteamento / Aba Inicial
     useEffect(() => {
         let path = window.location.pathname;
+        const legacyPath = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+
+        // Legacy deep links for Comanda now live under /loja/pedidos
+        if (legacyPath === '/loja/comanda' && (window.location.search || window.location.hash)) {
+            window.location.replace('/loja/pedidos');
+            return;
+        }
+
         const tabFromUrl = getTabFromUrl(path);
 
         if (!tabFromUrl && path !== '/' && path !== '/home' && !path.startsWith('/track/')) {
@@ -982,7 +992,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'store_drivers_chat'
         ]),
         store_partner: new Set<ActiveTab>([
-            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'store_catalog', 'store_print_catalog', 'store_api_docs', 'store_loans', 'store_promotions', 'internal_chat', 'store_drivers_chat', 'zepoint'
+            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'internal_orders_new', 'store_catalog', 'store_print_catalog', 'store_api_docs', 'store_loans', 'store_promotions', 'internal_chat', 'store_drivers_chat', 'zepoint'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
@@ -991,7 +1001,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         delivery_person: new Set<ActiveTab>([
             'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'insurance', 'score', 'zepoint'
         ]),
-        collaborator: new Set(['collaborator_area', 'shop', 'internal_orders', 'store_catalog']), // Added shop access
+        collaborator: new Set(['collaborator_area', 'shop', 'internal_orders', 'internal_orders_new', 'store_catalog']), // Added shop access
         user: new Set(['shop', 'profile', 'support', 'addresses', 'home', 'notifications', 'privacy', 'settings', 'zebank']) // Basic user access
     };
 
@@ -1156,7 +1166,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     );
                 case 'store_finance_panel': return <ZePayStore />;
                 case 'zepay_store': return <ZePayStore />; // ZéPay Module
-                case 'internal_orders': return <InternalOrders />;
+                case 'internal_orders': return <InternalOrders mode="full" />;
+                case 'internal_orders_new': return <InternalOrders mode="new_order" />;
                 case 'store_catalog': return <StoreCatalog />;
                 case 'store_print_catalog':
                     return (
@@ -1291,7 +1302,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             title: 'Operações',
             items: [
                 { label: 'Solicitar Entrega', tab: 'new_request', icon: Truck },
-                { label: 'Comanda', tab: 'internal_orders', icon: FileText, badge: pendingTicketsCount },
+                { label: 'Comanda', tab: 'internal_orders_new', icon: FileText },
+                { label: 'Pedidos', tab: 'internal_orders', icon: ClipboardList, badge: pendingTicketsCount },
                 { label: 'Status da Loja', tab: 'store_status', icon: Power }
             ]
         },
@@ -1380,11 +1392,12 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     const StoreBottomNav = () => (
-        <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" aria-label="Navegação principal da loja">
-            <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-800 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0)+0.75rem)]">
+        <nav className="fixed bottom-0 left-0 right-0 z-[45] md:hidden" aria-label="Navegação principal da loja">
+            <div className={`bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-800 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0)+0.75rem)] ${isStoreMoreOpen ? 'shadow-[0_-6px_16px_rgba(0,0,0,0.12)]' : ''}`}>
                 <div className="grid grid-cols-5 gap-1">
-                    {storeBottomNavItems.map(item => {
+                    {storeBottomNavItems.map((item, index) => {
                         const isActive = storeNavKey === item.key;
+                        const isCenterItem = index === Math.floor(storeBottomNavItems.length / 2);
                         return (
                             <button
                                 key={item.key}
@@ -1395,11 +1408,22 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                         navigate(item.tab);
                                     }
                                 }}
-                                className={`flex flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all ${isActive ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                className={`flex flex-col items-center justify-center ${isCenterItem ? 'py-0.5' : 'gap-1 py-2'} rounded-xl transition-all ${isCenterItem ? 'text-brand-600' : isActive ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                                 aria-current={isActive ? 'page' : undefined}
                             >
-                                <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`} />
-                                <span className={`text-[10px] font-bold ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`}>{item.label}</span>
+                                {isCenterItem ? (
+                                    <>
+                                        <div className="w-[66px] h-[66px] -mt-5 rounded-full bg-brand-600 shadow-lg flex items-center justify-center">
+                                            <item.icon className="w-8 h-8 text-white" />
+                                        </div>
+                                        <span className="sr-only">{item.label}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`} />
+                                        <span className={`text-[10px] font-bold ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`}>{item.label}</span>
+                                    </>
+                                )}
                             </button>
                         );
                     })}
@@ -1409,8 +1433,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     const StoreMoreSheet = () => (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Mais opções da loja">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsStoreMoreOpen(false)} />
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Mais opções da loja">
+            <div className="absolute inset-x-0 top-0 bottom-[calc(env(safe-area-inset-bottom,0)+4.5rem)] bg-black/50 backdrop-blur-sm" onClick={() => setIsStoreMoreOpen(false)} />
             <div className="absolute inset-x-0 bottom-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto">
                 <div className="sticky top-0 bg-white dark:bg-gray-900 p-4 border-b border-gray-100 dark:border-gray-800">
                     <div className="w-10 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-3" />
@@ -1425,7 +1449,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         </button>
                     </div>
                 </div>
-                <div className="p-4 space-y-5">
+                <div className="p-4 space-y-5 pb-[calc(env(safe-area-inset-bottom,0)+4.5rem)]">
                     {storeMoreSections.map(section => {
                         const visibleItems = section.items.filter(item => !item.tab || canAccessTab(item.tab));
                         if (visibleItems.length === 0) return null;
@@ -1537,11 +1561,12 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     const DriverBottomNav = () => (
-        <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" aria-label="Navegação principal do entregador">
-            <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-800 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0)+0.75rem)]">
+        <nav className="fixed bottom-0 left-0 right-0 z-[45] md:hidden" aria-label="Navegação principal do entregador">
+            <div className={`bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-800 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0)+0.75rem)] ${isDriverMoreOpen ? 'shadow-[0_-6px_16px_rgba(0,0,0,0.12)]' : ''}`}>
                 <div className="grid grid-cols-5 gap-1">
-                    {driverBottomNavItems.map(item => {
+                    {driverBottomNavItems.map((item, index) => {
                         const isActive = driverNavKey === item.key;
+                        const isCenterItem = index === Math.floor(driverBottomNavItems.length / 2);
                         return (
                             <button
                                 key={item.key}
@@ -1552,11 +1577,22 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                         navigate(item.tab);
                                     }
                                 }}
-                                className={`flex flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all ${isActive ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                className={`flex flex-col items-center justify-center ${isCenterItem ? 'py-0.5' : 'gap-1 py-2'} rounded-xl transition-all ${isCenterItem ? 'text-brand-600' : isActive ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                                 aria-current={isActive ? 'page' : undefined}
                             >
-                                <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`} />
-                                <span className={`text-[10px] font-bold ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`}>{item.label}</span>
+                                {isCenterItem ? (
+                                    <>
+                                        <div className="w-[66px] h-[66px] -mt-5 rounded-full bg-brand-600 shadow-lg flex items-center justify-center">
+                                            <item.icon className="w-8 h-8 text-white" />
+                                        </div>
+                                        <span className="sr-only">{item.label}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`} />
+                                        <span className={`text-[10px] font-bold ${isActive ? 'text-brand-600' : 'text-gray-500 dark:text-gray-400'}`}>{item.label}</span>
+                                    </>
+                                )}
                             </button>
                         );
                     })}
@@ -1566,8 +1602,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     const DriverMoreSheet = () => (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Mais opções do entregador">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsDriverMoreOpen(false)} />
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Mais opções do entregador">
+            <div className="absolute inset-x-0 top-0 bottom-[calc(env(safe-area-inset-bottom,0)+4.5rem)] bg-black/50 backdrop-blur-sm" onClick={() => setIsDriverMoreOpen(false)} />
             <div className="absolute inset-x-0 bottom-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto">
                 <div className="sticky top-0 bg-white dark:bg-gray-900 p-4 border-b border-gray-100 dark:border-gray-800">
                     <div className="w-10 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-3" />
@@ -1582,7 +1618,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         </button>
                     </div>
                 </div>
-                <div className="p-4 space-y-5">
+                <div className="p-4 space-y-5 pb-[calc(env(safe-area-inset-bottom,0)+4.5rem)]">
                     {driverMoreSections.map(section => {
                         const visibleItems = section.items.filter(item => !item.tab || canAccessTab(item.tab));
                         if (visibleItems.length === 0) return null;
@@ -1647,11 +1683,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                 {/* Header */}
                 <SectionErrorBoundary componentName="Header">
-                    <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 shadow-sm z-40 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800">
+                    <header className="fixed top-0 left-0 right-0 h-16 bg-brand-600 shadow-sm z-40 flex items-center justify-between px-4 border-b border-brand-700/60 text-white">
                         <div className="flex items-center gap-3">
-                            {!isMobileViewport && (
-                                <div className="p-2" /> // Espaçador para manter o alinhamento sem o botão
-                            )}
                             {isMobileViewport && !hideMobileMenuButton && (
                                 <button
                                     id="header-menu-button"
@@ -1659,7 +1692,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                         // Mobile: Toggle Modal Drawer
                                         setIsMenuOpen(true);
                                     }}
-                                    className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                                    className="p-2 -ml-2 rounded-full hover:bg-brand-700 text-white"
                                 >
                                     <Menu className="w-6 h-6" />
                                 </button>
@@ -1668,15 +1701,27 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             {shouldShowBack() && (
                                 <button
                                     onClick={() => navigate(defaultTabByRole[effectiveRole] || 'home')}
-                                    className="p-1 rounded-full text-gray-400 hover:text-gray-600 md:hidden"
+                                    className="p-1 rounded-full text-white hover:bg-brand-700 md:hidden"
                                     aria-label="Voltar"
                                 >
                                     <ArrowLeft className="w-5 h-5" />
                                 </button>
                             )}
 
+                            <button
+                                onClick={() => window.location.href = '/'}
+                                className="flex items-center gap-2"
+                                aria-label="Ir para a home"
+                            >
+                                <Logo
+                                    className="h-7 w-auto"
+                                    variant="full-white"
+                                    mode={isMobileViewport ? 'icon' : 'full'}
+                                />
+                            </button>
+
                             {isStore && (
-                                <span className="md:hidden text-sm font-bold text-gray-700 dark:text-gray-200 max-w-[180px] truncate">
+                                <span className="md:hidden text-xs font-bold text-white/90 max-w-[160px] truncate">
                                     {headerTitle}
                                 </span>
                             )}
@@ -1684,15 +1729,23 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         </div>
 
                         <div className="flex items-center gap-5 md:gap-2">
-                            <button id="header-emergency-button" onClick={() => setShowEmergency(true)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full animate-pulse">
+                            <button
+                                id="header-emergency-button"
+                                onClick={() => setShowEmergency(true)}
+                                className="p-2 text-white hover:bg-brand-700 rounded-full animate-pulse"
+                            >
                                 <ShieldAlert className="w-6 h-6" />
                             </button>
                             <div id="header-notifications-bell">
-                                <NotificationsBell unreadCount={unreadCount} onClick={() => setShowNotifications(true)} />
+                                <NotificationsBell
+                                    unreadCount={unreadCount}
+                                    onClick={() => setShowNotifications(true)}
+                                    className="text-white hover:bg-brand-700"
+                                />
                             </div>
                             <button
                                 onClick={() => window.location.reload()}
-                                className="p-2 text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                                className="p-2 text-white hover:bg-brand-700 rounded-full transition-colors"
                                 title="Recarregar dados"
                             >
                                 <RefreshCw className="w-5 h-5" />
@@ -1726,22 +1779,11 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     
                     bg-white dark:bg-gray-900 shadow-2xl transition-all duration-300 flex flex-col
                 `}>
-                        {/* Header (Logo + Close Button) - Mobile Only mostly, or adapted for desktop */}
-                        <div className={`
-                    flex items-center w-full
-                    justify-between p-6
-                    md:min-h-[4rem]
-                    ${isSidebarExpanded ? 'md:justify-between md:p-6' : 'md:justify-center md:p-4'}
-                    border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 
-                `}>
-                            {/* Logo - Show only when expanded */}
-                            {isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" onClick={() => window.location.href = '/'} />}
-
-                            {/* Logo Icon Only - Show when collapsed */}
-                            {!isSidebarExpanded && <Logo className="h-8 w-auto text-brand-600" mode="icon" onClick={() => window.location.href = '/'} />}
-
-                            {/* Close Button - Visible only on Mobile */}
-                            <button onClick={() => setIsMenuOpen(false)} className="md:hidden"><X className="w-6 h-6 text-gray-400 hover:text-gray-600" /></button>
+                        {/* Mobile Header (Close Only) */}
+                        <div className="md:hidden flex items-center justify-end p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                            <button onClick={() => setIsMenuOpen(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <X className="w-6 h-6 text-gray-400 hover:text-gray-600" />
+                            </button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
@@ -1835,7 +1877,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
                                     <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
                                     <MenuButton icon={Banknote} label="Promoções e Cupons" tab="store_promotions" />
-                                    <MenuButton icon={FileText} label="Comanda" tab="internal_orders" badge={pendingTicketsCount} />
+                                    <MenuButton icon={FileText} label="Comanda" tab="internal_orders_new" />
+                                    <MenuButton icon={ClipboardList} label="Pedidos" tab="internal_orders" badge={pendingTicketsCount} />
                                     <MenuButton icon={CreditCard} label="Financeiro ZéPay" tab="zepay_store" />
                                     <MenuButton icon={Key} label="Docs API / Integradores" tab="store_api_docs" />
                                 </>

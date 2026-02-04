@@ -66,30 +66,30 @@ export const FaqPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {showPublicHeader && (
-        <header className="sticky top-0 z-40 bg-white/90 dark:bg-gray-950/90 backdrop-blur border-b border-gray-100 dark:border-gray-800">
+        <header className="sticky top-0 z-40 bg-brand-600 text-white backdrop-blur border-b border-brand-700/60">
           <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <button
               onClick={() => window.location.href = '/'}
               className="flex items-center gap-3 text-left"
             >
-              <Logo className="h-8 w-auto text-brand-600" mode="icon" />
+              <Logo className="h-8 w-auto" mode="icon" variant="full-white" />
               <div>
-                <p className="text-xs uppercase tracking-widest text-gray-400 font-black">Central de Ajuda</p>
-                <p className="text-sm font-black text-gray-900 dark:text-white">Perguntas Frequentes</p>
+                <p className="text-xs uppercase tracking-widest text-white/80 font-black">Central de Ajuda</p>
+                <p className="text-sm font-black text-white">Perguntas Frequentes</p>
               </div>
             </button>
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => window.location.href = primaryCtaLink}
                 variant="outline"
-                className="font-black text-sm"
+                className="font-black text-sm !text-white !border-white/40 hover:!bg-brand-700 hover:!border-white/60"
               >
                 {primaryCtaLabel}
               </Button>
               {!hasSession && (
                 <Button
                   onClick={() => window.location.href = '/cadastro'}
-                  className="font-black text-sm"
+                  className="font-black text-sm !bg-white/15 !text-white !border-white/20 hover:!bg-brand-700"
                 >
                   Criar conta
                 </Button>

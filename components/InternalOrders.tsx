@@ -35,10 +35,17 @@ const parseCurrency = (val: string): number => {
 };
 
 
-export const InternalOrders: React.FC = () => {
+type InternalOrdersMode = 'full' | 'new_order';
+
+export const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode = 'full' }) => {
     // View State
-    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'DELIVERY_READY' | 'PICKUP_READY' | 'LOCAL_READY' | 'COMPLETED' | 'TABLES_MANAGE'>('PRODUCTION');
+    const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'DELIVERY_READY' | 'PICKUP_READY' | 'LOCAL_READY' | 'COMPLETED' | 'TABLES_MANAGE'>(() => (mode === 'new_order' ? 'NEW_ORDER' : 'PRODUCTION'));
     const [productionTab, setProductionTab] = useState<'QUEUE' | 'DELIVERY' | 'PICKUP' | 'LOCAL' | 'HISTORY' | 'CANCELLED'>('QUEUE');
+
+    const setViewSafe = (next: typeof view) => {
+        if (mode === 'new_order' && next !== 'NEW_ORDER') return;
+        setView(next);
+    };
 
     // Filtros de data para aba HISTORY
     // Filtros de data para aba HISTORY e CANCELLED
@@ -1103,7 +1110,7 @@ export const InternalOrders: React.FC = () => {
         setCustomerPhone(order.customer_phone || '');
         setObservation(order.observation || '');
         setOrderType((order as any).order_type || 'LOCAL');
-        setView('NEW_ORDER');
+        setViewSafe('NEW_ORDER');
     };
 
     // Validação de perfil - redirecionar para configurações se perfil incompleto
@@ -1121,30 +1128,24 @@ export const InternalOrders: React.FC = () => {
         <div className="md:h-[calc(100vh-100px)] flex flex-col animate-in fade-in">
 
             {/* Header Tabs */}
-            <div className="flex gap-2 mb-4">
+            {mode !== 'new_order' && (
+                <div className="flex gap-2 mb-4">
                 <button
-                    onClick={() => { setView('PRODUCTION'); loadTickets(); }}
+                    onClick={() => { setViewSafe('PRODUCTION'); loadTickets(); }}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'PRODUCTION' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
                 >
                     <Printer className="w-4 h-4" />
                     Produção
                 </button>
                 <button
-                    onClick={() => setView('NEW_ORDER')}
-                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'NEW_ORDER' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
-                >
-                    <Plus className="w-4 h-4" />
-                    Novo Pedido
-                </button>
-                <button
-                    onClick={() => setView('TABLES')}
+                    onClick={() => setViewSafe('TABLES')}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'TABLES' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
                 >
                     <LayoutList className="w-4 h-4" />
                     Mesas Ativas
                 </button>
                 <button
-                    onClick={() => { setView('HISTORY'); loadHistory(); }}
+                    onClick={() => { setViewSafe('HISTORY'); loadHistory(); }}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'HISTORY' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
                 >
                     <HistoryIcon className="w-4 h-4" />
@@ -1152,18 +1153,19 @@ export const InternalOrders: React.FC = () => {
                 </button>
 
                 <button
-                    onClick={() => setView('TABLES_MANAGE')}
+                    onClick={() => setViewSafe('TABLES_MANAGE')}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'TABLES_MANAGE' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
                 >
                     <LayoutList className="w-4 h-4" />
                     Mesas/QR
                 </button>
-            </div>
+                </div>
+            )}
 
             {view === 'NEW_ORDER' ? (
                 <div className="flex flex-col lg:flex-row flex-1 gap-4 overflow-hidden">
                     {/* Left: Catalog */}
-                    <div className="w-full lg:w-150 bg-white dark:bg-gray-800 rounded-2xl p-6 flex flex-col overflow-hidden">
+                    <div className="w-full lg:w-290 bg-white dark:bg-gray-800 rounded-2xl p-6 flex flex-col overflow-hidden">
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold dark:text-white">Catálogo</h2>

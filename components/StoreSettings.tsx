@@ -1,8 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { Settings, Truck, Save, Store, Lock, MapPin, Phone, Mail, Clock, Zap, Info, CheckCircle, AlertTriangle, X, User, Camera, Printer, Wallet, ChevronDown, Share2, Copy, ExternalLink, Power, MessageCircle } from 'lucide-react';
+import { Truck, Save, Store, MapPin, Phone, Mail, Clock, Zap, Info, User, Camera, Printer, Share2, Copy, Power } from 'lucide-react';
 import { Loading } from './Loading';
-import { Switch } from './Switch';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
@@ -13,19 +11,23 @@ import { ExclusiveLock } from './ExclusiveLock';
 import { CitySearchSelect } from './CitySearchSelect';
 import { OpeningHoursModal } from './OpeningHoursModal';
 import * as cloud from '../services/cloud';
-import { PartnerProfile, City } from '../types';
-import { formatPhoneNumber } from '../utils/mapHelpers';
+import { PartnerProfile } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { formatMinutes } from '../utils/formatMinutes';
 
+type TabKey = 'profile' | 'operation' | 'branding' | 'shipping' | 'printer';
+
 export const StoreSettings: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'general' | 'shipping' | 'printer'>('general');
+    const [activeTab, setActiveTab] = useState<TabKey>('profile');
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
-    const [availableCities, setAvailableCities] = useState<City[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loadingProfile, setLoadingProfile] = useState(true);
+    const [loadingPrinter, setLoadingPrinter] = useState(false);
+    const [printerLoaded, setPrinterLoaded] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [shippingMounted, setShippingMounted] = useState(false);
     const [isSuperStore, setIsSuperStore] = useState(false);
     const [expirationDate, setExpirationDate] = useState<string | null>(null);
+    const [loadingSuperStore, setLoadingSuperStore] = useState(false);
     const { alert, confirm } = useDialog();
     const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
 
@@ -67,8 +69,6 @@ export const StoreSettings: React.FC = () => {
         address_state: '',
         address_complement: '',
         description: '',
-        is_open: true,
-        delivery_time_max: '0',
         delivery_status: true,
         store_category_id: ''
     });
@@ -76,18 +76,42 @@ export const StoreSettings: React.FC = () => {
     const [citySlug, setCitySlug] = useState('');
     const [storeSlug, setStoreSlug] = useState('');
 
-    const loadProfileData = async () => {
-        setLoading(true);
+    const tabs: { id: TabKey; label: string; icon: React.ElementType }[] = [
+        { id: 'profile', label: 'Perfil', icon: User },
+        { id: 'operation', label: 'Operação', icon: Power },
+        { id: 'branding', label: 'Aparência', icon: Camera },
+        { id: 'shipping', label: 'Entrega/Retirada', icon: Truck },
+        { id: 'printer', label: 'Impressora', icon: Printer }
+    ];
+
+    const loadSuperStoreStatus = async () => {
+        setLoadingSuperStore(true);
         try {
-            const [p, cities, cats] = await Promise.all([
+            const user = await cloud.getClient()?.auth.getUser();
+            if (user?.data.user) {
+                const data = await cloud.getClient()?.from('user_profiles').select('is_super_store, super_store_expiration').eq('id', user.data.user.id).single();
+                if (data?.data) {
+                    setIsSuperStore(!!data.data.is_super_store);
+                    setExpirationDate(data.data.super_store_expiration || null);
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingSuperStore(false);
+        }
+    };
+
+    const loadProfileData = async () => {
+        setLoadingProfile(true);
+        try {
+            const [p, cats] = await Promise.all([
                 cloud.getMyPartnerProfile(),
-                cloud.getAvailableCities(),
                 cloud.getInstitutionalCategories()
             ]);
 
             setProfile(p);
-            setAvailableCities(cities);
-            setInstitutionalCategories(cats);
+            setInstitutionalCategories(cats || []);
 
             if (p) {
                 setCoverUrl(p.cover_url || null);
@@ -112,8 +136,6 @@ export const StoreSettings: React.FC = () => {
                     address_state: useStoreAddr ? (p.store_address_state || '') : (p.address_state || p.city?.split(' - ')[1] || ''),
                     address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.address_complement || ''),
                     description: p.description || '',
-                    is_open: p.is_currently_open ?? p.is_open ?? true,
-                    delivery_time_max: String(p.delivery_time_max || 0),
                     delivery_status: p.is_available ?? true,
                     store_category_id: p.store_category_id || ''
                 });
@@ -121,40 +143,70 @@ export const StoreSettings: React.FC = () => {
                 setCitySlug(p.city_slug || '');
                 setStoreSlug(p.store_slug || '');
 
-                const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', p.id).single() || {};
-                if (printerData) {
-                    setPrinterSettings({
-                        printer_width: String(printerData.printer_width || 80),
-                        paper_type: printerData.paper_type || 'thermal',
-                        margin_top: String(printerData.margin_top || 0),
-                        margin_bottom: String(printerData.margin_bottom || 0),
-                        margin_left: String(printerData.margin_left || 2),
-                        margin_right: String(printerData.margin_right || 2),
-                        font_size_base: String(printerData.font_size_base || 12),
-                        auto_cut: printerData.auto_cut !== false,
-                        use_printer: printerData.use_printer || false,
-                        printer_name: printerData.printer_name || ''
-                    });
+                if (p.is_super_store !== undefined && p.is_super_store !== null) {
+                    setIsSuperStore(!!p.is_super_store);
+                    setExpirationDate(p.super_store_expiration || null);
+                } else {
+                    setIsSuperStore(false);
+                    setExpirationDate(null);
+                    loadSuperStoreStatus();
                 }
-            }
-
-            const user = await cloud.getClient()?.auth.getUser();
-            if (user?.data.user) {
-                const data = await cloud.getClient()?.from('user_profiles').select('is_super_store, super_store_expiration').eq('id', user.data.user.id).single();
-                if (data?.data) {
-                    setIsSuperStore(data.data.is_super_store);
-                    setExpirationDate(data.data.super_store_expiration);
-                }
+            } else {
+                setIsSuperStore(false);
+                setExpirationDate(null);
+                loadSuperStoreStatus();
             }
         } catch (e) {
             console.error(e);
         } finally {
-            setLoading(false);
+            setLoadingProfile(false);
+        }
+    };
+
+    const loadPrinterSettings = async (storeId: string) => {
+        setLoadingPrinter(true);
+        try {
+            const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', storeId).single() || {};
+            if (printerData) {
+                setPrinterSettings({
+                    printer_width: String(printerData.printer_width || 80),
+                    paper_type: printerData.paper_type || 'thermal',
+                    margin_top: String(printerData.margin_top || 0),
+                    margin_bottom: String(printerData.margin_bottom || 0),
+                    margin_left: String(printerData.margin_left || 2),
+                    margin_right: String(printerData.margin_right || 2),
+                    font_size_base: String(printerData.font_size_base || 12),
+                    auto_cut: printerData.auto_cut !== false,
+                    use_printer: printerData.use_printer || false,
+                    printer_name: printerData.printer_name || ''
+                });
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingPrinter(false);
+            setPrinterLoaded(true);
         }
     };
 
     useEffect(() => {
         loadProfileData();
+    }, []);
+
+    useEffect(() => {
+        if (activeTab !== 'printer' || printerLoaded || !profile?.id) return;
+        loadPrinterSettings(profile.id);
+    }, [activeTab, printerLoaded, profile?.id]);
+
+    useEffect(() => {
+        if (activeTab === 'shipping') {
+            setShippingMounted(true);
+        }
+    }, [activeTab]);
+
+    useEffect(() => {
+        const timeout = setTimeout(() => setShippingMounted(true), 400);
+        return () => clearTimeout(timeout);
     }, []);
 
     const handleChange = (field: string, value: string | boolean) => {
@@ -191,7 +243,7 @@ export const StoreSettings: React.FC = () => {
             const rawPhone = (form.phone_number || '').replace(/\D/g, '');
             const rawZip = (form.address_zip || '').replace(/\D/g, '');
 
-            await cloud.updateMyPartnerProfile({
+            const { error } = await cloud.updateMyPartnerProfile({
                 store_name: form.name,
                 phone_number: rawPhone,
                 contact_email: form.contact_email,
@@ -206,22 +258,10 @@ export const StoreSettings: React.FC = () => {
                 store_address_state: cityState,
                 store_address_complement: form.address_complement,
                 description: form.description,
-                is_open: form.is_open,
-                is_currently_open: form.is_open,
-                delivery_time_max: Number(form.delivery_time_max),
                 is_available: form.delivery_status,
-                store_category_id: form.store_category_id || null
+                store_category_id: form.store_category_id ? String(form.store_category_id) : null
             });
-
-            const wasManualOpen = (profile?.is_currently_open ?? profile?.is_open) === true;
-            if (profile && wasManualOpen && !form.is_open) {
-                try {
-                    await cloud.generateDailyStoreReport(profile.id);
-                    await alert({ title: 'Relatório Gerado', message: 'O relatório de fechamento de caixa foi gerado com sucesso.' });
-                } catch (reportError) {
-                    console.error("Erro ao gerar relatório:", reportError);
-                }
-            }
+            if (error) throw error;
 
             await alert({ title: 'Sucesso', message: "Dados da loja atualizados com sucesso!" });
             await loadProfileData();
@@ -253,10 +293,6 @@ export const StoreSettings: React.FC = () => {
         } else {
             handleCopyLink();
         }
-    };
-
-    const handleToggleOpen = () => {
-        setForm(prev => ({ ...prev, is_open: !prev.is_open }));
     };
 
     const preparationMinLabel = formatMinutes(form.preparation_time_min);
@@ -335,10 +371,10 @@ export const StoreSettings: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="flex justify-center p-10"><Loading variant="container" size="md" message="Carregando configurações..." /></div>;
+    if (loadingProfile) return <div className="flex justify-center p-10"><Loading variant="container" size="md" message="Carregando configurações..." /></div>;
 
     return (
-        <div className="space-y-6 animate-in fade-in pb-24">
+        <div className="space-y-5 md:space-y-6 animate-in fade-in pb-24">
             <OpeningHoursModal
                 isOpen={isHoursModalOpen}
                 onClose={() => setIsHoursModalOpen(false)}
@@ -346,28 +382,23 @@ export const StoreSettings: React.FC = () => {
                 initialValue={form.opening_hours}
             />
 
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl mb-6 overflow-x-auto no-scrollbar">
-                <button
-                    onClick={() => setActiveTab('general')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'general' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
-                >
-                    <Store className="w-4 h-4" /> Dados da Loja
-                </button>
-                <button
-                    onClick={() => setActiveTab('shipping')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'shipping' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
-                >
-                    {isSuperStore ? <Truck className="w-4 h-4" /> : <Lock className="w-4 h-4" />} Config. Frete
-                </button>
-                <button
-                    onClick={() => setActiveTab('printer')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'printer' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
-                >
-                    <Printer className="w-4 h-4" /> Impressora
-                </button>
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto no-scrollbar">
+                {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tight flex items-center gap-2 whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        >
+                            <Icon className="w-4 h-4" />
+                            {tab.label}
+                        </button>
+                    );
+                })}
             </div>
 
-            {isSuperStore && expirationDate && (
+            {!loadingSuperStore && isSuperStore && expirationDate && (
                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-4 rounded-xl border border-amber-100 dark:border-amber-800/30 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-full text-amber-600 dark:text-amber-400">
@@ -383,135 +414,249 @@ export const StoreSettings: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'general' && (
-                <div className="space-y-10">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden relative group">
-                        <div className="h-40 md:h-52 w-full bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 relative">
-                            {coverUrl && <img src={coverUrl} alt="Capa" className="w-full h-full object-cover" />}
-                            <label className="absolute bottom-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full cursor-pointer backdrop-blur-sm">
-                                {uploadingAsset === 'cover' ? <Loading variant="inline" size="sm" /> : <Camera className="w-5 h-5" />}
-                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAssetUpload(e, 'cover')} />
-                            </label>
+            {activeTab === 'profile' && (
+                <div className="space-y-5 md:space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Informações da Loja</h3>
+                            <p className="text-xs text-gray-400">Nome, categoria e descrição do seu negócio.</p>
                         </div>
-                        <div className="absolute top-[80px] md:top-[120px] left-6">
-                            <div className="relative group/logo">
-                                <div className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-white dark:border-gray-800 bg-gray-100 dark:bg-gray-700 overflow-hidden shadow-lg flex items-center justify-center">
-                                    {logoUrl ? <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" /> : <Store className="w-10 h-10 md:w-12 md:h-12 text-gray-400" />}
-                                </div>
-                                <label className="absolute bottom-0 right-0 bg-brand-600 hover:bg-brand-700 text-white p-2 rounded-full cursor-pointer shadow-md border-2 border-white dark:border-gray-800">
-                                    {uploadingAsset === 'logo' ? <Loading variant="inline" size="xs" /> : <Camera className="w-4 h-4" />}
-                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAssetUpload(e, 'logo')} />
-                                </label>
-                            </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <CustomInput label="Nome da Loja" value={form.name} onChange={e => handleChange('name', e.target.value)} icon={Store} />
+                            <CustomSelect
+                                label="Segmento / Categoria"
+                                value={form.store_category_id}
+                                onChange={val => handleChange('store_category_id', String(val))}
+                                options={institutionalCategories.map(c => ({ label: c.name, value: String(c.id) }))}
+                                placeholder="Selecione..."
+                            />
                         </div>
-                        <div className="mt-16 px-6 pb-6">
-                            <h2 className="text-2xl font-bold dark:text-white">{form.name || 'Sua Loja'}</h2>
-                            <p className="text-sm text-gray-500">{profile?.email}</p>
+                        <CustomInput label="Descrição" value={form.description} onChange={e => handleChange('description', e.target.value)} icon={Info} />
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Contato</h3>
+                            <p className="text-xs text-gray-400">Como clientes podem falar com a sua loja.</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <CustomInput label="Telefone" value={form.phone_number} onChange={e => handleChange('phone_number', e.target.value)} mask="phone" icon={Phone} />
+                            <CustomInput label="E-mail de Contato" type="email" value={form.contact_email} onChange={e => handleChange('contact_email', e.target.value)} icon={Mail} />
                         </div>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl space-y-8">
-                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h4 className="font-bold flex items-center gap-2 dark:text-white"><Store className="w-5 h-5 text-brand-600" /> Catálogo Digital</h4>
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-sm font-bold ${form.is_open ? 'text-green-600' : 'text-red-600'}`}>{form.is_open ? 'ABERTA' : 'FECHADA'}</span>
-                                    <Switch checked={form.is_open} onChange={handleToggleOpen} />
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Endereço da Loja</h3>
+                            <p className="text-xs text-gray-400">Usamos estes dados para seu catálogo e entregas.</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <CustomInput label="CEP" value={form.address_zip} onChange={e => handleChange('address_zip', e.target.value)} mask="cep" icon={MapPin} />
+                            <div className="md:col-span-2">
+                                <CitySearchSelect label="Cidade" value={form.city} onSelect={city => setForm(prev => ({ ...prev, city: `${city.name} - ${city.state}`, address_state: city.state }))} />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <StreetAutocomplete label="Rua" value={form.address_street} onChange={val => handleChange('address_street', val)} city={form.city?.split(' - ')[0]} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <CustomInput label="Número" value={form.address_number} onChange={e => handleChange('address_number', e.target.value)} />
+                                <CustomInput label="Bairro" value={form.address_district} onChange={e => handleChange('address_district', e.target.value)} />
+                            </div>
+                        </div>
+                        <CustomInput label="Complemento" value={form.address_complement} onChange={e => handleChange('address_complement', e.target.value)} />
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Catálogo Digital</h3>
+                            <p className="text-xs text-gray-400">Compartilhe o link do seu cardápio com clientes.</p>
+                        </div>
+                        {citySlug && storeSlug ? (
+                            <div className="flex flex-col md:flex-row gap-3 items-center">
+                                <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm dark:text-gray-300 w-full truncate font-mono">
+                                    {window.location.origin}/{citySlug}/{storeSlug}/produtos
+                                </div>
+                                <div className="flex gap-2 w-full md:w-auto">
+                                    <Button variant="outline" onClick={handleCopyLink} className="flex-1"><Copy className="w-4 h-4 mr-2" /> Copiar</Button>
+                                    <Button variant="outline" onClick={handleShareLink} className="flex-1"><Share2 className="w-4 h-4 mr-2" /> Compartilhar</Button>
                                 </div>
                             </div>
-                            {citySlug && storeSlug ? (
-                                <div className="flex flex-col md:flex-row gap-3 items-center">
-                                    <div className="flex-1 bg-white dark:bg-gray-800 border rounded-lg px-3 py-2 text-sm dark:text-gray-300 w-full truncate font-mono">
-                                        {window.location.origin}/{citySlug}/{storeSlug}/produtos
-                                    </div>
-                                    <div className="flex gap-2 w-full md:w-auto">
-                                        <Button variant="outline" onClick={handleCopyLink} className="flex-1"><Copy className="w-4 h-4 mr-2" /> Copiar</Button>
-                                        <Button variant="outline" onClick={handleShareLink} className="flex-1"><Share2 className="w-4 h-4 mr-2" /> Compartilhar</Button>
-                                    </div>
-                                </div>
+                        ) : (
+                            <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">Configure nome e endereço para ativar o catálogo.</div>
+                        )}
+                    </div>
+
+                    <Button onClick={handleSave} disabled={saving} fullWidth className="py-4 bg-brand-600 text-white font-black">
+                        {saving ? <Loading variant="inline" size="sm" /> : <><Save className="w-5 h-5 mr-2" /> Salvar alterações</>}
+                    </Button>
+                </div>
+            )}
+
+            {activeTab === 'operation' && (
+                <div className="space-y-5 md:space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Status da Loja</h3>
+                            <p className="text-xs text-gray-400">Controle se a loja está aberta para pedidos.</p>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${form.is_open ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                    {form.is_open ? 'ABERTA' : 'FECHADA'}
+                                </span>
+                            </div>
+                            <Switch checked={form.is_open} onChange={handleToggleOpen} />
+                        </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Horário de Funcionamento</h3>
+                            <p className="text-xs text-gray-400">Defina seus horários para clientes visualizarem.</p>
+                        </div>
+                        <CustomInput
+                            label="Horário de Funcionamento"
+                            value={form.opening_hours}
+                            onClick={() => setIsHoursModalOpen(true)}
+                            readOnly
+                            icon={Clock}
+                            className="cursor-pointer"
+                        />
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Tempo de Preparo</h3>
+                            <p className="text-xs text-gray-400">Intervalo estimado de preparação dos pedidos.</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <CustomInput label="Preparo Mínimo (min)" value={form.preparation_time_min} onChange={e => handleChange('preparation_time_min', e.target.value.replace(/\D/g, ''))} icon={Zap} helperText={preparationMinLabel} />
+                            <CustomInput label="Preparo Máximo (min)" value={form.preparation_time_max} onChange={e => handleChange('preparation_time_max', e.target.value.replace(/\D/g, ''))} icon={Zap} helperText={preparationMaxLabel} />
+                        </div>
+                    </div>
+
+                    <Button onClick={handleSave} disabled={saving} fullWidth className="py-4 bg-brand-600 text-white font-black">
+                        {saving ? <Loading variant="inline" size="sm" /> : <><Save className="w-5 h-5 mr-2" /> Salvar alterações</>}
+                    </Button>
+                </div>
+            )}
+
+            {activeTab === 'branding' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Capa</h3>
+                                <p className="text-xs text-gray-400">Imagem principal do seu catálogo.</p>
+                            </div>
+                            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                                {uploadingAsset === 'cover' ? <Loading variant="inline" size="xs" /> : <Camera className="w-4 h-4" />}
+                                Alterar
+                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAssetUpload(e, 'cover')} />
+                            </label>
+                        </div>
+                        <div className="h-28 md:h-32 w-full bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 rounded-xl overflow-hidden">
+                            {coverUrl ? (
+                                <img src={coverUrl} alt="Capa" className="w-full h-full object-cover" />
                             ) : (
-                                <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">Configure nome e endereço para ativar o catálogo.</div>
+                                <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">Sem capa</div>
                             )}
                         </div>
+                    </div>
 
-                        <div className="space-y-6">
-                            <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Store className="w-5 h-5 text-gray-500" /> Informações Básicas</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <CustomInput label="Nome da Loja" value={form.name} onChange={e => handleChange('name', e.target.value)} icon={Store} />
-                                <CustomSelect
-                                    label="Segmento / Categoria"
-                                    value={form.store_category_id}
-                                    onChange={val => handleChange('store_category_id', val)}
-                                    options={institutionalCategories.map(c => ({ label: c.name, value: c.id }))}
-                                    placeholder="Selecione..."
-                                />
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Logo</h3>
+                                <p className="text-xs text-gray-400">Identidade visual da sua loja.</p>
                             </div>
-                            <CustomInput label="Descrição" value={form.description} onChange={e => handleChange('description', e.target.value)} icon={Info} />
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <CustomInput label="Preparo Mínimo (min)" value={form.preparation_time_min} onChange={e => handleChange('preparation_time_min', e.target.value.replace(/\D/g, ''))} icon={Zap} helperText={preparationMinLabel} />
-                                <CustomInput label="Preparo Máximo (min)" value={form.preparation_time_max} onChange={e => handleChange('preparation_time_max', e.target.value.replace(/\D/g, ''))} icon={Zap} helperText={preparationMaxLabel} />
-                                <CustomInput label="Telefone" value={form.phone_number} onChange={e => handleChange('phone_number', e.target.value)} mask="phone" icon={Phone} />
-                            </div>
-                            <CustomInput label="Horário de Funcionamento" value={form.opening_hours} onClick={() => setIsHoursModalOpen(true)} readOnly icon={Clock} className="cursor-pointer" />
+                            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                                {uploadingAsset === 'logo' ? <Loading variant="inline" size="xs" /> : <Camera className="w-4 h-4" />}
+                                Alterar
+                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAssetUpload(e, 'logo')} />
+                            </label>
                         </div>
-
-                        <div className="pt-8 border-t dark:border-gray-700 space-y-6">
-                            <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><MapPin className="w-5 h-5 text-gray-500" /> Endereço da Loja</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <CustomInput label="CEP" value={form.address_zip} onChange={e => handleChange('address_zip', e.target.value)} mask="cep" icon={MapPin} />
-                                <div className="md:col-span-2">
-                                    <CitySearchSelect label="Cidade" value={form.city} onSelect={city => setForm(prev => ({ ...prev, city: `${city.name} - ${city.state}`, address_state: city.state }))} />
-                                </div>
+                        <div className="flex items-center gap-4">
+                            <div className="w-20 h-20 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 overflow-hidden flex items-center justify-center">
+                                {logoUrl ? <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" /> : <Store className="w-8 h-8 text-gray-400" />}
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <StreetAutocomplete label="Rua" value={form.address_street} onChange={val => handleChange('address_street', val)} city={form.city?.split(' - ')[0]} />
-                                <div className="grid grid-cols-2 gap-4">
-                                    <CustomInput label="Número" value={form.address_number} onChange={e => handleChange('address_number', e.target.value)} />
-                                    <CustomInput label="Bairro" value={form.address_district} onChange={e => handleChange('address_district', e.target.value)} />
-                                </div>
+                            <div>
+                                <p className="text-sm font-bold text-gray-700 dark:text-gray-200">{form.name || 'Sua Loja'}</p>
+                                <p className="text-xs text-gray-400">Use uma imagem quadrada para melhor resultado.</p>
                             </div>
-                            <CustomInput label="Complemento" value={form.address_complement} onChange={e => handleChange('address_complement', e.target.value)} />
                         </div>
-
-                        <Button onClick={handleSave} disabled={saving} fullWidth className="py-4 bg-brand-600 text-white font-black">
-                            {saving ? <Loading variant="inline" size="sm" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Tudo</>}
-                        </Button>
                     </div>
                 </div>
             )}
 
-            {activeTab === 'shipping' && (
-                <div className="space-y-8">
-                    <StoreDeliverySettings />
-                    {isSuperStore ? <StoreShippingRules /> : <ExclusiveLock title="Regras Promocionais" description="Upgrade para Superlogista para acessar regras de frete grátis." />}
+            {shippingMounted && (
+                <div className={activeTab === 'shipping' ? 'space-y-5 md:space-y-6' : 'hidden'}>
+                    <div>
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white">Entrega e Retirada</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Configure como seus clientes recebem os pedidos.</p>
+                    </div>
+                    <StoreDeliverySettings profile={profile} />
+                    {loadingSuperStore ? (
+                        <div className="flex justify-center p-6"><Loading variant="inline" size="sm" /></div>
+                    ) : (
+                        isSuperStore
+                            ? <StoreShippingRules />
+                            : <ExclusiveLock title="Regras Promocionais" description="Upgrade para Superlogista para acessar regras de frete grátis." />
+                    )}
                 </div>
             )}
 
             {activeTab === 'printer' && (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl space-y-6">
-                    <div className={`p-4 rounded-xl border-2 ${printerSettings.use_printer ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <Printer className={`w-8 h-8 ${printerSettings.use_printer ? 'text-brand-600' : 'text-gray-400'}`} />
-                                <div>
-                                    <h4 className="font-bold dark:text-white">Impressora Térmica</h4>
-                                    <p className="text-xs text-gray-500">{printerSettings.use_printer ? 'Configurada' : 'Não ativa'}</p>
+                <div className="space-y-5 md:space-y-6">
+                    <div>
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white">Impressora</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Configure sua impressora térmica para pedidos.</p>
+                    </div>
+
+                    {loadingPrinter ? (
+                        <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-100 dark:border-gray-700 flex justify-center">
+                            <Loading variant="container" size="sm" message="Carregando impressora..." />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-xl ${printerSettings.use_printer ? 'bg-brand-100 text-brand-600' : 'bg-gray-100 text-gray-400'}`}>
+                                            <Printer className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold dark:text-white">Impressora Térmica</h4>
+                                            <p className="text-xs text-gray-500">{printerSettings.use_printer ? 'Configurada' : 'Não ativa'}</p>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        onClick={() => printerSettings.use_printer ? setPrinterSettings(prev => ({ ...prev, use_printer: false })) : handleDetectPrinter()}
+                                        variant={printerSettings.use_printer ? 'outline' : 'primary'}
+                                        loading={detectingPrinter}
+                                    >
+                                        {printerSettings.use_printer ? 'Desativar' : 'Ativar'}
+                                    </Button>
                                 </div>
                             </div>
-                            <Button onClick={() => printerSettings.use_printer ? setPrinterSettings(prev => ({ ...prev, use_printer: false })) : handleDetectPrinter()} variant={printerSettings.use_printer ? 'outline' : 'primary'}>
-                                {printerSettings.use_printer ? 'Desativar' : 'Ativar'}
-                            </Button>
-                        </div>
-                    </div>
-                    {printerSettings.use_printer && (
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t dark:border-gray-700">
-                            <CustomInput label="Largura (mm)" type="number" value={printerSettings.printer_width} onChange={e => setPrinterSettings({ ...printerSettings, printer_width: e.target.value })} />
-                            <CustomInput label="Fonte Base" type="number" value={printerSettings.font_size_base} onChange={e => setPrinterSettings({ ...printerSettings, font_size_base: e.target.value })} />
-                            <Button onClick={handleSavePrinter} disabled={savingPrinter} fullWidth className="col-span-2"><Save className="w-4 h-4 mr-2" /> Salvar Impressora</Button>
-                        </div>
+
+                            {printerSettings.use_printer && (
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                                    <h4 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Configurações</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <CustomInput label="Largura (mm)" type="number" value={printerSettings.printer_width} onChange={e => setPrinterSettings({ ...printerSettings, printer_width: e.target.value })} />
+                                        <CustomInput label="Fonte Base" type="number" value={printerSettings.font_size_base} onChange={e => setPrinterSettings({ ...printerSettings, font_size_base: e.target.value })} />
+                                    </div>
+                                    <Button onClick={handleSavePrinter} disabled={savingPrinter} fullWidth>
+                                        {savingPrinter ? <Loading variant="inline" size="sm" /> : <><Save className="w-4 h-4 mr-2" /> Salvar Impressora</>}
+                                    </Button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}
         </div>
     );
 };
+

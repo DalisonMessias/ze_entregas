@@ -5,7 +5,7 @@ import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import * as cloud from '../services/cloud';
-import { StoreDeliverySettings as IDeliverySettings, StoreNeighborhoodFee } from '../types';
+import { StoreDeliverySettings as IDeliverySettings, StoreNeighborhoodFee, PartnerProfile } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { formatMinutes } from '../utils/formatMinutes';
 import { ProfileValidationAlert } from './ProfileValidationAlert';
@@ -22,7 +22,11 @@ const formatCurrency = (val: number) => {
     return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-export const StoreDeliverySettings: React.FC = () => {
+interface StoreDeliverySettingsProps {
+    profile?: PartnerProfile | null;
+}
+
+export const StoreDeliverySettings: React.FC<StoreDeliverySettingsProps> = ({ profile }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -62,13 +66,13 @@ export const StoreDeliverySettings: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [s, f, profile] = await Promise.all([
+            const [s, f, profileData] = await Promise.all([
                 cloud.getStoreDeliverySettings(),
                 cloud.getStoreNeighborhoodFees(),
-                cloud.getMyPartnerProfile()
+                profile ? Promise.resolve(profile) : cloud.getMyPartnerProfile()
             ]);
 
-            const validation = validateStoreProfile(profile);
+            const validation = validateStoreProfile(profileData || null);
             setProfileValid(validation.isValid);
             setMissingFields(validation.missingFields);
 
