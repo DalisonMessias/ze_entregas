@@ -1388,6 +1388,7 @@ export interface CityStoreBannerRequest {
     store_id: string;
     city_slug: string;
     request_type: string;
+    topic?: string;
     status: string;
     banner_url?: string;
     notes?: string;

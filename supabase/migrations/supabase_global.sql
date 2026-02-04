@@ -749,14 +749,18 @@ BEGIN
     upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6))
   );
 
-  -- Se for lojista ou entregador, criar carteira (Unificado em store_wallets)
-  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('store_partner', 'delivery_partner', 'delivery_person') THEN
+  -- Logística de Carteiras Diferenciada (Zebank vs ZéPay)
+  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('store_partner') THEN
+      -- Carteira de Loja (ZéPay)
       INSERT INTO public.store_wallets (store_id, balance_decimal)
       VALUES (NEW.id, 0)
       ON CONFLICT (store_id) DO NOTHING;
+  ELSIF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('delivery_partner', 'delivery_person') THEN
+      -- Carteira de Entregador (Zebank)
+      INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal)
+      VALUES (NEW.id, 0, 0)
+      ON CONFLICT (driver_id) DO NOTHING;
   END IF;
-
-  -- Categoria Geral removida conforme solicitação. O lojista cria suas próprias categorias ou importa.
 
   RETURN NEW;
 END;
@@ -11910,10 +11914,11 @@ CREATE TRIGGER handle_city_store_banner_assets_updated_at BEFORE UPDATE ON publi
 -- city_store_banner_requests
 CREATE TABLE IF NOT EXISTS public.city_store_banner_requests (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  store_id uuid NOT NULL,
-  city_slug text NOT NULL,
-  request_type text NOT NULL,
-  status text NOT NULL DEFAULT 'OPEN'::text,
+	  store_id uuid NOT NULL,
+	  city_slug text NOT NULL,
+	  request_type text NOT NULL,
+	  topic text NOT NULL DEFAULT 'BANNER'::text,
+	  status text NOT NULL DEFAULT 'OPEN'::text,
   banner_url text,
   notes text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -12008,10 +12013,159 @@ DROP POLICY IF EXISTS "Public read highlight settings" ON public.city_store_high
 CREATE POLICY "Public read highlight settings" ON public.city_store_highlight_settings FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Admins manage highlight settings" ON public.city_store_highlight_settings;
 CREATE POLICY "Admins manage highlight settings" ON public.city_store_highlight_settings FOR ALL USING (public.is_admin());
-DROP TRIGGER IF EXISTS handle_city_store_highlight_settings_updated_at ON public.city_store_highlight_settings;
-CREATE TRIGGER handle_city_store_highlight_settings_updated_at BEFORE UPDATE ON public.city_store_highlight_settings FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+	DROP TRIGGER IF EXISTS handle_city_store_highlight_settings_updated_at ON public.city_store_highlight_settings;
+	CREATE TRIGGER handle_city_store_highlight_settings_updated_at BEFORE UPDATE ON public.city_store_highlight_settings FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- 3. COLUNAS FALTANTES EM TABELAS EXISTENTES
+	-- Funcoes: destaque por cidade
+	CREATE OR REPLACE FUNCTION public.purchase_city_store_highlight(p_city_slug text, p_days integer)
+	RETURNS JSONB
+	LANGUAGE plpgsql
+	SECURITY DEFINER
+	AS $$
+	DECLARE
+	  v_user uuid := auth.uid();
+	  v_price numeric;
+	  v_base_days integer;
+	  v_balance numeric;
+	  v_start timestamptz;
+	  v_end timestamptz;
+	  v_order_id uuid;
+	  v_status text := 'ACTIVE';
+	  v_last_end timestamptz;
+	BEGIN
+	  IF v_user IS NULL THEN
+	    RAISE EXCEPTION 'Not authenticated';
+	  END IF;
+
+	  IF p_days IS NULL OR p_days < 1 OR p_days > 365 THEN
+	    RAISE EXCEPTION 'Invalid days';
+	  END IF;
+
+	  SELECT highlight_price, highlight_duration_days
+	    INTO v_price, v_base_days
+	  FROM public.city_store_highlight_settings
+	  ORDER BY updated_at DESC
+	  LIMIT 1;
+
+	  IF v_price IS NULL OR v_base_days IS NULL OR v_base_days = 0 THEN
+	    RAISE EXCEPTION 'Highlight settings not configured';
+	  END IF;
+
+	  v_price := ROUND((v_price / v_base_days) * p_days, 2);
+
+	  SELECT balance_decimal INTO v_balance
+	  FROM public.store_wallets
+	  WHERE store_id = v_user
+	  FOR UPDATE;
+
+	  IF v_balance IS NULL OR v_balance < v_price THEN
+	    RAISE EXCEPTION 'Saldo insuficiente';
+	  END IF;
+
+	  SELECT ends_at INTO v_last_end
+	  FROM public.city_store_highlight_orders
+	  WHERE store_id = v_user
+	    AND city_slug = p_city_slug
+	    AND status IN ('ACTIVE','SCHEDULED')
+	  ORDER BY ends_at DESC
+	  LIMIT 1;
+
+	  IF v_last_end IS NOT NULL AND v_last_end > now() THEN
+	    v_start := v_last_end;
+	    v_status := 'SCHEDULED';
+	  ELSE
+	    v_start := now();
+	    v_status := 'ACTIVE';
+	  END IF;
+
+	  v_end := v_start + (p_days::text || ' days')::interval;
+
+	  INSERT INTO public.city_store_highlight_orders (
+	    store_id, city_slug, amount_paid, duration_days, starts_at, ends_at, status
+	  ) VALUES (
+	    v_user, p_city_slug, v_price, p_days, v_start, v_end, v_status
+	  ) RETURNING id INTO v_order_id;
+
+	  INSERT INTO public.store_wallet_transactions (store_id, amount, description, type, status)
+	  VALUES (v_user, -ABS(v_price), 'Destaque por cidade', 'DEBIT', 'COMPLETED');
+
+	  UPDATE public.store_wallets
+	  SET balance_decimal = balance_decimal - ABS(v_price),
+	      updated_at = now()
+	  WHERE store_id = v_user;
+
+	  RETURN jsonb_build_object('order_id', v_order_id, 'amount', v_price, 'status', v_status);
+	END;
+	$$;
+
+	CREATE OR REPLACE FUNCTION public.cancel_city_store_highlight(p_order_id uuid)
+	RETURNS JSONB
+	LANGUAGE plpgsql
+	SECURITY DEFINER
+	AS $$
+	DECLARE
+	  v_user uuid := auth.uid();
+	  v_order RECORD;
+	  v_fee_percent numeric;
+	  v_fee_amount numeric;
+	  v_balance numeric;
+	BEGIN
+	  IF v_user IS NULL THEN
+	    RAISE EXCEPTION 'Not authenticated';
+	  END IF;
+
+	  SELECT * INTO v_order
+	  FROM public.city_store_highlight_orders
+	  WHERE id = p_order_id AND store_id = v_user;
+
+	  IF NOT FOUND THEN
+	    RAISE EXCEPTION 'Highlight order not found';
+	  END IF;
+
+	  IF v_order.status NOT IN ('ACTIVE','SCHEDULED') THEN
+	    RAISE EXCEPTION 'Order cannot be cancelled';
+	  END IF;
+
+	  SELECT cancel_fee INTO v_fee_percent
+	  FROM public.city_store_highlight_settings
+	  ORDER BY updated_at DESC
+	  LIMIT 1;
+
+	  v_fee_percent := COALESCE(v_fee_percent, 0);
+	  v_fee_amount := ROUND((v_order.amount_paid * (v_fee_percent / 100)), 2);
+
+	  SELECT balance_decimal INTO v_balance
+	  FROM public.store_wallets
+	  WHERE store_id = v_user
+	  FOR UPDATE;
+
+	  IF v_balance IS NULL OR v_balance < v_fee_amount THEN
+	    RAISE EXCEPTION 'Saldo insuficiente';
+	  END IF;
+
+	  UPDATE public.city_store_highlight_orders
+	  SET status = 'CANCELLED',
+	      updated_at = now()
+	  WHERE id = p_order_id;
+
+	  IF v_fee_amount > 0 THEN
+	    INSERT INTO public.store_wallet_transactions (store_id, amount, description, type, status)
+	    VALUES (v_user, -ABS(v_fee_amount), 'Taxa de cancelamento destaque por cidade', 'DEBIT', 'COMPLETED');
+
+	    UPDATE public.store_wallets
+	    SET balance_decimal = balance_decimal - ABS(v_fee_amount),
+	        updated_at = now()
+	    WHERE store_id = v_user;
+	  END IF;
+
+	  RETURN jsonb_build_object('order_id', p_order_id, 'fee', v_fee_amount);
+	END;
+	$$;
+
+	GRANT EXECUTE ON FUNCTION public.purchase_city_store_highlight(text, integer) TO authenticated;
+	GRANT EXECUTE ON FUNCTION public.cancel_city_store_highlight(uuid) TO authenticated;
+	
+	-- 3. COLUNAS FALTANTES EM TABELAS EXISTENTES
 DO $$ 
 BEGIN
     -- available_cities
@@ -12351,3 +12505,16 @@ DROP POLICY IF EXISTS "Admins manage shop products" ON public.shop_platform_prod
 CREATE POLICY "Admins manage shop products" ON public.shop_platform_products FOR ALL USING (public.is_admin());
 DROP TRIGGER IF EXISTS handle_shop_platform_products_updated_at ON public.shop_platform_products;
 CREATE TRIGGER handle_shop_platform_products_updated_at BEFORE UPDATE ON public.shop_platform_products FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- ==================================================================
+-- [REPAIR SCRIPT] GARANTIR CARTEIRAS ZEBANK PARA ENTREGADORES EXISTENTES
+-- ==================================================================
+DO $$
+BEGIN
+    INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal)
+    SELECT id, 0, 0
+    FROM public.user_profiles
+    WHERE role IN ('delivery_partner', 'delivery_person')
+    ON CONFLICT (driver_id) DO NOTHING;
+END $$;
+

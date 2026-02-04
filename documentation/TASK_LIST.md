@@ -1,10 +1,3 @@
-# Plano de Sincronização SQL - 04/02/2026
-
-- [x] Comparar `supabase_global.sql` com `supabase_global-backup.sql`
-- [x] Identificar diferenças de tabelas e colunas (Script `compare_sql.py`)
-- [x] Adicionar novas tabelas ao backup (Formas aditivas com IF NOT EXISTS)
-- [x] Adicionar novas colunas ao backup (ALTER TABLE com segurança)
-- [x] Implementar Políticas (RLS) e Gatilhos (Triggers) para os novos elementos
-- [x] Validar a consistência dos arquivos
-- [x] Atualizar o `checklist.txt`
-- [x] Gerar Walkthrough final
+- [x] Correção do trigger `handle_new_user` para criar carteira em `driver_wallets` para entregadores.
+- [x] Inclusão de script de reparo para criar carteiras Zebank faltantes para usuários existentes.
+- [x] Ajuste no componente `Zebank.tsx` para exibir o saldo para o papel `delivery_person`.

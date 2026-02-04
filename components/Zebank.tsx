@@ -594,21 +594,9 @@ export const Zebank: React.FC<ZebankProps> = ({ userRole }) => {
         </div>
     );
 
-    if (isNormalDriver) {
-        return (
-            <div className="space-y-8 animate-in fade-in pb-24 px-4 sm:px-8 md:px-16">
-                {/* Invite card at the very top */}
-                <InviteCard />
-                <div className="bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-1 overflow-x-auto no-scrollbar">
-                    <button className="flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap">Visão Geral</button>
-                    <button className="flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap">Extrato</button>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-8 animate-in fade-in pb-24 px-4 sm:px-8 md:px-16">
+            {isNormalDriver && <InviteCard />}
 
 
             {/* Main Balance Card */}

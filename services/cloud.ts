@@ -3650,11 +3650,11 @@ export const purchaseCityStoreHighlight = async (citySlug: string, days: number)
     return { success: true, data };
 };
 
-export const cancelCityStoreHighlight = async (citySlug: string) => {
+export const cancelCityStoreHighlight = async (orderId: string) => {
     const sb = getClient();
     if (!sb) return { success: false, error: 'Client not ready' };
 
-    const { data, error } = await sb.rpc('cancel_city_store_highlight', { p_city_slug: citySlug });
+    const { data, error } = await sb.rpc('cancel_city_store_highlight', { p_order_id: orderId });
     if (error) return { success: false, error };
     return { success: true, data };
 };

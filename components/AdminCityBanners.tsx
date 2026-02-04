@@ -14,6 +14,7 @@ const toLocalInputValue = (value?: string) => {
 };
 
 const formatCurrency = (val?: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+const formatPercent = (val?: number) => `${Number(val || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 const formatDateTime = (value?: string) => value ? new Date(value).toLocaleString('pt-BR') : '-';
 
 export const AdminCityBanners: React.FC = () => {
@@ -294,6 +295,19 @@ export const AdminCityBanners: React.FC = () => {
         }
     };
 
+    const formatRequestTopic = (topic?: string) => {
+        const normalized = (topic || '').toUpperCase();
+        switch (normalized) {
+            case 'HIGHLIGHT':
+            case 'DESTAQUE':
+            case 'STORE_HIGHLIGHT':
+                return 'DESTAQUE DA LOJA';
+            case 'BANNER':
+            default:
+                return 'BANNER DA CIDADE';
+        }
+    };
+
     const activeHighlightCount = (() => {
         const now = new Date();
         return highlightOrders.filter(order => {
@@ -305,7 +319,7 @@ export const AdminCityBanners: React.FC = () => {
     })();
 
     return (
-        <div className="space-y-6 animate-in fade-in">
+        <div className="space-y-8 animate-in fade-in">
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
@@ -411,13 +425,13 @@ export const AdminCityBanners: React.FC = () => {
             ) : (
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+                        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-7 space-y-5">
                             <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
                                 <Wallet className="w-5 h-5 text-brand-600" />
                                 <h3 className="text-lg font-black">Configuracao do destaque pago</h3>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">Valor base (30 dias)</label>
                                     <input
@@ -439,7 +453,7 @@ export const AdminCityBanners: React.FC = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Taxa de cancelamento (R$)</label>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Taxa de cancelamento (%)</label>
                                     <input
                                         type="number"
                                         min="0"
@@ -455,13 +469,10 @@ export const AdminCityBanners: React.FC = () => {
                                 <Button onClick={handleSaveHighlightSettings} disabled={savingHighlights} icon={<Star className="w-4 h-4" />}>
                                     {savingHighlights ? 'Salvando...' : 'Salvar configuracoes'}
                                 </Button>
-                                <Button variant="outline" onClick={handleSaveAssets} disabled={savingHighlights} icon={<Link2 className="w-4 h-4" />}>
-                                    Salvar links de gabarito
-                                </Button>
                             </div>
                         </div>
 
-                        <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-7 space-y-4">
                             <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
                                 <Clock className="w-5 h-5 text-brand-600" />
                                 <h3 className="text-lg font-black">Resumo</h3>
@@ -493,7 +504,7 @@ export const AdminCityBanners: React.FC = () => {
                                     <div className="flex items-center justify-between">
                                         <span>Taxa de cancelamento</span>
                                         <span className="font-bold text-gray-900 dark:text-white">
-                                            {formatCurrency(Number(highlightSettings?.cancel_fee || 0))}
+                                            {formatPercent(Number(highlightSettings?.cancel_fee || 0))}
                                         </span>
                                     </div>
                                 </div>
@@ -501,7 +512,7 @@ export const AdminCityBanners: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-7 space-y-4">
                         <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
                             <Link2 className="w-5 h-5 text-brand-600" />
                             <h3 className="text-lg font-black">Links para gabaritos</h3>
@@ -525,10 +536,15 @@ export const AdminCityBanners: React.FC = () => {
                                     onChange={e => setAssetsForm(prev => ({ ...prev, canva_link: e.target.value }))}
                                 />
                             </div>
+                            <div className="flex flex-wrap gap-2">
+                                <Button variant="outline" onClick={handleSaveAssets} disabled={savingHighlights} icon={<Link2 className="w-4 h-4" />}>
+                                    Salvar links de gabarito
+                                </Button>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-7">
                         <div className="flex items-center gap-2 mb-4">
                             <Star className="w-5 h-5 text-brand-600" />
                             <h3 className="text-lg font-black text-gray-900 dark:text-white">Lojas que pagaram destaque</h3>
@@ -575,7 +591,7 @@ export const AdminCityBanners: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-7">
                         <div className="flex items-center gap-2 mb-4">
                             <MessageCircle className="w-5 h-5 text-brand-600" />
                             <h3 className="text-lg font-black text-gray-900 dark:text-white">Solicitacoes de banner</h3>
@@ -598,6 +614,7 @@ export const AdminCityBanners: React.FC = () => {
                                         >
                                             <p className="text-sm font-black text-gray-900 dark:text-white">{request.store?.store_name || request.store?.name || 'Loja'}</p>
                                             <p className="text-xs text-gray-500">Cidade: {request.city_slug}</p>
+                                            <p className="text-xs text-gray-500">Assunto: {formatRequestTopic(request.topic)}</p>
                                             <p className="text-xs text-gray-500">Tipo: {formatRequestType(request.request_type)}</p>
                                             <span className={`inline-flex mt-2 text-[11px] font-bold px-2 py-1 rounded-full border ${getStatusBadgeClasses(request.status)}`}>
                                                 {formatHighlightStatus(request.status)}

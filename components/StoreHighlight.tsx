@@ -402,40 +402,21 @@ export const StoreHighlight: React.FC = () => {
                 )}
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6 space-y-6">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-7 space-y-6">
                 <div className="flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-brand-600" />
                     <h3 className="text-lg font-black text-gray-900 dark:text-white">Banner da sua cidade</h3>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 space-y-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">Envie seu banner pronto</label>
-                            <ImageUpload
-                                label="Banner (1600x400 recomendado)"
-                                currentImageUrl={bannerUrl}
-                                onImageUploaded={(url) => setBannerUrl(url)}
-                                folderPath="city_banners_store"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">Observacoes</label>
-                            <textarea
-                                className="w-full min-h-[120px] p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
-                                value={bannerNotes}
-                                onChange={e => setBannerNotes(e.target.value)}
-                                placeholder="Detalhes sobre o banner ou a campanha."
-                            />
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Button onClick={() => handleCreateBannerRequest('READY')} icon={<ImageIcon className="w-4 h-4" />}>
-                                Enviar banner pronto
-                            </Button>
-                            <Button variant="outline" onClick={() => handleCreateBannerRequest('DESIGN_REQUEST')} icon={<MessageCircle className="w-4 h-4" />}>
-                                Pedir criacao para a plataforma
-                            </Button>
-                        </div>
+                    <div className="lg:col-span-2 space-y-3">
+                        <label className="block text-xs font-bold text-gray-500">Envie seu banner pronto</label>
+                        <ImageUpload
+                            label="Banner (1600x400 recomendado)"
+                            currentImageUrl={bannerUrl}
+                            onImageUploaded={(url) => setBannerUrl(url)}
+                            folderPath="city_banners_store"
+                        />
                     </div>
 
                     <div className="space-y-3">
@@ -463,6 +444,42 @@ export const StoreHighlight: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Observacoes</label>
+                            <textarea
+                                className="w-full min-h-[120px] p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                value={bannerNotes}
+                                onChange={e => setBannerNotes(e.target.value)}
+                                placeholder="Detalhes sobre o banner ou a campanha."
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Assunto da solicitacao</label>
+                                <select
+                                    className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                    value={requestTopic}
+                                    onChange={e => setRequestTopic(e.target.value as "BANNER" | "HIGHLIGHT")}
+                                >
+                                    <option value="BANNER">Banner da cidade</option>
+                                    <option value="HIGHLIGHT">Destaque da loja</option>
+                                </select>
+                            </div>
+                            <div className="flex flex-wrap gap-2 md:justify-end">
+                                <Button onClick={() => handleCreateBannerRequest("READY")} icon={<ImageIcon className="w-4 h-4" />}>
+                                    Enviar banner pronto
+                                </Button>
+                                <Button variant="outline" onClick={() => handleCreateBannerRequest("DESIGN_REQUEST")} icon={<MessageCircle className="w-4 h-4" />}>
+                                    Pedir criacao para a plataforma
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="space-y-3">
                         <h4 className="text-sm font-black text-gray-900 dark:text-white">Solicitacoes</h4>
                         {bannerRequests.length === 0 ? (
@@ -475,7 +492,8 @@ export const StoreHighlight: React.FC = () => {
                                     onClick={() => loadBannerMessages(request)}
                                 >
                                     <p className="text-sm font-bold text-gray-900 dark:text-white">{request.city_slug}</p>
-                                    <p className="text-xs text-gray-500">{formatRequestType(request.request_type)} • {formatHighlightStatus(request.status)}</p>
+                                    <p className="text-xs text-gray-500">{formatRequestTopic(request.topic)} - {formatRequestType(request.request_type)}</p>
+                                    <p className="text-xs text-gray-500">{formatHighlightStatus(request.status)}</p>
                                 </button>
                             ))
                         )}
@@ -493,7 +511,7 @@ export const StoreHighlight: React.FC = () => {
                             ) : (
                                 requestMessages.map(msg => (
                                     <div key={msg.id} className={`p-3 rounded-xl ${msg.sender_role === 'store' ? 'bg-brand-600 text-white ml-auto' : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100'} max-w-[80%]`}>
-                                        <p className="text-xs font-bold mb-1">{msg.sender_role === 'store' ? 'Voce' : 'Admin'} • {formatDateTime(msg.created_at)}</p>
+                                        <p className="text-xs font-bold mb-1">{msg.sender_role === 'store' ? 'Voce' : 'Admin'} - {formatDateTime(msg.created_at)}</p>
                                         <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                                     </div>
                                 ))
@@ -514,7 +532,6 @@ export const StoreHighlight: React.FC = () => {
                     </div>
                 </div>
             </div>
-
             <BaseModal
                 isOpen={showActivateModal}
                 onClose={() => setShowActivateModal(false)}
@@ -537,8 +554,8 @@ export const StoreHighlight: React.FC = () => {
                             <p className="text-lg font-black text-gray-900 dark:text-white">{formatCurrency(walletBalance)}</p>
                         </div>
                         <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700">
-                            <p className="text-xs uppercase tracking-wider text-gray-400">Taxa de cancelamento</p>
-                            <p className="text-lg font-black text-gray-900 dark:text-white">{formatCurrency(Number(settings?.cancel_fee || 0))}</p>
+                            <p className="text-xs uppercase tracking-wider text-gray-400">Taxa de cancelamento (%)</p>
+                            <p className="text-lg font-black text-gray-900 dark:text-white">{formatPercent(settings?.cancel_fee)}</p>
                         </div>
                     </div>
                     <p className="text-xs text-gray-500">
@@ -569,19 +586,26 @@ export const StoreHighlight: React.FC = () => {
             </BaseModal>
 
             <BaseModal
-                isOpen={showCancelModal}
-                onClose={() => setShowCancelModal(false)}
+                isOpen={!!cancelTarget}
+                onClose={() => setCancelTarget(null)}
                 title="Cancelar destaque"
                 icon={<AlertTriangle className="w-5 h-5 text-red-500" />}
             >
                 <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300">
-                    <p>Ao cancelar o destaque ativo ou agendado, sera cobrada a taxa abaixo.</p>
-                    <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700">
-                        <p className="text-xs uppercase tracking-wider text-gray-400">Taxa de cancelamento</p>
-                        <p className="text-lg font-black text-gray-900 dark:text-white">{formatCurrency(Number(settings?.cancel_fee || 0))}</p>
+                    <p>Ao cancelar o destaque selecionado, sera cobrada a taxa abaixo.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700">
+                            <p className="text-xs uppercase tracking-wider text-gray-400">Taxa de cancelamento (%)</p>
+                            <p className="text-lg font-black text-gray-900 dark:text-white">{formatPercent(cancelFeePercent)}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700">
+                            <p className="text-xs uppercase tracking-wider text-gray-400">Valor estimado</p>
+                            <p className="text-lg font-black text-gray-900 dark:text-white">{formatCurrency(getCancelFeeValue(cancelTarget))}</p>
+                        </div>
                     </div>
+                    <p className="text-xs text-gray-500">Cidade: {cancelTarget?.city_slug || '-'}</p>
                     <div className="flex flex-col md:flex-row gap-2">
-                        <Button variant="outline" onClick={() => setShowCancelModal(false)}>Voltar</Button>
+                        <Button variant="outline" onClick={() => setCancelTarget(null)}>Voltar</Button>
                         <Button variant="danger" onClick={handleCancelHighlight} loading={cancelling}>Confirmar cancelamento</Button>
                     </div>
                 </div>
