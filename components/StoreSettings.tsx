@@ -496,21 +496,6 @@ export const StoreSettings: React.FC = () => {
                 <div className="space-y-5 md:space-y-6">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
                         <div>
-                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Status da Loja</h3>
-                            <p className="text-xs text-gray-400">Controle se a loja está aberta para pedidos.</p>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${form.is_open ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                    {form.is_open ? 'ABERTA' : 'FECHADA'}
-                                </span>
-                            </div>
-                            <Switch checked={form.is_open} onChange={handleToggleOpen} />
-                        </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
-                        <div>
                             <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Horário de Funcionamento</h3>
                             <p className="text-xs text-gray-400">Defina seus horários para clientes visualizarem.</p>
                         </div>

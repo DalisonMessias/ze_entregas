@@ -1117,7 +1117,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'order_tracking': return <OrderTracking />;
 
                 // Store Specific
-                case 'store_status': return <div className="max-w-4xl mx-auto"><h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">Gerenciar Loja</h1><StoreStatus /></div>;
+                case 'store_status': return <div className="max-w-4xl mx-auto"><StoreStatus /></div>;
                 case 'wallet': return <StoreWalletModule onNavigate={navigate} />;
                 case 'new_request': return <StoreRequest onNavigate={navigate} />;
                 case 'history': return <OrderHistory userRole={effectiveRole as 'store_partner'} />;
