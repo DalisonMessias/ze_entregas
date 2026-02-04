@@ -12166,12 +12166,17 @@ CREATE POLICY "Admins manage highlight settings" ON public.city_store_highlight_
 	GRANT EXECUTE ON FUNCTION public.cancel_city_store_highlight(uuid) TO authenticated;
 	
 	-- 3. COLUNAS FALTANTES EM TABELAS EXISTENTES
-DO $$ 
-BEGIN
-    -- available_cities
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'available_cities' AND column_name = 'ibge_code') THEN
-        ALTER TABLE public.available_cities ADD COLUMN ibge_code text;
-    END IF;
+	DO $$ 
+	BEGIN
+	    -- available_cities
+	    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'available_cities' AND column_name = 'ibge_code') THEN
+	        ALTER TABLE public.available_cities ADD COLUMN ibge_code text;
+	    END IF;
+
+	    -- city_store_banner_requests
+	    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_banner_requests' AND column_name = 'topic') THEN
+	        ALTER TABLE public.city_store_banner_requests ADD COLUMN topic text NOT NULL DEFAULT 'BANNER';
+	    END IF;
 
     -- partner_fee_settings
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'pos_min_value') THEN
