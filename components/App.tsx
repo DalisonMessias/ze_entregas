@@ -92,6 +92,7 @@ const PartnerDelivery = React.lazy(() => import('./PartnerDelivery').then(m => (
 const OrderTracking = React.lazy(() => import('./OrderTracking/OrderTracking').then(m => ({ default: m.OrderTracking })));
 const UserOrders = React.lazy(() => import('./UserOrders').then(m => ({ default: m.UserOrders })));
 const StoreChatPage = React.lazy(() => import('./DigitalMenu/StoreChatPage').then(m => ({ default: m.StoreChatPage })));
+const StoreHighlight = React.lazy(() => import('./StoreHighlight').then(m => ({ default: m.StoreHighlight })));
 const StreetRequestPage = React.lazy(() => import('../src/pages/StreetRequestPage').then(m => ({ default: m.StreetRequestPage })));
 const StreetRequestsAdmin = React.lazy(() => import('../src/pages/StreetRequestsAdmin').then(m => ({ default: m.StreetRequestsAdmin })));
 const MerchantPOSMobile = React.lazy(() => import('./MerchantPOSMobile').then(m => ({ default: m.MerchantPOSMobile })));
@@ -114,7 +115,7 @@ export type ActiveTab =
     | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
     | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
     | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides' | 'admin_tips' | 'admin_chat' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_pix_config' | 'admin_location_map' | 'admin_base_catalog'
+    | 'admin_slides' | 'admin_city_banners' | 'admin_tips' | 'admin_chat' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_pix_config' | 'admin_location_map' | 'admin_base_catalog'
     | 'order_tracking'
     | 'admin_store_categories' | 'admin_global_coupons' | 'admin_image_gallery'
     | 'admin_insurance' | 'admin_street_requests' | 'admin_mediation'
@@ -166,6 +167,7 @@ export type ActiveTab =
     | 'store_print_catalog'
     | 'store_api_docs'
     | 'store_promotions'
+    | 'store_highlight'
 
     | 'streets_list'
     | 'score'
@@ -477,6 +479,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         store_product_import: 'Importar Produtos',
         store_print_catalog: 'Catálogo Impresso',
         store_promotions: 'Promoções',
+        store_highlight: 'Destaque na Cidade',
         store_status: 'Status da Loja',
         store_team: 'Equipe',
         store_reports: 'Relatórios',
@@ -987,12 +990,12 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             'admin_dashboard', 'admin_users', 'admin_lojas', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
             'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
             'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
-            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_tips', 'admin_loan_config',
+            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_city_banners', 'admin_tips', 'admin_loan_config',
             'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation', 'zepoint',
             'store_drivers_chat'
         ]),
         store_partner: new Set<ActiveTab>([
-            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'internal_orders_new', 'store_catalog', 'store_print_catalog', 'store_api_docs', 'store_loans', 'store_promotions', 'internal_chat', 'store_drivers_chat', 'zepoint'
+            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'internal_orders_new', 'store_catalog', 'store_print_catalog', 'store_api_docs', 'store_loans', 'store_promotions', 'store_highlight', 'internal_chat', 'store_drivers_chat', 'zepoint'
         ]),
 
         delivery_partner: new Set<ActiveTab>([
@@ -1136,6 +1139,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <StoreMarketing />
                         </DesktopOnlyGate>
                     );
+                case 'store_highlight': return <StoreHighlight />;
                 case 'store_integrations':
                     return (
                         <DesktopOnlyGate
@@ -1319,6 +1323,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             title: 'Marketing & Vendas',
             items: [
                 { label: 'Marketing', tab: 'store_marketing', icon: Megaphone },
+                { label: 'Destaque na Cidade', tab: 'store_highlight', icon: Star },
                 { label: 'Promoções e Cupons', tab: 'store_promotions', icon: Banknote }
             ]
         },
@@ -1821,6 +1826,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     {/* <MenuButton icon={Newspaper} label="Notícias" tab="admin_platform_news" /> */}
                                     <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
                                     <MenuButton icon={Layout} label="Banners/Slides" tab="admin_slides" />
+                                    <MenuButton icon={MapPin} label="Banners por Cidade" tab="admin_city_banners" />
                                     <MenuButton icon={Construction} label="Manutenção" tab="admin_maintenance" />
 
                                     <MenuSection title="Financeiro" />
@@ -1871,6 +1877,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuSection title="Gestão" />
                                     <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
                                     <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
+                                    <MenuButton icon={Star} label="Destaque na Cidade" tab="store_highlight" />
                                     <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
                                     <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
                                     <MenuButton icon={Smartphone} label="Recebimento PIX" tab="store_receiving_payment" />
@@ -2043,3 +2050,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         </div>
     );
 };
+
+
+

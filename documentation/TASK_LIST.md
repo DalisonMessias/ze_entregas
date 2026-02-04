@@ -1,6 +1,27 @@
-# Plano de Unificação de Chat - CONCLUÍDOv2
+# Plano de Sincronização SQL - 04/02/2026
 
-- [x] Tempo Real no Rastreio (Supabase Realtime)
-- [x] Identificação de Pedidos no Painel da Loja ("Rastreio: Pedido #...")
-- [x] Sincronização Bidirecional (API Chat <-> Supabase)
-- [x] Correção de Erros de Enum e Nulidade de Sender
+- [x] Comparar `supabase_global.sql` com `supabase_global-backup.sql`
+- [x] Identificar diferenças de tabelas e colunas (Script `compare_sql.py`)
+- [ ] Adicionar novas tabelas ao backup:
+    - [ ] `city_store_banner_assets`
+    - [ ] `city_store_banner_request_messages`
+    - [ ] `city_store_banner_requests`
+    - [ ] `city_store_banners`
+    - [ ] `city_store_highlight_orders`
+    - [ ] `city_store_highlight_settings`
+- [ ] Adicionar novas colunas ao backup:
+    - [ ] `ze_assistant_rules`: `rule_type`, `variables`, `last_synced_at`, `relevance_score`, `structured_data`
+    - [ ] `ze_assistant_conversations`: `customer_name`, `customer_phone`, `handoff_at`, `handoff_reason`, `handoff_to_human`, `last_interaction_at`, `summary`
+    - [ ] `partner_fee_settings`: `pos_max_value`, `pos_min_value`
+    - [ ] `api_keys`: `name`, `key_token`
+    - [ ] `available_cities`: `ibge_code`
+    - [ ] `products`: `addon_group_id`, `addon_options`
+    - [ ] `store_products`: `addon_options`
+    - [ ] `pwa_settings`: (Múltiplas colunas de configuração)
+    - [ ] `orders_tickets`: `general_order_id`, `payment_status`
+    - [ ] `user_terminal_transactions`: `description`, `method`, `payer_id`, `payer_name`, `type`
+    - [ ] `user_terminals`: `auto_lock_minutes`, `fee_payer`, `pin_code`
+    - [ ] `chat_conversations`: `attendant_id`, `contact_name`, etc.
+- [ ] Implementar Políticas e Gatilhos para os novos elementos
+- [ ] Validar a consistência dos arquivos
+- [ ] Atualizar o `checklist.txt`

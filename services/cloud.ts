@@ -11,7 +11,7 @@ import {
     StoreDeliveryPartner, DailySummary, FinancialStatementItem,
     ReferralData, ReferralHistoryItem, StoreReportData, StoreShippingRule,
     AdminWalletUser, AdminDashboardStats, PWASettings, MaintenanceData,
-    AppNotification, PayoutSummary, AppSlide, StoreProduct,
+    AppNotification, PayoutSummary, AppSlide, CityStoreBanner, CityStoreHighlightSettings, CityStoreHighlightOrder, CityStoreBannerAssets, CityStoreBannerRequest, CityStoreBannerRequestMessage, StoreProduct,
     UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator, StoreAddonOption, StoreAddonGroup,
     StoreDeliverySettings, StoreNeighborhoodFee, PaymentGatewayConfig, PaymentGatewayLog,
     FinancialTransaction, BlacklistEntry, PartnerRating, Claim,
@@ -2033,16 +2033,53 @@ export const getMyClaims = async (): Promise<Claim[]> => {
     if (!sb) return [];
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return [];
-    const { data } = await sb.from('claims').select('*').eq('user_id', user.id);
+    const { data, error } = await sb.from('support_claims').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+    if (error) {
+        const { data: fallback } = await sb.from('claims').select('*').eq('user_id', user.id);
+        return fallback || [];
+    }
     return data || [];
 };
 
-export const createClaim = async (type: string, description: string) => {
+const sanitizeFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+const uploadSupportClaimImages = async (files: File[], userId: string, claimId: string) => {
+    const sb = getClient();
+    if (!sb || files.length === 0) return [];
+    const uploadedPaths: string[] = [];
+    for (const file of files) {
+        const safeName = sanitizeFileName(file.name);
+        const path = `${userId}/${claimId}/${Date.now()}-${safeName}`;
+        const { error } = await sb.storage.from('support_claims').upload(path, file, { upsert: false, contentType: file.type });
+        if (!error) {
+            uploadedPaths.push(path);
+        }
+    }
+    return uploadedPaths;
+};
+
+export const createClaim = async (type: string, description: string, attachments: File[] = []) => {
     const sb = getClient();
     if (!sb) return;
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
-    await sb.from('claims').insert({ user_id: user.id, type, description, status: 'open', user_email: user.email });
+    const { data: created, error } = await sb
+        .from('support_claims')
+        .insert({ user_id: user.id, type, description, status: 'open', user_email: user.email, attachments: [] })
+        .select('id')
+        .single();
+
+    if (error || !created?.id) {
+        await sb.from('claims').insert({ user_id: user.id, type, description, status: 'open', user_email: user.email, attachments: [] });
+        return;
+    }
+
+    if (attachments.length > 0) {
+        const uploaded = await uploadSupportClaimImages(attachments, user.id, created.id);
+        if (uploaded.length > 0) {
+            await sb.from('support_claims').update({ attachments: uploaded }).eq('id', created.id);
+        }
+    }
 };
 
 export const adminGetSupportClaims = async (statusFilter: 'all' | 'open' | 'resolved' | 'closed'): Promise<Claim[]> => {
@@ -2082,6 +2119,17 @@ export const adminUpdateClaim = async (id: string, updates: Partial<Claim>) => {
         console.warn('Error updating support_claims, trying legacy claims table:', error);
         await sb.from('claims').update(updates).eq('id', id);
     }
+};
+
+export const getSupportClaimAttachmentUrls = async (paths: string[]) => {
+    const sb = getClient();
+    if (!sb || paths.length === 0) return [];
+    const urls: string[] = [];
+    for (const path of paths) {
+        const { data, error } = await sb.storage.from('support_claims').createSignedUrl(path, 60 * 60);
+        if (!error && data?.signedUrl) urls.push(data.signedUrl);
+    }
+    return urls;
 };
 
 // --- NEWS ---
@@ -3362,14 +3410,262 @@ export const adminDeleteSlide = async (id: string) => {
     if (error) throw error;
 };
 
+// --- BANNERS POR CIDADE (TOPO DAS LOJAS) ---
+
+export const getCityStoreBanners = async (citySlug: string): Promise<CityStoreBanner[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('city_store_banners')
+        .select('*')
+        .eq('city_slug', citySlug)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    const now = new Date();
+    return data.filter(banner => {
+        if (!banner.is_active) return false;
+        if (banner.starts_at) {
+            const start = new Date(banner.starts_at);
+            if (start > now) return false;
+        }
+        if (banner.ends_at) {
+            const end = new Date(banner.ends_at);
+            if (end <= now) return false;
+        }
+        return true;
+    });
+};
+
+export const adminGetCityStoreBanners = async (): Promise<CityStoreBanner[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('city_store_banners')
+        .select('*')
+        .order('city_slug', { ascending: true })
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+
+    if (error) return [];
+    return data || [];
+};
+
+export const adminCreateCityStoreBanner = async (banner: Partial<CityStoreBanner>) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('city_store_banners').insert(banner);
+    if (error) throw error;
+};
+
+export const adminUpdateCityStoreBanner = async (id: string, updates: Partial<CityStoreBanner>) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('city_store_banners').update(updates).eq('id', id);
+    if (error) throw error;
+};
+
+export const adminDeleteCityStoreBanner = async (id: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    const { error } = await sb.from('city_store_banners').delete().eq('id', id);
+    if (error) throw error;
+};
+
+export const getCityStoreBannerAssets = async (): Promise<CityStoreBannerAssets | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb
+        .from('city_store_banner_assets')
+        .select('*')
+        .limit(1)
+        .single();
+
+    if (error) return null;
+    return data || null;
+};
+
+export const adminUpdateCityStoreBannerAssets = async (updates: Partial<CityStoreBannerAssets>) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+
+    const { error } = await sb
+        .from('city_store_banner_assets')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', '1');
+
+    if (error) return { success: false, error };
+    return { success: true };
+};
+
+export const getMyCityStoreBannerRequests = async (): Promise<CityStoreBannerRequest[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data: userData } = await sb.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) return [];
+
+    const { data, error } = await sb
+        .from('city_store_banner_requests')
+        .select('*')
+        .eq('store_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (error) return [];
+    return data || [];
+};
+
+export const adminGetCityStoreBannerRequests = async (): Promise<CityStoreBannerRequest[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('city_store_banner_requests')
+        .select('*, store:store_id(id, name, store_name, city, city_slug)')
+        .order('created_at', { ascending: false });
+
+    if (error) return [];
+    return data || [];
+};
+
+export const createCityStoreBannerRequest = async (payload: Partial<CityStoreBannerRequest>) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+    const { error } = await sb.from('city_store_banner_requests').insert(payload);
+    if (error) return { success: false, error };
+    return { success: true };
+};
+
+export const adminUpdateCityStoreBannerRequest = async (id: string, updates: Partial<CityStoreBannerRequest>) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+    const { error } = await sb.from('city_store_banner_requests').update(updates).eq('id', id);
+    if (error) return { success: false, error };
+    return { success: true };
+};
+
+export const getCityStoreBannerRequestMessages = async (requestId: string): Promise<CityStoreBannerRequestMessage[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb
+        .from('city_store_banner_request_messages')
+        .select('*')
+        .eq('request_id', requestId)
+        .order('created_at', { ascending: true });
+    if (error) return [];
+    return data || [];
+};
+
+export const sendCityStoreBannerRequestMessage = async (requestId: string, senderRole: 'store' | 'admin', message: string) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+    const { data: userData } = await sb.auth.getUser();
+    const senderId = userData?.user?.id || null;
+
+    const { error } = await sb.from('city_store_banner_request_messages').insert({
+        request_id: requestId,
+        sender_id: senderId,
+        sender_role: senderRole,
+        message
+    });
+    if (error) return { success: false, error };
+    return { success: true };
+};
+
+// --- DESTAQUE POR CIDADE ---
+
+export const getCityStoreHighlightSettings = async (): Promise<CityStoreHighlightSettings | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb
+        .from('city_store_highlight_settings')
+        .select('*')
+        .limit(1)
+        .single();
+
+    if (error) return null;
+    return data || null;
+};
+
+export const adminUpdateCityStoreHighlightSettings = async (updates: Partial<CityStoreHighlightSettings>) => {
+    const sb = getClient();
+    if (!sb) return { success: false };
+
+    const { error } = await sb
+        .from('city_store_highlight_settings')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', '1');
+
+    if (error) return { success: false, error };
+    return { success: true };
+};
+
+export const adminGetCityStoreHighlightOrders = async (): Promise<CityStoreHighlightOrder[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('city_store_highlight_orders')
+        .select('*, store:store_id(id, name, store_name, city, city_slug)')
+        .order('created_at', { ascending: false });
+
+    if (error) return [];
+    return data || [];
+};
+
+export const getMyCityStoreHighlightOrders = async (citySlug?: string): Promise<CityStoreHighlightOrder[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data: userData } = await sb.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) return [];
+
+    let query = sb
+        .from('city_store_highlight_orders')
+        .select('*')
+        .eq('store_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (citySlug) query = query.eq('city_slug', citySlug);
+
+    const { data, error } = await query;
+    if (error) return [];
+    return data || [];
+};
+
+export const purchaseCityStoreHighlight = async (citySlug: string, days: number) => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    const { data, error } = await sb.rpc('purchase_city_store_highlight', { p_city_slug: citySlug, p_days: days });
+    if (error) return { success: false, error };
+    return { success: true, data };
+};
+
+export const cancelCityStoreHighlight = async (citySlug: string) => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    const { data, error } = await sb.rpc('cancel_city_store_highlight', { p_city_slug: citySlug });
+    if (error) return { success: false, error };
+    return { success: true, data };
+};
+
 export const subscribeToSuperStore = async (fee: number) => {
     const sb = getClient();
     if (!sb) return;
     const { data: { user } } = await sb.auth.getUser();
     if (!user) throw new Error("Not logged in");
 
-    // In real app, create charge here. For now, just update profile.
-    const { error } = await sb.from('user_profiles').update({ is_super_store: true }).eq('id', user.id);
+    const { error } = await sb.rpc('subscribe_to_super_store', { fee });
     if (error) throw new Error(error.message);
 };
 

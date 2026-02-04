@@ -21,10 +21,19 @@ export const PublicSupportPage: React.FC = () => {
     const [supportPhone, setSupportPhone] = useState<string | null>(null);
     const [supportHours, setSupportHours] = useState<{ start: string; end: string } | null>(null);
     const [loadingSettings, setLoadingSettings] = useState(true);
+    const [supportOverride, setSupportOverride] = useState<'AUTO' | 'OPEN' | 'CLOSED'>('AUTO');
+    const [lastStatusCheck, setLastStatusCheck] = useState<Date | null>(null);
     const [hasSession, setHasSession] = useState(false);
     const [checkingSession, setCheckingSession] = useState(true);
 
+    const computeIsOpen = (override: 'AUTO' | 'OPEN' | 'CLOSED', hours: { start: string; end: string }) => {
+        if (override === 'OPEN') return true;
+        if (override === 'CLOSED') return false;
+        return checkBusinessHours(hours.start, hours.end);
+    };
+
     useEffect(() => {
+        let mounted = true;
         const fetchSettings = async () => {
             try {
                 const settings = await cloud.getShopSettings();
@@ -35,29 +44,47 @@ export const PublicSupportPage: React.FC = () => {
 
                     const start = settings.support_hours_start || '09:00';
                     const end = settings.support_hours_end || '18:00';
-                    setSupportHours({ start, end });
-
-                    const override = settings.support_status_override || 'AUTO';
-                    if (override === 'OPEN') {
-                        setIsOpen(true);
-                    } else if (override === 'CLOSED') {
-                        setIsOpen(false);
-                    } else {
-                        setIsOpen(checkBusinessHours(start, end));
+                    const override = (settings.support_status_override || 'AUTO') as 'AUTO' | 'OPEN' | 'CLOSED';
+                    if (mounted) {
+                        setSupportHours({ start, end });
+                        setSupportOverride(override);
+                        setIsOpen(computeIsOpen(override, { start, end }));
+                        setLastStatusCheck(new Date());
                     }
-                } else {
-                    setSupportHours({ start: '09:00', end: '18:00' });
-                    setIsOpen(checkBusinessHours('09:00', '18:00'));
+                } else if (mounted) {
+                    const fallback = { start: '09:00', end: '18:00' };
+                    setSupportHours(fallback);
+                    setSupportOverride('AUTO');
+                    setIsOpen(computeIsOpen('AUTO', fallback));
+                    setLastStatusCheck(new Date());
                 }
             } catch {
-                setSupportHours({ start: '09:00', end: '18:00' });
-                setIsOpen(checkBusinessHours('09:00', '18:00'));
+                if (mounted) {
+                    const fallback = { start: '09:00', end: '18:00' };
+                    setSupportHours(fallback);
+                    setSupportOverride('AUTO');
+                    setIsOpen(computeIsOpen('AUTO', fallback));
+                    setLastStatusCheck(new Date());
+                }
             } finally {
-                setLoadingSettings(false);
+                if (mounted) setLoadingSettings(false);
             }
         };
         fetchSettings();
+        const refreshInterval = window.setInterval(fetchSettings, 5 * 60 * 1000);
+        return () => {
+            mounted = false;
+            window.clearInterval(refreshInterval);
+        };
     }, []);
+
+    useEffect(() => {
+        if (!supportHours) return;
+        const tick = () => setIsOpen(computeIsOpen(supportOverride, supportHours));
+        tick();
+        const interval = window.setInterval(tick, 60 * 1000);
+        return () => window.clearInterval(interval);
+    }, [supportHours, supportOverride]);
 
     useEffect(() => {
         let mounted = true;
@@ -81,7 +108,7 @@ export const PublicSupportPage: React.FC = () => {
     const handleOpenWhatsapp = () => {
         const number = supportPhone || "5511999999999";
         const message = encodeURIComponent("Ola, preciso de ajuda com o app Ze Entregas.");
-        window.open(`https://wa.me/${number}?text=${message}`, '_blank');
+        window.location.href = `https://wa.me/${number}?text=${message}`;
     };
 
     const supportHoursLabel = supportHours
@@ -98,6 +125,9 @@ export const PublicSupportPage: React.FC = () => {
         : isOpen
             ? 'Equipe humana disponivel agora.'
             : `Equipe humana indisponivel. ${nextBusinessMessage}.`;
+    const lastStatusLabel = lastStatusCheck
+        ? `Atualizado às ${lastStatusCheck.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+        : 'Atualizando status...';
     const showPublicHeader = !checkingSession;
     const primaryCtaLabel = hasSession ? 'Meu painel' : 'Entrar';
     const primaryCtaLink = hasSession ? '/home' : '/login';
@@ -158,10 +188,11 @@ export const PublicSupportPage: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <button
-                            onClick={handleOpenWhatsapp}
+                            onClick={isOpen ? handleOpenWhatsapp : undefined}
+                            disabled={!isOpen}
                             className={`group flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${isOpen
                                 ? 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30'
-                                : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-90'
+                                : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-70 cursor-not-allowed'
                                 }`}
                         >
                             <div className={`p-3 rounded-xl ${isOpen ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
@@ -368,6 +399,9 @@ export const PublicSupportPage: React.FC = () => {
                                 <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-300">
                                     <Clock className="w-4 h-4" />
                                     Horario humano: {supportHoursLabel}
+                                </div>
+                                <div className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
+                                    {lastStatusLabel}
                                 </div>
                             </div>
                         </div>

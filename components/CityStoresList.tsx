@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, MapPin, Search, Loader2, Store, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Logo } from './Logo';
 import { StoreCard } from './StoreCard';
+import { CityBannerSlider } from './CityBannerSlider';
 import * as cloud from '../services/cloud';
 import { PublicStoreProfile } from '../types';
 
@@ -135,6 +136,9 @@ export const CityStoresList: React.FC<CityStoresListProps> = ({ citySlug }) => {
             </header>
 
             <main className="max-w-7xl mx-auto px-6 py-6">
+                <div className="mb-6">
+                    <CityBannerSlider citySlug={citySlug} />
+                </div>
                 {loading ? (
                     <div className="py-20 flex flex-col items-center gap-4">
                         <Loader2 className="w-12 h-12 animate-spin text-brand-600" />

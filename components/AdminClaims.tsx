@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, MessageCircle, FileText, X, CheckCircle, Clock, Eye, Send, AlertTriangle, RefreshCw, Settings, Save, Phone } from 'lucide-react';
+import { Loader2, MessageCircle, FileText, X, CheckCircle, Clock, Eye, Send, AlertTriangle, RefreshCw, Settings, Save, Phone, ImageIcon } from 'lucide-react';
 import { Claim, ShopSettings } from '../types';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
@@ -27,6 +27,7 @@ export const AdminClaims: React.FC = () => {
     const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
     const [adminResponse, setAdminResponse] = useState('');
     const [processing, setProcessing] = useState(false);
+    const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
 
     // Settings State
     const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
@@ -54,6 +55,22 @@ export const AdminClaims: React.FC = () => {
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    useEffect(() => {
+        let mounted = true;
+        const loadAttachments = async () => {
+            if (!selectedClaim?.attachments?.length) {
+                if (mounted) setAttachmentUrls([]);
+                return;
+            }
+            const urls = await cloud.getSupportClaimAttachmentUrls(selectedClaim.attachments);
+            if (mounted) setAttachmentUrls(urls);
+        };
+        loadAttachments();
+        return () => {
+            mounted = false;
+        };
+    }, [selectedClaim]);
 
     const handleUpdateClaim = async (status: 'open' | 'resolved' | 'closed') => {
         if (!selectedClaim) return;
@@ -108,6 +125,25 @@ export const AdminClaims: React.FC = () => {
                     <p><strong>Descrição:</strong> {claim.description}</p>
                     <p><strong>Status:</strong> <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusChipColor(claim.status)}`}>{claim.status}</span></p>
                     <p><strong>Criado em:</strong> {formatDateTime(claim.created_at)}</p>
+
+                    {claim.attachments && claim.attachments.length > 0 && (
+                        <div>
+                            <p className="font-bold text-gray-900 dark:text-white text-sm mt-4 flex items-center gap-2">
+                                <ImageIcon className="w-4 h-4 text-brand-500" /> Anexos ({claim.attachments.length})
+                            </p>
+                            {attachmentUrls.length > 0 ? (
+                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                    {attachmentUrls.map((url, idx) => (
+                                        <a key={`${url}-${idx}`} href={url} target="_blank" rel="noreferrer" className="block">
+                                            <img src={url} alt={`Anexo ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-100 dark:border-gray-700" />
+                                        </a>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-gray-400 mt-2">Carregando anexos...</p>
+                            )}
+                        </div>
+                    )}
 
                     {claim.admin_response && (
                         <div>

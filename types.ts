@@ -2,7 +2,11 @@
 export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator' | 'user';
 export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found' | 'blocked' | 'suspended' | 'error';
-export interface PublicStoreProfile extends PartnerProfile { }
+export interface PublicStoreProfile extends PartnerProfile {
+    orders_count?: number;
+    is_top_seller?: boolean;
+    is_paid_featured?: boolean;
+}
 export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION' | 'WAITING_PAYMENT_PIX' | 'PAYMENT_TO_ARRANGE';
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER' | 'PENDING';
 export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
@@ -436,6 +440,7 @@ export interface Claim {
     created_at: string;
     admin_response?: string;
     user_email?: string;
+    attachments?: string[];
 }
 
 // Consolidated StoreWallet and WalletTransaction
@@ -893,7 +898,7 @@ export interface FinancialTransaction {
     created_at: string;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation';
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation';
 
 export interface AppNotification {
     id: string;
@@ -1354,6 +1359,85 @@ export interface AppSlide {
     is_active: boolean;
     created_at: string;
     expires_at?: string;
+}
+
+export interface CityStoreBanner {
+    id: string;
+    city_slug: string;
+    name: string;
+    image_url: string;
+    link?: string;
+    is_active: boolean;
+    starts_at?: string;
+    ends_at?: string;
+    sort_order?: number;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface CityStoreBannerAssets {
+    id: string;
+    template_link?: string;
+    canva_link?: string;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface CityStoreBannerRequest {
+    id: string;
+    store_id: string;
+    city_slug: string;
+    request_type: string;
+    status: string;
+    banner_url?: string;
+    notes?: string;
+    created_at: string;
+    updated_at?: string;
+    store?: {
+        id: string;
+        name?: string;
+        store_name?: string;
+        city?: string;
+        city_slug?: string;
+    };
+}
+
+export interface CityStoreBannerRequestMessage {
+    id: string;
+    request_id: string;
+    sender_id?: string;
+    sender_role: 'store' | 'admin';
+    message: string;
+    created_at: string;
+}
+
+export interface CityStoreHighlightSettings {
+    id: string;
+    highlight_price: number;
+    highlight_duration_days: number;
+    cancel_fee?: number;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface CityStoreHighlightOrder {
+    id: string;
+    store_id: string;
+    city_slug: string;
+    amount_paid: number;
+    duration_days: number;
+    starts_at: string;
+    ends_at: string;
+    status: string;
+    created_at: string;
+    updated_at?: string;
+    store?: {
+        id: string;
+        name?: string;
+        store_name?: string;
+        city?: string;
+        city_slug?: string;
+    };
 }
 
 export interface MarketingTemplate {

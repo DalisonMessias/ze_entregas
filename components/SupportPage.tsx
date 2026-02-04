@@ -8,6 +8,7 @@ import {
     ExternalLink,
     FileQuestion,
     Headphones,
+    ImagePlus,
     Lock,
     MessageCircle,
     MessageSquare,
@@ -31,6 +32,7 @@ interface SupportPageProps {
 }
 
 export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layout = 'embedded', userRole }) => {
+    const MAX_ATTACHMENTS = 5;
     const [activeTab, setActiveTab] = useState<'menu' | 'ticket' | 'faq' | 'history'>('menu');
     const [claims, setClaims] = useState<Claim[]>([]);
     const [loadingClaims, setLoadingClaims] = useState(false);
@@ -38,10 +40,13 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
     const [supportHours, setSupportHours] = useState<{ start: string; end: string } | null>(null);
     const [isOpen, setIsOpen] = useState(false);
     const [loadingSettings, setLoadingSettings] = useState(true);
+    const [supportOverride, setSupportOverride] = useState<'AUTO' | 'OPEN' | 'CLOSED'>('AUTO');
+    const [lastStatusCheck, setLastStatusCheck] = useState<Date | null>(null);
 
     const [ticketType, setTicketType] = useState('other');
     const [ticketDesc, setTicketDesc] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [attachments, setAttachments] = useState<File[]>([]);
 
     const [showClosedModal, setShowClosedModal] = useState(false);
     const [pendingAction, setPendingAction] = useState<'whatsapp' | 'ticket' | 'chat' | null>(null);
@@ -60,7 +65,14 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
         window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
     };
 
+    const computeIsOpen = (override: 'AUTO' | 'OPEN' | 'CLOSED', hours: { start: string; end: string }) => {
+        if (override === 'OPEN') return true;
+        if (override === 'CLOSED') return false;
+        return checkBusinessHours(hours.start, hours.end);
+    };
+
     useEffect(() => {
+        let mounted = true;
         const fetchSettings = async () => {
             try {
                 const settings = await cloud.getShopSettings();
@@ -71,32 +83,47 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
 
                     const start = settings.support_hours_start || '09:00';
                     const end = settings.support_hours_end || '18:00';
-                    setSupportHours({ start, end });
-
-                    const override = settings.support_status_override || 'AUTO';
-                    if (override === 'OPEN') {
-                        setIsOpen(true);
-                    } else if (override === 'CLOSED') {
-                        setIsOpen(false);
-                    } else {
-                        setIsOpen(checkBusinessHours(
-                            start,
-                            end
-                        ));
+                    const override = (settings.support_status_override || 'AUTO') as 'AUTO' | 'OPEN' | 'CLOSED';
+                    if (mounted) {
+                        setSupportHours({ start, end });
+                        setSupportOverride(override);
+                        setIsOpen(computeIsOpen(override, { start, end }));
+                        setLastStatusCheck(new Date());
                     }
-                } else {
-                    setSupportHours({ start: '09:00', end: '18:00' });
-                    setIsOpen(checkBusinessHours('09:00', '18:00'));
+                } else if (mounted) {
+                    const fallback = { start: '09:00', end: '18:00' };
+                    setSupportHours(fallback);
+                    setSupportOverride('AUTO');
+                    setIsOpen(computeIsOpen('AUTO', fallback));
+                    setLastStatusCheck(new Date());
                 }
             } catch {
-                setSupportHours({ start: '09:00', end: '18:00' });
-                setIsOpen(checkBusinessHours('09:00', '18:00'));
+                if (mounted) {
+                    const fallback = { start: '09:00', end: '18:00' };
+                    setSupportHours(fallback);
+                    setSupportOverride('AUTO');
+                    setIsOpen(computeIsOpen('AUTO', fallback));
+                    setLastStatusCheck(new Date());
+                }
             } finally {
-                setLoadingSettings(false);
+                if (mounted) setLoadingSettings(false);
             }
         };
         fetchSettings();
+        const refreshInterval = window.setInterval(fetchSettings, 5 * 60 * 1000);
+        return () => {
+            mounted = false;
+            window.clearInterval(refreshInterval);
+        };
     }, []);
+
+    useEffect(() => {
+        if (!supportHours) return;
+        const tick = () => setIsOpen(computeIsOpen(supportOverride, supportHours));
+        tick();
+        const interval = window.setInterval(tick, 60 * 1000);
+        return () => window.clearInterval(interval);
+    }, [supportHours, supportOverride]);
 
     const fetchClaims = async () => {
         setLoadingClaims(true);
@@ -141,6 +168,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
         : isOpen
             ? 'Equipe humana disponivel agora.'
             : `Equipe humana indisponivel. ${nextBusinessMessage}.`;
+    const lastStatusLabel = lastStatusCheck
+        ? `Atualizado às ${lastStatusCheck.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+        : 'Atualizando status...';
 
     const roleContent = {
         store: {
@@ -274,13 +304,17 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
             await alert({ title: "Erro no chamado", message: "Descreva o problema." });
             return;
         }
+        if (attachments.length > MAX_ATTACHMENTS) {
+            await alert({ title: "Limite de imagens", message: `Você pode anexar no máximo ${MAX_ATTACHMENTS} imagens.` });
+            return;
+        }
         setIsSubmitting(true);
         try {
             const finalDesc = isScheduling
                 ? `[AGENDAMENTO FORA DE HORARIO] ${ticketDesc}`
                 : ticketDesc;
 
-            await cloud.createClaim(ticketType, finalDesc);
+            await cloud.createClaim(ticketType, finalDesc, attachments);
 
             if (isScheduling) {
                 await alert({ title: "Chamado registrado", message: `Registramos seu chamado fora do horario. Nossa equipe responde no ${nextBusinessMessage}.` });
@@ -291,11 +325,26 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
             }
 
             setTicketDesc('');
+            setAttachments([]);
             setActiveTab('history');
         } catch (e: any) {
             await alert({ title: "Erro", message: "Erro ao abrir chamado: " + e.message });
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const addAttachments = async (files: File[]) => {
+        if (files.length === 0) return;
+        const remaining = MAX_ATTACHMENTS - attachments.length;
+        if (remaining <= 0) {
+            await alert({ title: "Limite de imagens", message: `Você pode anexar no máximo ${MAX_ATTACHMENTS} imagens.` });
+            return;
+        }
+        const toAdd = files.slice(0, remaining);
+        setAttachments(prev => [...prev, ...toAdd]);
+        if (files.length > remaining) {
+            await alert({ title: "Limite de imagens", message: `Apenas ${MAX_ATTACHMENTS} imagens serão anexadas.` });
         }
     };
 
@@ -512,6 +561,43 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
                         />
                     </div>
 
+                    <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Anexar imagens ({attachments.length}/{MAX_ATTACHMENTS})</label>
+                            <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-brand-600">
+                                <ImagePlus className="w-4 h-4" />
+                                Selecionar arquivos
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        void addAttachments(Array.from(e.target.files || []));
+                                        e.currentTarget.value = '';
+                                    }}
+                                />
+                            </label>
+                        </div>
+                        {attachments.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {attachments.map((file, idx) => (
+                                    <div key={`${file.name}-${idx}`} className="flex items-center justify-between gap-2 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs">
+                                        <span className="truncate">{file.name}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                            className="text-red-500 hover:text-red-600 font-bold"
+                                        >
+                                            Remover
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <p className="text-xs text-gray-400">Envie fotos do problema para agilizar o atendimento.</p>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row gap-3">
                         <Button fullWidth onClick={() => handleSubmitTicket(false)} disabled={isSubmitting}>
                             {isSubmitting ? <Loading variant="inline" size="sm" /> : <Send className="w-5 h-5 mr-2" />}
@@ -713,6 +799,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
                                     <Clock className="w-4 h-4" />
                                     Horario humano: {supportHoursLabel}
                                 </div>
+                                <div className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
+                                    {lastStatusLabel}
+                                </div>
                             </div>
                         </div>
 
@@ -790,11 +879,11 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
                             {pendingAction === 'ticket' || pendingAction === 'whatsapp' || pendingAction === 'chat' ? (
                                 <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-700/30">
                                     <h4 className="font-bold text-sm dark:text-white mb-2">Registrar chamado fora do horario?</h4>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                                        Seu chamado entra na fila e nossa equipe responde no {nextBusinessMessage}.
-                                    </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                                Seu chamado entra na fila e nossa equipe responde no {nextBusinessMessage}.
+                                            </p>
 
-                                    <div className="space-y-2">
+                                            <div className="space-y-2">
                                         {pendingAction === 'whatsapp' || pendingAction === 'chat' ? (
                                             <p className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded text-center">
                                                 Chat ao vivo e WhatsApp ficam disponiveis no horario humano.
@@ -807,6 +896,39 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
                                                     className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none h-20"
                                                     placeholder="Descreva seu problema..."
                                                 />
+                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Anexar imagens ({attachments.length}/{MAX_ATTACHMENTS})</label>
+                                                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-brand-600">
+                                                        <ImagePlus className="w-4 h-4" />
+                                                        Selecionar arquivos
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            multiple
+                                                            className="hidden"
+                                                            onChange={(e) => {
+                                                                void addAttachments(Array.from(e.target.files || []));
+                                                                e.currentTarget.value = '';
+                                                            }}
+                                                        />
+                                                    </label>
+                                                </div>
+                                                {attachments.length > 0 && (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        {attachments.map((file, idx) => (
+                                                            <div key={`${file.name}-${idx}`} className="flex items-center justify-between gap-2 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs">
+                                                                <span className="truncate">{file.name}</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                                                    className="text-red-500 hover:text-red-600 font-bold"
+                                                                >
+                                                                    Remover
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                                 <Button fullWidth onClick={() => handleSubmitTicket(true)} disabled={isSubmitting} className="h-10 text-sm">
                                                     {isSubmitting ? 'Agendando...' : 'Confirmar agendamento'}
                                                 </Button>

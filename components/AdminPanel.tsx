@@ -58,6 +58,7 @@ import { AdminMaintenance } from './AdminMaintenance';
 import { AdminLoanConfig } from './AdminLoanConfig';
 import { AdminInvestments } from './AdminInvestments';
 import { AdminSlides } from './AdminSlides';
+import { AdminCityBanners } from './AdminCityBanners';
 import { AdminPayouts } from './AdminPayouts';
 import { AdminTips } from './AdminTips';
 import { AdminScoreConfig } from './AdminScoreConfig';
@@ -1185,6 +1186,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'loan_config': return <AdminLoanConfig />;
             case 'investments': return <AdminInvestments />;
             case 'slides': return <AdminSlides />;
+            case 'city_banners': return <AdminCityBanners />;
             case 'tips': return <AdminTips />;
             case 'score_config': return <AdminScoreConfig />;
             case 'payment_gateways': return <AdminPaymentGateways />;
