@@ -6,3 +6,8 @@
 - Exibição de saldos ZePay e ZeBank simultaneamente no Admin: Concluído.
 - Implementação completa do Sistema de Seguros (Tabelas, Tipos e Serviços): Concluído.
 - Correção de conflito de gatilhos (triggers) no banco de dados de Seguros: Concluído.
+- Consolidação de políticas de RLS e funções RPC no SQL Global: Concluído.
+- Correção de erro de sintaxe e remoção de código corrompido no SQL Global (linha 12836): Concluído.
+- Orientação sobre execução delta para evitar erro 'Query too large': Concluído.
+- Divisão do SQL Global em duas partes (part1 e part2) para facilitar a execução: Concluído.
+- Correção de erro de sintaxe remanescente na Parte 2 do SQL Global: Concluído.

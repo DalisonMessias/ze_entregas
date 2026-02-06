@@ -388,13 +388,13 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
             {/* Modern Promo Banner */}
             {!searchTerm && activeCategory === 'all' && (
-                <div className="mt-6 mb-8 relative overflow-hidden rounded-[32px] bg-gray-900 text-white shadow-xl h-64 flex flex-col justify-end p-8 group cursor-pointer transition-transform hover:scale-[1.02]">
+                <div className="mt-6 mb-8 relative overflow-hidden rounded-[32px] bg-gray-900 text-white shadow-xl h-64 flex flex-col justify-center items-center p-8 text-center group cursor-pointer transition-transform hover:scale-[1.02]">
                     {/* Background Image/Gradient */}
                     <div className="absolute inset-0 bg-gradient-to-br from-brand-600 via-brand-500 to-orange-400 opacity-90"></div>
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
 
                     {/* Floating Elements */}
-                    <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-white/10 flex items-center gap-1">
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-white/10 flex items-center gap-1">
                         <Zap className="w-3 h-3 fill-white" />
                         {settings?.banner_tag || 'Oferta'}
                     </div>
@@ -403,10 +403,10 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
                     <div className="relative z-10">
                         <h2 className="text-3xl font-black leading-none mb-2 tracking-tight">{settings?.banner_title || 'Novidades'}</h2>
-                        <p className="text-base text-brand-100 font-medium max-w-xs leading-snug">{settings?.banner_subtitle || 'Confira os melhores produtos.'}</p>
+                        <p className="text-base text-brand-100 font-medium max-w-md mx-auto leading-snug">{settings?.banner_subtitle || 'Confira os melhores produtos.'}</p>
 
                         {settings?.free_shipping_threshold && (
-                            <div className="mt-4 flex items-center gap-2 bg-white/10 w-fit px-3 py-1.5 rounded-xl border border-white/10 backdrop-blur-sm">
+                            <div className="mt-4 flex items-center gap-2 bg-white/10 w-fit mx-auto px-3 py-1.5 rounded-xl border border-white/10 backdrop-blur-sm">
                                 <Truck className="w-4 h-4 text-white" />
                                 <span className="text-xs font-bold">Frete Grátis &gt; R$ {settings.free_shipping_threshold}</span>
                             </div>

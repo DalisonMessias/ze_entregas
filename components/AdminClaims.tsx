@@ -4,6 +4,7 @@ import { Loader2, MessageCircle, FileText, X, CheckCircle, Clock, Eye, Send, Ale
 import { Claim, ShopSettings } from '../types';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { useDialog } from '../utils/dialogService';
 
 const formatDateTime = (isoString: string) => new Date(isoString).toLocaleString('pt-BR');
@@ -189,7 +190,17 @@ export const AdminClaims: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit overflow-x-auto no-scrollbar">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'claims' | 'settings')}
+                options={[
+                    { value: 'claims', label: 'Chamados' },
+                    { value: 'settings', label: 'Configurações' }
+                ]}
+                label="Seção de Suporte"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit overflow-x-auto no-scrollbar">
                 <button onClick={() => setActiveTab('claims')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'claims' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Chamados</button>
                 <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'settings' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Configurações</button>
             </div>

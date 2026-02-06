@@ -431,7 +431,17 @@ export const PublicSupportPage: React.FC = () => {
                     </div>
                 </header>
 
-                <nav className="flex gap-2 overflow-x-auto no-scrollbar pb-1 mt-2">
+                <MobileTabsSelect
+                    value={activeTab}
+                    onChange={(val) => setActiveTab(val as 'menu' | 'faq')}
+                    options={[
+                        { value: 'menu', label: 'Menu' },
+                        { value: 'faq', label: 'FAQ' }
+                    ]}
+                    label="Seção de Ajuda"
+                    className="md:hidden"
+                />
+                <nav className="hidden md:flex gap-2 overflow-x-auto no-scrollbar pb-1 mt-2">
                     {tabs.map((tab) => (
                         <button
                             key={tab.key}

@@ -116,7 +116,18 @@ export const AdminInsuranceConfig: React.FC = () => {
                     </h2>
                     <p className="text-sm text-gray-500">Configure planos, franquias e empresas parceiras.</p>
                 </div>
-                <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto no-scrollbar max-w-full">
+                <MobileTabsSelect
+                    value={activeTab}
+                    onChange={(val) => setActiveTab(val as 'plans' | 'partners' | 'referrals')}
+                    options={[
+                        { value: 'plans', label: 'Planos' },
+                        { value: 'partners', label: 'Empresas Parceiras' },
+                        { value: 'referrals', label: 'Indicações' }
+                    ]}
+                    label="Seção de Seguros"
+                    className="md:hidden w-full"
+                />
+                <div className="hidden md:flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto no-scrollbar max-w-full">
                     <button
                         onClick={() => setActiveTab('plans')}
                         className={`px-4 md:px-6 py-2 rounded-xl text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'plans' ? 'bg-white dark:bg-gray-700 shadow-sm text-brand-600' : 'text-gray-500'}`}

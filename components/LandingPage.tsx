@@ -308,7 +308,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                                     </h2>
                                     <div className="text-gray-500 font-bold flex items-center gap-2">
                                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                        <span>{stores.length} lojas encontradas na sua regi?o</span>
+                                        <span>{stores.length} lojas encontradas na sua região</span>
                                     </div>
                                 </div>
                                 <div className="hidden md:flex gap-2">

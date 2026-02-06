@@ -5,6 +5,7 @@ import { Loader2, ShieldAlert, FileCheck, FileX, Eye, X, RefreshCw, AlertTriangl
 import * as cloud from '../services/cloud';
 import { FraudAlert } from '../types';
 import { Button } from './Button';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { Switch } from './Switch';
 import { useDialog } from '../utils/dialogService';
 
@@ -195,7 +196,17 @@ export const SecurityManagement: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit overflow-x-auto no-scrollbar">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'fraud' | 'identity')}
+                options={[
+                    { value: 'fraud', label: 'Alertas de Fraude' },
+                    { value: 'identity', label: 'Verificações de Identidade' }
+                ]}
+                label="Seção de Segurança"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit overflow-x-auto no-scrollbar">
                 <button onClick={() => setActiveTab('fraud')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'fraud' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Alertas de Fraude</button>
                 <button onClick={() => setActiveTab('identity')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'identity' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Verificações de Identidade</button>
             </div>

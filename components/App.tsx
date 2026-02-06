@@ -35,7 +35,7 @@ import { DesktopOnlyGate } from './DesktopOnlyGate';
 const AdminPanel = React.lazy(() => import('./AdminPanel').then(module => ({ default: module.AdminPanel })));
 const PartnerArea = React.lazy(() => import('./PartnerArea').then(module => ({ default: module.PartnerArea })));
 const StoreWalletModule = React.lazy(() => import('./StoreWallet'));
-const InternalOrders = React.lazy(() => import('./InternalOrders').then(module => ({ default: module.InternalOrders })));
+const InternalOrders = React.lazy(() => import('./InternalOrders'));
 const StoreCatalog = React.lazy(() => import('./StoreCatalog').then(module => ({ default: module.StoreCatalog })));
 const InternalChatContainer = React.lazy(() => import('./InternalChat/InternalChatContainer'));
 const StoreDriversChat = React.lazy(() => import('./InternalChat/StoreDriversChat'));

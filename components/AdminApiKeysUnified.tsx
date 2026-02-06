@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, Bot, Map, Save, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Key, Shield, Activity, Trash2 } from 'lucide-react';
 import { Button } from './Button';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
 import { ShopSettings } from '../types';
@@ -320,7 +321,14 @@ export const AdminApiKeysUnified: React.FC = () => {
             </div>
 
             {/* Tab Navigation */}
-            <div className="border-b border-gray-200 dark:border-gray-700">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val)}
+                options={tabs.map(tab => ({ value: tab.id, label: tab.label }))}
+                label="Seção de API Keys"
+                className="md:hidden"
+            />
+            <div className="hidden md:block border-b border-gray-200 dark:border-gray-700">
                 <nav className="flex space-x-8 overflow-x-auto no-scrollbar whitespace-nowrap">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;

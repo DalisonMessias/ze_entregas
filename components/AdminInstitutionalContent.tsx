@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, Eye, CheckCircle, AlertTriangle, Loader2, Image as ImageIcon, Tag, FileText, Save } from 'lucide-react';
 import { Button } from './Button';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import * as cloud from '../services/cloud';
 import { InstitutionalContent, InstitutionalPageKey, InstitutionalCategory, InstitutionalTag, InstitutionalContentVersion, ContentStatus } from '../types';
 import { useDialog } from '../utils/dialogService';
@@ -133,7 +134,18 @@ export const AdminInstitutionalContent: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+        <MobileTabsSelect
+          value={pageKey}
+          onChange={(val) => {
+            const next = val as InstitutionalPageKey;
+            setPageKey(next);
+            setForm(prev => ({ ...prev, page_key: next }));
+          }}
+          options={pageOptions.map(p => ({ value: p.key, label: p.label }))}
+          label="Página"
+          className="md:hidden w-full"
+        />
+        <div className="hidden md:flex gap-2 overflow-x-auto no-scrollbar">
           {pageOptions.map(p => (
             <button key={p.key} onClick={() => { setPageKey(p.key); setForm(prev => ({ ...prev, page_key: p.key })); }} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${pageKey === p.key ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{p.label}</button>
           ))}

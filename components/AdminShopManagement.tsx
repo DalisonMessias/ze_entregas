@@ -293,12 +293,22 @@ export const AdminShopManagement: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in">
 
-            <div role="tablist" className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full mx-auto mb-[15px]">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'products' | 'categories' | 'settings' | 'coupons')}
+                options={[
+                    { value: 'products', label: 'Produtos' },
+                    { value: 'categories', label: 'Categorias' },
+                    { value: 'settings', label: 'Configurações' },
+                    { value: 'coupons', label: 'Cupons' }
+                ]}
+                label="Seção da Loja"
+                className="md:hidden"
+            />
+            <div role="tablist" className="hidden md:flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full mx-auto mb-[15px]">
                 <button
-                    id="tab-products"
                     role="tab"
                     aria-selected={activeTab === 'products'}
-                    aria-controls="panel-products"
                     tabIndex={activeTab === 'products' ? 0 : -1}
                     onClick={() => setActiveTab('products')}
                     className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'products' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
@@ -306,10 +316,8 @@ export const AdminShopManagement: React.FC = () => {
                     Produtos
                 </button>
                 <button
-                    id="tab-categories"
                     role="tab"
                     aria-selected={activeTab === 'categories'}
-                    aria-controls="panel-categories"
                     tabIndex={activeTab === 'categories' ? 0 : -1}
                     onClick={() => setActiveTab('categories')}
                     className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'categories' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
@@ -317,10 +325,8 @@ export const AdminShopManagement: React.FC = () => {
                     Categorias
                 </button>
                 <button
-                    id="tab-settings"
                     role="tab"
                     aria-selected={activeTab === 'settings'}
-                    aria-controls="panel-settings"
                     tabIndex={activeTab === 'settings' ? 0 : -1}
                     onClick={() => setActiveTab('settings')}
                     className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'settings' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}
@@ -328,10 +334,8 @@ export const AdminShopManagement: React.FC = () => {
                     Configurações
                 </button>
                 <button
-                    id="tab-coupons"
                     role="tab"
                     aria-selected={activeTab === 'coupons'}
-                    aria-controls="panel-coupons"
                     tabIndex={activeTab === 'coupons' ? 0 : -1}
                     onClick={() => setActiveTab('coupons')}
                     className={`flex-1 py-2 rounded-lg text-sm font-bold ${activeTab === 'coupons' ? 'bg-brand-600 text-white shadow-md' : 'text-gray-500'}`}

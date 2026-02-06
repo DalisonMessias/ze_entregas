@@ -5,6 +5,7 @@ import * as cloud from '../services/cloud';
 import { AdminWalletUser } from '../types';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { useDialog } from '../utils/dialogService';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -107,7 +108,18 @@ export const AdminWalletControl: React.FC = () => {
         <div className="space-y-6 animate-in fade-in">
             {/* Header / Controls */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-                <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar">
+                <MobileTabsSelect
+                    value={filter}
+                    onChange={(val) => setFilter(val as 'ALL' | 'store_partner' | 'DELIVERY')}
+                    options={[
+                        { value: 'ALL', label: 'Todos' },
+                        { value: 'store_partner', label: 'Lojistas' },
+                        { value: 'DELIVERY', label: 'Entregadores' }
+                    ]}
+                    label="Filtro de Usuários"
+                    className="md:hidden"
+                />
+                <div className="hidden md:flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar">
                     <button onClick={() => setFilter('ALL')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${filter === 'ALL' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Todos</button>
                     <button onClick={() => setFilter('store_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${filter === 'store_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojistas</button>
                     <button onClick={() => setFilter('DELIVERY')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${filter === 'DELIVERY' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregadores</button>

@@ -1,20 +1,17 @@
-# Plano de Correção - Seguros
+# Plano: Navegação Interna de Entregas (ORS + GPS em Tempo Real)
 
-Este plano visa corrigir os erros de compilação no componente `InsurancePage.tsx`, adicionando os tipos necessários, implementando os métodos de serviço e garantindo que o esquema do banco de dados esteja correto.
-
-## Lista de Tarefas
-- [x] Criar tipos `InsurancePlan`, `InsurancePartner` e `InsuranceSubscription` em `types/index.ts`
-- [x] Implementar métodos de serviço em `services/cloud.ts`:
-    - [x] `getInsurancePlans()`
-    - [x] `getInsurancePartners()`
-    - [x] `getUserInsuranceSubscriptions()`
-    - [x] `createInsuranceSubscription()`
-    - [x] `cancelInsuranceSubscription()`
-    - [x] `submitInsuranceReferral()`
-- [ ] Adicionar tabelas de seguros ao `supabase_global.sql` se não existirem:
-    - [x] `insurance_plans`
-    - [x] `insurance_partners`
-    - [x] `insurance_subscriptions`
-    - [x] `insurance_referrals`
-- [x] Registrar conclusões no `checklist.txt`
-- [x] Atualizar `documentation/TASK_LIST.md`
+- [ ] Atualizar tipos e estado de navegação em `types.ts`
+- [ ] Implementar helper unificado para abrir navegação em `mapHelpers.ts`
+- [ ] Configurar roteamento e controle de acesso (`navigation.ts`, `routeMap.ts`, `accessControl.ts`, `App.tsx`)
+- [ ] Criar nova tela full screen `DeliveryNavigation.tsx`
+- [ ] Incluir plugin Leaflet Rotate no `index.html`
+- [ ] Substituir ações de mapas externos por navegação interna nos componentes:
+    - [ ] `AddressBook.tsx`
+    - [ ] `StoreRequest.tsx`
+    - [ ] `RouteList.tsx`
+    - [ ] `PartnerArea.tsx`
+    - [ ] `OrderHistory.tsx`
+    - [ ] `InternalOrders.tsx`
+    - [ ] `RouteOptimizer.tsx`
+    - [ ] `App.tsx` (short link)
+- [ ] Validar casos de teste e funcionamento geral

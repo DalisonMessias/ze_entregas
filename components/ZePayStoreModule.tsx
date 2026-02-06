@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, CreditCard, Send, Plus, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, CheckCircle, AlertTriangle, X, Lock, Eye, EyeOff, Trash2, Sliders, Smartphone, Copy } from 'lucide-react';
 import { Loading } from './Loading';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import * as cloud from '../services/cloud';
 import { generatePaymentQRCode, checkPaymentStatus } from '../services/paymentGateway';
 import { ZePayData, StoreVirtualCard } from '../types';
@@ -213,7 +214,17 @@ export const ZePayStore: React.FC = () => {
         <div className="space-y-6 animate-in fade-in pb-24">
 
 
-            <div className="bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 flex gap-1 overflow-x-auto no-scrollbar">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'overview' | 'extract')}
+                options={[
+                    { value: 'overview', label: 'Visão Geral' },
+                    { value: 'extract', label: 'Extrato' }
+                ]}
+                label="Seção do ZéPay"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 gap-1 overflow-x-auto no-scrollbar">
                 <button onClick={() => setActiveTab('overview')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap ${activeTab === 'overview' ? 'bg-gray-100 dark:bg-gray-700' : ''}`}>Visão Geral</button>
                 <button onClick={() => setActiveTab('extract')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap ${activeTab === 'extract' ? 'bg-gray-100 dark:bg-gray-700' : ''}`}>Extrato</button>
             </div>

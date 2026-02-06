@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Skeleton } from '../../components/Skeleton';
+import { MobileTabsSelect } from '../../components/MobileTabsSelect';
 import * as cloud from '../../services/cloud';
 import { StreetRequest, ApprovedStreet } from '../../types';
 import { useDialog } from '../../utils/dialogService';
@@ -211,7 +212,17 @@ export const StreetRequestsAdmin: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex bg-gray-100 p-1 rounded-2xl w-full overflow-x-auto no-scrollbar">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'REQUESTS' | 'CATALOG')}
+                options={[
+                    { value: 'REQUESTS', label: 'Solicitações' },
+                    { value: 'CATALOG', label: 'Catálogo' }
+                ]}
+                label="Seção de Ruas"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex bg-gray-100 p-1 rounded-2xl w-full overflow-x-auto no-scrollbar">
                 <button onClick={() => setActiveTab('REQUESTS')} className={`px-6 py-2 rounded-xl text-sm font-bold whitespace-nowrap ${activeTab === 'REQUESTS' ? 'bg-white text-brand-600 shadow' : 'text-gray-500'}`}>Solicitações</button>
                 <button onClick={() => setActiveTab('CATALOG')} className={`px-6 py-2 rounded-xl text-sm font-bold whitespace-nowrap ${activeTab === 'CATALOG' ? 'bg-white text-brand-600 shadow' : 'text-gray-500'}`}>Catálogo</button>
             </div>

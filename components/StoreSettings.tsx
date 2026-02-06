@@ -5,6 +5,7 @@ import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { StoreShippingRules } from './StoreShippingRules';
 import { StoreDeliverySettings } from './StoreDeliverySettings';
 import { ExclusiveLock } from './ExclusiveLock';
@@ -382,7 +383,14 @@ export const StoreSettings: React.FC = () => {
                 initialValue={form.opening_hours}
             />
 
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto no-scrollbar">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as TabKey)}
+                options={tabs.map(tab => ({ value: tab.id, label: tab.label }))}
+                label="Seção"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
                     return (

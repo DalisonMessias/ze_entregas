@@ -69,6 +69,7 @@ import { AdminStoreCategories } from './AdminStoreCategories';
 import { AdminImageGallery } from './Admin/AdminImageGallery';
 import { StreetRequestsAdmin } from '../src/pages/StreetRequestsAdmin';
 import { AdminMediation } from './AdminMediation';
+import { MobileTabsSelect } from './MobileTabsSelect';
 
 
 // --- HELPERS ---
@@ -328,13 +329,26 @@ const UserManagement: React.FC = () => {
                         className="w-full pl-10 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white transition-all"
                     />
                 </div>
-                <div className="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1">
+                <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
                     <Button onClick={() => setIsAddingUser(true)} className="whitespace-nowrap h-10">
                         <Plus className="w-4 h-4 mr-2" /> Adicionar Usuário
                     </Button>
-                    <button onClick={() => setRoleFilter('ALL')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'ALL' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Todos</button>
-                    <button onClick={() => setRoleFilter('store_partner')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'store_partner' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Lojistas</button>
-                    <button onClick={() => setRoleFilter('delivery_partner')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'delivery_partner' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Parceiros</button>
+                    <MobileTabsSelect
+                        value={roleFilter}
+                        onChange={(val) => setRoleFilter(val as any)}
+                        options={[
+                            { value: 'ALL', label: 'Todos' },
+                            { value: 'store_partner', label: 'Lojistas' },
+                            { value: 'delivery_partner', label: 'Parceiros' }
+                        ]}
+                        label="Filtro"
+                        className="md:hidden"
+                    />
+                    <div className="hidden md:flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1">
+                        <button onClick={() => setRoleFilter('ALL')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'ALL' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Todos</button>
+                        <button onClick={() => setRoleFilter('store_partner')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'store_partner' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Lojistas</button>
+                        <button onClick={() => setRoleFilter('delivery_partner')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${roleFilter === 'delivery_partner' ? 'bg-brand-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>Parceiros</button>
+                    </div>
                 </div>
             </div>
 
@@ -998,7 +1012,19 @@ const CityManagement: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in">
 
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-full overflow-x-auto no-scrollbar">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'active' | 'inactive' | 'requests' | 'districts')}
+                options={[
+                    { value: 'active', label: 'Cidades Ativas' },
+                    { value: 'inactive', label: 'Cidades Desativadas' },
+                    { value: 'requests', label: 'Solicitações' },
+                    { value: 'districts', label: 'Bairros / API' }
+                ]}
+                label="Seção de Cidades"
+                className="md:hidden mb-4"
+            />
+            <div className="hidden md:flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-full overflow-x-auto no-scrollbar">
                 <button onClick={() => setActiveTab('active')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'active' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Ativas</button>
                 <button onClick={() => setActiveTab('inactive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'inactive' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Cidades Desativadas</button>
                 <button onClick={() => setActiveTab('requests')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'requests' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Solicitações</button>

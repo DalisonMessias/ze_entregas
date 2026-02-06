@@ -9,6 +9,7 @@ import QrCodeModal from './QrCodeModal';
 import SearchBar from './SearchBar';
 import ContactsManager from './ContactsManager';
 import { BaseModal } from '../BaseModal';
+import { MobileTabsSelect } from '../MobileTabsSelect';
 import { ZeAssistantConfig, ZeAssistantRulesManager, ZeAssistantDashboard, ZeAssistantQuickReplies } from './ZeAssistant/index';
 import { BroadcastModal } from './BroadcastModal';
 import { MessageSquare, ArrowLeft, Users, MessageCircle, AlertTriangle, MoreVertical, LogOut, ChevronLeft, ChevronRight, Check, CheckCheck, Paperclip, Send, Mic, RefreshCw, UserPlus, X, Bot, Shield, Megaphone, Scale } from 'lucide-react';
@@ -1053,7 +1054,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                   <ArrowLeft size={20} />
                 </button>
               )}
-              <div className="w-10 h-10 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center cursor-pointer" onClick={() => setActiveTab('contacts')}>
+              <div className="hidden md:flex w-10 h-10 rounded-full bg-gray-300 overflow-hidden items-center justify-center cursor-pointer" onClick={() => setActiveTab('contacts')}>
                 <Users className="text-gray-600" size={24} />
               </div>
             </div>
@@ -1063,7 +1064,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
               <button
                 onClick={() => setActiveTab('conversations')}
                 title="Conversas"
-                className={`p-2 rounded-full transition-colors relative ${activeTab === 'conversations' ? 'bg-brand-50' : 'hover:bg-gray-200'}`}
+                className={`hidden md:flex p-2 rounded-full transition-colors relative ${activeTab === 'conversations' ? 'bg-brand-50' : 'hover:bg-gray-200'}`}
               >
                 <div className="relative">
                   <MessageCircle size={20} />
@@ -1096,7 +1097,7 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
             <button
               onClick={() => setActiveTab(activeTab === 'contacts' ? 'conversations' : 'contacts')}
               title="Gerenciar Contatos"
-              className={`p-2 rounded-full transition-colors ${activeTab === 'contacts' ? 'bg-brand-50 text-brand-600' : 'hover:bg-gray-200 text-[#54656F]'}`}
+              className={`hidden md:flex p-2 rounded-full transition-colors ${activeTab === 'contacts' ? 'bg-brand-50 text-brand-600' : 'hover:bg-gray-200 text-[#54656F]'}`}
             >
               <Users size={20} />
             </button>
@@ -1125,6 +1126,18 @@ const InternalChatContainer: React.FC<InternalChatContainerProps> = ({
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="md:hidden border-b border-gray-100 bg-white px-4 py-2">
+            <MobileTabsSelect
+              value={activeTab}
+              onChange={(val) => setActiveTab(val as TabType)}
+              options={[
+                { value: 'conversations', label: 'Conversas' },
+                { value: 'contacts', label: 'Contatos' }
+              ]}
+              label="Seção"
+            />
           </div>
 
           {/* Connection Alert Bar removed as it's internal now */}

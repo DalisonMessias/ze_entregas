@@ -16,6 +16,8 @@ import { StreetAutocomplete } from './StreetAutocomplete';
 import { Logo } from './Logo';
 import { useDebounce } from '../hooks/useDebounce';
 import { useMemo } from 'react';
+import { TablesManager } from './TablesManager';
+import { MobileTabsSelect } from './MobileTabsSelect';
 
 // Interface para detalhamento da taxa do Parceiro Zé
 interface PlatformFeeDetails {
@@ -26,8 +28,6 @@ interface PlatformFeeDetails {
     totalDistance: number;
 }
 
-import { TablesManager } from './TablesManager';
-
 const parseCurrency = (val: string): number => {
     if (!val) return 0;
     const digits = val.replace(/\D/g, '');
@@ -37,7 +37,7 @@ const parseCurrency = (val: string): number => {
 
 type InternalOrdersMode = 'full' | 'new_order';
 
-export const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode = 'full' }) => {
+const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode = 'full' }) => {
     // View State
     const [view, setView] = useState<'NEW_ORDER' | 'HISTORY' | 'TABLES' | 'PRODUCTION' | 'DELIVERY_READY' | 'PICKUP_READY' | 'LOCAL_READY' | 'COMPLETED' | 'TABLES_MANAGE'>(() => (mode === 'new_order' ? 'NEW_ORDER' : 'PRODUCTION'));
     const [productionTab, setProductionTab] = useState<'QUEUE' | 'DELIVERY' | 'PICKUP' | 'LOCAL' | 'HISTORY' | 'CANCELLED'>('QUEUE');
@@ -1124,48 +1124,64 @@ export const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode =
         );
     }
 
+    const isNewOrderView = view === 'NEW_ORDER';
+
     return (
-        <div className="md:h-[calc(100vh-100px)] flex flex-col animate-in fade-in">
+        <div className={`${isNewOrderView ? '' : 'md:h-[calc(100vh-100px)] '}flex flex-col animate-in fade-in`}>
 
             {/* Header Tabs */}
             {mode !== 'new_order' && (
-                <div className="flex gap-2 mb-4">
-                <button
-                    onClick={() => { setViewSafe('PRODUCTION'); loadTickets(); }}
-                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'PRODUCTION' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
-                >
-                    <Printer className="w-4 h-4" />
-                    Produção
-                </button>
-                <button
-                    onClick={() => setViewSafe('TABLES')}
-                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'TABLES' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
-                >
-                    <LayoutList className="w-4 h-4" />
-                    Mesas Ativas
-                </button>
-                <button
-                    onClick={() => { setViewSafe('HISTORY'); loadHistory(); }}
-                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'HISTORY' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
-                >
-                    <HistoryIcon className="w-4 h-4" />
-                    Histórico
-                </button>
+                <>
+                    <MobileTabsSelect
+                        value={view}
+                        onChange={(val) => setViewSafe(val as 'PRODUCTION' | 'TABLES' | 'HISTORY' | 'TABLES_MANAGE')}
+                        options={[
+                            { value: 'PRODUCTION', label: 'Produção' },
+                            { value: 'TABLES', label: 'Mesas Ativas' },
+                            { value: 'HISTORY', label: 'Histórico' },
+                            { value: 'TABLES_MANAGE', label: 'Mesas/QR' }
+                        ]}
+                        label="Seção de Comanda"
+                        className="md:hidden"
+                    />
+                    <div className="hidden md:flex gap-2 mb-4">
+                        <button
+                            onClick={() => { setViewSafe('PRODUCTION'); loadTickets(); }}
+                            className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'PRODUCTION' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
+                        >
+                            <Printer className="w-4 h-4" />
+                            Produção
+                        </button>
+                        <button
+                            onClick={() => setViewSafe('TABLES')}
+                            className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'TABLES' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
+                        >
+                            <LayoutList className="w-4 h-4" />
+                            Mesas Ativas
+                        </button>
+                        <button
+                            onClick={() => { setViewSafe('HISTORY'); loadHistory(); }}
+                            className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'HISTORY' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
+                        >
+                            <HistoryIcon className="w-4 h-4" />
+                            Histórico
+                        </button>
 
-                <button
-                    onClick={() => setViewSafe('TABLES_MANAGE')}
-                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'TABLES_MANAGE' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
-                >
-                    <LayoutList className="w-4 h-4" />
-                    Mesas/QR
-                </button>
-                </div>
+                        <button
+                            onClick={() => setViewSafe('TABLES_MANAGE')}
+                            className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${view === 'TABLES_MANAGE' ? 'bg-brand-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}
+                        >
+                            <LayoutList className="w-4 h-4" />
+                            Mesas/QR
+                        </button>
+                    </div>
+                </>
             )}
 
             {view === 'NEW_ORDER' ? (
-                <div className="flex flex-col lg:flex-row flex-1 gap-4 overflow-hidden">
+                <div className="flex flex-col lg:flex-row flex-1 gap-4">
                     {/* Left: Catalog */}
-                    <div className="w-full lg:w-290 bg-white dark:bg-gray-800 rounded-2xl p-6 flex flex-col overflow-hidden">
+                    <div className="w-full lg:w-290 bg-white dark:bg-gray-800 rounded-2xl p-6 flex flex-col">
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold dark:text-white">Catálogo</h2>
@@ -1196,7 +1212,7 @@ export const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode =
                             />
                         </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        <div className="custom-scrollbar">
                             {loading ? (
                                 <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
                             ) : filteredProducts.length === 0 ? (
@@ -1247,9 +1263,9 @@ export const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode =
                     </div>
 
                     {/* Right: Order Ticket */}
-                    <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl flex flex-col h-full lg:h-auto overflow-hidden">
+                    <div className="w-full lg:flex-1 bg-white dark:bg-gray-800 rounded-2xl flex flex-col h-auto">
                         {/* Scrollable Content */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pb-0">
+                        <div className="custom-scrollbar p-6 pb-0">
                             <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
                                 <h2 className="text-xl font-bold dark:text-white">Comanda</h2>
                                 <span className="text-sm font-mono text-gray-400">#{Math.floor(Math.random() * 1000).toString().padStart(4, '0')}</span>
@@ -2869,3 +2885,5 @@ export const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode =
         </div >
     );
 };
+
+export default InternalOrders;

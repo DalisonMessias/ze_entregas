@@ -14,6 +14,7 @@ import { StoreRatingModal } from './StoreRatingModal';
 import { PixPaymentModal } from '../PixPaymentModal';
 import { ShippingRulesModal } from './ShippingRulesModal';
 import { AuthRequiredModal } from './AuthRequiredModal';
+import { MobileTabsSelect } from '../MobileTabsSelect';
 
 interface DigitalMenuProps {
     citySlug: string;
@@ -1138,28 +1139,40 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     // 1. Both Available: Show Tabs
                                     if (canDeliver && canPickup) {
                                         return (
-                                            <div className="grid grid-cols-2 p-1 bg-gray-50 dark:bg-gray-800 border border-gray-200/70 dark:border-gray-700 rounded-xl mb-4 relative">
-                                                {/* Tabs Indicator Background */}
-                                                <div
-                                                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-lg border border-gray-200/70 dark:border-gray-700 shadow-sm transition-all duration-300 ease-in-out ${deliveryType === 'PICKUP' ? 'left-[calc(50%+2px)]' : 'left-1'
-                                                        }`}
+                                            <div className="space-y-3">
+                                                <MobileTabsSelect
+                                                    value={deliveryType}
+                                                    onChange={(val) => setDeliveryType(val as 'DELIVERY' | 'PICKUP')}
+                                                    options={[
+                                                        { value: 'DELIVERY', label: 'Entrega' },
+                                                        { value: 'PICKUP', label: 'Retirada' }
+                                                    ]}
+                                                    label="Entrega ou retirada"
+                                                    className="md:hidden"
                                                 />
+                                                <div className="hidden md:grid grid-cols-2 p-1 bg-gray-50 dark:bg-gray-800 border border-gray-200/70 dark:border-gray-700 rounded-xl mb-4 relative">
+                                                    {/* Tabs Indicator Background */}
+                                                    <div
+                                                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-lg border border-gray-200/70 dark:border-gray-700 shadow-sm transition-all duration-300 ease-in-out ${deliveryType === 'PICKUP' ? 'left-[calc(50%+2px)]' : 'left-1'
+                                                            }`}
+                                                    />
 
-                                                <button
-                                                    onClick={() => setDeliveryType('DELIVERY')}
-                                                    className={`relative z-10 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${deliveryType === 'DELIVERY' ? 'text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                                                        }`}
-                                                >
-                                                    <Bike className="w-4 h-4" /> Entrega
-                                                </button>
+                                                    <button
+                                                        onClick={() => setDeliveryType('DELIVERY')}
+                                                        className={`relative z-10 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${deliveryType === 'DELIVERY' ? 'text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                                            }`}
+                                                    >
+                                                        <Bike className="w-4 h-4" /> Entrega
+                                                    </button>
 
-                                                <button
-                                                    onClick={() => setDeliveryType('PICKUP')}
-                                                    className={`relative z-10 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${deliveryType === 'PICKUP' ? 'text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                                                        }`}
-                                                >
-                                                    <StoreIcon className="w-4 h-4" /> Retirada
-                                                </button>
+                                                    <button
+                                                        onClick={() => setDeliveryType('PICKUP')}
+                                                        className={`relative z-10 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${deliveryType === 'PICKUP' ? 'text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                                            }`}
+                                                    >
+                                                        <StoreIcon className="w-4 h-4" /> Retirada
+                                                    </button>
+                                                </div>
                                             </div>
                                         );
                                     }

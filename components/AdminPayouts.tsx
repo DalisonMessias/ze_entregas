@@ -5,6 +5,7 @@ import { PayoutSettings, PayoutSummary, PartnerPayment, DriverPaymentInfo, Pendi
 import * as cloud from '../services/cloud';
 import { Loader2, CheckCircle, AlertTriangle, Clock, CalendarDays, Settings, History, Banknote, X as CloseIcon } from 'lucide-react';
 import { Switch } from './Switch';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { CustomSelect } from './CustomSelect';
 // --- TOAST COMPONENT (copied from AdminPanel.tsx for consistency) ---
 
@@ -193,7 +194,18 @@ export const AdminPayouts: React.FC = () => {
             </div>
 
             {/* Tab Navigation */}
-            <div className="border-b border-gray-200 dark:border-gray-700">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'general' | 'drivers' | 'pending')}
+                options={[
+                    { value: 'general', label: 'Configurações Gerais' },
+                    { value: 'drivers', label: 'Preferências por Entregador' },
+                    { value: 'pending', label: 'Repasses Pendentes' }
+                ]}
+                label="Seção de Repasses"
+                className="md:hidden"
+            />
+            <div className="hidden md:block border-b border-gray-200 dark:border-gray-700">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                     <button
                         className={`

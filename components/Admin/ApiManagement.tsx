@@ -90,13 +90,19 @@ export const ApiManagement: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-full overflow-x-auto no-scrollbar">
-                <button onClick={() => setActiveTab('keys')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'keys' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>
-                    <Shield className="w-4 h-4" /> Chaves de API
-                </button>
-                <button onClick={() => setActiveTab('logs')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'logs' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>
-                    <Activity className="w-4 h-4" /> Logs de Uso
-                </button>
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'keys' | 'logs')}
+                options={[
+                    { value: 'keys', label: 'Chaves de API' },
+                    { value: 'logs', label: 'Logs de Uso' }
+                ]}
+                label="Seção da API"
+                className="md:hidden mb-4"
+            />
+            <div className="hidden md:flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-4 w-full overflow-x-auto no-scrollbar">
+                <button onClick={() => setActiveTab('keys')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'keys' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}><Shield className="w-4 h-4" /> Chaves de API</button>
+                <button onClick={() => setActiveTab('logs')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'logs' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}><Activity className="w-4 h-4" /> Logs de Uso</button>
             </div>
 
             {loading ? <Loader2 className="animate-spin mx-auto" /> : (

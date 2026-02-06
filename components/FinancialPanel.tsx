@@ -3,6 +3,7 @@ import { DollarSign, Calendar, Download, FileText, TrendingUp, TrendingDown, Fil
 import { FinancialStatementItem, UserRole, LoanItem, LoanStatus, LoanSummary, LoanConfig } from '../types';
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { CustomDateInput } from './CustomDateInput';
 import { ReceiptModal } from './ReceiptModal';
 
@@ -461,7 +462,17 @@ export const FinancialPanel: React.FC<FinancialPanelProps> = ({ userRole, hideHe
                 </div>
             )}
 
-            <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl flex gap-2 mb-4">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'extrato' | 'emprestimos')}
+                options={[
+                    { value: 'extrato', label: 'Extrato' },
+                    { value: 'emprestimos', label: 'Empréstimos' }
+                ]}
+                label="Seção Financeira"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl gap-2 mb-4">
                 {(['extrato', 'emprestimos'] as const).map(tab => (
                     <button
                         key={tab}

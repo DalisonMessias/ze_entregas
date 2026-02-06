@@ -820,7 +820,19 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onNavigateToChat, layo
                     </div>
                 </header>
 
-                <nav className="flex gap-2 overflow-x-auto no-scrollbar pb-1 mt-2">
+                <MobileTabsSelect
+                    value={activeTab}
+                    onChange={(val) => setActiveTab(val as 'menu' | 'ticket' | 'faq' | 'history')}
+                    options={[
+                        { value: 'menu', label: 'Menu' },
+                        { value: 'ticket', label: 'Abrir Ticket' },
+                        { value: 'faq', label: 'FAQ' },
+                        { value: 'history', label: 'Histórico' }
+                    ]}
+                    label="Seção de Suporte"
+                    className="md:hidden"
+                />
+                <nav className="hidden md:flex gap-2 overflow-x-auto no-scrollbar pb-1 mt-2">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.key;

@@ -166,14 +166,21 @@ export const AdminPWASettings: React.FC = () => {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-2 overflow-x-auto pb-2 mb-6 border-b border-gray-100 dark:border-gray-700">
+                <MobileTabsSelect
+                    value={activeTab}
+                    onChange={(val) => setActiveTab(val as 'general' | 'appearance' | 'icons' | 'advanced')}
+                    options={tabs.map(tab => ({ value: tab.id, label: tab.label }))}
+                    label="Seção de PWA"
+                    className="md:hidden"
+                />
+                <div className="hidden md:flex gap-2 overflow-x-auto pb-2 mb-6 border-b border-gray-100 dark:border-gray-700">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
+                            onClick={() => setActiveTab(tab.id)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${activeTab === tab.id
-                                ? 'bg-brand-50 text-brand-600 font-bold dark:bg-brand-900/20 dark:text-brand-300'
-                                : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-400'
+                                ? 'bg-brand-600 text-white shadow-md'
+                                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
                                 }`}
                         >
                             <tab.icon className="w-4 h-4" />

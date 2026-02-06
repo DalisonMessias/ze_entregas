@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Tag, Ticket, Calendar, Search, Trash2, Edit2, CheckCircle, XCircle, AlertCircle, Percent, DollarSign, Truck, Package, Info, ArrowRight } from 'lucide-react';
 import { Loading } from './Loading';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import * as cloud from '../services/cloud';
 import { Promotion, Coupon, StoreProduct } from '../types';
 import { Button } from './Button';
@@ -191,7 +192,17 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
                     </h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">Gerencie descontos automáticos e códigos promocionais.</p>
                 </div>
-                <div className="flex gap-2 bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <MobileTabsSelect
+                    value={activeTab}
+                    onChange={(val) => setActiveTab(val as 'PROMOTIONS' | 'COUPONS')}
+                    options={[
+                        { value: 'PROMOTIONS', label: 'Promoções' },
+                        { value: 'COUPONS', label: 'Cupons' }
+                    ]}
+                    label="Seção de Promoções"
+                    className="md:hidden w-full"
+                />
+                <div className="hidden md:flex gap-2 bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                     <button
                         onClick={() => setActiveTab('PROMOTIONS')}
                         className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'PROMOTIONS' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}

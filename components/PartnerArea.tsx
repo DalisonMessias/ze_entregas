@@ -24,6 +24,7 @@ import { NotificationCenter } from './NotificationCenter';
 import { useNotification } from '../contexts/NotificationContext';
 import { PromoSlider } from './PromoSlider';
 import { TipOfTheDay } from './TipOfTheDay';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { ScorePanel } from './ScorePanel';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -583,7 +584,19 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 </button>
             </div>
 
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar mb-2.5">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'deliveries' | 'financial' | 'history' | 'stores')}
+                options={[
+                    { value: 'deliveries', label: 'Entregas' },
+                    { value: 'financial', label: 'Financeiro' },
+                    { value: 'history', label: 'Histórico' },
+                    { value: 'stores', label: 'Lojas' }
+                ]}
+                label="Seção do Parceiro"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar mb-2.5">
                 <Button
                     variant="ghost"
                     onClick={() => setActiveTab('deliveries')}

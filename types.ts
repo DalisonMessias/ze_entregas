@@ -13,7 +13,7 @@ export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
 export type VehicleType = 'moto' | 'car' | 'bike' | 'other';
 export type DocumentType = 'CNH' | 'CRLV' | 'VEHICLE_PHOTO' | 'ADDRESS_PROOF' | 'SELFIE' | 'PERSONAL_ID';
 export type RatingDirection = 'STORE_TO_PARTNER' | 'PARTNER_TO_STORE';
-
+import { ActiveTab } from './types/navigation';
 export interface ManualWaypoint {
     id: string;
     street: string;
@@ -97,7 +97,27 @@ export interface MaintenanceData {
 
 export interface NavigationState {
     active: boolean;
-    destination?: { lat: number, lng: number, address: string };
+    destination?: { lat: number, lng: number, address?: string, label?: string };
+    context_id?: string;
+    vehicle_type?: VehicleType | 'foot';
+    return_tab?: ActiveTab;
+    created_at?: string;
+}
+
+export interface NavigationStep {
+    instruction: string;
+    distance_m: number;
+    duration_s: number;
+    type: number;
+    way_points: [number, number];
+}
+
+export interface NavigationRoute {
+    geometry: { lat: number; lng: number }[];
+    distance_m: number;
+    duration_s: number;
+    steps: NavigationStep[];
+    updated_at: string;
 }
 
 export interface PromotionDetails {

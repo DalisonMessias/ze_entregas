@@ -8,6 +8,7 @@ import * as cloud from '../services/cloud';
 import { StoreDeliveryPartner, ManagedUser, PartnerFeeSettings } from '../types';
 import { Skeleton } from './Skeleton';
 import { useDialog } from '../utils/dialogService'; // Import useDialog
+import { MobileTabsSelect } from './MobileTabsSelect';
 
 import { StoreCollaborators } from './StoreCollaborators';
 import { ProfileValidationAlert } from './ProfileValidationAlert';
@@ -151,8 +152,18 @@ export const StoreTeam: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="mb-8">
-                <div className="flex gap-8 border-b border-gray-100 dark:border-gray-800 mb-6">
+            <div className="mb-8 space-y-4">
+                <MobileTabsSelect
+                    value={tab}
+                    onChange={(val) => setTab(val as 'partners' | 'collaborators')}
+                    options={[
+                        { value: 'partners', label: 'Entregadores' },
+                        { value: 'collaborators', label: 'Colaboradores' }
+                    ]}
+                    label="Seção da equipe"
+                    className="md:hidden"
+                />
+                <div className="hidden md:flex gap-8 border-b border-gray-100 dark:border-gray-800">
                     <button
                         onClick={() => setTab('partners')}
                         className={`pb-4 text-xs font-black uppercase tracking-widest transition-all relative ${tab === 'partners' ? 'text-brand-600' : 'text-gray-400 hover:text-gray-600'}`}

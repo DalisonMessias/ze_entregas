@@ -4,6 +4,7 @@ import { RouteList } from './RouteList';
 import { AddressBook } from './AddressBook';
 import { UserRole } from '../types';
 import { GitMerge, List, BookUser } from 'lucide-react';
+import { MobileTabsSelect } from './MobileTabsSelect';
 
 interface ToolsPageProps {
     userRole: UserRole;
@@ -43,7 +44,18 @@ export const ToolsPage: React.FC<ToolsPageProps> = ({ userRole }) => {
 
     return (
         <div className="space-y-5">
-            <div className="flex space-x-2 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-xl shadow-inner">
+            <MobileTabsSelect
+                value={activeTool}
+                onChange={(val) => setActiveTool(val as ToolTab)}
+                options={[
+                    { value: 'optimizer', label: 'Otimizador' },
+                    { value: 'list', label: 'Minha Lista' },
+                    { value: 'address_book', label: 'Agenda' }
+                ]}
+                label="Ferramentas"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex space-x-2 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-xl shadow-inner">
                 <TabButton tab="optimizer" label="Otimizador" icon={GitMerge} />
                 <TabButton tab="list" label="Minha Lista" icon={List} />
                 <TabButton tab="address_book" label="Agenda" icon={BookUser} />

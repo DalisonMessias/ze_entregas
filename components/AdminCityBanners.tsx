@@ -335,7 +335,17 @@ export const AdminCityBanners: React.FC = () => {
                     )}
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <MobileTabsSelect
+                    value={activeTab}
+                    onChange={(val) => setActiveTab(val as 'banners' | 'highlight')}
+                    options={[
+                        { value: 'banners', label: 'Banners' },
+                        { value: 'highlight', label: 'Destaque pago' }
+                    ]}
+                    label="Seção de Banners"
+                    className="md:hidden"
+                />
+                <div className="hidden md:flex flex-wrap gap-2">
                     <Button
                         variant={activeTab === 'banners' ? 'primary' : 'outline'}
                         onClick={() => setActiveTab('banners')}

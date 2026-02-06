@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Loader2, Megaphone, CheckCircle, AlertTriangle, X, User, Search } from 'lucide-react';
 import { Button } from './Button';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
 
@@ -80,7 +81,17 @@ export const AdminNotifications: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in">
             {/* Tabs for switching mode */}
-            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full overflow-x-auto no-scrollbar">
+            <MobileTabsSelect
+                value={activeType}
+                onChange={(val) => setActiveType(val as 'global' | 'individual')}
+                options={[
+                    { value: 'global', label: 'Global' },
+                    { value: 'individual', label: 'Individual' }
+                ]}
+                label="Tipo de Notificação"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full overflow-x-auto no-scrollbar">
                 <button
                     onClick={() => {
                         setActiveType('global');

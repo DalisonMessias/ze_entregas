@@ -422,7 +422,18 @@ export const AdminLoanConfig: React.FC = () => {
     return (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6">
 
-            <div className="flex gap-2 border-b border-gray-100 dark:border-gray-700 pb-4 overflow-x-auto no-scrollbar">
+            <MobileTabsSelect
+                value={activeTab}
+                onChange={(val) => setActiveTab(val as 'types' | 'levels' | 'loans')}
+                options={[
+                    { value: 'types', label: 'Tipos de Empréstimo' },
+                    { value: 'levels', label: 'Limites por Nível' },
+                    { value: 'loans', label: 'Solicitações' }
+                ]}
+                label="Seção de Empréstimos"
+                className="md:hidden"
+            />
+            <div className="hidden md:flex gap-2 border-b border-gray-100 dark:border-gray-700 pb-4 overflow-x-auto no-scrollbar">
                 <Button variant={activeTab === 'types' ? 'primary' : 'ghost'} onClick={() => setActiveTab('types')} className="whitespace-nowrap">
                     <Settings className="w-4 h-4 mr-2" />
                     Tipos de Empréstimo
