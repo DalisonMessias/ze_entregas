@@ -1,8 +1,5 @@
-# Lista de Tarefas - Ajuste de Regra de Débito de Saldo
+# Lista de Tarefas
 
-- [ ] Pesquisar código responsável por débito de saldo e transações de carteira.
-- [ ] Identificar lógica atual de seleção de carteira (Pessoal vs Corporativa).
-- [ ] Implementar regra: Débito padrão sempre na Carteira Pessoal.
-- [ ] Implementar exceção: Débito na Carteira Corporativa apenas se pagamento for via Cartão Corporativo.
-- [ ] Verificar se há outras áreas afetadas (assinaturas, taxas, serviços).
-- [ ] Atualizar checklist.txt.
+- [x] Adicionar os tamanhos recomendados para capa e logo na página de configurações da loja.
+- [x] Modificar o arquivo `StoreSettings.tsx` para incluir as dimensões recomendadas (1200x400px para capa, 400x400px para logo).
+- [x] Atualizar o arquivo `documentation/TASK_LIST.md` com o plano de tarefas.

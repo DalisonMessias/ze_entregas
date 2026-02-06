@@ -20,3 +20,5 @@
 - [ ] Fix: Liberar permissão de acesso para 'store_performance' (Access Denied)
 - [x] Fix: Permissão 'store_performance' adicionada em accessControl.ts
 - [x] Fix: Recriar RPC get_store_performance_dashboard em supabase_global.sql
+- [2026-02-06] Implementada regra de débito de saldo (WalletService): Débito padrão na Carteira Pessoal (driver_wallets); Débito na Carteira Corporativa (store_wallets) APENAS se for Cartão Corporativo.
+- [2026-02-06] Implementado bloqueio de saldo negativo: Limite de R$ -20,00 para operações no geral. Exceção: Menu Digital (origem='DIGITAL_MENU') não permite saldo negativo (Limite R$ 0,00).

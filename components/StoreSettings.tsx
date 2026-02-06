@@ -540,7 +540,7 @@ export const StoreSettings: React.FC = () => {
                         <div className="flex items-center justify-between">
                             <div>
                                 <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Capa</h3>
-                                <p className="text-xs text-gray-400">Imagem principal do seu catálogo.</p>
+                                <p className="text-xs text-gray-400">Imagem principal do seu catálogo. (Recomendado: 1200x400px)</p>
                             </div>
                             <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                                 {uploadingAsset === 'cover' ? <Loading variant="inline" size="xs" /> : <Camera className="w-4 h-4" />}
@@ -575,7 +575,7 @@ export const StoreSettings: React.FC = () => {
                             </div>
                             <div>
                                 <p className="text-sm font-bold text-gray-700 dark:text-gray-200">{form.name || 'Sua Loja'}</p>
-                                <p className="text-xs text-gray-400">Use uma imagem quadrada para melhor resultado.</p>
+                                <p className="text-xs text-gray-400">Use uma imagem quadrada (Recomendado: 400x400px).</p>
                             </div>
                         </div>
                     </div>
