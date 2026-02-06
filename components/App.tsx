@@ -1539,6 +1539,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const showDriverBottomNav = isDriver && !isPublicTab;
     const showBottomNav = showStoreBottomNav || showDriverBottomNav;
     const hideMobileMenuButton = isMobileViewport && showBottomNav;
+    const isAssistantTab = activeTab === 'assistant';
+    const mainContentClass = isAssistantTab
+        ? 'h-[calc(100dvh-4rem)] overflow-hidden px-0 pb-0 pt-16'
+        : `pt-20 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${showBottomNav ? 'pb-24 md:pb-6' : 'pb-6'}`;
 
     if (isPublicTab) return (
         <div className={theme === 'dark' ? 'dark' : ''}>
@@ -1885,8 +1889,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 </SectionErrorBoundary>
 
                 {/* Main Content Area */}
-                <main className={`pt-20 transition-all duration-300 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'} ${showBottomNav ? 'pb-24 md:pb-6' : 'pb-6'}`}>
-                    {activeTab !== 'support' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
+                <main className={`${mainContentClass} transition-all duration-300 ${isSidebarExpanded ? 'md:ml-80' : 'md:ml-20'}`}>
+                    {activeTab !== 'support' && activeTab !== 'assistant' && <UserStatusBanner status={userStatus} reason={blockingReason} />}
                     <Suspense fallback={<Loading variant="container" size="md" />}>
                         {renderContent()}
                     </Suspense>

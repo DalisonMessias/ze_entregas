@@ -28,9 +28,12 @@ const extractJsonBlock = (text: string) => {
 };
 
 const splitDetails = (text: string) => {
-  const parts = text.split(/\bDETALHES:\b/i);
-  const summary = parts[0].replace(/\bRESUMO:\b/i, '').trim();
-  const details = parts[1]?.trim() || '';
+  const detailsMatch = text.match(/DETALHES:\s*([\s\S]*)$/i);
+  const summary = text
+    .replace(/RESUMO:\s*/i, '')
+    .replace(/DETALHES:\s*[\s\S]*$/i, '')
+    .trim();
+  const details = detailsMatch?.[1]?.trim() || '';
   return { summary, details };
 };
 

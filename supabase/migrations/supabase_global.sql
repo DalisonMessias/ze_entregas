@@ -4033,30 +4033,62 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: admin_adjust_balance
-CREATE OR REPLACE FUNCTION public.admin_adjust_balance(p_user_id UUID, p_amount NUMERIC, p_reason TEXT)
-RETURNS VOID AS $$
+-- Removendo assinatura antiga para evitar conflitos de overload (06/02/2026)
+DROP FUNCTION IF EXISTS public.admin_adjust_balance(UUID, NUMERIC, TEXT);
+
+-- Funﾃｧﾃ｣o: admin_adjust_balance (Atualizada em 06/02/2026 para suportar Pessoal vs Corporativo)
+CREATE OR REPLACE FUNCTION public.admin_adjust_balance(
+    p_user_id UUID, 
+    p_amount NUMERIC, 
+    p_reason TEXT,
+    p_wallet_type TEXT DEFAULT 'CORPORATE' -- 'PERSONAL' ou 'CORPORATE'
+)
+RETURNS JSONB AS $$
 DECLARE
     v_user_role public.user_role;
+    v_success BOOLEAN := FALSE;
+    v_message TEXT;
 BEGIN
     IF NOT public.is_admin() THEN
-        RAISE EXCEPTION 'Permission denied.';
+        RETURN jsonb_build_object('success', false, 'message', 'Permission denied.');
     END IF;
 
     SELECT role INTO v_user_role FROM public.user_profiles WHERE id = p_user_id;
 
-    IF v_user_role = 'store_partner' THEN
+    IF p_wallet_type = 'PERSONAL' THEN
+        -- Ajuste na Carteira Pessoal (driver_wallets / ZeBank)
+        INSERT INTO public.driver_wallets (driver_id, balance_decimal)
+        VALUES (p_user_id, p_amount)
+        ON CONFLICT (driver_id) DO UPDATE
+        SET balance_decimal = public.driver_wallets.balance_decimal + p_amount;
+
+        INSERT INTO public.driver_wallet_transactions (driver_id, amount, description, type, status)
+        VALUES (p_user_id, p_amount, 'Ajuste administrativo (Pessoal): ' || p_reason, 'ADJUSTMENT', 'COMPLETED');
+        
+        v_success := TRUE;
+        v_message := 'Saldo pessoal ajustado com sucesso.';
+    
+    ELSIF p_wallet_type = 'CORPORATE' THEN
+        -- Ajuste na Carteira Corporativa (store_wallets / ZePay)
+        IF v_user_role != 'store_partner' THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Apenas lojistas possuem carteira corporativa.');
+        END IF;
+
         INSERT INTO public.store_wallets (store_id, balance_decimal)
         VALUES (p_user_id, p_amount)
         ON CONFLICT (store_id) DO UPDATE
         SET balance_decimal = public.store_wallets.balance_decimal + p_amount;
 
         INSERT INTO public.store_wallet_transactions (store_id, amount, description, type, status)
-        VALUES (p_user_id, p_amount, 'Ajuste administrativo: ' || p_reason, 'ADJUSTMENT', 'COMPLETED');
+        VALUES (p_user_id, p_amount, 'Ajuste administrativo (Corporativo): ' || p_reason, 'ADJUSTMENT', 'COMPLETED');
+        
+        v_success := TRUE;
+        v_message := 'Saldo corporativo ajustado com sucesso.';
     ELSE
-        -- Para entregadores, a lﾃｳgica pode ser diferente (ex: criar tabela driver_wallets)
-        RAISE EXCEPTION 'Balance adjustment for this user role is not implemented yet.';
+        RETURN jsonb_build_object('success', false, 'message', 'Tipo de carteira inválido. Use PERSONAL ou CORPORATE.');
     END IF;
+
+    RETURN jsonb_build_object('success', v_success, 'message', v_message);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -12533,4 +12565,90 @@ BEGIN
     WHERE role IN ('store_partner')
     ON CONFLICT (store_id) DO NOTHING;
 END $$;
+
+-- ==================================================================
+-- 10.x SISTEMA DE SEGUROS
+-- ==================================================================
+
+-- Tabela de Parceiros de Seguros (Seguradoras)
+CREATE TABLE IF NOT EXISTS public.insurance_partners (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    logo_url TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.insurance_partners ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read insurance partners" ON public.insurance_partners;
+CREATE POLICY "Public read insurance partners" ON public.insurance_partners FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Admins manage insurance partners" ON public.insurance_partners;
+CREATE POLICY "Admins manage insurance partners" ON public.insurance_partners FOR ALL USING (public.is_admin());
+
+-- Tabela de Planos de Seguros
+CREATE TABLE IF NOT EXISTS public.insurance_plans (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    partner_id UUID REFERENCES public.insurance_partners(id),
+    title TEXT NOT NULL,
+    description TEXT,
+    price_mensal NUMERIC(15, 2) NOT NULL,
+    features TEXT[] DEFAULT ARRAY[]::TEXT[],
+    is_popular BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    deductible_percent NUMERIC(5, 2),
+    deductible_info TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.insurance_plans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read insurance plans" ON public.insurance_plans;
+CREATE POLICY "Public read insurance plans" ON public.insurance_plans FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Admins manage insurance plans" ON public.insurance_plans;
+CREATE POLICY "Admins manage insurance plans" ON public.insurance_plans FOR ALL USING (public.is_admin());
+
+-- Tabela de Assinaturas de Seguros
+CREATE TABLE IF NOT EXISTS public.insurance_subscriptions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.user_profiles(id) NOT NULL,
+    plan_id UUID REFERENCES public.insurance_plans(id) NOT NULL,
+    status TEXT DEFAULT 'ACTIVE', -- 'ACTIVE', 'CANCELLED', 'EXPIRED'
+    payment_method TEXT NOT NULL, -- 'WALLET', 'CARD'
+    next_billing_date TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.insurance_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users view own subscriptions" ON public.insurance_subscriptions;
+CREATE POLICY "Users view own subscriptions" ON public.insurance_subscriptions FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins view all subscriptions" ON public.insurance_subscriptions;
+CREATE POLICY "Admins view all subscriptions" ON public.insurance_subscriptions FOR SELECT USING (public.is_admin());
+
+-- Tabela de Indicações de Seguros
+CREATE TABLE IF NOT EXISTS public.insurance_referrals (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.user_profiles(id),
+    city TEXT NOT NULL,
+    company_name TEXT NOT NULL,
+    status TEXT DEFAULT 'PENDING',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.insurance_referrals ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Admins manage referrals" ON public.insurance_referrals;
+CREATE POLICY "Admins manage referrals" ON public.insurance_referrals FOR ALL USING (public.is_admin());
+DROP POLICY IF EXISTS "Users can insert referrals" ON public.insurance_referrals;
+CREATE POLICY "Users can insert referrals" ON public.insurance_referrals FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+-- Triggers para updated_at
+DROP TRIGGER IF EXISTS handle_insurance_partners_updated_at ON public.insurance_partners;
+CREATE TRIGGER handle_insurance_partners_updated_at BEFORE UPDATE ON public.insurance_partners FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP TRIGGER IF EXISTS handle_insurance_plans_updated_at ON public.insurance_plans;
+CREATE TRIGGER handle_insurance_plans_updated_at BEFORE UPDATE ON public.insurance_plans FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP TRIGGER IF EXISTS handle_insurance_subscriptions_updated_at ON public.insurance_subscriptions;
+CREATE TRIGGER handle_insurance_subscriptions_updated_at BEFORE UPDATE ON public.insurance_subscriptions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 

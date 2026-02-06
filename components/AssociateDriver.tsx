@@ -121,17 +121,20 @@ export const AssociateDriver: React.FC<AssociateDriverProps> = ({ onBack }) => {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {associatedStores.map(store => (
-                            <div key={store.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                                <div>
-                                    <p className="font-bold text-gray-900 dark:text-white">{store.store_name}</p>
-                                    <p className="text-xs text-gray-500">{store.city}</p>
+                        {associatedStores.map(store => {
+                            const storeName = store?.store_name || store?.name || 'Loja';
+                            return (
+                                <div key={store.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                    <div>
+                                        <p className="font-bold text-gray-900 dark:text-white">{storeName}</p>
+                                        {store.city && <p className="text-xs text-gray-500">{store.city}</p>}
+                                    </div>
+                                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
+                                        Ativo
+                                    </div>
                                 </div>
-                                <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
-                                    Ativo
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

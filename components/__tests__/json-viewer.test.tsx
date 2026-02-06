@@ -16,7 +16,7 @@ describe('JsonViewer', () => {
 
     expect(screen.getByText('JSON Viewer')).toBeInTheDocument();
     expect(screen.getByText('Visual')).toBeInTheDocument();
-    expect(screen.getByText(/Cod/i)).toBeInTheDocument();
+    expect(screen.getByText(/C[oó]d/i)).toBeInTheDocument();
   });
 
   it('exibe fallback para JSON invalido', () => {

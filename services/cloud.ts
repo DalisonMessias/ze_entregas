@@ -12,11 +12,11 @@ import {
     ReferralData, ReferralHistoryItem, StoreReportData, StoreShippingRule,
     AdminWalletUser, AdminDashboardStats, PWASettings, MaintenanceData,
     AppNotification, PayoutSummary, AppSlide, CityStoreBanner, CityStoreHighlightSettings, CityStoreHighlightOrder, CityStoreBannerAssets, CityStoreBannerRequest, CityStoreBannerRequestMessage, StoreProduct,
-    UserTerminal, UserTerminalHistoryItem, SalesSimulation, Collaborator, StoreAddonOption, StoreAddonGroup,
+    UserTerminal, UserTerminalHistoryItem, SalesSimulation, AssociatedStore, Collaborator, StoreAddonOption, StoreAddonGroup,
     StoreDeliverySettings, StoreNeighborhoodFee, PaymentGatewayConfig, PaymentGatewayLog,
     FinancialTransaction, BlacklistEntry, PartnerRating, Claim,
     CatalogBaseProduct, QuickReply, StreetRequest, ApprovedStreet,
-    Promotion, Coupon
+    Promotion, Coupon, InsurancePlan, InsurancePartner, InsuranceSubscription
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -2482,7 +2482,7 @@ export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
         const [usersRes, storeWalletsRes, userWalletsRes] = await Promise.all([
             sb.from('user_profiles').select('id, name, email, role, is_super_store').order('name'),
             sb.from('store_wallets').select('store_id, balance_decimal'),
-            sb.from('wallets').select('user_id, balance')
+            sb.from('driver_wallets').select('driver_id, balance_decimal')
         ]);
 
         if (usersRes.error) throw usersRes.error;
@@ -2494,10 +2494,10 @@ export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
             storeWalletMap.set(w.store_id, Number(w.balance_decimal || 0));
         });
 
-        // Map para carteira do usuário
-        const userWalletMap = new Map<string, number>();
+        // Map para carteira pessoal (ZeBank - driver_wallets)
+        const personalWalletMap = new Map<string, number>();
         userWalletsRes.data?.forEach((w: any) => {
-            userWalletMap.set(w.user_id, Number(w.balance || 0));
+            personalWalletMap.set(w.driver_id, Number(w.balance_decimal || 0));
         });
 
         return usersRes.data.map(u => ({
@@ -2505,8 +2505,8 @@ export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
             name: u.name || u.email || 'Sem Nome',
             email: u.email || '',
             role: u.role,
-            balance: storeWalletMap.get(u.id) || 0, // Carteira da loja
-            user_balance: userWalletMap.get(u.id) || 0, // Carteira do usuário
+            balance: storeWalletMap.get(u.id) || 0, // Carteira da loja (Corporativa)
+            personal_balance: personalWalletMap.get(u.id) || 0, // Carteira Pessoal ( driver_wallets )
             is_super_store: u.is_super_store
         }));
 
@@ -2516,14 +2516,15 @@ export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
     }
 };
 
-export const adminAdjustBalance = async (userId: string, amount: number, reason: string) => {
+export const adminAdjustBalance = async (userId: string, amount: number, reason: string, walletType: 'PERSONAL' | 'CORPORATE' = 'CORPORATE') => {
     const sb = getClient();
     if (!sb) throw new Error("Supabase client not initialized");
 
-    const { data, error } = await sb.rpc('adjust_wallet_balance', {
+    const { data, error } = await sb.rpc('admin_adjust_balance', {
         p_user_id: userId,
         p_amount: amount,
-        p_reason: reason
+        p_reason: reason,
+        p_wallet_type: walletType
     });
 
     if (error) {
@@ -2935,6 +2936,25 @@ export const getStoreAssociatedPartners = async (): Promise<StoreDeliveryPartner
     if (!user) return [];
 
     return getStoreDeliveryPartners(user.id);
+};
+
+// Busca lojas associadas ao entregador (RPC)
+export const getPartnerAssociatedStores = async (): Promise<AssociatedStore[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb.rpc('get_partner_associated_stores');
+    if (error) {
+        console.error('Error fetching partner associated stores:', error);
+        return [];
+    }
+
+    return (data || []).map((store: any) => ({
+        id: store.id,
+        name: store.name,
+        city: store.city,
+        avatar_url: store.avatar_url
+    }));
 };
 
 // Busca entregadores associados a uma loja (Implementação Real)
@@ -7442,6 +7462,94 @@ export const processPartnerSaleWallet = async (
         console.error('Error processing partner sale:', e);
         return { success: false, error: e.message || 'Erro ao processar venda na carteira.' };
     }
+};
+
+// --- INSURANCE SERVICES ---
+
+export const getInsurancePlans = async (): Promise<InsurancePlan[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.from('insurance_plans').select(`
+        *,
+        partner:partner_id(*)
+    `).eq('is_active', true);
+    if (error) {
+        console.error('getInsurancePlans error', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getInsurancePartners = async (): Promise<InsurancePartner[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { data, error } = await sb.from('insurance_partners').select('*').eq('is_active', true);
+    if (error) {
+        console.error('getInsurancePartners error', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getUserInsuranceSubscriptions = async (): Promise<InsuranceSubscription[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+    const { user } = await getUserWithCache();
+    if (!user) return [];
+    const { data, error } = await sb.from('insurance_subscriptions').select(`
+        *,
+        plan:plan_id(
+            *,
+            partner:partner_id(*)
+        )
+    `).eq('user_id', user.id);
+    if (error) {
+        console.error('getUserInsuranceSubscriptions error', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const createInsuranceSubscription = async (planId: string, paymentMethod: 'WALLET' | 'CARD') => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not ready');
+    const { user } = await getUserWithCache();
+    if (!user) throw new Error('Unauthorized');
+
+    const { error } = await sb.from('insurance_subscriptions').insert({
+        user_id: user.id,
+        plan_id: planId,
+        payment_method: paymentMethod,
+        status: 'ACTIVE',
+        next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    });
+
+    if (error) throw error;
+};
+
+export const cancelInsuranceSubscription = async (subscriptionId: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not ready');
+    const { error } = await sb.from('insurance_subscriptions').update({
+        status: 'CANCELLED',
+        updated_at: new Date().toISOString()
+    }).eq('id', subscriptionId);
+
+    if (error) throw error;
+};
+
+export const submitInsuranceReferral = async (city: string, company: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Client not ready');
+    const { user } = await getUserWithCache();
+
+    const { error } = await sb.from('insurance_referrals').insert({
+        user_id: user?.id || null,
+        city,
+        company_name: company
+    });
+
+    if (error) throw error;
 };
 
 

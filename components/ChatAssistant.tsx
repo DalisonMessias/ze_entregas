@@ -2,6 +2,7 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  ChevronDown,
   ChevronRight,
   Eraser,
   Loader2,
@@ -10,7 +11,16 @@ import {
   Send,
   Sparkles
 } from 'lucide-react';
-import { ChatMessage, DailySummary, DailyTransaction, ShopSettings, StoreWallet, UserRole } from '../types';
+import {
+  ChatMessage,
+  DailySummary,
+  DailyTransaction,
+  StoreAddonGroup,
+  StoreProduct,
+  StoreReportData,
+  StoreWallet,
+  UserRole
+} from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
 import { SparklesIcon } from './SparklesIcon';
@@ -18,8 +28,14 @@ import { useDialog } from '../utils/dialogService';
 import { AssistantTabs } from './assistant/AssistantTabs';
 import { AssistantResources } from './assistant/AssistantResources';
 import { StructuredResponse } from './assistant/StructuredResponse';
-import { CollaboratorFunction } from './assistant/assistantResources';
-import { buildSystemPrompt, buildUserPrompt, getQuickSuggestions, promptLibrary } from './assistant/assistantPrompts';
+import { CollaboratorFunction } from './assistant/assistantResourcesData';
+import {
+  AssistantStoreInsights,
+  buildSystemPrompt,
+  buildUserPrompt,
+  getQuickSuggestions,
+  promptLibrary
+} from './assistant/assistantPrompts';
 import { getRoleLabel } from '../utils/accessControl';
 
 interface ChatAssistantProps {
@@ -30,8 +46,78 @@ interface ChatAssistantProps {
   onClose: () => void;
 }
 
+const TEXTAREA_BASE_HEIGHT = 44;
+const TEXTAREA_MAX_HEIGHT = 120;
+const STORE_FINAL_STATUSES = new Set([
+  'COMPLETED',
+  'CANCELLED',
+  'FAILED',
+  'DELIVERED',
+  'EXPIRED',
+  'REFUNDED'
+]);
+
 const formatTime = (date: Date) =>
   date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+const buildStoreInsights = (
+  products: StoreProduct[],
+  addonGroups: StoreAddonGroup[],
+  reports: StoreReportData | null,
+  zePayDashboard: any,
+  internalOrders: any[]
+): AssistantStoreInsights => {
+  const safeProducts = products || [];
+  const safeOrders = internalOrders || [];
+  const activeProducts = safeProducts.filter(product => Boolean(product.is_active));
+  const inactiveProducts = safeProducts.length - activeProducts.length;
+
+  const topProducts = activeProducts.slice(0, 5).map(product => ({
+    name: product.name || 'Produto',
+    price: Number(product.price || 0),
+    stock: product.stock_quantity ?? null
+  }));
+
+  const internalOrdersPending = safeOrders.filter(order => {
+    const status = String(order?.status || '').toUpperCase();
+    return status && !STORE_FINAL_STATUSES.has(status);
+  }).length;
+
+  const reportSummary = reports
+    ? {
+      totalRequests: Number(reports.totalRequests || 0),
+      totalValue: Number(reports.totalValue || 0),
+      completedCount: Number(reports.completedCount || 0),
+      cancelledCount: Number(reports.cancelledCount || 0),
+      failedCount: Number(reports.failedCount || 0),
+      peakHours: Array.isArray(reports.peakHours) ? reports.peakHours.slice(0, 3) : []
+    }
+    : null;
+
+  const recentTransactions = Array.isArray(zePayDashboard?.recent_transactions)
+    ? zePayDashboard.recent_transactions.slice(0, 5).map((tx: any) => ({
+      type: String(tx?.type || tx?.direction || 'N/A'),
+      amount: Number(tx?.amount || 0),
+      created_at: tx?.created_at,
+      description: tx?.description
+    }))
+    : [];
+
+  return {
+    productsTotal: safeProducts.length,
+    productsActive: activeProducts.length,
+    productsInactive: inactiveProducts,
+    addonGroupsTotal: addonGroups?.length || 0,
+    topProducts,
+    internalOrdersRecent: safeOrders.length,
+    internalOrdersPending,
+    report: reportSummary,
+    financial: {
+      corporateBalance: Number(zePayDashboard?.balance || 0),
+      recentTransactions
+    }
+  };
+};
 
 const renderFormattedText = (text: string, isUser: boolean) => {
   const textColor = isUser ? 'text-white' : 'text-gray-700 dark:text-gray-200';
@@ -109,32 +195,47 @@ const renderFormattedText = (text: string, isUser: boolean) => {
 const PromptCategoryCard = ({
   title,
   prompts,
-  onSelect
+  onSelect,
+  isOpen,
+  onToggle
 }: {
   title: string;
   prompts: string[];
   onSelect: (text: string) => void;
+  isOpen: boolean;
+  onToggle: () => void;
 }) => {
   return (
     <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
-      <div className="flex items-center justify-between">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between text-left"
+      >
         <h4 className="text-xs font-black uppercase tracking-widest text-gray-700 dark:text-gray-200">
           {title}
         </h4>
-        <ChevronRight className="h-4 w-4 text-gray-400" />
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {prompts.map(prompt => (
-          <button
-            key={prompt}
-            type="button"
-            onClick={() => onSelect(prompt)}
-            className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-600 transition-all hover:border-brand-300 hover:text-brand-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
-          >
-            {prompt}
-          </button>
-        ))}
-      </div>
+        {isOpen ? (
+          <ChevronDown className="h-4 w-4 text-gray-400" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-gray-400" />
+        )}
+      </button>
+      {isOpen && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {prompts.map(prompt => (
+            <button
+              key={prompt}
+              type="button"
+              onClick={() => onSelect(prompt)}
+              className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-600 transition-all hover:border-brand-300 hover:text-brand-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -161,11 +262,13 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
 
   const [userProfile, setUserProfile] = useState({ name: 'Usuário', email: '', city: 'Não definida' });
   const [wallet, setWallet] = useState<StoreWallet | null>(null);
-  const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
+  const [storeIdentity, setStoreIdentity] = useState<{ name: string; city: string } | null>(null);
+  const [storeInsights, setStoreInsights] = useState<AssistantStoreInsights | null>(null);
   const [collaboratorFunction, setCollaboratorFunction] = useState<CollaboratorFunction | null>(null);
+  const [openPromptCategory, setOpenPromptCategory] = useState<string>('');
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -182,16 +285,49 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
         }
 
         if (userRole === 'store_partner') {
-          const w = await cloud.getMyWallet();
-          setWallet(w);
+          const settled = await Promise.allSettled([
+            cloud.getMyWallet(),
+            cloud.getMyPartnerProfile(),
+            cloud.getStoreProducts(userId),
+            cloud.getStoreAddonGroups(),
+            cloud.getStoreReportsData(),
+            cloud.getZePayDashboardData(),
+            cloud.getStoreInternalOrders(userId)
+          ]);
+
+          const walletResult = settled[0].status === 'fulfilled' ? settled[0].value : null;
+          const partnerProfileResult = settled[1].status === 'fulfilled' ? settled[1].value : null;
+          const productsResult = settled[2].status === 'fulfilled' ? settled[2].value : [];
+          const addonGroupsResult = settled[3].status === 'fulfilled' ? settled[3].value : [];
+          const reportsResult = settled[4].status === 'fulfilled' ? settled[4].value : null;
+          const zePayResult = settled[5].status === 'fulfilled' ? settled[5].value : null;
+          const internalOrdersResult = settled[6].status === 'fulfilled' ? settled[6].value : [];
+
+          setWallet(walletResult);
+          setStoreIdentity({
+            name: partnerProfileResult?.store_name || partnerProfileResult?.name || 'Não informado',
+            city: partnerProfileResult?.store_address_city || partnerProfileResult?.city || 'Não informada'
+          });
+          setStoreInsights(
+            buildStoreInsights(
+              productsResult || [],
+              addonGroupsResult || [],
+              reportsResult || null,
+              zePayResult,
+              internalOrdersResult || []
+            )
+          );
+        } else {
+          setWallet(null);
+          setStoreIdentity(null);
+          setStoreInsights(null);
         }
 
-        let settings: ShopSettings | null = null;
+        let settings: { google_gemini_api_key?: string | null } | null = null;
         try {
           settings = await cloud.getShopSettings();
-          setShopSettings(settings);
         } catch {
-          setShopSettings(null);
+          settings = null;
         }
 
         if (userRole === 'collaborator') {
@@ -204,6 +340,8 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
           } catch {
             setCollaboratorFunction('waiter');
           }
+        } else {
+          setCollaboratorFunction(null);
         }
 
         if (settings?.google_gemini_api_key) {
@@ -220,14 +358,27 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
       }
     };
     init();
-  }, [userRole]);
+  }, [userRole, userId]);
 
   useEffect(() => {
     if (messages.length > 0) {
       storage.saveAssistantHistory(messages);
     }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!messagesContainerRef.current) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      if (!messagesContainerRef.current) return;
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: messages.length <= 1 ? 'auto' : 'smooth'
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages.length, isLoading]);
 
   useEffect(() => {
     setMessageTimes(prev => {
@@ -241,8 +392,14 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
 
   useEffect(() => {
     if (inputRef.current) {
+      const nextHeight = Math.max(
+        TEXTAREA_BASE_HEIGHT,
+        Math.min(inputRef.current.scrollHeight, TEXTAREA_MAX_HEIGHT)
+      );
       inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+      inputRef.current.style.height = `${nextHeight}px`;
+      inputRef.current.style.overflowY =
+        inputRef.current.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
     }
   }, [input]);
 
@@ -264,6 +421,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
     setMessages(prev => [...prev, userMessage]);
     setMessageTimes(prev => ({ ...prev, [messages.length]: formatTime(new Date()) }));
     setInput('');
+    if (inputRef.current) {
+      inputRef.current.style.height = `${TEXTAREA_BASE_HEIGHT}px`;
+      inputRef.current.style.overflowY = 'hidden';
+    }
     setIsLoading(true);
     setError(null);
 
@@ -275,15 +436,19 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
         walletBalance: wallet?.balance_decimal || 0,
         userCity: userProfile.city,
         userLocation: dailySummary.location,
-        shopSettings,
+        storeName: storeIdentity?.name,
+        storeCity: storeIdentity?.city,
         route: '/assistente',
-        collaboratorFunction
+        collaboratorFunction,
+        storeInsights
       });
 
       const promptWithContext = buildUserPrompt({
         dailySummary,
         transactions,
-        userInput: content
+        userInput: content,
+        userRole,
+        storeInsights
       });
 
       const response = await cloud.generateAIContent(promptWithContext, apiKey, systemInstruction);
@@ -309,6 +474,28 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.defaultPrevented) return;
+
+    const nativeEvent = event.nativeEvent as KeyboardEvent & {
+      keyCode?: number;
+      which?: number;
+      isComposing?: boolean;
+    };
+    if (nativeEvent.isComposing) return;
+
+    const keyCode = nativeEvent.keyCode ?? nativeEvent.which ?? 0;
+    const isEnter = event.key === 'Enter' || event.code === 'Enter' || keyCode === 13;
+
+    if (!isEnter) return;
+    if (event.shiftKey) return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    void handleSend();
   };
 
   const handleClearHistory = async () => {
@@ -359,16 +546,16 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
 
   return (
     <div
-      className="relative min-h-[100dvh] bg-slate-50 text-gray-900 dark:bg-gray-950"
-      style={{ fontFamily: '"Space Grotesk", "Sora", ui-sans-serif, system-ui' }}
+      className="relative h-full overflow-hidden bg-slate-50 text-gray-900 dark:bg-gray-950"
+      style={{ fontFamily: '"AmsiProUltra", "Space Grotesk", "Sora", ui-sans-serif, system-ui' }}
     >
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-24 right-[-6rem] h-72 w-72 rounded-full bg-gradient-to-br from-brand-200/40 via-white/10 to-transparent blur-3xl" />
         <div className="absolute bottom-[-8rem] left-[-4rem] h-72 w-72 rounded-full bg-gradient-to-tr from-blue-200/30 via-white/10 to-transparent blur-3xl" />
       </div>
 
-      <div className="relative z-10 flex min-h-[100dvh] flex-col">
-        <header className="sticky top-0 z-30 border-b border-white/60 bg-white/85 px-4 py-3 backdrop-blur dark:border-gray-800/60 dark:bg-gray-950/85">
+      <div className="relative z-10 flex h-full min-h-0 flex-col">
+        <header className="z-30 shrink-0 border-b border-white/60 bg-white/85 px-4 py-3 backdrop-blur dark:border-gray-800/60 dark:bg-gray-950/85">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <button
@@ -410,9 +597,9 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
           </div>
         </header>
 
-        <div className="flex-1 overflow-hidden px-4 pb-4 pt-4">
-          <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="flex h-full flex-col gap-4">
+        <div className="flex-1 min-h-0 overflow-hidden px-4 pb-4 pt-4">
+          <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="flex h-full min-h-0 flex-col gap-4">
               <div className="md:hidden">
                 <AssistantTabs
                   value={activeMobileTab}
@@ -428,7 +615,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
               <div
                 className={`${
                   activeMobileTab !== 'chat' ? 'hidden md:flex' : 'flex'
-                } flex-1 flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/70`}
+                } flex-1 min-h-0 flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/70`}
               >
                 {!apiKey && (
                   <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center text-xs font-bold text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
@@ -437,7 +624,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                   </div>
                 )}
 
-                <div className="flex-1 space-y-6 overflow-y-auto pr-1">
+                <div ref={messagesContainerRef} className="flex-1 min-h-0 space-y-6 overflow-y-auto pr-1 custom-scrollbar">
                   {messages.length === 0 && apiKey ? (
                     <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-gray-500">
                       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-brand-200/70 to-white/40 shadow-inner">
@@ -505,8 +692,6 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                       </div>
                     </div>
                   )}
-
-                  <div ref={messagesEndRef} />
                 </div>
 
                 <div className="mt-4">
@@ -539,10 +724,12 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                       ref={inputRef}
                       value={input}
                       onChange={event => setInput(event.target.value)}
+                      onKeyDown={handleInputKeyDown}
                       placeholder={apiKey ? 'Pergunte ao Zé...' : 'Zé offline'}
                       rows={1}
-                      className="flex-1 resize-none bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-white"
-                      style={{ minHeight: '44px' }}
+                      enterKeyHint="send"
+                      className="flex-1 resize-none overflow-y-hidden bg-transparent py-[10px] text-sm leading-6 text-gray-900 outline-none placeholder:text-gray-400 dark:text-white"
+                      style={{ minHeight: `${TEXTAREA_BASE_HEIGHT}px`, height: `${TEXTAREA_BASE_HEIGHT}px` }}
                       disabled={!apiKey}
                     />
 
@@ -583,6 +770,8 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                         key={category}
                         title={category}
                         prompts={prompts}
+                        isOpen={openPromptCategory === category}
+                        onToggle={() => setOpenPromptCategory(prev => (prev === category ? '' : category))}
                         onSelect={text => setInput(text)}
                       />
                     ))}
@@ -591,37 +780,41 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
               </div>
             </div>
 
-            <aside className="hidden h-full flex-col gap-4 lg:flex">
-              <div className="rounded-3xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
-                    Recursos
-                  </h3>
-                  <span className="rounded-full bg-gray-900 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-white dark:bg-white dark:text-gray-900">
-                    Perfil
-                  </span>
+            <aside className="hidden h-full min-h-0 flex-col gap-4 lg:flex">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar">
+                <div className="rounded-3xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                      Recursos
+                    </h3>
+                    <span className="rounded-full bg-gray-900 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-white dark:bg-white dark:text-gray-900">
+                      Perfil
+                    </span>
+                  </div>
+                  <div className="mt-4">
+                    <AssistantResources userRole={userRole} collaboratorFunction={collaboratorFunction} />
+                  </div>
                 </div>
-                <div className="mt-4">
-                  <AssistantResources userRole={userRole} collaboratorFunction={collaboratorFunction} />
-                </div>
-              </div>
 
-              <div className="rounded-3xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
-                    Biblioteca de Prompts
-                  </h3>
-                  <Sparkles className="h-4 w-4 text-brand-600" />
-                </div>
-                <div className="mt-4 space-y-3">
-                  {Object.entries(promptLibrary).map(([category, prompts]) => (
-                    <PromptCategoryCard
-                      key={category}
-                      title={category}
-                      prompts={prompts}
-                      onSelect={text => setInput(text)}
-                    />
-                  ))}
+                <div className="mt-4 rounded-3xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                      Biblioteca de Prompts
+                    </h3>
+                    <Sparkles className="h-4 w-4 text-brand-600" />
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {Object.entries(promptLibrary).map(([category, prompts]) => (
+                      <PromptCategoryCard
+                        key={category}
+                        title={category}
+                        prompts={prompts}
+                        isOpen={openPromptCategory === category}
+                        onToggle={() => setOpenPromptCategory(prev => (prev === category ? '' : category))}
+                        onSelect={text => setInput(text)}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </aside>

@@ -32,9 +32,10 @@ describe('StructuredResponse', () => {
   });
 
   it('renderiza JSON quando presente em bloco', async () => {
+    const jsonBlock = '```json\n{"ok": true}\n```';
     render(
       <StructuredResponse
-        text="RESUMO: ```json\n{\"ok\": true}\n```"
+        text={`RESUMO: ${jsonBlock}`}
         renderText={renderText}
       />
     );

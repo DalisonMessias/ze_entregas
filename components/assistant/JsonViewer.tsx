@@ -63,7 +63,7 @@ const renderJsonCode = (json: string) => {
 
 const renderTable = (rows: Record<string, any>[]) => {
   const columns = Array.from(
-    rows.reduce((acc, row) => {
+    rows.reduce<Set<string>>((acc, row) => {
       Object.keys(row || {}).forEach(key => acc.add(key));
       return acc;
     }, new Set<string>())
@@ -265,7 +265,9 @@ export const JsonViewer: React.FC<JsonViewerProps> = ({ jsonText }) => {
 
       {view === 'visual' ? (
         <div className="space-y-3">
-          {friendlyViews}
+          {friendlyViews.map((viewItem, index) => (
+            <div key={`friendly-${index}`}>{viewItem}</div>
+          ))}
           <div className="rounded-xl border border-gray-200 bg-white/90 p-3 dark:border-gray-800 dark:bg-gray-900/80">
             <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
               <span>Estrutura</span>

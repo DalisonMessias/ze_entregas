@@ -1,0 +1,8 @@
+
+- Implementação de escolha entre Conta Pessoal e Corporativa no Admin: Concluído.
+- Atualização da RPC admin_adjust_balance para suportar p_wallet_type: Concluído.
+- Correção da busca de saldos em cloud.ts usando driver_wallets em vez de wallets: Concluído.
+- Atualização da tipagem AdminWalletUser para suportar personal_balance: Concluído.
+- Exibição de saldos ZePay e ZeBank simultaneamente no Admin: Concluído.
+- Implementação completa do Sistema de Seguros (Tabelas, Tipos e Serviços): Concluído.
+- Correção de conflito de gatilhos (triggers) no banco de dados de Seguros: Concluído.

@@ -1,6 +1,28 @@
-﻿import { DailySummary, DailyTransaction, ShopSettings, UserRole } from '../../types';
+import { DailySummary, DailyTransaction, UserRole } from '../../types';
 import { getPermittedTabsForRole, getRoleLabel } from '../../utils/accessControl';
-import { CollaboratorFunction } from './assistantResources';
+import { CollaboratorFunction } from './assistantResourcesData';
+
+export interface AssistantStoreInsights {
+  productsTotal: number;
+  productsActive: number;
+  productsInactive: number;
+  addonGroupsTotal: number;
+  topProducts: Array<{ name: string; price: number; stock: number | null }>;
+  internalOrdersRecent: number;
+  internalOrdersPending: number;
+  report?: {
+    totalRequests: number;
+    totalValue: number;
+    completedCount: number;
+    cancelledCount: number;
+    failedCount: number;
+    peakHours: Array<{ hour: number; count: number }>;
+  } | null;
+  financial?: {
+    corporateBalance: number;
+    recentTransactions: Array<{ type: string; amount: number; created_at?: string; description?: string }>;
+  } | null;
+}
 
 export const getBusinessStatus = () => {
   const now = new Date();
@@ -99,9 +121,11 @@ interface SystemPromptContext {
   walletBalance: number;
   userCity: string;
   userLocation: { lat: number; lng: number } | null;
-  shopSettings?: ShopSettings | null;
+  storeName?: string | null;
+  storeCity?: string | null;
   route: string;
   collaboratorFunction?: CollaboratorFunction | null;
+  storeInsights?: AssistantStoreInsights | null;
 }
 
 export const buildSystemPrompt = (context: SystemPromptContext) => {
@@ -123,17 +147,31 @@ export const buildSystemPrompt = (context: SystemPromptContext) => {
   const permissions = getPermittedTabsForRole(context.userRole).join(', ');
   const roleLabel = getRoleLabel(context.userRole);
 
-  const shopContext = context.shopSettings
+  const shopContext = context.storeName || context.storeCity
     ? `
 LOJA/UNIDADE:
-- Nome: ${context.shopSettings.shop_name || 'Não informado'}
-- Cidade: ${context.shopSettings.shop_city || 'Não informada'}
+- Nome: ${context.storeName || 'Não informado'}
+- Cidade: ${context.storeCity || 'Não informada'}
 `
     : '';
 
   const collaboratorContext = context.collaboratorFunction
     ? `
 FUNÇÃO DO COLABORADOR: ${context.collaboratorFunction === 'kitchen' ? 'Cozinha' : 'Atendimento'}
+`
+    : '';
+
+  const storeInsightsContext = context.userRole === 'store_partner' && context.storeInsights
+    ? `
+CONTEXTO OPERACIONAL DA LOJA (USUÁRIO LOGADO):
+- Produtos totais: ${context.storeInsights.productsTotal}
+- Produtos ativos: ${context.storeInsights.productsActive}
+- Produtos inativos: ${context.storeInsights.productsInactive}
+- Grupos de adicionais/derivados: ${context.storeInsights.addonGroupsTotal}
+- Pedidos internos recentes: ${context.storeInsights.internalOrdersRecent}
+- Pedidos internos pendentes: ${context.storeInsights.internalOrdersPending}
+- Top produtos (amostra): ${context.storeInsights.topProducts.map(item => `${item.name} (R$ ${item.price.toFixed(2)})`).join(', ') || 'Sem dados'}
+- Saldo corporativo (ZePay): R$ ${(context.storeInsights.financial?.corporateBalance || 0).toFixed(2)}
 `
     : '';
 
@@ -152,14 +190,16 @@ CONTEXTO DO USUÁRIO:
 - Saldo (quando aplicável): R$ ${context.walletBalance.toFixed(2)}
 - Permissões relevantes: ${permissions}
 - ${locationContext}
-${collaboratorContext}${shopContext}
+${collaboratorContext}${shopContext}${storeInsightsContext}
 ${businessRule}
 
 DIRETRIZES:
 - Identifique a intenção do usuário e confirme brevemente o objetivo antes de detalhar.
 - Responda de forma curta e objetiva por padrão (mobile-first).
 - Quando necessário, adicione detalhes em um bloco separado.
-- Se usar dados estruturados, prefira JSON puro ou bloco ```json```.
+- Se usar dados estruturados, prefira JSON puro ou bloco \`\`\`json\`\`\`.
+- Nunca misture dados de outro usuário/loja.
+- Se o perfil for lojista, priorize respostas com foco em catálogo, pedidos, financeiro e operação da loja logada.
 
 FORMATO PADRÃO:
 RESUMO: (1 a 3 frases)
@@ -171,10 +211,31 @@ interface UserPromptContext {
   dailySummary: DailySummary;
   transactions: DailyTransaction[];
   userInput: string;
+  userRole: UserRole;
+  storeInsights?: AssistantStoreInsights | null;
 }
 
-export const buildUserPrompt = ({ dailySummary, transactions, userInput }: UserPromptContext) => {
+export const buildUserPrompt = ({
+  dailySummary,
+  transactions,
+  userInput,
+  userRole,
+  storeInsights
+}: UserPromptContext) => {
   const recentTransactions = transactions.slice(-5);
+  const storeBlock = userRole === 'store_partner' && storeInsights
+    ? `
+DADOS REAIS DO LOJISTA (LOJA LOGADA):
+- Produtos: ${storeInsights.productsTotal} (ativos: ${storeInsights.productsActive}, inativos: ${storeInsights.productsInactive})
+- Adicionais/derivados: ${storeInsights.addonGroupsTotal} grupos
+- Pedidos internos pendentes: ${storeInsights.internalOrdersPending}
+- Pedidos internos recentes: ${storeInsights.internalOrdersRecent}
+- Relatório rápido: ${storeInsights.report
+        ? `requisições=${storeInsights.report.totalRequests}, valor=${storeInsights.report.totalValue}, concluídos=${storeInsights.report.completedCount}, cancelados=${storeInsights.report.cancelledCount}`
+        : 'indisponível'}
+- Financeiro ZePay: saldo corporativo R$ ${(storeInsights.financial?.corporateBalance || 0).toFixed(2)}
+`
+    : '';
 
   return `DADOS DO DIA:
 - Lucro: R$ ${dailySummary.profit.toFixed(2)}
@@ -182,10 +243,10 @@ export const buildUserPrompt = ({ dailySummary, transactions, userInput }: UserP
 - KM rodados: ${dailySummary.km.toFixed(1)}
 - Meta diária: ${dailySummary.goal ? `R$ ${dailySummary.goal.toFixed(2)}` : 'Não definida'}
 - Últimas transações: ${JSON.stringify(recentTransactions)}
+${storeBlock}
 
 PERGUNTA DO USUÁRIO:
 ${userInput}
 
 Lembrete: mantenha o padrão RESUMO/DETALHES e seja direto.`;
 };
-

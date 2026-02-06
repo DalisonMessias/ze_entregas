@@ -31,6 +31,7 @@ export const AdminWalletControl: React.FC = () => {
     const [amount, setAmount] = useState('');
     const [reason, setReason] = useState('');
     const [actionType, setActionType] = useState<'ADD' | 'REMOVE'>('ADD');
+    const [walletType, setWalletType] = useState<'PERSONAL' | 'CORPORATE'>('PERSONAL');
     const [processing, setProcessing] = useState(false);
 
     const { alert } = useDialog();
@@ -53,15 +54,21 @@ export const AdminWalletControl: React.FC = () => {
     };
 
     const filteredWallets = wallets.filter(w => {
-        const matchesType = filter === 'ALL' || w.role === filter;
+        const isDelivery = w.role === 'delivery_partner' || w.role === 'delivery_person';
+        const matchesType = filter === 'ALL' ||
+            (filter === 'store_partner' && w.role === 'store_partner') ||
+            (filter === 'DELIVERY' && isDelivery);
+
         const matchesSearch = (w.name || '').toLowerCase().includes(search.toLowerCase()) ||
             (w.email || '').toLowerCase().includes(search.toLowerCase());
         return matchesType && matchesSearch;
     });
 
-    const handleOpenModal = (user: AdminWalletUser, type: 'ADD' | 'REMOVE') => {
+    const handleOpenModal = (user: AdminWalletUser, action: 'ADD' | 'REMOVE') => {
         setSelectedUser(user);
-        setActionType(type);
+        setActionType(action);
+        // Default: Se for lojista, talvez queira corporativo. Se for entregador, sempre pessoal.
+        setWalletType(user.role === 'store_partner' ? 'CORPORATE' : 'PERSONAL');
         setAmount('');
         setReason('');
     };
@@ -85,7 +92,7 @@ export const AdminWalletControl: React.FC = () => {
 
         setProcessing(true);
         try {
-            await cloud.adminAdjustBalance(selectedUser.user_id, finalAmount, reason);
+            await cloud.adminAdjustBalance(selectedUser.user_id, finalAmount, reason, walletType);
             await alert({ title: 'Ajuste', message: 'Saldo ajustado com sucesso!' });
             setSelectedUser(null);
             loadData();
@@ -101,9 +108,9 @@ export const AdminWalletControl: React.FC = () => {
             {/* Header / Controls */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
                 <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto no-scrollbar">
-                    <button onClick={() => setFilter('ALL')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'ALL' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Todos</button>
-                    <button onClick={() => setFilter('store_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'store_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojistas</button>
-                    <button onClick={() => setFilter('DELIVERY')} className={`px-4 py-2 rounded-lg text-sm font-bold ${filter === 'DELIVERY' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregadores</button>
+                    <button onClick={() => setFilter('ALL')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${filter === 'ALL' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Todos</button>
+                    <button onClick={() => setFilter('store_partner')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${filter === 'store_partner' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Lojistas</button>
+                    <button onClick={() => setFilter('DELIVERY')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${filter === 'DELIVERY' ? 'bg-white dark:bg-gray-700 shadow text-brand-600' : 'text-gray-500'}`}>Entregadores</button>
                 </div>
 
                 <div className="flex gap-2 w-full md:w-auto">
@@ -131,12 +138,13 @@ export const AdminWalletControl: React.FC = () => {
                             <tr>
                                 <th className="px-4 py-3">Usuário</th>
                                 <th className="px-4 py-3">Tipo</th>
-                                <th className="px-4 py-3">Saldo Atual</th>
+                                <th className="px-4 py-3">Saldo ZePay (Corp)</th>
+                                <th className="px-4 py-3">Saldo ZeBank (Pers)</th>
                                 <th className="px-4 py-3 text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {loading && <tr><td colSpan={4} className="text-center p-8"><Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-600" /></td></tr>}
+                            {loading && <tr><td colSpan={5} className="text-center p-8"><Loader2 className="w-6 h-6 animate-spin mx-auto text-brand-600" /></td></tr>}
                             {!loading && filteredWallets.map(user => (
                                 <tr key={user.user_id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                     <td className="px-4 py-3">
@@ -145,11 +153,14 @@ export const AdminWalletControl: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${user.role === 'store_partner' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                            {getRoleLabel(user.role)} {/* Usar getRoleLabel aqui */}
+                                            {getRoleLabel(user.role)}
                                         </span>
                                     </td>
                                     <td className={`px-4 py-3 font-mono font-bold ${user.balance < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
-                                        {formatCurrency(user.balance)}
+                                        {user.role === 'store_partner' ? formatCurrency(user.balance) : '-'}
+                                    </td>
+                                    <td className={`px-4 py-3 font-mono font-bold ${user.personal_balance < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
+                                        {formatCurrency(user.personal_balance || 0)}
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex justify-end gap-2">
@@ -172,7 +183,7 @@ export const AdminWalletControl: React.FC = () => {
                                 </tr>
                             ))}
                             {!loading && filteredWallets.length === 0 && (
-                                <tr><td colSpan={4} className="text-center p-8 text-gray-400">Nenhum usuário encontrado.</td></tr>
+                                <tr><td colSpan={5} className="text-center p-8 text-gray-400">Nenhum usuário encontrado.</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -196,8 +207,34 @@ export const AdminWalletControl: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
+                            {/* Account Type Selection */}
+                            {selectedUser.role === 'store_partner' && (
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase">Escolha a Conta</label>
+                                    <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl">
+                                        <button
+                                            onClick={() => setWalletType('PERSONAL')}
+                                            className={`py-2 text-xs font-bold rounded-lg transition-all ${walletType === 'PERSONAL' ? 'bg-white dark:bg-gray-600 text-brand-600 shadow-sm' : 'text-gray-500'}`}
+                                        >
+                                            PESSOAL (ZeBank)
+                                        </button>
+                                        <button
+                                            onClick={() => setWalletType('CORPORATE')}
+                                            className={`py-2 text-xs font-bold rounded-lg transition-all ${walletType === 'CORPORATE' ? 'bg-white dark:bg-gray-600 text-brand-600 shadow-sm' : 'text-gray-500'}`}
+                                        >
+                                            CORP (ZePay)
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 italic">
+                                        {walletType === 'PERSONAL'
+                                            ? 'O ajuste afetará o saldo individual do parceiro (ZeBank).'
+                                            : 'O ajuste afetará o saldo de ganhos da loja (ZePay).'}
+                                    </p>
+                                </div>
+                            )}
+
                             <CustomInput
-                                label="Valor (R$)"
+                                label={`Valor para ${walletType === 'PERSONAL' ? 'ZeBank' : 'ZePay'} (R$)`}
                                 mask="currency"
                                 value={amount}
                                 onChange={e => setAmount(e.target.value)}

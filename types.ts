@@ -759,6 +759,43 @@ export interface PartnerPayment {
     partner_email?: string; // joined
 }
 
+export interface InsurancePartner {
+    id: string;
+    name: string;
+    logo_url?: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface InsurancePlan {
+    id: string;
+    partner_id: string;
+    title: string;
+    description?: string;
+    price_mensal: number;
+    features: string[];
+    is_popular: boolean;
+    is_active: boolean;
+    deductible_percent?: number;
+    deductible_info?: string;
+    created_at: string;
+    updated_at: string;
+    partner?: InsurancePartner;
+}
+
+export interface InsuranceSubscription {
+    id: string;
+    user_id: string;
+    plan_id: string;
+    status: 'ACTIVE' | 'CANCELLED' | 'EXPIRED';
+    payment_method: 'WALLET' | 'CARD';
+    next_billing_date: string | null;
+    created_at: string;
+    updated_at: string;
+    plan?: InsurancePlan;
+}
+
 export interface BlacklistEntry {
     id: string;
     user_id: string;
@@ -1106,7 +1143,7 @@ export interface AdminWalletUser {
     email: string;
     role: string;
     balance: number; // Saldo da carteira da loja (store_wallets)
-    user_balance?: number; // Saldo da carteira do usuário (wallets)
+    personal_balance?: number; // Saldo da carteira pessoal (driver_wallets)
     is_super_store?: boolean;
 }
 
