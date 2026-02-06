@@ -1,555 +1,634 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-// GoogleGenAI import removido - Gerenciado pelo cloud.generateAIContent
-import { Send, Eraser, Loader2, Mic, AlertTriangle, ArrowLeft, ChevronLeft, Lock } from 'lucide-react';
-import { ChatMessage, DailySummary, DailyTransaction, UserRole, StoreWallet } from '../types';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ChevronRight,
+  Eraser,
+  Loader2,
+  Mic,
+  Plus,
+  Send,
+  Sparkles
+} from 'lucide-react';
+import { ChatMessage, DailySummary, DailyTransaction, ShopSettings, StoreWallet, UserRole } from '../types';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
 import { SparklesIcon } from './SparklesIcon';
 import { useDialog } from '../utils/dialogService';
-
-// Helper para verificar horário comercial (Mantido do original)
-const getBusinessStatus = () => {
-    const now = new Date();
-    const day = now.getDay();
-    const hour = now.getHours();
-
-    const isWeekDay = day >= 1 && day <= 5;
-    const isWorkingHours = hour >= 9 && hour < 18;
-
-    const isOpen = isWeekDay && isWorkingHours;
-
-    return {
-        isOpen,
-        currentTime: now.toLocaleString('pt-BR', { weekday: 'long', hour: '2-digit', minute: '2-digit' }),
-        nextOpen: "Segunda a Sexta, das 09h às 18h"
-    };
-};
-
-
-// --- ENGENHARIA DE PROMPT (Mantida do original) ---
-const getSystemInstruction = (
-    userRole: UserRole,
-    userName: string,
-    userEmail: string,
-    walletBalance: number,
-    userCity: string,
-    userLocation: { lat: number; lng: number } | null
-) => {
-    const { isOpen, currentTime, nextOpen } = getBusinessStatus();
-
-    const locationContext = userLocation
-        ? `[COORDENADAS GPS ATUAIS: ${userLocation.lat}, ${userLocation.lng}]`
-        : `[COORDENADAS GPS ATUAIS: INDISPONÍVEL/OFFLINE]`;
-
-    const businessRule = isOpen
-        ? `[STATUS ATENDIMENTO: ABERTO]
-           - O suporte humano ESTÁ DISPONÍVEL agora.
-           - Se o problema for complexo ou o usuário pedir explicitamente, você PODE orientar a buscar a aba "Suporte" para falar no WhatsApp ou abrir chamado.`
-        : `[STATUS ATENDIMENTO: FECHADO - ALERTA MÁXIMO]
-           - Horário Atual: ${currentTime}. O suporte humano está FECHADO.
-           - Reabertura: ${nextOpen}.
-           - Você DEVE tentar resolver tudo sozinho.
-           - Se o usuário pedir humano, diga que o suporte volta no próximo dia útil.`;
-
-    let roleSpecificInstructions = '';
-    switch (userRole) {
-        case 'admin':
-            roleSpecificInstructions = `
-            ESPECIALIZAÇÃO - ADMINISTRADOR:
-            - Aja como um analista de sistemas sênior.
-            - Foco em dados agregados, saúde do sistema, e gerenciamento de usuários.
-            `;
-            break;
-        case 'store_partner':
-            roleSpecificInstructions = `
-            ESPECIALIZAÇÃO - LOJISTA:
-            - Aja como um parceiro de logística focado em negócios.
-            - Foco em ajudar a loja a enviar pedidos, gerenciar a carteira (saldo atual: R$ ${walletBalance.toFixed(2)}) e entender os custos.
-            `;
-            break;
-        case 'delivery_partner':
-            roleSpecificInstructions = `
-            ESPECIALIZAÇÃO - ENTREGADOR PARCEIRO:
-            - Aja como um parceiro "do corre", um colega de equipe que entende o dia a dia na rua.
-            - Foco em ajudar o entregador a ganhar mais, encontrar corridas e gerenciar sua rotina.
-            `;
-            break;
-        default:
-            roleSpecificInstructions = `
-            ESPECIALIZAÇÃO - ENTREGADOR (USO PESSOAL):
-            - Aja como um assistente pessoal para controle de entregas diárias.
-            - Foco em ajudar o usuário a registrar suas entregas manuais, ver histórico e usar as ferramentas do app.
-            `;
-            break;
-    }
-
-    return `Você é o Zé, assistente virtual inteligente do app Zé Entregas.
-    
-    CONTEXTO DO USUÁRIO:
-    - Nome: ${userName}
-    - Email: ${userEmail}
-    - Função no App: ${userRole}
-    - Cidade Principal: ${userCity}
-    - ${locationContext}
-    
-    ${businessRule}
-    
-    ${roleSpecificInstructions}
-    
-    SUAS FUNÇÕES GERAIS:
-    - Analisar dados fornecidos pelo usuário.
-    - Explicar como usar as funcionalidades do app.
-    - Dar dicas e conselhos.
-    - **USAR LOCALIZAÇÃO DE FORMA INTELIGENTE:**
-        - Perguntas GERAIS: use "Cidade Principal".
-        - Perguntas PRECISAS: use "Coordenadas GPS Atuais".
-
-    TOM DE VOZ GERAL:
-    - Amigável, direto e profissional.
-    - Use emojis ocasionalmente 🏍️📦.
-    - Respostas curtas e objetivas (mobile-first).
-    `;
-};
+import { AssistantTabs } from './assistant/AssistantTabs';
+import { AssistantResources } from './assistant/AssistantResources';
+import { StructuredResponse } from './assistant/StructuredResponse';
+import { CollaboratorFunction } from './assistant/assistantResources';
+import { buildSystemPrompt, buildUserPrompt, getQuickSuggestions, promptLibrary } from './assistant/assistantPrompts';
+import { getRoleLabel } from '../utils/accessControl';
 
 interface ChatAssistantProps {
-    dailySummary: DailySummary;
-    transactions: DailyTransaction[];
-    userId: string;
-    userRole: UserRole;
-    onClose: () => void;
+  dailySummary: DailySummary;
+  transactions: DailyTransaction[];
+  userId: string;
+  userRole: UserRole;
+  onClose: () => void;
 }
 
+const formatTime = (date: Date) =>
+  date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
 const renderFormattedText = (text: string, isUser: boolean) => {
-    const textColor = isUser ? 'text-white' : 'text-gray-700 dark:text-gray-300';
-    const strongColor = isUser ? 'text-white' : 'text-gray-900 dark:text-white';
-    const headingColor = isUser ? 'text-white' : 'text-gray-900 dark:text-white';
-    const bulletColor = isUser ? 'bg-white' : 'bg-brand-500';
-    const numberColor = isUser ? 'text-white' : 'text-brand-600 dark:text-brand-400';
+  const textColor = isUser ? 'text-white' : 'text-gray-700 dark:text-gray-200';
+  const strongColor = isUser ? 'text-white' : 'text-gray-900 dark:text-white';
+  const headingColor = isUser ? 'text-white' : 'text-gray-900 dark:text-white';
+  const bulletColor = isUser ? 'bg-white' : 'bg-brand-500';
+  const numberColor = isUser ? 'text-white' : 'text-brand-600 dark:text-brand-400';
 
-    // Helper to process inline bolding within a line
-    const processBold = (line: string) => {
-        const parts = line.split(/(\*\*.*?\*\*)/g);
-        return parts.map((part, index) => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-                return <strong key={index} className={`font-bold ${strongColor}`}>{part.slice(2, -2)}</strong>;
-            }
-            return part;
-        });
-    };
-
-    const lines = text.split('\n');
-    const elements: React.ReactNode[] = [];
-
-    lines.forEach((line, index) => {
-        const trimmedLine = line.trim();
-        if (!trimmedLine) return;
-
-        const ulMatch = trimmedLine.match(/^\*\s+(.*)/);
-        if (ulMatch) {
-            elements.push(
-                <div key={index} className="flex items-start my-1 ml-2">
-                    <span className={`mr-2 mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${bulletColor}`}></span>
-                    <span className={`flex-1 leading-relaxed ${textColor}`}>{processBold(ulMatch[1])}</span>
-                </div>
-            );
-            return;
-        }
-
-        const olMatch = trimmedLine.match(/^(\d+)\.\s+(.*)/);
-        if (olMatch && trimmedLine.length < 100) {
-            elements.push(
-                <div key={index} className="flex items-start my-2 ml-1">
-                    <strong className={`mr-2 font-bold ${numberColor}`}>{olMatch[1]}.</strong>
-                    <span className={`flex-1 leading-relaxed ${textColor}`}>{processBold(olMatch[2])}</span>
-                </div>
-            );
-            return;
-        }
-
-        const headingMatch = trimmedLine.match(/^(#+)\s+(.*)/);
-        if (headingMatch) {
-            const level = headingMatch[1].length;
-            const content = processBold(headingMatch[2]);
-            const className = level === 1 ? "text-lg font-black mt-4 mb-2" : "text-base font-bold mt-3 mb-1";
-            elements.push(<div key={index} className={`${className} ${headingColor}`}>{content}</div>);
-            return;
-        }
-
-        elements.push(<p key={index} className={`my-1 leading-relaxed ${textColor}`}>{processBold(trimmedLine)}</p>);
-    });
-
-    return <div className="space-y-1">{elements}</div>;
-};
-
-export const ChatAssistant: React.FC<ChatAssistantProps> = ({ dailySummary, transactions, userId, userRole, onClose }) => {
-    const [messages, setMessages] = useState<ChatMessage[]>(storage.getAssistantHistory());
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [isListening, setIsListening] = useState(false);
-    const [isFocused, setIsFocused] = useState(false);
-
-    const { alert, confirm } = useDialog();
-
-    // Config State
-    const [apiKey, setApiKey] = useState<string | null>(null);
-    const [isConfigLoading, setIsConfigLoading] = useState(true);
-
-    const [userProfile, setUserProfile] = useState({ name: 'Usuário', email: '', city: 'Não definida' });
-    const [wallet, setWallet] = useState<StoreWallet | null>(null);
-
-    const inputRef = useRef<HTMLTextAreaElement>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const init = async () => {
-            setIsConfigLoading(true);
-            try {
-                // 1. Fetch User Data
-                const client = cloud.getClient();
-                if (client) {
-                    const { data: { user } } = await (client.auth as any).getUser();
-                    setUserProfile({
-                        name: user?.user_metadata?.name || 'Usuário',
-                        email: user?.email || '',
-                        city: user?.user_metadata?.city || 'Não definida'
-                    });
-                }
-                if (userRole === 'store_partner') {
-                    const w = await cloud.getMyWallet();
-                    setWallet(w);
-                }
-
-                // 2. Fetch API Key from DB (Critical)
-                const settings = await cloud.getShopSettings();
-                if (settings?.google_gemini_api_key) {
-                    setApiKey(settings.google_gemini_api_key);
-                } else {
-                    const envKey = (process as any)?.env?.GEMINI_API_KEY || (import.meta as any)?.env?.VITE_GEMINI_API_KEY;
-                    if (envKey) setApiKey(envKey);
-                }
-            } catch (e) {
-                console.error("Failed to init chat", e);
-                setError("Erro ao inicializar chat. Verifique sua conexão.");
-            } finally {
-                setIsConfigLoading(false);
-            }
-        };
-        init();
-    }, [userRole]);
-
-    useEffect(() => {
-        if (messages.length > 0) {
-            storage.saveAssistantHistory(messages);
-        }
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
-    useEffect(() => {
-        if (inputRef.current) {
-            inputRef.current.style.height = 'auto';
-            inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
-        }
-    }, [input]);
-
-    const handleSend = async () => {
-        if (!input.trim() || isLoading) return;
-
-        if (!apiKey) {
-            setError("O assistente está indisponível no momento (Chave de API não configurada).");
-            return;
-        }
-
-        const userMessage: ChatMessage = { role: 'user', parts: [{ text: input }] };
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            const fullContext = `
-                DADOS DO DIA ATUAL:
-                - Lucro: R$ ${dailySummary.profit.toFixed(2)}
-                - Entregas: ${dailySummary.deliveryCount}
-                - KM Rodados: ${dailySummary.km.toFixed(1)}
-                - Meta Diária: ${dailySummary.goal ? `R$ ${dailySummary.goal.toFixed(2)}` : 'Não definida'}
-                - Últimas Transações: ${JSON.stringify(transactions.slice(-5))}
-            `;
-
-            const systemInstruction = getSystemInstruction(
-                userRole,
-                userProfile.name,
-                userProfile.email,
-                wallet?.balance_decimal || 0,
-                userProfile.city,
-                dailySummary.location
-            );
-
-            const promptWithContext = `${fullContext}\n\nPERGUNTA DO USUÁRIO: ${input}`;
-
-            const response = await cloud.generateAIContent(promptWithContext, apiKey, systemInstruction);
-
-            if (response.text) {
-                const modelMessage: ChatMessage = { role: 'model', parts: [{ text: response.text }] };
-                setMessages(prev => [...prev, modelMessage]);
-            } else {
-                throw new Error("Recebi uma resposta vazia. Tente reformular sua pergunta.");
-            }
-
-        } catch (e: any) {
-            console.error(e);
-            let errorMessage = "Ocorreu um erro ao conectar com o assistente.";
-            if (e.message.includes('API key not valid') || e.message.includes('400')) {
-                errorMessage = "Chave da IA inválida. Contate o administrador.";
-            } else if (e.message.includes('rate limit')) {
-                errorMessage = "Muitas perguntas! Aguarde um instante.";
-            } else {
-                errorMessage = e.message;
-            }
-            setError(errorMessage);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleClearHistory = async () => {
-        const ok = await confirm({ title: 'Limpar histórico', message: 'Limpar todo o histórico da conversa?' });
-        if (!ok) return;
-        setMessages([]);
-        storage.clearAssistantHistory();
-    };
-
-    const handleVoiceInput = async () => {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            await alert({ title: 'Voz', message: 'Seu navegador não suporta voz.' });
-            return;
-        }
-
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'pt-BR';
-        recognition.interimResults = true;
-
-        setIsListening(true);
-
-        recognition.onresult = (event: any) => {
-            let transcript = '';
-            for (let i = 0; i < event.results.length; i++) {
-                transcript += event.results[i][0].transcript;
-            }
-            setInput(transcript);
-        };
-        recognition.onend = () => {
-            setIsListening(false);
-            // Opcional: auto-enviar após terminar de falar
-            // setTimeout(() => handleSend(), 500); 
-        };
-        recognition.start();
-    };
-
-    // --- Dynamic Suggestions Based on Role ---
-    const getSuggestions = (role: UserRole) => {
-        switch (role) {
-            case 'admin':
-                return [
-                    { label: "📊 Saúde do sistema", text: "Me dê um resumo geral da saúde do sistema hoje." },
-                    { label: "🛡️ Alertas de segurança", text: "Existem alertas de segurança pendentes?" },
-                    { label: "💡 Gestão de usuários", text: "Dicas para melhorar a gestão de usuários na plataforma." }
-                ];
-            case 'store_partner':
-                return [
-                    { label: "💰 Meu faturamento", text: "Como está meu faturamento hoje e quais as previsões?" },
-                    { label: "🚀 Atrair clientes", text: "Me dê dicas de marketing para atrair mais pedidos." },
-                    { label: "📦 Status dos pedidos", text: "Resuma o status dos meus pedidos atuais." }
-                ];
-            case 'delivery_partner':
-                return [
-                    { label: "🏍️ Lucro de hoje", text: "Quanto eu lucrei hoje e quantas entregas fiz?" },
-                    { label: "⛽ Economizar combustível", text: "Me dê dicas práticas para economizar combustível na moto." },
-                    { label: "⭐ Melhorar avaliação", text: "O que posso fazer para melhorar minha avaliação com as lojas?" }
-                ];
-            default: // User
-                return [
-                    { label: "💵 Balanço do dia", text: "Faça um balanço das minhas entregas e gastos de hoje." },
-                    { label: "📉 Registrar gasto", text: "Como faço para registrar um gasto novo?" },
-                    { label: "🎯 Bater a meta", text: "Dicas para me ajudar a bater minha meta diária." }
-                ];
-        }
-    };
-
-    const suggestions = getSuggestions(userRole);
-
-    if (isConfigLoading) {
+  const processBold = (line: string) => {
+    const parts = line.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
         return (
-            <div className="fixed inset-0 z-[100] bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-                <Loader2 className="w-10 h-10 animate-spin text-brand-600" />
-            </div>
+          <strong key={index} className={`font-bold ${strongColor}`}>
+            {part.slice(2, -2)}
+          </strong>
         );
+      }
+      return part;
+    });
+  };
+
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+
+  lines.forEach((line, index) => {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) return;
+
+    const ulMatch = trimmedLine.match(/^\*\s+(.*)/);
+    if (ulMatch) {
+      elements.push(
+        <div key={index} className="flex items-start gap-2">
+          <span className={`mt-1.5 h-1.5 w-1.5 rounded-full ${bulletColor}`} />
+          <span className={`flex-1 leading-relaxed ${textColor}`}>{processBold(ulMatch[1])}</span>
+        </div>
+      );
+      return;
     }
 
-    return (
-        <div className="fixed inset-0 z-[100] bg-gray-50 dark:bg-gray-900 flex flex-col h-[100dvh]">
-            {/* Header Flutuante / Fixo */}
-            <div className="flex-shrink-0 px-4 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 flex justify-between items-center shadow-sm z-10">
-                <button
-                    onClick={onClose}
-                    className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
-                >
-                    <ArrowLeft className="w-6 h-6" />
-                </button>
+    const olMatch = trimmedLine.match(/^(\d+)\.\s+(.*)/);
+    if (olMatch && trimmedLine.length < 120) {
+      elements.push(
+        <div key={index} className="flex items-start gap-2">
+          <strong className={`font-bold ${numberColor}`}>{olMatch[1]}.</strong>
+          <span className={`flex-1 leading-relaxed ${textColor}`}>{processBold(olMatch[2])}</span>
+        </div>
+      );
+      return;
+    }
 
-                <div className="flex flex-col items-center">
-                    <div className="flex items-center gap-2">
-                        <SparklesIcon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
-                        <span className="font-black text-lg text-gray-900 dark:text-white tracking-tight">Assistente Zé</span>
+    const headingMatch = trimmedLine.match(/^(#+)\s+(.*)/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const content = processBold(headingMatch[2]);
+      const className = level === 1 ? 'text-lg font-black mt-4 mb-2' : 'text-base font-bold mt-3 mb-1';
+      elements.push(
+        <div key={index} className={`${className} ${headingColor}`}>
+          {content}
+        </div>
+      );
+      return;
+    }
+
+    elements.push(
+      <p key={index} className={`leading-relaxed ${textColor}`}>
+        {processBold(trimmedLine)}
+      </p>
+    );
+  });
+
+  return <div className="space-y-2">{elements}</div>;
+};
+
+const PromptCategoryCard = ({
+  title,
+  prompts,
+  onSelect
+}: {
+  title: string;
+  prompts: string[];
+  onSelect: (text: string) => void;
+}) => {
+  return (
+    <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-black uppercase tracking-widest text-gray-700 dark:text-gray-200">
+          {title}
+        </h4>
+        <ChevronRight className="h-4 w-4 text-gray-400" />
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {prompts.map(prompt => (
+          <button
+            key={prompt}
+            type="button"
+            onClick={() => onSelect(prompt)}
+            className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-600 transition-all hover:border-brand-300 hover:text-brand-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export const ChatAssistant: React.FC<ChatAssistantProps> = ({
+  dailySummary,
+  transactions,
+  userId,
+  userRole,
+  onClose
+}) => {
+  const [messages, setMessages] = useState<ChatMessage[]>(storage.getAssistantHistory());
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState('chat');
+  const [messageTimes, setMessageTimes] = useState<Record<number, string>>({});
+
+  const { alert, confirm } = useDialog();
+
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [isConfigLoading, setIsConfigLoading] = useState(true);
+
+  const [userProfile, setUserProfile] = useState({ name: 'Usuário', email: '', city: 'Não definida' });
+  const [wallet, setWallet] = useState<StoreWallet | null>(null);
+  const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
+  const [collaboratorFunction, setCollaboratorFunction] = useState<CollaboratorFunction | null>(null);
+
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const init = async () => {
+      setIsConfigLoading(true);
+      try {
+        const client = cloud.getClient();
+        if (client) {
+          const { data: { user } } = await (client.auth as any).getUser();
+          setUserProfile({
+            name: user?.user_metadata?.name || 'Usuário',
+            email: user?.email || '',
+            city: user?.user_metadata?.city || 'Não definida'
+          });
+        }
+
+        if (userRole === 'store_partner') {
+          const w = await cloud.getMyWallet();
+          setWallet(w);
+        }
+
+        let settings: ShopSettings | null = null;
+        try {
+          settings = await cloud.getShopSettings();
+          setShopSettings(settings);
+        } catch {
+          setShopSettings(null);
+        }
+
+        if (userRole === 'collaborator') {
+          try {
+            const stored = localStorage.getItem('ze_collaborator_session');
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              setCollaboratorFunction(parsed?.function === 'kitchen' ? 'kitchen' : 'waiter');
+            }
+          } catch {
+            setCollaboratorFunction('waiter');
+          }
+        }
+
+        if (settings?.google_gemini_api_key) {
+          setApiKey(settings.google_gemini_api_key);
+        } else {
+          const envKey = (process as any)?.env?.GEMINI_API_KEY || (import.meta as any)?.env?.VITE_GEMINI_API_KEY;
+          if (envKey) setApiKey(envKey);
+        }
+      } catch (e) {
+        console.error('Failed to init chat', e);
+        setError('Erro ao inicializar chat. Verifique sua conexão.');
+      } finally {
+        setIsConfigLoading(false);
+      }
+    };
+    init();
+  }, [userRole]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      storage.saveAssistantHistory(messages);
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    setMessageTimes(prev => {
+      const next = { ...prev };
+      messages.forEach((_, index) => {
+        if (!next[index]) next[index] = formatTime(new Date());
+      });
+      return next;
+    });
+  }, [messages.length]);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+    }
+  }, [input]);
+
+  const suggestions = useMemo(
+    () => getQuickSuggestions(userRole, collaboratorFunction),
+    [userRole, collaboratorFunction]
+  );
+
+  const handleSend = async (overrideText?: string) => {
+    const content = (overrideText ?? input).trim();
+    if (!content || isLoading) return;
+
+    if (!apiKey) {
+      setError('O Zé está indisponível no momento (Chave de API não configurada).');
+      return;
+    }
+
+    const userMessage: ChatMessage = { role: 'user', parts: [{ text: content }] };
+    setMessages(prev => [...prev, userMessage]);
+    setMessageTimes(prev => ({ ...prev, [messages.length]: formatTime(new Date()) }));
+    setInput('');
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const systemInstruction = buildSystemPrompt({
+        userRole,
+        userName: userProfile.name,
+        userEmail: userProfile.email,
+        walletBalance: wallet?.balance_decimal || 0,
+        userCity: userProfile.city,
+        userLocation: dailySummary.location,
+        shopSettings,
+        route: '/assistente',
+        collaboratorFunction
+      });
+
+      const promptWithContext = buildUserPrompt({
+        dailySummary,
+        transactions,
+        userInput: content
+      });
+
+      const response = await cloud.generateAIContent(promptWithContext, apiKey, systemInstruction);
+
+      if (response.text) {
+        const modelMessage: ChatMessage = { role: 'model', parts: [{ text: response.text }] };
+        setMessages(prev => [...prev, modelMessage]);
+        setMessageTimes(prev => ({ ...prev, [messages.length + 1]: formatTime(new Date()) }));
+      } else {
+        throw new Error('Recebi uma resposta vazia. Tente reformular sua pergunta.');
+      }
+    } catch (e: any) {
+      console.error(e);
+      let errorMessage = 'Ocorreu um erro ao conectar com o Zé.';
+      if (e.message.includes('API key not valid') || e.message.includes('400')) {
+        errorMessage = 'Chave da IA inválida. Contate o administrador.';
+      } else if (e.message.includes('rate limit')) {
+        errorMessage = 'Muitas perguntas! Aguarde um instante.';
+      } else {
+        errorMessage = e.message;
+      }
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    const ok = await confirm({ title: 'Novo chat', message: 'Deseja iniciar um novo chat e limpar o histórico?' });
+    if (!ok) return;
+    setMessages([]);
+    setMessageTimes({});
+    storage.clearAssistantHistory();
+  };
+
+  const handleVoiceInput = async () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      await alert({ title: 'Voz', message: 'Seu navegador não suporta voz.' });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.interimResults = true;
+
+    setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setInput(transcript);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
+
+  const status = !apiKey
+    ? { label: 'offline', color: 'bg-red-500', text: 'text-red-500' }
+    : isLoading
+      ? { label: 'ocupado', color: 'bg-amber-400', text: 'text-amber-500' }
+      : { label: 'online', color: 'bg-emerald-500', text: 'text-emerald-500' };
+
+  if (isConfigLoading) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="relative min-h-[100dvh] bg-slate-50 text-gray-900 dark:bg-gray-950"
+      style={{ fontFamily: '"Space Grotesk", "Sora", ui-sans-serif, system-ui' }}
+    >
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-24 right-[-6rem] h-72 w-72 rounded-full bg-gradient-to-br from-brand-200/40 via-white/10 to-transparent blur-3xl" />
+        <div className="absolute bottom-[-8rem] left-[-4rem] h-72 w-72 rounded-full bg-gradient-to-tr from-blue-200/30 via-white/10 to-transparent blur-3xl" />
+      </div>
+
+      <div className="relative z-10 flex min-h-[100dvh] flex-col">
+        <header className="sticky top-0 z-30 border-b border-white/60 bg-white/85 px-4 py-3 backdrop-blur dark:border-gray-800/60 dark:bg-gray-950/85">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white/90 text-gray-600 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <SparklesIcon className="h-5 w-5 text-brand-600" />
+                  <span className="text-lg font-black tracking-tight">Zé</span>
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                  <span className={`h-2 w-2 rounded-full ${status.color}`} />
+                  <span className={status.text}>{status.label}</span>
+                  <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[9px] text-white dark:bg-white dark:text-gray-900">
+                    {getRoleLabel(userRole)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleClearHistory}
+                className="hidden items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 md:flex"
+              >
+                <Plus className="h-4 w-4" />
+                Novo chat
+              </button>
+              <button
+                onClick={handleClearHistory}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 md:hidden"
+              >
+                <Eraser className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-hidden px-4 pb-4 pt-4">
+          <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="flex h-full flex-col gap-4">
+              <div className="md:hidden">
+                <AssistantTabs
+                  value={activeMobileTab}
+                  onChange={setActiveMobileTab}
+                  tabs={[
+                    { id: 'chat', label: 'Chat', icon: Sparkles },
+                    { id: 'resources', label: 'Recursos' },
+                    { id: 'details', label: 'Detalhes' }
+                  ]}
+                />
+              </div>
+
+              <div
+                className={`${
+                  activeMobileTab !== 'chat' ? 'hidden md:flex' : 'flex'
+                } flex-1 flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/70`}
+              >
+                {!apiKey && (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center text-xs font-bold text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
+                    <AlertTriangle className="mx-auto mb-2 h-6 w-6" />
+                    Zé indisponível. Chave de API não configurada.
+                  </div>
+                )}
+
+                <div className="flex-1 space-y-6 overflow-y-auto pr-1">
+                  {messages.length === 0 && apiKey ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-gray-500">
+                      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-brand-200/70 to-white/40 shadow-inner">
+                        <SparklesIcon className="h-10 w-10 text-brand-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white">Olá!</h2>
+                        <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">
+                          Sou o Zé, sua central inteligente. Pergunte sobre operação, pedidos, marketing ou suporte.
+                        </p>
+                      </div>
+                      <div className="grid w-full max-w-xs gap-2">
+                        {suggestions.map(suggestion => (
+                          <button
+                            key={suggestion.label}
+                            onClick={() => setInput(suggestion.text)}
+                            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left text-xs font-bold text-gray-600 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:text-brand-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                          >
+                            {suggestion.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    {apiKey ? (
-                        <span className="text-[10px] font-bold text-green-600 dark:text-green-400 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Online
-                        </span>
-                    ) : (
-                        <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
-                            <Lock className="w-3 h-3" /> Configuração Pendente
-                        </span>
-                    )}
+                  ) : (
+                    messages.map((msg, index) => (
+                      <div key={index} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`flex max-w-[85%] flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                          <div
+                            className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                              msg.role === 'user'
+                                ? 'bg-gray-900 text-white'
+                                : 'bg-white text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                            }`}
+                          >
+                            {msg.role === 'user' ? (
+                              renderFormattedText(msg.parts[0].text, true)
+                            ) : (
+                              <StructuredResponse
+                                text={msg.parts[0].text}
+                                renderText={text => renderFormattedText(text, false)}
+                              />
+                            )}
+                          </div>
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                            {messageTimes[index] || formatTime(new Date())}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {isLoading && (
+                    <div className="flex w-full justify-start">
+                      <div className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-gray-900">
+                        <Loader2 className="h-4 w-4 animate-spin text-brand-500" />
+                        <span className="text-xs text-gray-500">Zé está gerando...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {error && (
+                    <div className="flex justify-center">
+                      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
+                        {error}
+                      </div>
+                    </div>
+                  )}
+
+                  <div ref={messagesEndRef} />
                 </div>
 
-                <button
-                    onClick={handleClearHistory}
-                    className="p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors"
-                    title="Limpar Histórico"
-                >
-                    <Eraser className="w-5 h-5" />
-                </button>
-            </div>
+                <div className="mt-4">
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions.map(suggestion => (
+                      <button
+                        key={suggestion.label}
+                        onClick={() => setInput(suggestion.text)}
+                        className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-600 transition hover:border-brand-300 hover:text-brand-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                      >
+                        {suggestion.label}
+                      </button>
+                    ))}
+                  </div>
 
-            {/* Área de Mensagens */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50 dark:bg-gray-900 scroll-smooth">
-                {!apiKey && (
-                    <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800 text-center">
-                        <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-                        <p className="text-sm font-bold text-red-700 dark:text-red-300">Assistente Indisponível</p>
-                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                            A chave de API não foi configurada pelo administrador.
-                        </p>
-                    </div>
-                )}
-
-                {messages.length === 0 && apiKey ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center px-6 opacity-60 mt-10">
-                        <div className="w-20 h-20 bg-gradient-to-tr from-brand-100 to-purple-100 dark:from-brand-900/30 dark:to-purple-900/30 rounded-full flex items-center justify-center mb-6 animate-subtle-bounce-in">
-                            <SparklesIcon className="w-10 h-10 text-brand-600 dark:text-brand-400" />
-                        </div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Olá, Parceiro!</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
-                            Sou o Zé, sua inteligência artificial. Posso ajudar com rotas, finanças, dicas ou dúvidas sobre o app.
-                        </p>
-                        <div className="grid grid-cols-1 gap-2 mt-8 w-full max-w-xs">
-                            {suggestions.map((s, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => setInput(s.text)}
-                                    className="p-3 bg-white dark:bg-gray-800 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 shadow-sm border border-gray-100 dark:border-gray-700 hover:border-brand-300 transition-colors text-left"
-                                >
-                                    {s.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        {messages.map((msg, index) => (
-                            <div key={index} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`flex items-end gap-2 max-w-[85%] sm:max-w-[75%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    {/* Avatar */}
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${msg.role === 'user'
-                                        ? 'bg-gray-200 dark:bg-gray-700'
-                                        : 'bg-gradient-to-br from-brand-500 to-purple-600'
-                                        }`}>
-                                        {msg.role === 'user'
-                                            ? <div className="w-4 h-4 bg-gray-400 rounded-full" />
-                                            : <SparklesIcon className="w-5 h-5 text-white" />
-                                        }
-                                    </div>
-
-                                    {/* Bubble */}
-                                    <div className={`px-4 py-3 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.role === 'user'
-                                        ? 'bg-brand-600 text-white rounded-br-none'
-                                        : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-none border border-gray-100 dark:border-gray-700'
-                                        }`}>
-                                        {renderFormattedText(msg.parts[0].text, msg.role === 'user')}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </>
-                )}
-
-                {isLoading && (
-                    <div className="flex w-full justify-start animate-pulse">
-                        <div className="flex items-end gap-2 max-w-[85%]">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                                <SparklesIcon className="w-5 h-5 text-white" />
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 px-4 py-3 rounded-2xl rounded-bl-none border border-gray-100 dark:border-gray-700 flex gap-1">
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {error && (
-                    <div className="flex justify-center">
-                        <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border border-red-100 dark:border-red-800">
-                            <AlertTriangle className="w-4 h-4" /> {error}
-                        </div>
-                    </div>
-                )}
-                <div ref={messagesEndRef} className="h-4" />
-            </div>
-
-            {/* Área de Input */}
-            <div className="flex-shrink-0 p-3 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 pb-safe">
-                <div className="relative flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-[24px] p-2 transition-all ring-offset-2 focus-within:ring-2 focus-within:ring-brand-500">
+                  <div className="mt-3 flex items-center gap-2 rounded-3xl border border-gray-200 bg-white p-2 shadow-sm focus-within:border-brand-400 dark:border-gray-700 dark:bg-gray-900">
                     <button
-                        onClick={handleVoiceInput}
-                        className={`p-3 rounded-full flex-shrink-0 flex items-center justify-center transition-all ${isListening
-                            ? 'bg-red-100 text-red-500 animate-pulse'
-                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                            }`}
-                        disabled={!apiKey}
+                      onClick={handleVoiceInput}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                        isListening
+                          ? 'bg-red-100 text-red-500'
+                          : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                      }`}
+                      disabled={!apiKey}
                     >
-                        <Mic className="w-5 h-5" />
+                      <Mic className="h-5 w-5" />
                     </button>
 
                     <textarea
-                        ref={inputRef}
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onFocus={() => setIsFocused(true)}
-                        onBlur={() => setIsFocused(false)}
-                        placeholder={apiKey ? "Pergunte ao Zé..." : "Assistente Offline"}
-                        rows={1}
-                        className="flex-1 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-white py-3 max-h-32 resize-none placeholder:text-gray-400 disabled:cursor-not-allowed"
-                        style={{ minHeight: '44px' }}
-                        disabled={!apiKey}
+                      ref={inputRef}
+                      value={input}
+                      onChange={event => setInput(event.target.value)}
+                      placeholder={apiKey ? 'Pergunte ao Zé...' : 'Zé offline'}
+                      rows={1}
+                      className="flex-1 resize-none bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-white"
+                      style={{ minHeight: '44px' }}
+                      disabled={!apiKey}
                     />
 
                     <button
-                        onClick={handleSend}
-                        disabled={isLoading || !input.trim() || !apiKey}
-                        className={`p-3 rounded-full flex-shrink-0 flex items-center justify-center transition-all ${input.trim() && apiKey
-                            ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 transform hover:scale-105 active:scale-95'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                            }`}
+                      onClick={() => handleSend()}
+                      disabled={isLoading || !input.trim() || !apiKey}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                        input.trim() && apiKey
+                          ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/20'
+                          : 'bg-gray-200 text-gray-400 dark:bg-gray-800'
+                      }`}
                     >
-                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
+                      {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </button>
+                  </div>
                 </div>
+              </div>
+
+              <div className={`${activeMobileTab !== 'resources' ? 'hidden md:block' : 'block'} lg:hidden`}>
+                <div className="rounded-3xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                    Recursos
+                  </h3>
+                  <div className="mt-4">
+                    <AssistantResources userRole={userRole} collaboratorFunction={collaboratorFunction} />
+                  </div>
+                </div>
+              </div>
+
+              <div className={`${activeMobileTab !== 'details' ? 'hidden md:block' : 'block'} lg:hidden`}>
+                <div className="rounded-3xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                    Biblioteca de Prompts
+                  </h3>
+                  <div className="mt-4 space-y-3">
+                    {Object.entries(promptLibrary).map(([category, prompts]) => (
+                      <PromptCategoryCard
+                        key={category}
+                        title={category}
+                        prompts={prompts}
+                        onSelect={text => setInput(text)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <aside className="hidden h-full flex-col gap-4 lg:flex">
+              <div className="rounded-3xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                    Recursos
+                  </h3>
+                  <span className="rounded-full bg-gray-900 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-white dark:bg-white dark:text-gray-900">
+                    Perfil
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <AssistantResources userRole={userRole} collaboratorFunction={collaboratorFunction} />
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/80">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                    Biblioteca de Prompts
+                  </h3>
+                  <Sparkles className="h-4 w-4 text-brand-600" />
+                </div>
+                <div className="mt-4 space-y-3">
+                  {Object.entries(promptLibrary).map(([category, prompts]) => (
+                    <PromptCategoryCard
+                      key={category}
+                      title={category}
+                      prompts={prompts}
+                      onSelect={text => setInput(text)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </div>
         </div>
-    );
+      </div>
+    </div>
+  );
 };
+

@@ -119,7 +119,7 @@ export const ZePayStore: React.FC = () => {
             const isSuper = !!profileData?.is_super_store;
             setIsSuperStore(isSuper);
             if (isSuper) {
-                const dashboardData = await cloud.getZebankDashboardData();
+                const dashboardData = await cloud.getZePayDashboardData();
                 if (!dashboardData.my_code && profile?.association_code) {
                     dashboardData.my_code = profile.association_code;
                 }

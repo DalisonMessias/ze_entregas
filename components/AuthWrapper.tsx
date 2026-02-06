@@ -20,6 +20,7 @@ import { CollaboratorModule } from './CollaboratorModule';
 
 import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
 import { getTabFromUrl } from '../utils/routeMap';
+import { ActiveTab } from '../types/navigation';
 
 type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_password' | 'signup_type_selection';
 
@@ -133,7 +134,7 @@ export const AuthWrapper: React.FC = () => {
 
   const { alert } = useDialog();
 
-  const defaultTabByRole: Record<UserRole, import('./App').ActiveTab> = {
+  const defaultTabByRole: Record<UserRole, ActiveTab> = {
     admin: 'admin_dashboard',
     store_partner: 'wallet',
     delivery_partner: 'partner',

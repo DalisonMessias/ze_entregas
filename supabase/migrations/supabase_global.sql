@@ -749,18 +749,21 @@ BEGIN
     upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6))
   );
 
-  -- Logística de Carteiras Diferenciada (Zebank vs ZéPay)
-  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('store_partner') THEN
-      -- Carteira de Loja (ZéPay)
-      INSERT INTO public.store_wallets (store_id, balance_decimal)
-      VALUES (NEW.id, 0)
-      ON CONFLICT (store_id) DO NOTHING;
-  ELSIF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('delivery_partner', 'delivery_person') THEN
-      -- Carteira de Entregador (Zebank)
+  -- Logística de Carteiras (Zebank vs ZéPay)
+  -- 1. Carteira Pessoal (Zebank) - Para TODOS os parceiros (Lojistas e Entregadores)
+  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('store_partner', 'delivery_partner', 'delivery_person') THEN
       INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal)
       VALUES (NEW.id, 0, 0)
       ON CONFLICT (driver_id) DO NOTHING;
   END IF;
+
+  -- 2. Carteira de Vendas (ZéPay) - Apenas para Lojistas
+  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('store_partner') THEN
+      INSERT INTO public.store_wallets (store_id, balance_decimal)
+      VALUES (NEW.id, 0)
+      ON CONFLICT (store_id) DO NOTHING;
+  END IF;
+
 
   RETURN NEW;
 END;
@@ -12512,14 +12515,22 @@ DROP TRIGGER IF EXISTS handle_shop_platform_products_updated_at ON public.shop_p
 CREATE TRIGGER handle_shop_platform_products_updated_at BEFORE UPDATE ON public.shop_platform_products FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ==================================================================
--- [REPAIR SCRIPT] GARANTIR CARTEIRAS ZEBANK PARA ENTREGADORES EXISTENTES
+-- [REPAIR SCRIPT] GARANTIR CARTEIRAS ZEBANK PARA TODOS OS PARCEIROS
 -- ==================================================================
 DO $$
 BEGIN
+    -- 1. Carteiras de Entregador/Pessoal - AGORA INCLUI LOJISTAS
     INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal)
     SELECT id, 0, 0
     FROM public.user_profiles
-    WHERE role IN ('delivery_partner', 'delivery_person')
+    WHERE role IN ('delivery_partner', 'delivery_person', 'store_partner')
     ON CONFLICT (driver_id) DO NOTHING;
+
+    -- 2. Carteiras de Vendas/Loja - Apenas para Lojistas
+    INSERT INTO public.store_wallets (store_id, balance_decimal)
+    SELECT id, 0
+    FROM public.user_profiles
+    WHERE role IN ('store_partner')
+    ON CONFLICT (store_id) DO NOTHING;
 END $$;
 

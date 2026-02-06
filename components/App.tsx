@@ -3,6 +3,7 @@ import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
+import { ActiveTab } from '../types/navigation';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
 import * as logger from '../services/logger';
@@ -107,88 +108,10 @@ const NotFound = React.lazy(() => import('../src/pages/NotFound').then(module =>
 import { StoreStatus } from './StoreStatus';
 import { useDialog } from '../utils/dialogService';
 import { getTabFromUrl, syncUrlWithTab } from '../utils/routeMap';
+import { canAccessTabForRole, getRolesForTab } from '../utils/accessControl';
 
 
-// Expanded type to include specific admin routes
-export type ActiveTab =
-    | 'admin_dashboard' | 'admin_users' | 'admin_lojas' | 'admin_validation' | 'admin_notifications' | 'admin_shop' | 'admin_support'
-    | 'admin_api_keys' | 'admin_ai_config' | 'admin_routing' | 'admin_infinitepay' | 'admin_fees' | 'admin_pwa' | 'admin_payouts' | 'admin_cities'
-    | 'admin_levels' | 'admin_ratings' | 'admin_security' | 'admin_blacklist' | 'admin_referrals' | 'admin_institutional'
-    | 'admin_platform_news' | 'admin_store_finance' | 'admin_wallet_control' | 'admin_claims' | 'admin_maintenance' | 'admin_loan_config' | 'admin_investments'
-    | 'admin_slides' | 'admin_city_banners' | 'admin_tips' | 'admin_chat' | 'admin_payment_gateways' | 'admin_mercadopago' | 'admin_pix_config' | 'admin_location_map' | 'admin_base_catalog'
-    | 'order_tracking'
-    | 'admin_store_categories' | 'admin_global_coupons' | 'admin_image_gallery'
-    | 'admin_insurance' | 'admin_street_requests' | 'admin_mediation'
-    | 'store_drivers_chat'
-    | 'profile'
-    | 'support'
-    | 'shop'
-    | 'assistant'
-    | 'wallet'
-    | 'new_request'
-    | 'history'
-    | 'store_team'
-    | 'store_reports'
-    | 'store_marketing'
-    | 'store_integrations'
-    | 'store_settings'
-    | 'store_product_import'
-    | 'store_status'
-    | 'store_receiving_payment'
-    | 'store_finance_panel'
-    | 'partner'
-    | 'daily_panel'
-    | 'driver_marketing'
-    | 'route_tools'
-    | 'route_list'
-    | 'local_history'
-    | 'reports'
-    | 'tasks'
-    | 'zebank'
-    | 'about'
-    | 'faq'
-    | 'solutions'
-    | 'benefits'
-    | 'notifications'
-    | 'cloud'
-    | 'settings'
-    | 'associate_driver'
-    | 'associate_orders'
-    | 'status'
-    | 'heatmap'
-    | 'addresses'
-    | 'privacy'
-    | 'zepay_store'
-    | 'upgrade_to_partner'
-    | 'install_app'
-    | 'internal_orders'
-    | 'internal_orders_new'
-    | 'store_catalog'
-    | 'store_print_catalog'
-    | 'store_api_docs'
-    | 'store_promotions'
-    | 'store_highlight'
-
-    | 'streets_list'
-    | 'score'
-    | 'store_loans'
-    | 'loans'
-    | 'collaborator_area'
-    | 'internal_chat'
-    | 'chat'
-    | 'forgot_password'
-    | 'login'
-    | 'signup'
-    | 'partner_store'
-    | 'partner_delivery'
-    | 'insurance'
-    | 'home'
-    | 'my_orders'
-    | 'digital_menu'
-    | 'store_public_chat'
-    | 'street_request'
-    | 'zepoint'
-    | 'not_found';
+// ActiveTab type moved to types/navigation.ts
 
 
 interface AppProps {
@@ -455,11 +378,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const [navigationKey, setNavigationKey] = useState(0);
 
     // --- Constants & Config ---
-    const generalTabs = new Set<ActiveTab>([
-        'shop', 'profile', 'support', 'assistant', 'cloud', 'about', 'faq', 'solutions', 'benefits', 'install_app', 'status', 'privacy', 'streets_list', 'settings', 'upgrade_to_partner', 'internal_chat',
-        'partner_store', 'partner_delivery', 'home', 'digital_menu', 'login', 'signup', 'order_tracking', 'my_orders', 'store_public_chat', 'street_request', 'not_found'
-    ]);
-
     const defaultTabByRole: Record<UserRole, ActiveTab> = {
         admin: 'admin_dashboard',
         store_partner: 'wallet',
@@ -985,35 +903,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         return activeTab !== defaultTabByRole[effectiveRole];
     };
 
-    const allowedTabs: Record<UserRole, Set<ActiveTab>> = {
-        admin: new Set<ActiveTab>([...generalTabs,
-            'admin_dashboard', 'admin_users', 'admin_lojas', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
-            'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
-            'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
-            'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_city_banners', 'admin_tips', 'admin_loan_config',
-            'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation', 'zepoint',
-            'store_drivers_chat'
-        ]),
-        store_partner: new Set<ActiveTab>([
-            'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing', 'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel', 'zepay_store', 'zebank', 'internal_orders', 'internal_orders_new', 'store_catalog', 'store_print_catalog', 'store_api_docs', 'store_loans', 'store_promotions', 'store_highlight', 'internal_chat', 'store_drivers_chat', 'zepoint'
-        ]),
-
-        delivery_partner: new Set<ActiveTab>([
-            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'loans', 'insurance', 'score', 'zepoint'
-        ]),
-        delivery_person: new Set<ActiveTab>([
-            'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history', 'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses', 'insurance', 'score', 'zepoint'
-        ]),
-        collaborator: new Set(['collaborator_area', 'shop', 'internal_orders', 'internal_orders_new', 'store_catalog']), // Added shop access
-        user: new Set(['shop', 'profile', 'support', 'addresses', 'home', 'notifications', 'privacy', 'settings', 'zebank']) // Basic user access
-    };
-
-    const canAccessTab = (tab: ActiveTab) => {
-        if (tab.startsWith('admin_')) return isAdmin;
-        if (generalTabs.has(tab)) return true;
-        const set = allowedTabs[effectiveRole];
-        return set && set.has(tab);
-    };
+    const canAccessTab = (tab: ActiveTab) => canAccessTabForRole(effectiveRole, tab);
 
 
 
@@ -1026,14 +916,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     // --- RENDER CONTENT BASED ON TAB ---
     const renderContent = () => {
         if (!canAccessTab(activeTab)) {
-            let required: UserRole[] = [];
-
-            // Tenta identificar os papéis permitidos para esta aba
-            for (const [role, tabs] of Object.entries(allowedTabs)) {
-                if (tabs.has(activeTab)) {
-                    required.push(role as UserRole);
-                }
-            }
+            const required = getRolesForTab(activeTab);
 
             return (
                 <AccessDenied
@@ -1358,7 +1241,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             items: [
                 { label: 'Meu Perfil', tab: 'profile', icon: User },
                 { label: 'Suporte', tab: 'support', icon: Headphones },
-                { label: 'Assistente Zé', tab: 'assistant', icon: Bot },
+                { label: 'Zé', tab: 'assistant', icon: Bot },
                 { label: 'Perguntas Frequentes', tab: 'faq', icon: HelpCircle },
                 { label: 'Backup Nuvem', tab: 'cloud', icon: Cloud },
                 { label: 'Ruas', tab: 'streets_list', icon: Map },
@@ -1532,7 +1415,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             items: [
                 { label: 'Meu Perfil', tab: 'profile', icon: User },
                 { label: 'Suporte', tab: 'support', icon: Headphones },
-                { label: 'Assistente Zé', tab: 'assistant', icon: Bot },
+                { label: 'Zé', tab: 'assistant', icon: Bot },
                 { label: 'Perguntas Frequentes', tab: 'faq', icon: HelpCircle },
                 { label: 'Backup Nuvem', tab: 'cloud', icon: Cloud },
                 { label: 'Ruas', tab: 'streets_list', icon: Map },
@@ -1947,7 +1830,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             <MenuButton icon={Headphones} label="Suporte" tab="support" />
                             <MenuButton icon={HelpCircle} label="Perguntas Frequentes (FAQ)" tab="faq" />
                             <MenuButton icon={Bell} label="Notificações" tab="notifications" />
-                            <MenuButton icon={Bot} label="Assistente Zé" tab="assistant" />
+                            <MenuButton icon={Bot} label="Zé" tab="assistant" />
 
                             {/* Backup Nuvem apenas para quem opera offline (Entregadores/Lojistas) */}
                             {effectiveRole !== 'user' && (

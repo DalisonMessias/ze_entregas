@@ -1,3 +1,8 @@
-- [x] Correção do trigger `handle_new_user` para criar carteira em `driver_wallets` para entregadores.
-- [x] Inclusão de script de reparo para criar carteiras Zebank faltantes para usuários existentes.
-- [x] Ajuste no componente `Zebank.tsx` para exibir o saldo para o papel `delivery_person`.
+# Lista de Tarefas - Correção de Lógica de Saldos ZeBank/ZePay
+
+- [x] Ajustar `getMyWallet` em `services/cloud.ts` para retornar saldo pessoal de lojistas no painel principal.
+- [x] Unificar `getWalletTransactions` em `services/cloud.ts` para mostrar extrato pessoal no painel.
+- [x] Corrigir tab do botão "Financeiro" em `storeBottomNavItems` no `App.tsx`.
+- [x] Revisar rótulos em `ZePayStoreModule.tsx`.
+- [x] Atualizar `checklist.txt` com as mudanças realizadas.
+- [/] Gerar walkthrough final.

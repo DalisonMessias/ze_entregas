@@ -1,4 +1,4 @@
-import { ActiveTab } from '../components/App';
+import { ActiveTab } from '../types/navigation';
 import { UserRole } from '../types';
 
 // Mapeamento de rotas amigáveis para Tabs internas

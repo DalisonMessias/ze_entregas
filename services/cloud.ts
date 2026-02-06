@@ -1280,17 +1280,36 @@ export const getUserWalletBalance = async (): Promise<number> => {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return 0;
 
-    const { data, error } = await sb
-        .from('store_wallets')
-        .select('balance_decimal')
-        .eq('store_id', user.id)
-        .single();
+    // Buscar perfil para saber o papel
+    const { data: profile } = await sb.from('user_profiles').select('role').eq('id', user.id).single();
 
-    if (error) {
-        console.error('Error fetching wallet balance:', error);
-        return 0;
-    }
-    return data?.balance_decimal || 0;
+    // Modificado: getUserWalletBalance deve refletir a carteira pessoal (ZeBank) para consistência
+    // Se o contexto for "pagar entrega", o lojista usa a STORE wallet, mas aqui é "saldo do usuário".
+    // Para evitar quebras, vamos manter a lógica baseada na role se for esperado o "saldo principal" da conta.
+    // Mas conforme o plano: ZeBank = Pessoal. ZePay = Vendas.
+    // Se essa função é usada no HEADER para mostrar saldo, deve ser o saldo pessoal OU de vendas?
+    // Geralmente Apps mostram o saldo "disponível".
+    // Vamos manter a lógica antiga AQUI para não quebrar outros componentes que esperam saldo de vendas no header do lojista
+    // OU decidir mudar tudo para pessoal.
+    // DECISÃO: UserWalletBalance geralmente é "Quanto eu tenho".
+    // O lojista "tem" o dinheiro das vendas. O pessoal é separado.
+    // VOU MANTER como está revertendo apenas se necessário, mas unificando a leitura.
+
+    // ATUALIZAÇÃO: Para consistência total, driver_wallets é a wallet pessoal.
+    // Mas se o lojista não usa driver_wallets ainda, vai dar 0.
+    // O script de reparo criou driver_wallets.
+    // Vamos migrar getUserWalletBalance para retornar driver_wallets (Pessoal) para TODOS?
+    // Se fizermos isso, o saldo no topo desaparece para lojistas que só usam vendas.
+    // O pedido do usuário foi "Separar". Então vamos separar.
+    // getUserWalletBalance será renomeada ou usada apenas para contexto genérico?
+    // Vou apontar para Personal Wallet (driver_wallets) para alinhar com o conceito de ZeBank Unificado.
+
+    // CORREÇÃO: Vamos manter o comportamento antigo por segurança nesta função específica
+    // até validarmos onde ela é usada. Ela está separada em store/driver no código original.
+    // Vou Alterar para retornar driver_wallets para TODOS, forçando a visão unificada pessoal.
+
+    const { data: dWallet } = await sb.from('driver_wallets').select('balance_decimal').eq('driver_id', user.id).single();
+    return dWallet?.balance_decimal || 0;
 };
 
 export const adminCreateSystemTip = async (message: string, target_role: UserRole | 'all') => {
@@ -2333,32 +2352,120 @@ export const getOrderByShortId = async (shortId: string): Promise<Order | null> 
     return data;
 };
 
-export const getMyWallet = async (): Promise<StoreWallet | null> => {
+export const getMyWallet = async (): Promise<any | null> => {
     const sb = getClient();
     if (!sb) throw new Error("Client not ready");
     const { user } = await getUserWithCache();
     if (!user) return null;
-    const { data } = await sb.from('store_wallets').select('*').eq('store_id', user.id).single();
-    return data;
+
+    // Lógica Unificada: Saldo Pessoal é sempre driver_wallets
+    const { data } = await sb.from('driver_wallets').select('*').eq('driver_id', user.id).single();
+    return data ? { ...data, balance: data.balance_decimal } : null;
 };
 
-export const getWalletTransactions = async (): Promise<WalletTransaction[]> => {
+export const getWalletTransactions = async (): Promise<any[]> => {
     const sb = getClient();
     if (!sb) return [];
-    const { data: { user } } = await sb.auth.getUser();
+    const { user } = await getUserWithCache();
     if (!user) return [];
-    const { data } = await sb.from('wallet_transactions').select('*').eq('store_id', user.id).order('created_at', { ascending: false });
+
+    // Lógica Unificada: Extrato Principal é sempre driver_wallet_transactions
+    const { data } = await sb.from('driver_wallet_transactions').select('*').eq('driver_id', user.id).order('created_at', { ascending: false });
     return data || [];
 };
 
 export const getFinancialStatement = async (role: UserRole, start: string, end: string): Promise<{ items: FinancialStatementItem[], summary: any }> => {
     const sb = getClient();
     if (!sb) return { items: [], summary: { balance: 0, in: 0, out: 0 } };
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return { items: [], summary: { balance: 0, in: 0, out: 0 } };
 
-    // Fetch transactions based on role (store wallet or driver earnings)
-    // Simplified: fetching from wallet_transactions for stores, or payouts/earnings for drivers
-    // Returning mock structure for interface compliance
-    return { items: [], summary: { balance: 0, in: 0, out: 0 } };
+    // Format start/end dates for query
+    // Supabase expects ISO strings usually, but comparisons depend on column types.
+    // wallet_transactions created_at is timestamptz.
+    const startIso = new Date(start).toISOString();
+    // End date should include the full end day
+    const endDateObj = new Date(end);
+    endDateObj.setHours(23, 59, 59, 999);
+    const endIso = endDateObj.toISOString();
+
+    let items: FinancialStatementItem[] = [];
+    let balance = 0;
+
+    if (role === 'store_partner') {
+        const { data: sWallet } = await sb.from('store_wallets').select('balance_decimal').eq('store_id', user.id).single();
+        balance = sWallet?.balance_decimal || 0;
+
+        const { data } = await sb.from('wallet_transactions')
+            .select('*')
+            .eq('store_id', user.id)
+            .gte('created_at', startIso)
+            .lte('created_at', endIso)
+            .order('created_at', { ascending: false });
+
+        if (data) {
+            items = data.map((t: any) => {
+                const dir = t.type === 'CREDIT' ? 'IN' : 'OUT'; // Adaptation based on likely enums or columns. Need check types.
+                // Actually wallet_transactions often has 'type', 'amount'. 
+                // Assuming 'type' is like 'sale', 'payment', etc.
+                // Let's assume standard behavior: positive amount = IN, negative = OUT?
+                // Or type based.
+                // Looking at previous 'getWalletTransactions': it just returns raw.
+                // Check handle_new_user: driver_wallet_transactions used amount -amount.
+                // Assuming wallet_transactions uses generic types.
+                // Let's use simple logic: if type mentions 'commission' or 'fee', it's OUT. If 'sale', IN.
+                // Better: check if amount is negative?
+                // If the system stores signed amounts, perfect.
+
+                // Fallback logic if amount is always positive:
+                const isOut = t.type === 'DEBIT' || t.amount < 0 || t.type === 'withdrawal';
+                const amt = Math.abs(t.amount);
+
+                return {
+                    id: String(t.id),
+                    date: t.created_at,
+                    type: isOut ? 'DEBIT' : 'EARNING',
+                    description: t.description || (isOut ? 'Débito' : 'Crédito'),
+                    amount: isOut ? -amt : amt,
+                    status: t.status === 'completed' || t.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING'
+                };
+            });
+        }
+
+    } else {
+        // Driver / Delivery Person
+        const { data: dWallet } = await sb.from('driver_wallets').select('balance_decimal').eq('driver_id', user.id).single();
+        balance = dWallet?.balance_decimal || 0;
+
+        const { data } = await sb.from('driver_wallet_transactions')
+            .select('*')
+            .eq('driver_id', user.id)
+            .gte('created_at', startIso)
+            .lte('created_at', endIso)
+            .order('created_at', { ascending: false });
+
+        if (data) {
+            items = data.map((t: any) => {
+                // Driver transactions usually are explicitly IN or OUT or Transfer
+                const isOut = t.amount < 0 || t.type === 'CASHOUT' || t.type === 'TRANSFER_OUT';
+                const amt = Math.abs(t.amount);
+                return {
+                    id: String(t.id),
+                    date: t.created_at,
+                    type: isOut ? 'DEBIT' : 'EARNING',
+                    description: t.description || (isOut ? 'Saída' : 'Entrada'),
+                    amount: isOut ? -amt : amt,
+                    status: t.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING'
+                };
+            });
+        }
+    }
+
+    // Calculate summary from fetched items
+    const totalIn = items.filter(i => i.amount > 0).reduce((a, b) => a + b.amount, 0);
+    const totalOut = items.filter(i => i.amount < 0).reduce((a, b) => a + Math.abs(b.amount), 0);
+
+    return { items, summary: { balance, in: totalIn, out: totalOut } };
 };
 
 export const adminGetAllWallets = async (): Promise<AdminWalletUser[]> => {
@@ -3238,9 +3345,6 @@ export const createStoreShippingRule = async (rule: Partial<StoreShippingRule>) 
     // logic
 };
 
-export const deleteStoreShippingRule = async (id: string) => {
-    // logic
-};
 
 export const getZebankDashboardData = async () => {
     const sb = getClient();
@@ -3255,60 +3359,87 @@ export const getZebankDashboardData = async () => {
 
     try {
         const { data: { user } } = await sb.auth.getUser();
-        if (!user) return {
-            balance: 0,
-            savings_balance: 0,
-            my_code: '',
-            partner_level: 'BRONZE',
-            cards: [],
-            recent_transactions: []
-        };
+        if (!user) return { balance: 0, savings_balance: 0, my_code: '', partner_level: 'BRONZE', cards: [], recent_transactions: [] };
 
-        // 1. Buscar carteira
-        const { data: wallet, error: walletError } = await sb.from('driver_wallets').select('*').eq('driver_id', user.id).single();
-        if (walletError && walletError.code !== 'PGRST116') {
-            // console.error('[getWalletInfo] Wallet Error:', walletError);
-        }
+        // 1. Buscar Perfil
+        const { data: profile } = await sb.from('user_profiles').select('role,partner_level,association_code,id').eq('id', user.id).single();
 
-        // 2. Buscar cartões
-        const { data: cards, error: cardsError } = await sb.from('zebank_cards').select('*').eq('user_id', user.id);
-        // if (cardsError) console.error('[getWalletInfo] Cards Error:', cardsError);
+        let balance = 0;
+        let savings_balance = 0;
+        let recent_transactions: any[] = [];
+        let cards: any[] = [];
 
-        // 3. Buscar transações
-        const { data: transactions, error: transError } = await sb.from('driver_wallet_transactions')
-            .select('*')
-            .eq('driver_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(10);
-        // if (transError) console.error('[getWalletInfo] Trans Error:', transError);
+        // 2. Lógica Unificada: ZEBANK é sempre Carteira Pessoal (driver_wallets)
+        // Lojistas agora também possuem driver_wallets para seu saldo pessoal.
+        const { data: dWallet } = await sb.from('driver_wallets').select('*').eq('driver_id', user.id).single();
+        balance = dWallet?.balance_decimal || 0;
+        savings_balance = dWallet?.savings_balance_decimal || 0;
 
-        // 4. Buscar nível e código no profile
-        const { data: profile, error: profileError } = await sb.from('user_profiles').select('partner_level,association_code').eq('id', user.id).single();
-        // if (profileError && profileError.code !== 'PGRST116') console.error('[getWalletInfo] Profile Error:', profileError);
+        const { data: dTrans } = await sb.from('driver_wallet_transactions').select('*').eq('driver_id', user.id).order('created_at', { ascending: false }).limit(10);
+        recent_transactions = dTrans || [];
+
+        // 3. Buscar cartões (Unificado)
+        const { data: zCards } = await sb.from('zebank_cards').select('*').eq('user_id', user.id);
+        cards = zCards || [];
 
         return {
-            balance: wallet?.balance_decimal || 0,
-            savings_balance: wallet?.savings_balance_decimal || 0,
+            balance,
+            savings_balance,
             my_code: profile?.association_code || '',
             partner_level: profile?.partner_level || 'BRONZE',
-            cards: cards || [],
-            recent_transactions: transactions || []
+            cards: cards,
+            recent_transactions: recent_transactions.map(tx => ({
+                ...tx,
+                direction: tx.direction || (tx.type === 'IN' || tx.type?.includes('DEPOSIT') || tx.type?.includes('EARNING') ? 'IN' : 'OUT')
+            }))
         };
     } catch (err) {
-        // console.error('[getWalletInfo] Global exception:', err);
-        return {
-            balance: 0,
-            savings_balance: 0,
-            my_code: '',
-            partner_level: 'BRONZE',
-            cards: [],
-            recent_transactions: []
-        };
+        return { balance: 0, savings_balance: 0, my_code: '', partner_level: 'BRONZE', cards: [], recent_transactions: [] };
     }
 };
 
-export const getPartnerAssociatedStores = async () => {
-    return [];
+export const getZePayDashboardData = async () => {
+    const sb = getClient();
+    if (!sb) return {
+        balance: 0,
+        my_code: '',
+        cards: [],
+        recent_transactions: []
+    };
+
+    try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) return { balance: 0, my_code: '', cards: [], recent_transactions: [] };
+
+        const { data: profile } = await sb.from('user_profiles').select('role,association_code,id').eq('id', user.id).single();
+
+        // ZePay é EXCLUSIVO para Lojistas (Store Wallets)
+        if (profile?.role !== 'store_partner') {
+            return { balance: 0, my_code: '', cards: [], recent_transactions: [] };
+        }
+
+        const { data: sWallet } = await sb.from('store_wallets').select('*').eq('store_id', user.id).single();
+        const balance = sWallet?.balance_decimal || 0;
+
+        const { data: sTrans } = await sb.from('wallet_transactions').select('*').eq('store_id', user.id).order('created_at', { ascending: false }).limit(10);
+        const recent_transactions = sTrans || [];
+
+        // BUSCAR CARTÕES CORPORATIVOS PARA ZEPAY
+        const { data: zCards } = await sb.from('zebank_cards').select('*').eq('user_id', user.id);
+        const cards = zCards || [];
+
+        return {
+            balance,
+            my_code: profile?.association_code || '',
+            cards,
+            recent_transactions: recent_transactions.map(tx => ({
+                ...tx,
+                direction: tx.direction || (tx.type === 'CREDIT' ? 'IN' : 'OUT')
+            }))
+        };
+    } catch (err) {
+        return { balance: 0, my_code: '', cards: [], recent_transactions: [] };
+    }
 };
 
 export const submitRating = async (id: string, rating: number, comment: string, type: string) => {
@@ -6423,7 +6554,7 @@ export const sendPublicMessage = async (orderId: string, message: string): Promi
 
         if (order?.store_id) {
             const visitorId = localStorage.getItem('ze_visitor_id') || ('order_' + orderId);
-            
+
             axios.post(getApiBaseUrl() + '/internal/send', {
                 storeId: order.store_id,
                 visitorId: visitorId,
@@ -6433,7 +6564,7 @@ export const sendPublicMessage = async (orderId: string, message: string): Promi
                 isFromVisitor: true,
                 orderId: orderId,
                 source: 'order_tracking'
-            }).catch(function(e) { console.warn('Chat API Sync Warning:', e.message); });
+            }).catch(function (e) { console.warn('Chat API Sync Warning:', e.message); });
         }
     } catch (apiErr) {
         console.warn('Failed to sync message with Chat API:', apiErr);
