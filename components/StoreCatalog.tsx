@@ -63,6 +63,9 @@ export const StoreCatalog: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [profileValid, setProfileValid] = useState<boolean | null>(null);
     const [missingFields, setMissingFields] = useState<string[]>([]);
+    const [draftSaveCallback, setDraftSaveCallback] = useState<(() => void) | null>(null);
+    const [draftAddonSaveCallback, setDraftAddonSaveCallback] = useState<(() => void) | null>(null);
+
 
     // Super Store State
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -149,6 +152,13 @@ export const StoreCatalog: React.FC = () => {
                 setToast({ message: 'Produto criado com sucesso!', type: 'success' });
             }
             setIsProductModalOpen(false);
+
+            // Se for um rascunho da IA, executa o callback de limpeza
+            if (draftSaveCallback) {
+                draftSaveCallback();
+                setDraftSaveCallback(null);
+            }
+
             loadData();
         } catch (error: any) {
             if (error.code === '42501') {
@@ -230,6 +240,27 @@ export const StoreCatalog: React.FC = () => {
         }
     };
 
+    const handleEditAIDraft = (product: Partial<StoreProduct>, onSaved?: () => void) => {
+        setEditingProduct(product);
+        if (onSaved) {
+            setDraftSaveCallback(() => onSaved);
+        } else {
+            setDraftSaveCallback(null);
+        }
+        setIsProductModalOpen(true);
+    };
+
+    const handleEditAddonGroupFromAI = (group: Partial<StoreAddonGroup>, onSaved?: () => void) => {
+        // Cast para StoreAddonGroup pois o modal espera o tipo completo, mas lidamos com partial na criacao
+        setEditingAddonGroup(group as StoreAddonGroup);
+        if (onSaved) {
+            setDraftAddonSaveCallback(() => onSaved);
+        } else {
+            setDraftAddonSaveCallback(null);
+        }
+        setIsAddonModalOpen(true);
+    };
+
     const filteredProducts = useMemo(() => {
         return products.filter(p => {
             const term = debouncedSearchTerm.toLowerCase().trim();
@@ -271,6 +302,8 @@ export const StoreCatalog: React.FC = () => {
                         onProductCreated={loadData}
                         categories={categories}
                         products={products}
+                        onEditProduct={handleEditAIDraft}
+                        onEditAddonGroup={handleEditAddonGroupFromAI}
                     />
                 </div>
             )}

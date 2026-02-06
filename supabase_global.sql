@@ -120,3 +120,23 @@ $$;
 -- Permissões
 GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) TO service_role;
+
+-- Tabela de Chaves de API (Segurança)
+CREATE TABLE IF NOT EXISTS public.api_keys (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    store_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL, -- 'google', 'openai', etc
+    key_value TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(store_id, provider)
+);
+
+-- RLS para api_keys
+ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own keys" ON public.api_keys
+    FOR SELECT USING (auth.uid() = store_id);
+
+CREATE POLICY "Users can insert/update their own keys" ON public.api_keys
+    FOR ALL USING (auth.uid() = store_id);

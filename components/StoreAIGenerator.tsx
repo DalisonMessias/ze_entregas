@@ -1,15 +1,18 @@
+```
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle, Eye } from 'lucide-react';
+import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Loader2, Plus, BarChart3, AlertCircle, Eye, Layers } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
-import { StoreProduct, Category } from '../types';
+import { StoreProduct, Category, StoreAddonGroup } from '../types';
 import { useDialog } from '../utils/dialogService';
 // GoogleGenAI agora é gerenciado pelo cloud.generateAIContent
 
 interface StoreAIGeneratorProps {
-    onProductCreated: () => void;
+    onProductCreated: (signal?: AbortSignal) => Promise<void>;
     categories: Category[];
     products: StoreProduct[];
+    onEditProduct: (product: Partial<StoreProduct>, onSaved?: () => void) => void;
+    onEditAddonGroup: (group: Partial<StoreAddonGroup>, onSaved?: () => void) => void;
 }
 
 interface AnalysisReport {
@@ -34,11 +37,13 @@ interface AnalysisSuggestion {
     new_data?: Partial<StoreProduct> & { category_name?: string };
 }
 
-export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCreated, categories, products }) => {
+type GeneratorMode = 'chat' | 'list' | 'analyze' | 'addons';
+
+export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCreated, categories, products, onEditProduct, onEditAddonGroup }) => {
     const [apiKey, setApiKey] = useState<string>('');
 
     // Generator Modes
-    const [generatorMode, setGeneratorMode] = useState<'chat' | 'batch' | 'analyze'>('chat');
+    const [generatorMode, setGeneratorMode] = useState<GeneratorMode>('chat');
 
     // State
     const [aiMessage, setAiMessage] = useState('');
@@ -48,6 +53,10 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [pendingChatProducts, setPendingChatProducts] = useState<Partial<StoreProduct & { id_temp: string, category_name: string }>[]>([]);
     const [pendingBatchProducts, setPendingBatchProducts] = useState<Partial<StoreProduct & { id_temp: string, category_name: string }>[]>([]);
+    
+    // Addons Mode State
+    const [addonMessage, setAddonMessage] = useState('');
+    const [pendingAddonGroups, setPendingAddonGroups] = useState<Partial<StoreAddonGroup & { id_temp: string }>[]>([]);
     const [analysisSuggestions, setAnalysisSuggestions] = useState<AnalysisSuggestion[]>([]);
     const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -60,9 +69,10 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Editing State
-    const [editingItem, setEditingItem] = useState<string | null>(null); // id_temp being edited
-    const [editForm, setEditForm] = useState<Partial<StoreProduct & { category_name: string }>>({});
+    // Editing State - Removido estado interno em favor do onEditProduct
+    const [editingItem, setEditingItem] = useState<string | null>(null); // Mantido apenas se necessário para alguma lógica visual local, mas o form sumirá
+    // const [editForm, setEditForm] = useState... // Removido
+
 
     const { confirm, alert: showMessage } = useDialog();
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -164,8 +174,9 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
 
     const loadSettings = async () => {
         try {
-            const settings = await cloud.getShopSettings();
-            setApiKey(settings?.google_gemini_api_key || '');
+            // Updated to fetch from specific api_keys table via cloud service
+            const key = await cloud.getAPIKey('google');
+            setApiKey(key || '');
         } catch (error) {
             console.error("Error loading settings:", error);
         } finally {
@@ -183,12 +194,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             const settings = await cloud.getShopSettings(); // Ou pegar user id de outra forma se settings não tiver
             // Melhor: usar getUserWithCache que já temos ou chamar cloud direto que pega user interno
             // Como cloud.ensureStoreCategory pega user internamente se passar ID, mas aqui precisamos do ID do user logado.
-            // O componente não tem o user.id fácil, mas o cloud.ensureStoreCategory requer userId.
-            // Vamos obter o usuário atual via cloud helper se não tivermos no state.
-
-            // Ajuste: cloud.ensureStoreCategory precisa de userId. 
-            // Vamos fazer o cloud function pegar o user se não passado? Não, ele pede userId.
-            // Vamos pegar o user aqui.
+            // Vamos obter o usuário aqui.
             const { user } = await cloud.getUserWithCache();
             if (!user) return '';
 
@@ -231,34 +237,38 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             const catNames = categories.map(c => c.name).join(', ');
 
             const prompt = `Atue como um EXPERT COPYWRITER e CONSULTOR DE VENDAS para delivery.
-            Categorias na loja: ${catNames || 'Geral'}.
+            Categorias na loja: ${ catNames || 'Geral' }.
 
-            ENTRADA: "${userMsg}" ${currentImage ? 'e IMAGEM (analise detalhes visuais).' : '.'}
+ENTRADA: "${userMsg}" ${ currentImage ? 'e IMAGEM (analise detalhes visuais).' : '.' }
 
             DIRETRIZES DE OURO:
-            1. PERSONA: Você é um mestre em vendas. Suas descrições devem ser IRRESISTÍVEIS, usando gatilhos de apetite, frescor e conveniência.
-            2. PROATIVIDADE MÁXIMA: Se detectar itens vendíveis, SEMPRE gere "PRODUCT_CREATION". Se falta preço, sugira um valor "premium" de mercado.
+1. PERSONA: Você é um mestre em vendas.Suas descrições devem ser IRRESISTÍVEIS, usando gatilhos de apetite, frescor e conveniência.
+            2. PROATIVIDADE MÁXIMA: Se detectar itens vendáveis, SEMPRE gere "PRODUCT_CREATION".Se falta preço, sugira um valor "premium" de mercado.
             3. EXTRAÇÃO DE IMAGEM: Se for um cardápio, ignore ruídos e extraia TODOS os itens com precisão cirúrgica.
             4. COPYWRITING:
-               - Artesanal: "Pão brioche selado na manteiga, blend suculento de 180g, queijo cheddar derretido..." (Liste ingredientes de forma poética).
-               - Industrial: "Coca-Cola trincando de gelada, o acompanhamento perfeito para sua refeição." (Foco no momento de consumo).
+- Artesanal: "Pão brioche selado na manteiga, blend suculento de 180g, queijo cheddar derretido..."(Liste ingredientes de forma poética).
+               - Industrial: "Coca-Cola trincando de gelada, o acompanhamento perfeito para sua refeição."(Foco no momento de consumo).
 
             JSON ESPERADO:
-            {
-                "type": "PRODUCT_CREATION",
-                "content": "Texto vendedor confirmando a ação e justificando preços sugeridos",
-                "products": [
-                    {
-                        "name": "Nome Impactante",
-                        "description": "Copy irresistível seguindo as regras",
-                        "price": 0.00,
-                        "category_name": "Categoria mais adequada"
-                    }
-                ]
-            }
+{
+    "type": "PRODUCT_CREATION",
+        "content": "Texto vendedor confirmando a ação e justificando preços sugeridos",
+            "products": [
+                {
+                    "name": "Nome Impactante",
+                    "description": "Copy irresistível seguindo as regras",
+                    "price": 0.00,
+                    "category_name": "Categoria mais adequada",
+                    "addon_options": [
+                        { "name": "Bacon Extra", "price": 5.00, "is_active": true },
+                        { "name": "Molho Especial", "price": 0.00, "is_active": true }
+                    ]
+                }
+            ]
+}
 
             Se for apenas conversa teórica, use "INFORMATION" com formatação HTML rica.
-            IDOMA: Português do Brasil.`;
+    IDOMA: Português do Brasil.`;
 
             const response = await cloud.generateAIContent(
                 prompt,
@@ -323,22 +333,23 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
 
             const prompt = `Atue como um ALGORITMO DE EXTRAÇÃO E COPYWRITING EM MASSA.
     LISTA BRUTA: "${batchInput}"
-    Categorias: ${catNames}.
+Categorias: ${ catNames }.
 
-    TAREFA: Transformar cada linha em um produto de alta conversão.
+TAREFA: Transformar cada linha em um produto de alta conversão.
     - Se a linha estiver bagunçada, use inteligência para deduzir Nome, Preço e Categoria.
     - Se não houver preço, aplique um valor médio de mercado.
-    - Gere descrições RICAS e CRIATIVAS para cada item (Artesanal = Ingredientes, Industrial = Comercial).
+    - Gere descrições RICAS e CRIATIVAS para cada item(Artesanal = Ingredientes, Industrial = Comercial).
 
     RETORNE APENAS JSON ARRAY:
-    [
-      {
+[
+    {
         "name": "Nome do Produto",
         "description": "Copy persuasiva e detalhada",
         "price": 0.00,
-        "category_name": "Categoria"
-      }
-    ]`;
+        "category_name": "Categoria",
+        "addon_options": [{ "name": "...", "price": 0, "is_active": true }]
+    }
+]`;
 
             const response = await cloud.generateAIContent(prompt, apiKey);
 
@@ -375,48 +386,48 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         setIsAnalyzing(true);
         try {
             // Fornecer dados mais detalhados para análise de qualidade
-            const catalogSummary = products.map(p => `- ${p.name} (R$${p.price}) | Categoria: ${p.category} | Descrição: ${p.description || 'SEM DESCRIÇÃO'}`).join('\n');
+            const catalogSummary = products.map(p => `- ${ p.name } (R$${ p.price }) | Categoria: ${ p.category } | Descrição: ${ p.description || 'SEM DESCRIÇÃO' } `).join('\n');
             const catNames = categories.map(c => c.name).join(', ');
 
             const prompt = `Atue como um MENTOR DE NEGÓCIOS Estratégico e Especialista em Engenharia de Cardápio.
     DADOS DO CATÁLOGO:
-    ${catalogSummary}
+    ${ catalogSummary }
 
-    Categorias: ${catNames}.
+Categorias: ${ catNames }.
 
-    OBJETIVO: Diagnosticar falhas e sugerir ações que AUMENTEM O TICKET MÉDIO E A CONVERSÃO.
+OBJETIVO: Diagnosticar falhas e sugerir ações que AUMENTEM O TICKET MÉDIO E A CONVERSÃO.
     
     DIRETRIZES DE ANÁLISE:
-    1. PSICOLOGIA DE PREÇOS: Identifique se há falta de combos ou ancoragem de preços.
+1. PSICOLOGIA DE PREÇOS: Identifique se há falta de combos ou ancoragem de preços.
     2. GATILHOS MENTAIS: Sugira descrições que usem Escassez, Urgência ou Prova Social.
-    3. MIX DE PRODUTOS: Sugira itens que faltam para complementar a experiência (cross-sell).
+    3. MIX DE PRODUTOS: Sugira itens que faltam para complementar a experiência(cross - sell).
     4. HIGIENE VISUAL: Avalie se os nomes são curtos e impactantes.
 
     RETORNE APENAS JSON:
-    {
-        "report": {
-            "score": 0-100,
+{
+    "report": {
+        "score": 0 - 100,
             "metrics": {
-                "descriptionQuality": 0-100,
-                "mixCompleteness": 0-100,
-                "pricingConsistency": 0-100
-            },
-            "summary": "Texto direto e provocativo sobre o estado do catálogo",
-            "strengths": ["Ponto forte real e estratégico"],
-            "weaknesses": ["Ponto fraco crítico que impede vendas"]
+            "descriptionQuality": 0 - 100,
+                "mixCompleteness": 0 - 100,
+                    "pricingConsistency": 0 - 100
         },
-        "suggestions": [
-            {
-                "type": "improvement" | "new_product",
-                "target_product_name": "Nome exato",
-                "suggestion": "Título da Melhoria",
-                "reason": "Explicação baseada em psicologia de vendas",
-                "new_data": { "name": "...", "price": 0, "description": "Copy Mestre", "category_name": "..." }
-            }
-        ]
-    }
+        "summary": "Texto direto e provocativo sobre o estado do catálogo",
+            "strengths": ["Ponto forte real e estratégico"],
+                "weaknesses": ["Ponto fraco crítico que impede vendas"]
+    },
+    "suggestions": [
+        {
+            "type": "improvement" | "new_product",
+            "target_product_name": "Nome exato",
+            "suggestion": "Título da Melhoria",
+            "reason": "Explicação baseada em psicologia de vendas",
+            "new_data": { "name": "...", "price": 0, "description": "Copy Mestre", "category_name": "..." }
+        }
+    ]
+}
 
-    IDOMA: Português do Brasil.`;
+IDOMA: Português do Brasil.`;
 
             const response = await cloud.generateAIContent(prompt, apiKey);
 
@@ -457,7 +468,8 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                 description: prod.description,
                 price: Number(prod.price) || 0,
                 category_id: catId,
-                is_active: true
+                is_active: true,
+                addon_options: prod.addon_options || [] // Incluir adicionais avulsos
             });
 
             if (isChat) {
@@ -518,7 +530,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
 
         const ok = await confirm({
             title: 'Salvar Tudo',
-            message: `Deseja adicionar estes ${list.length} produtos à sua loja?`
+            message: `Deseja adicionar estes ${ list.length } produtos à sua loja ? `
         });
         if (!ok) return;
 
@@ -531,7 +543,8 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                     description: prod.description,
                     price: Number(prod.price) || 0,
                     category_id: catId,
-                    is_active: true
+                    is_active: true,
+                    addon_options: prod.addon_options || []
                 });
             }
             if (generatorMode === 'chat') {
@@ -555,687 +568,774 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     };
 
     const startEdit = (prod: any) => {
-        setEditingItem(prod.id_temp);
-        setEditForm({ ...prod });
+        // Envia para o pai abrir o modal completo
+        // Passa callback para remover da lista 'pendente' se for salvo com sucesso
+        onEditProduct(prod, () => handleDiscard(prod.id_temp));
     };
 
-    const saveEdit = () => {
-        setPendingChatProducts(prev => prev.map(p =>
-            p.id_temp === editingItem ? { ...p, ...editForm } : p
-        ));
-        setPendingBatchProducts(prev => prev.map(p =>
-            p.id_temp === editingItem ? { ...p, ...editForm } : p
-        ));
-        setEditingItem(null);
+    // saveEdit removido pois o salvamento ocorre no ProductModal do pai
+
+    // --- ADDONS HANDLERS ---
+    const handleSendAddonsMessage = async () => {
+        if (!addonMessage.trim() && !fileInputRef.current?.files?.length) return;
+
+        setIsAILoading(true);
+        try {
+            const prompt = `
+            Atue como um especialista em engenharia de cardápios.
+            Crie Grupos de Adicionais(Complementos) para produtos de delivery com base no pedido: "${addonMessage}".
+            
+            Retorne APENAS um JSON válido seguindo estritamente este formato:
+{
+    "groups": [
+        {
+            "name": "Nome do Grupo (ex: Escolha sua Proteína)",
+            "type": "SINGLE"(para apenas uma escolha) ou "MULTIPLE"(para várias),
+            "min": 0(mínimo de escolhas),
+            "max": 1(máximo de escolhas),
+            "options": [
+                { "name": "Opção 1", "price": 0.00, "is_active": true },
+                { "name": "Opção 2", "price": 5.00, "is_active": true }
+            ]
+        }
+    ]
+}
+
+Regras:
+1. Seja comercial e organizado.
+            2. Se o usuário pedir "Adicionais para Açaí", crie grupos como "Frutas", "Caldas", "Complementos".
+            3. "min": 1 obriga o usuário a escolher. "min": 0 é opcional.
+            `;
+
+            const response = await cloud.generateAIContent(prompt);
+            const jsonStr = response.text.replace(/```json / g, '').replace(/```/g, '').trim();
+const data = JSON.parse(jsonStr);
+
+if (data.groups && Array.isArray(data.groups)) {
+    const newGroups = data.groups.map((g: any) => ({
+        ...g,
+        id_temp: Math.random().toString(36).substr(2, 9),
+        store_id: 'temp',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    }));
+    setPendingAddonGroups(prev => [...prev, ...newGroups]);
+    setAddonMessage('');
+    showMessage({ title: 'Sucesso', message: 'Sugestões de adicionais geradas!' });
+}
+
+        } catch (error: any) {
+    console.error("Erro ao gerar adicionais:", error);
+    showMessage({ title: 'Erro', message: 'Não foi possível gerar os adicionais. Tente novamente.' });
+} finally {
+    setIsAILoading(false);
+}
     };
 
-    if (initializing) return <div className="p-4"><Loader2 className="w-6 h-6 animate-spin text-brand-600" /></div>;
+const handleApproveAddonGroup = async (tempId: string) => {
+    const group = pendingAddonGroups.find(g => g.id_temp === tempId);
+    if (!group) return;
 
-    return (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-            {/* Header - Unified with Admin Style */}
-            <div className="p-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-2xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center border border-brand-100 dark:border-brand-900/30">
-                        <Bot className="w-6 h-6 text-brand-600" />
-                    </div>
-                    <div>
-                        <h3 className="font-black text-sm dark:text-white uppercase tracking-tighter">Gerador de Produtos</h3>
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">IA Conectada</span>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 ml-auto">
-                        {(isAILoading || isBatchLoading || isAnalyzing) && <Loader2 className="w-4 h-4 animate-spin text-brand-600" />}
-                        {chatHistory.length > 0 && (
-                            <button
-                                onClick={handleClearChat}
-                                className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-xl transition-colors"
-                                title="Limpar conversa"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        )}
+    setIsSaving(true);
+    try {
+        const { id_temp, ...payload } = group;
+        await cloud.createStoreAddonGroup(payload as any);
+
+        setPendingAddonGroups(prev => prev.filter(g => g.id_temp !== tempId));
+        showMessage({ title: 'Sucesso', message: 'Grupo de adicionais salvo com sucesso!' });
+        onProductCreated(); // Reuse to refresh data if needed, or just let generic load happen
+    } catch (error: any) {
+        console.error("Erro ao salvar grupo:", error);
+        showMessage({ title: 'Erro', message: 'Erro ao salvar grupo.' });
+    } finally {
+        setIsSaving(false);
+    }
+};
+
+const handleEditAddonGroup = (group: any) => {
+    onEditAddonGroup(group, () => {
+        setPendingAddonGroups(prev => prev.filter(g => g.id_temp !== group.id_temp));
+    });
+};
+
+const handleDiscardAddonGroup = (tempId: string) => {
+    setPendingAddonGroups(prev => prev.filter(g => g.id_temp !== tempId));
+};
+
+
+if (initializing) return <div className="p-4"><Loader2 className="w-6 h-6 animate-spin text-brand-600" /></div>;
+
+return (
+    <div className="flex flex-col h-full bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+        {/* Header - Unified with Admin Style */}
+        <div className="p-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center border border-brand-100 dark:border-brand-900/30">
+                    <Bot className="w-6 h-6 text-brand-600" />
+                </div>
+                <div>
+                    <h3 className="font-black text-sm dark:text-white uppercase tracking-tighter">Gerador de Produtos</h3>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">IA Conectada</span>
                     </div>
                 </div>
-
-                <div className="flex gap-2 bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl">
-                    <button
-                        onClick={() => setGeneratorMode('chat')}
-                        className={`flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex flex-col items-center gap-1 ${generatorMode === 'chat' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm ring-1 ring-brand-100' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <Bot className="w-4 h-4" /> Conversa
-                    </button>
-                    <button
-                        onClick={() => setGeneratorMode('batch')}
-                        className={`flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex flex-col items-center gap-1 ${generatorMode === 'batch' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm ring-1 ring-brand-100' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <Package className="w-4 h-4" /> Lista
-                    </button>
-                    <button
-                        onClick={() => setGeneratorMode('analyze')}
-                        className={`flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex flex-col items-center gap-1 ${generatorMode === 'analyze' ? 'bg-white dark:bg-gray-700 text-amber-500 shadow-sm ring-1 ring-amber-100' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <BarChart3 className="w-4 h-4" /> Análise
-                    </button>
+                <div className="flex items-center gap-2 ml-auto">
+                    {(isAILoading || isBatchLoading || isAnalyzing) && <Loader2 className="w-4 h-4 animate-spin text-brand-600" />}
+                    {chatHistory.length > 0 && (
+                        <button
+                            onClick={handleClearChat}
+                            className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-xl transition-colors"
+                            title="Limpar conversa"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-
-                {/* MODE: CHAT */}
-                {generatorMode === 'chat' && (
-                    <>
-                        {chatHistory.length === 0 && (
-                            <div className="flex flex-col items-center justify-center text-center h-40 opacity-50">
-                                <Sparkles className="w-10 h-10 text-brand-500 mb-2" />
-                                <p className="text-xs font-medium">"Criar X-Bacon com fritas por 25 reais"</p>
-                            </div>
-                        )}
-                        {chatHistory.map((chat: any, idx) => (
-                            <div key={idx} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[90%] p-3 rounded-2xl text-xs ${chat.role === 'user'
-                                    ? 'bg-brand-600 text-white rounded-tr-none'
-                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-tl-none'}`}
-                                >
-                                    {chat.image && (
-                                        <div className="mb-2 overflow-hidden rounded-xl border border-white/20 shadow-sm">
-                                            <img src={chat.image} alt="Enviada" className="w-full max-h-48 object-cover" />
-                                        </div>
-                                    )}
-                                    <div dangerouslySetInnerHTML={{ __html: chat.content }} />
-                                </div>
-                            </div>
-                        ))}
-
-                        {pendingChatProducts.length > 0 && (
-                            <div className="pt-6 mt-6 border-t border-gray-100 dark:border-gray-700">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center shadow-lg">
-                                            <Sparkles className="w-4 h-4 text-white" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-sm dark:text-white uppercase tracking-tight">Produtos Sugeridos</h4>
-                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Gerados pela IA • {pendingChatProducts.length} {pendingChatProducts.length === 1 ? 'item' : 'itens'}</p>
-                                        </div>
-                                    </div>
-                                    {pendingChatProducts.length > 1 && (
-                                        <Button size="sm" onClick={handleApproveAll} disabled={isSaving} className="rounded-xl">
-                                            <Check className="w-3.5 h-3.5 mr-1.5" />
-                                            Aprovar Tudo
-                                        </Button>
-                                    )}
-                                </div>
-
-                                <div className="space-y-3">
-                                    {pendingChatProducts.map((prod) => (
-                                        <div
-                                            key={prod.id_temp}
-                                            className="group relative bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-brand-200 dark:hover:border-brand-900/30 transition-all duration-300 hover:shadow-xl hover:shadow-brand-500/5 animate-in fade-in slide-in-from-bottom-2"
-                                        >
-                                            {/* Badge IA */}
-                                            <div className="absolute -top-2 -right-2 px-2 py-1 bg-gradient-to-r from-brand-500 to-purple-600 rounded-full shadow-lg">
-                                                <span className="text-[8px] font-black text-white uppercase tracking-widest flex items-center gap-1">
-                                                    <Sparkles className="w-2 h-2" />
-                                                    IA
-                                                </span>
-                                            </div>
-
-                                            {editingItem === prod.id_temp ? (
-                                                <div className="space-y-3">
-                                                    <input
-                                                        value={editForm.name}
-                                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                                                        className="w-full text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
-                                                        placeholder="Nome do produto"
-                                                    />
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="number"
-                                                            value={editForm.price}
-                                                            onChange={e => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
-                                                            className="w-24 text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
-                                                            placeholder="Preço"
-                                                        />
-                                                        <select
-                                                            value={editForm.category_name}
-                                                            onChange={e => setEditForm({ ...editForm, category_name: e.target.value })}
-                                                            className="flex-1 text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
-                                                        >
-                                                            {categories.map(c => (
-                                                                <option key={c.id} value={c.name}>{c.name}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <textarea
-                                                        value={editForm.description}
-                                                        onChange={e => setEditForm({ ...editForm, description: e.target.value })}
-                                                        className="w-full text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white h-20 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all resize-none"
-                                                        placeholder="Descrição do produto"
-                                                    />
-                                                    <div className="flex justify-end gap-2 pt-2">
-                                                        <Button size="sm" variant="secondary" onClick={() => setEditingItem(null)} className="rounded-xl">
-                                                            <X className="w-3.5 h-3.5 mr-1.5" />
-                                                            Cancelar
-                                                        </Button>
-                                                        <Button size="sm" onClick={saveEdit} className="rounded-xl">
-                                                            <Check className="w-3.5 h-3.5 mr-1.5" />
-                                                            Salvar
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex justify-between items-start mb-3">
-                                                        <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.15em] py-1.5 px-2.5 bg-brand-50 dark:bg-brand-900/20 rounded-full border border-brand-100 dark:border-brand-900/30">
-                                                            <Package className="w-2.5 h-2.5" />
-                                                            {prod.category_name}
-                                                        </span>
-                                                        <span className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
-                                                            {prod.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                                        </span>
-                                                    </div>
-                                                    <h5 className="font-black text-base dark:text-white mb-2 leading-tight group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                                                        {prod.name}
-                                                    </h5>
-                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
-                                                        {prod.description || 'Sem descrição'}
-                                                    </p>
-                                                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
-                                                        <div className="flex gap-1.5">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setPreviewItem(prod);
-                                                                    setShowPreviewModal(true);
-                                                                }}
-                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all hover:scale-105"
-                                                                title="Visualizar"
-                                                            >
-                                                                <Eye className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDiscard(prod.id_temp!)}
-                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-rose-500 hover:text-rose-500 transition-all hover:scale-105"
-                                                                disabled={isSaving}
-                                                                title="Descartar"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => startEdit(prod)}
-                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-amber-500 hover:text-amber-600 transition-all hover:scale-105"
-                                                                disabled={isSaving}
-                                                                title="Editar"
-                                                            >
-                                                                <Edit2 className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleApproveProduct(prod.id_temp!)}
-                                                            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-brand-500/25 hover:shadow-xl hover:shadow-brand-500/40 hover:scale-105 active:scale-95"
-                                                            disabled={isSaving}
-                                                        >
-                                                            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                                                            Adicionar
-                                                        </button>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        <div ref={chatEndRef} />
-                    </>
-                )}
-
-                {/* MODE: BATCH */}
-                {generatorMode === 'batch' && (
-                    <div className="flex flex-col h-full">
-                        <textarea
-                            value={batchInput}
-                            onChange={(e) => setBatchInput(e.target.value)}
-                            placeholder="Cole sua lista aqui...&#10;Ex:&#10;Coca Cola - R$ 12,00&#10;X-Tudo - R$ 25,00"
-                            className="w-full h-40 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl p-4 text-xs outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none mb-2"
-                        />
-                        <Button fullWidth size="sm" onClick={handleBatchGenerate} disabled={isBatchLoading || !batchInput.trim()}>
-                            <Sparkles className="w-4 h-4 mr-2" /> Gerar Produtos
-                        </Button>
-
-                        {/* Produtos pendentes específicos do modo Lista aparecem aqui agora */}
-                        {pendingBatchProducts.length > 0 && (
-                            <div className="pt-6 mt-6 border-t border-gray-100 dark:border-gray-700">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
-                                            <Package className="w-4 h-4 text-white" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-sm dark:text-white uppercase tracking-tight">Revisão de Lote</h4>
-                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Importados • {pendingBatchProducts.length} {pendingBatchProducts.length === 1 ? 'item' : 'itens'}</p>
-                                        </div>
-                                    </div>
-                                    {pendingBatchProducts.length > 1 && (
-                                        <Button size="sm" onClick={handleApproveAll} disabled={isSaving} className="rounded-xl">
-                                            <Check className="w-3.5 h-3.5 mr-1.5" />
-                                            Aprovar Tudo
-                                        </Button>
-                                    )}
-                                </div>
-
-                                <div className="space-y-3">
-                                    {pendingBatchProducts.map((prod) => (
-                                        <div
-                                            key={prod.id_temp}
-                                            className="group relative bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 animate-in fade-in slide-in-from-bottom-2"
-                                        >
-                                            {/* Badge Lote */}
-                                            <div className="absolute -top-2 -right-2 px-2 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full shadow-lg">
-                                                <span className="text-[8px] font-black text-white uppercase tracking-widest flex items-center gap-1">
-                                                    <Package className="w-2 h-2" />
-                                                    LOTE
-                                                </span>
-                                            </div>
-
-                                            {editingItem === prod.id_temp ? (
-                                                <div className="space-y-3">
-                                                    <input
-                                                        value={editForm.name}
-                                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                                                        className="w-full text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
-                                                        placeholder="Nome do produto"
-                                                    />
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="number"
-                                                            value={editForm.price}
-                                                            onChange={e => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
-                                                            className="w-24 text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
-                                                            placeholder="Preço"
-                                                        />
-                                                        <select
-                                                            value={editForm.category_name}
-                                                            onChange={e => setEditForm({ ...editForm, category_name: e.target.value })}
-                                                            className="flex-1 text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
-                                                        >
-                                                            {categories.map(c => (
-                                                                <option key={c.id} value={c.name}>{c.name}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <textarea
-                                                        value={editForm.description}
-                                                        onChange={e => setEditForm({ ...editForm, description: e.target.value })}
-                                                        className="w-full text-sm p-2.5 rounded-xl border-2 border-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:text-white h-20 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all resize-none"
-                                                        placeholder="Descrição do produto"
-                                                    />
-                                                    <div className="flex justify-end gap-2 pt-2">
-                                                        <Button size="sm" variant="secondary" onClick={() => setEditingItem(null)} className="rounded-xl">
-                                                            <X className="w-3.5 h-3.5 mr-1.5" />
-                                                            Cancelar
-                                                        </Button>
-                                                        <Button size="sm" onClick={saveEdit} className="rounded-xl">
-                                                            <Check className="w-3.5 h-3.5 mr-1.5" />
-                                                            Salvar
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex justify-between items-start mb-3">
-                                                        <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.15em] py-1.5 px-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-full border border-emerald-100 dark:border-emerald-900/30">
-                                                            <Package className="w-2.5 h-2.5" />
-                                                            {prod.category_name}
-                                                        </span>
-                                                        <span className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
-                                                            {prod.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                                        </span>
-                                                    </div>
-                                                    <h5 className="font-black text-base dark:text-white mb-2 leading-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                                                        {prod.name}
-                                                    </h5>
-                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
-                                                        {prod.description || 'Sem descrição'}
-                                                    </p>
-                                                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
-                                                        <div className="flex gap-1.5">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setPreviewItem(prod);
-                                                                    setShowPreviewModal(true);
-                                                                }}
-                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all hover:scale-105"
-                                                                title="Visualizar"
-                                                            >
-                                                                <Eye className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDiscard(prod.id_temp!)}
-                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-rose-500 hover:text-rose-500 transition-all hover:scale-105"
-                                                                disabled={isSaving}
-                                                                title="Descartar"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => startEdit(prod)}
-                                                                className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-amber-500 hover:text-amber-600 transition-all hover:scale-105"
-                                                                disabled={isSaving}
-                                                                title="Editar"
-                                                            >
-                                                                <Edit2 className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleApproveProduct(prod.id_temp!)}
-                                                            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/40 hover:scale-105 active:scale-95"
-                                                            disabled={isSaving}
-                                                        >
-                                                            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                                                            Adicionar
-                                                        </button>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* MODE: ANALYZE */}
-                {generatorMode === 'analyze' && (
-                    <div className="flex flex-col h-full">
-                        {!analysisReport && !isAnalyzing ? (
-                            <div className="text-center py-6">
-                                <BarChart3 className="w-12 h-12 text-amber-200 mx-auto mb-3" />
-                                <h3 className="font-bold text-sm dark:text-white">Análise de Catálogo</h3>
-                                <p className="text-xs text-gray-500 mb-4 px-4">
-                                    Nossa IA vai encontrar oportunidades para você vender mais, sugerindo melhores descrições, preços e novos itens.
-                                </p>
-                                <Button fullWidth size="sm" variant="secondary" onClick={handleAnalyzeCatalog} disabled={isAnalyzing}>
-                                    <Sparkles className="w-4 h-4 mr-2" />
-                                    {isAnalyzing ? 'Analisando...' : 'Iniciar Análise'}
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="space-y-6">
-                                {isAnalyzing && (
-                                    <div className="flex flex-col items-center justify-center py-10">
-                                        <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-2" />
-                                        <p className="text-[10px] font-bold text-amber-600 animate-pulse">RECALCULANDO MÉTRICAS...</p>
-                                    </div>
-                                )}
-
-                                {analysisReport && !isAnalyzing && (
-                                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        {/* Score Dashboard */}
-                                        <div className="bg-gradient-to-br from-brand-600 to-indigo-700 rounded-3xl p-5 text-white shadow-lg mb-4 relative overflow-hidden">
-                                            <div className="relative z-10">
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div>
-                                                        <h4 className="text-[10px] font-black uppercase tracking-widest opacity-80">Catálogo Score</h4>
-                                                        <div className="text-4xl font-black mt-1 flex items-baseline">
-                                                            {analysisReport.score}
-                                                            <span className="text-xs font-normal opacity-60 ml-1">/100</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="p-2 bg-white/20 rounded-2xl backdrop-blur-md">
-                                                        <BarChart3 className="w-5 h-5 text-white" />
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                                    <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
-                                                        <div className="text-[8px] uppercase font-bold opacity-70">Descrições</div>
-                                                        <div className="text-sm font-black">{analysisReport.metrics.descriptionQuality}%</div>
-                                                    </div>
-                                                    <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
-                                                        <div className="text-[8px] uppercase font-bold opacity-70">Mix Produto</div>
-                                                        <div className="text-sm font-black">{analysisReport.metrics.mixCompleteness}%</div>
-                                                    </div>
-                                                    <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
-                                                        <div className="text-[8px] uppercase font-bold opacity-70">Preços</div>
-                                                        <div className="text-sm font-black">{analysisReport.metrics.pricingConsistency}%</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {/* Design element */}
-                                            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
-                                        </div>
-
-                                        {/* Summary & Points */}
-                                        <div className="space-y-4">
-                                            <div className="bg-gray-50 dark:bg-gray-900/40 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
-                                                <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed italic">
-                                                    "{analysisReport.summary}"
-                                                </p>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div className="space-y-2">
-                                                    <h5 className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase flex items-center gap-1">
-                                                        <Check className="w-3 h-3" /> Pontos Fortes
-                                                    </h5>
-                                                    <div className="space-y-1">
-                                                        {analysisReport.strengths.map((s, i) => (
-                                                            <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/10">
-                                                                {s}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <h5 className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1">
-                                                        <AlertCircle className="w-3 h-3" /> Melhorar
-                                                    </h5>
-                                                    <div className="space-y-1">
-                                                        {analysisReport.weaknesses.map((w, i) => (
-                                                            <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 bg-rose-500/5 p-2 rounded-lg border border-rose-500/10">
-                                                                {w}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Suggestions Area */}
-                                        <div className="mt-8 pt-6 border-t dark:border-gray-700">
-                                            <div className="flex justify-between items-center mb-4">
-                                                <h4 className="font-black text-xs uppercase tracking-wider text-gray-400">Planos de Ação ({analysisSuggestions.length})</h4>
-                                                <button onClick={() => { setAnalysisReport(null); setAnalysisSuggestions([]); }} className="text-[10px] text-brand-600 font-bold hover:underline">Refazer Análise</button>
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                {analysisSuggestions.map(sug => (
-                                                    <div key={sug.id} className="group bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-4 rounded-3xl hover:border-brand-200 dark:hover:border-brand-900/30 transition-all shadow-sm">
-                                                        <div className="flex gap-3 mb-3">
-                                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${sug.type === 'improvement' ? 'bg-amber-100 dark:bg-amber-900/20 text-amber-600' : 'bg-brand-100 dark:bg-brand-900/20 text-brand-600'}`}>
-                                                                {sug.type === 'improvement' ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                                                            </div>
-                                                            <div>
-                                                                <h5 className="font-bold text-xs text-gray-800 dark:text-white group-hover:text-brand-600 transition-colors uppercase tracking-tight">{sug.suggestion}</h5>
-                                                                <p className="text-[10px] text-gray-500 leading-tight mt-1">{sug.reason}</p>
-                                                            </div>
-                                                        </div>
-
-                                                        {sug.new_data && (
-                                                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3 mb-4 border border-dashed border-gray-200 dark:border-gray-700">
-                                                                <div className="flex justify-between items-center mb-1">
-                                                                    <span className="text-[9px] font-black text-gray-400 uppercase">Sugestão de Dados</span>
-                                                                    {sug.new_data.price && <span className="text-[10px] font-bold text-brand-600">R$ {sug.new_data.price.toFixed(2)}</span>}
-                                                                </div>
-                                                                <div className="text-[11px] font-bold dark:text-gray-200">{sug.new_data.name}</div>
-                                                                <div className="text-[10px] text-gray-500 line-clamp-2 mt-1">{sug.new_data.description}</div>
-                                                            </div>
-                                                        )}
-
-                                                        <Button size="sm" fullWidth variant={sug.type === 'improvement' ? 'secondary' : 'primary'} onClick={() => handleApplySuggestion(sug)} disabled={isSaving}>
-                                                            <Sparkles className="w-3 h-3 mr-2" />
-                                                            {sug.type === 'improvement' ? 'Aplicar Melhoria' : 'Criar Produto'}
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                <div ref={chatEndRef} />
+            <div className="flex gap-2 bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl">
+                <button
+                    onClick={() => setGeneratorMode('chat')}
+                    className={`flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex flex-col items-center gap-1 ${generatorMode === 'chat' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm ring-1 ring-brand-100' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                    <Bot className="w-4 h-4" /> Conversa
+                </button>
+                <button
+                    onClick={() => setGeneratorMode('list')}
+                    className={`flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex flex-col items-center gap-1 ${generatorMode === 'list' ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm ring-1 ring-brand-100' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                    <Package className="w-4 h-4" /> Lista
+                </button>
+                <button
+                    onClick={() => setGeneratorMode('analyze')}
+                    className={`flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex flex-col items-center gap-1 ${generatorMode === 'analyze' ? 'bg-white dark:bg-gray-700 text-amber-500 shadow-sm ring-1 ring-amber-100' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                    <BarChart3 className="w-4 h-4" /> Análise
+                </button>
+                <button
+                    onClick={() => setGeneratorMode('addons')}
+                    className={`flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex flex-col items-center gap-1 ${generatorMode === 'addons' ? 'bg-white dark:bg-gray-700 text-purple-500 shadow-sm ring-1 ring-purple-100' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                    <Layers className="w-4 h-4" /> Adicionais
+                </button>
             </div>
+        </div>
 
-            {/* Input Chat */}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+
+            {/* MODE: CHAT */}
             {generatorMode === 'chat' && (
-                <div className="p-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                    {imagePreview && (
-                        <div className="mb-2 relative w-fit">
-                            <img src={imagePreview} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-brand-500" />
-                            <button
-                                onClick={() => { setSelectedImage(null); setImagePreview(null); }}
-                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-sm"
-                            >
-                                <X className="w-2 h-2" />
-                            </button>
+                <>
+                    {chatHistory.length === 0 && (
+                        <div className="flex flex-col items-center justify-center text-center h-40 opacity-50">
+                            <Sparkles className="w-10 h-10 text-brand-500 mb-2" />
+                            <p className="text-xs font-medium">"Criar X-Bacon com fritas por 25 reais"</p>
                         </div>
                     )}
-                    <div className="flex gap-2 relative">
-                        <div className="relative flex-1">
+                    {chatHistory.map((chat: any, idx) => (
+                        <div key={idx} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[90%] p-3 rounded-2xl text-xs ${chat.role === 'user'
+                                ? 'bg-brand-600 text-white rounded-tr-none'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-tl-none'}`}
+                            >
+                                {chat.image && (
+                                    <div className="mb-2 overflow-hidden rounded-xl border border-white/20 shadow-sm">
+                                        <img src={chat.image} alt="Enviada" className="w-full max-h-48 object-cover" />
+                                    </div>
+                                )}
+                                <div dangerouslySetInnerHTML={{ __html: chat.content }} />
+                            </div>
+                        </div>
+                    ))}
+
+                    {pendingChatProducts.length > 0 && (
+                        <div className="pt-6 mt-6 border-t border-gray-100 dark:border-gray-700">
+                            <div className="flex justify-between items-center mb-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                        <Sparkles className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-sm dark:text-white uppercase tracking-tight">Produtos Sugeridos</h4>
+                                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Gerados pela IA • {pendingChatProducts.length} {pendingChatProducts.length === 1 ? 'item' : 'itens'}</p>
+                                    </div>
+                                </div>
+                                {pendingChatProducts.length > 1 && (
+                                    <Button size="sm" onClick={handleApproveAll} disabled={isSaving} className="rounded-xl">
+                                        <Check className="w-3.5 h-3.5 mr-1.5" />
+                                        Aprovar Tudo
+                                    </Button>
+                                )}
+                            </div>
+
+                            <div className="space-y-3">
+                                {pendingChatProducts.map((prod) => (
+                                    <div
+                                        key={prod.id_temp}
+                                        className="group relative bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-brand-200 dark:hover:border-brand-900/30 transition-all duration-300 hover:shadow-xl hover:shadow-brand-500/5 animate-in fade-in slide-in-from-bottom-2"
+                                    >
+                                        {/* Badge IA */}
+                                        <div className="absolute -top-2 -right-2 px-2 py-1 bg-gradient-to-r from-brand-500 to-purple-600 rounded-full shadow-lg">
+                                            <span className="text-[8px] font-black text-white uppercase tracking-widest flex items-center gap-1">
+                                                <Sparkles className="w-2 h-2" />
+                                                IA
+                                            </span>
+                                        </div>
+
+                                        {true && (
+                                            /* View Mode Only - Edição movida para Modal */
+                                            <>
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.15em] py-1.5 px-2.5 bg-brand-50 dark:bg-brand-900/20 rounded-full border border-brand-100 dark:border-brand-900/30">
+                                                        <Package className="w-2.5 h-2.5" />
+                                                        {prod.category_name}
+                                                    </span>
+                                                    <span className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
+                                                        {prod.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                    </span>
+                                                </div>
+                                                <h5 className="font-black text-base dark:text-white mb-2 leading-tight group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                                                    {prod.name}
+                                                </h5>
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
+                                                    {prod.description || 'Sem descrição'}
+                                                </p>
+                                                <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                                                    <div className="flex gap-1.5">
+                                                        <button
+                                                            onClick={() => {
+                                                                setPreviewItem(prod);
+                                                                setShowPreviewModal(true);
+                                                            }}
+                                                            className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all hover:scale-105"
+                                                            title="Visualizar"
+                                                        >
+                                                            <Eye className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDiscard(prod.id_temp!)}
+                                                            className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-rose-500 hover:text-rose-500 transition-all hover:scale-105"
+                                                            disabled={isSaving}
+                                                            title="Descartar"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => startEdit(prod)}
+                                                            className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-amber-500 hover:text-amber-600 transition-all hover:scale-105"
+                                                            disabled={isSaving}
+                                                            title="Editar"
+                                                        >
+                                                            <Edit2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleApproveProduct(prod.id_temp!)}
+                                                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-brand-500/25 hover:shadow-xl hover:shadow-brand-500/40 hover:scale-105 active:scale-95"
+                                                        disabled={isSaving}
+                                                    >
+                                                        {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                                                        Adicionar
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    <div ref={chatEndRef} />
+                </>
+            )}
+
+            {/* MODE: BATCH */}
+            {generatorMode === 'list' && (
+                <div className="flex flex-col h-full">
+                    <textarea
+                        value={batchInput}
+                        onChange={(e) => setBatchInput(e.target.value)}
+                        placeholder="Cole sua lista aqui...&#10;Ex:&#10;Coca Cola - R$ 12,00&#10;X-Tudo - R$ 25,00"
+                        className="w-full h-40 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl p-4 text-xs outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none mb-2"
+                    />
+                    <Button fullWidth size="sm" onClick={handleBatchGenerate} disabled={isBatchLoading || !batchInput.trim()}>
+                        <Sparkles className="w-4 h-4 mr-2" /> Gerar Produtos
+                    </Button>
+
+                    {/* Produtos pendentes específicos do modo Lista aparecem aqui agora */}
+                    {pendingBatchProducts.length > 0 && (
+                        <div className="pt-6 mt-6 border-t border-gray-100 dark:border-gray-700">
+                            <div className="flex justify-between items-center mb-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
+                                        <Package className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-sm dark:text-white uppercase tracking-tight">Revisão de Lote</h4>
+                                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Importados • {pendingBatchProducts.length} {pendingBatchProducts.length === 1 ? 'item' : 'itens'}</p>
+                                    </div>
+                                </div>
+                                {pendingBatchProducts.length > 1 && (
+                                    <Button size="sm" onClick={handleApproveAll} disabled={isSaving} className="rounded-xl">
+                                        <Check className="w-3.5 h-3.5 mr-1.5" />
+                                        Aprovar Tudo
+                                    </Button>
+                                )}
+                            </div>
+
+                            <div className="space-y-3">
+                                {pendingBatchProducts.map((prod) => (
+                                    <div
+                                        key={prod.id_temp}
+                                        className="group relative bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 animate-in fade-in slide-in-from-bottom-2"
+                                    >
+                                        {/* Badge Lote */}
+                                        <div className="absolute -top-2 -right-2 px-2 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full shadow-lg">
+                                            <span className="text-[8px] font-black text-white uppercase tracking-widest flex items-center gap-1">
+                                                <Package className="w-2 h-2" />
+                                                LOTE
+                                            </span>
+                                        </div>
+
+                                        {true && (
+                                            /* View Mode Only - Edição movida para Modal */
+                                            <>
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.15em] py-1.5 px-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-full border border-emerald-100 dark:border-emerald-900/30">
+                                                        <Package className="w-2.5 h-2.5" />
+                                                        {prod.category_name}
+                                                    </span>
+                                                    <span className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
+                                                        {prod.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                    </span>
+                                                </div>
+                                                <h5 className="font-black text-base dark:text-white mb-2 leading-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                                                    {prod.name}
+                                                </h5>
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
+                                                    {prod.description || 'Sem descrição'}
+                                                </p>
+                                                <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                                                    <div className="flex gap-1.5">
+                                                        <button
+                                                            onClick={() => {
+                                                                setPreviewItem(prod);
+                                                                setShowPreviewModal(true);
+                                                            }}
+                                                            className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all hover:scale-105"
+                                                            title="Visualizar"
+                                                        >
+                                                            <Eye className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDiscard(prod.id_temp!)}
+                                                            className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-rose-500 hover:text-rose-500 transition-all hover:scale-105"
+                                                            disabled={isSaving}
+                                                            title="Descartar"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => startEdit(prod)}
+                                                            className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-amber-500 hover:text-amber-600 transition-all hover:scale-105"
+                                                            disabled={isSaving}
+                                                            title="Editar"
+                                                        >
+                                                            <Edit2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleApproveProduct(prod.id_temp!)}
+                                                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/40 hover:scale-105 active:scale-95"
+                                                        disabled={isSaving}
+                                                    >
+                                                        {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                                                        Adicionar
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* MODE: ANALYZE */}
+            {generatorMode === 'analyze' && (
+                <div className="flex flex-col h-full">
+                    {!analysisReport && !isAnalyzing ? (
+                        <div className="text-center py-6">
+                            <BarChart3 className="w-12 h-12 text-amber-200 mx-auto mb-3" />
+                            <h3 className="font-bold text-sm dark:text-white">Análise de Catálogo</h3>
+                            <p className="text-xs text-gray-500 mb-4 px-4">
+                                Nossa IA vai encontrar oportunidades para você vender mais, sugerindo melhores descrições, preços e novos itens.
+                            </p>
+                            <Button fullWidth size="sm" variant="secondary" onClick={handleAnalyzeCatalog} disabled={isAnalyzing}>
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                {isAnalyzing ? 'Analisando...' : 'Iniciar Análise'}
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            {isAnalyzing && (
+                                <div className="flex flex-col items-center justify-center py-10">
+                                    <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-2" />
+                                    <p className="text-[10px] font-bold text-amber-600 animate-pulse">RECALCULANDO MÉTRICAS...</p>
+                                </div>
+                            )}
+
+                            {analysisReport && !isAnalyzing && (
+                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    {/* Score Dashboard */}
+                                    <div className="bg-gradient-to-br from-brand-600 to-indigo-700 rounded-3xl p-5 text-white shadow-lg mb-4 relative overflow-hidden">
+                                        <div className="relative z-10">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div>
+                                                    <h4 className="text-[10px] font-black uppercase tracking-widest opacity-80">Catálogo Score</h4>
+                                                    <div className="text-4xl font-black mt-1 flex items-baseline">
+                                                        {analysisReport.score}
+                                                        <span className="text-xs font-normal opacity-60 ml-1">/100</span>
+                                                    </div>
+                                                </div>
+                                                <div className="p-2 bg-white/20 rounded-2xl backdrop-blur-md">
+                                                    <BarChart3 className="w-5 h-5 text-white" />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+                                                    <div className="text-[8px] uppercase font-bold opacity-70">Descrições</div>
+                                                    <div className="text-sm font-black">{analysisReport.metrics.descriptionQuality}%</div>
+                                                </div>
+                                                <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+                                                    <div className="text-[8px] uppercase font-bold opacity-70">Mix Produto</div>
+                                                    <div className="text-sm font-black">{analysisReport.metrics.mixCompleteness}%</div>
+                                                </div>
+                                                <div className="bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+                                                    <div className="text-[8px] uppercase font-bold opacity-70">Preços</div>
+                                                    <div className="text-sm font-black">{analysisReport.metrics.pricingConsistency}%</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {/* Design element */}
+                                        <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+                                    </div>
+
+                                    {/* Summary & Points */}
+                                    <div className="space-y-4">
+                                        <div className="bg-gray-50 dark:bg-gray-900/40 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
+                                            <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed italic">
+                                                "{analysisReport.summary}"
+                                            </p>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-2">
+                                                <h5 className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase flex items-center gap-1">
+                                                    <Check className="w-3 h-3" /> Pontos Fortes
+                                                </h5>
+                                                <div className="space-y-1">
+                                                    {analysisReport.strengths.map((s, i) => (
+                                                        <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/10">
+                                                            {s}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <h5 className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1">
+                                                    <AlertCircle className="w-3 h-3" /> Melhorar
+                                                </h5>
+                                                <div className="space-y-1">
+                                                    {analysisReport.weaknesses.map((w, i) => (
+                                                        <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 bg-rose-500/5 p-2 rounded-lg border border-rose-500/10">
+                                                            {w}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Suggestions Area */}
+                                    <div className="mt-8 pt-6 border-t dark:border-gray-700">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="font-black text-xs uppercase tracking-wider text-gray-400">Planos de Ação ({analysisSuggestions.length})</h4>
+                                            <button onClick={() => { setAnalysisReport(null); setAnalysisSuggestions([]); }} className="text-[10px] text-brand-600 font-bold hover:underline">Refazer Análise</button>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {analysisSuggestions.map(sug => (
+                                                <div key={sug.id} className="group bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-4 rounded-3xl hover:border-brand-200 dark:hover:border-brand-900/30 transition-all shadow-sm">
+                                                    <div className="flex gap-3 mb-3">
+                                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${sug.type === 'improvement' ? 'bg-amber-100 dark:bg-amber-900/20 text-amber-600' : 'bg-brand-100 dark:bg-brand-900/20 text-brand-600'}`}>
+                                                            {sug.type === 'improvement' ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                                        </div>
+                                                        <div>
+                                                            <h5 className="font-bold text-xs text-gray-800 dark:text-white group-hover:text-brand-600 transition-colors uppercase tracking-tight">{sug.suggestion}</h5>
+                                                            <p className="text-[10px] text-gray-500 leading-tight mt-1">{sug.reason}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {sug.new_data && (
+                                                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3 mb-4 border border-dashed border-gray-200 dark:border-gray-700">
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <span className="text-[9px] font-black text-gray-400 uppercase">Sugestão de Dados</span>
+                                                                {sug.new_data.price && <span className="text-[10px] font-bold text-brand-600">R$ {sug.new_data.price.toFixed(2)}</span>}
+                                                            </div>
+                                                            <div className="text-[11px] font-bold dark:text-gray-200">{sug.new_data.name}</div>
+                                                            <div className="text-[10px] text-gray-500 line-clamp-2 mt-1">{sug.new_data.description}</div>
+                                                        </div>
+                                                    )}
+
+                                                    <Button size="sm" fullWidth variant={sug.type === 'improvement' ? 'secondary' : 'primary'} onClick={() => handleApplySuggestion(sug)} disabled={isSaving}>
+                                                        <Sparkles className="w-3 h-3 mr-2" />
+                                                        {sug.type === 'improvement' ? 'Aplicar Melhoria' : 'Criar Produto'}
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* MODE: ADDONS */}
+            {generatorMode === 'addons' && (
+                <div className="flex flex-col h-full bg-gray-50/50 dark:bg-gray-900/50">
+                    <div className="p-4 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
+
+                        {pendingAddonGroups.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center p-8 opacity-50">
+                                <Layers className="w-12 h-12 text-gray-300 mb-3" />
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Sem sugestões no momento</p>
+                                <p className="text-[10px] text-gray-400 mt-1 max-w-[200px]">
+                                    Peça logo abaixo para a IA criar grupos de complementos para seus produtos.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 pb-20">
+                                {pendingAddonGroups.map((group) => (
+                                    <div key={group.id_temp} className="bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm animate-in slide-in-from-bottom-2">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <h4 className="font-black text-sm text-gray-800 dark:text-white">{group.name}</h4>
+                                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-gray-500 uppercase">
+                                                        {group.type === 'SINGLE' ? 'Escolha Única' : 'Múltipla'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                                    Min: {group.min} • Max: {group.max}
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button onClick={() => handleEditAddonGroup(group)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl text-brand-600 transition-colors">
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => handleDiscardAddonGroup(group.id_temp!)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl text-rose-500 transition-colors">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1 mb-4">
+                                            {group.options?.map((opt, idx) => (
+                                                <div key={idx} className="flex justify-between text-xs py-1 px-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg">
+                                                    <span className="text-gray-600 dark:text-gray-300">{opt.name}</span>
+                                                    <span className="font-bold text-gray-900 dark:text-white">
+                                                        {opt.price === 0 ? 'Grátis' : `+ R$ ${Number(opt.price).toFixed(2)}`}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <Button fullWidth onClick={() => handleApproveAddonGroup(group.id_temp!)} disabled={isSaving}>
+                                            <Check className="w-4 h-4 mr-2" />
+                                            Aprovar Grupo
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-3 border-t dark:border-gray-700 bg-white dark:bg-gray-900">
+                        <div className="relative">
                             <input
                                 type="text"
-                                value={aiMessage}
-                                onChange={(e) => setAiMessage(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                                placeholder="Diga ou envie foto do cardápio..."
-                                className="w-full bg-white dark:bg-gray-800 border-none rounded-xl pl-9 pr-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                                value={addonMessage}
+                                onChange={(e) => setAddonMessage(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleSendAddonsMessage()}
+                                placeholder="Ex: Crie adicionais para Açaí (Frutas, Caldas...)"
+                                className="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-xl pl-4 pr-12 py-3 text-xs outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
                                 disabled={isAILoading}
                             />
                             <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-500 transition-colors"
-                                title="Anexar imagem"
+                                onClick={handleSendAddonsMessage}
+                                disabled={isAILoading || !addonMessage.trim()}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:bg-gray-300 transition-all"
                             >
-                                <Plus className="w-4 h-4" />
+                                {isAILoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             </button>
-                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
                         </div>
+                    </div>
+                </div>
+            )}
+
+            <div ref={chatEndRef} />
+        </div>
+
+        {/* Input Chat */}
+        {generatorMode === 'chat' && (
+            <div className="p-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                {imagePreview && (
+                    <div className="mb-2 relative w-fit">
+                        <img src={imagePreview} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-brand-500" />
                         <button
-                            onClick={handleSendMessage}
-                            disabled={isAILoading || (!aiMessage.trim() && !selectedImage)}
-                            className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:bg-gray-300 transition-all font-bold text-xs"
+                            onClick={() => { setSelectedImage(null); setImagePreview(null); }}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-sm"
                         >
-                            {isAILoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            <X className="w-2 h-2" />
                         </button>
                     </div>
+                )}
+                <div className="flex gap-2 relative">
+                    <div className="relative flex-1">
+                        <input
+                            type="text"
+                            value={aiMessage}
+                            onChange={(e) => setAiMessage(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                            placeholder="Diga ou envie foto do cardápio..."
+                            className="w-full bg-white dark:bg-gray-800 border-none rounded-xl pl-9 pr-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                            disabled={isAILoading}
+                        />
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-500 transition-colors"
+                            title="Anexar imagem"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
+                    </div>
+                    <button
+                        onClick={handleSendMessage}
+                        disabled={isAILoading || (!aiMessage.trim() && !selectedImage)}
+                        className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:bg-gray-300 transition-all font-bold text-xs"
+                    >
+                        {isAILoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </button>
                 </div>
-            )}
+            </div>
+        )}
 
-            {/* Preview Modal */}
-            {showPreviewModal && previewItem && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 text-left animate-in fade-in duration-200" onClick={() => setShowPreviewModal(false)}>
-                    <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl shadow-black/20 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-                        {/* Header com Gradiente */}
-                        <div className="relative bg-gradient-to-br from-brand-600 to-purple-700 p-6 text-white overflow-hidden">
-                            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjA1IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
-                            <div className="relative z-10">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center">
-                                            <Eye className="w-5 h-5 text-white" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-sm uppercase tracking-tight">Preview do Produto</h4>
-                                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Visualização Detalhada</p>
-                                        </div>
+        {/* Preview Modal */}
+        {showPreviewModal && previewItem && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 text-left animate-in fade-in duration-200" onClick={() => setShowPreviewModal(false)}>
+                <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl shadow-black/20 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                    {/* Header com Gradiente */}
+                    <div className="relative bg-gradient-to-br from-brand-600 to-purple-700 p-6 text-white overflow-hidden">
+                        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjA1IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+                        <div className="relative z-10">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+                                        <Eye className="w-5 h-5 text-white" />
                                     </div>
-                                    <button
-                                        onClick={() => setShowPreviewModal(false)}
-                                        className="p-2 hover:bg-white/20 rounded-xl transition-all"
-                                    >
-                                        <X className="w-5 h-5" />
-                                    </button>
+                                    <div>
+                                        <h4 className="font-black text-sm uppercase tracking-tight">Preview do Produto</h4>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Visualização Detalhada</p>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-
-                        {/* Conteúdo */}
-                        <div className="p-6 space-y-5">
-                            {/* Categoria e Preço */}
-                            <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-800">
-                                <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.15em] py-2 px-3 bg-brand-50 dark:bg-brand-900/20 rounded-full border border-brand-100 dark:border-brand-900/30">
-                                    <Package className="w-3 h-3" />
-                                    {previewItem.category_name || previewItem.category || 'Sem categoria'}
-                                </span>
-                                <div className="text-right">
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Preço</p>
-                                    <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                                        {previewItem.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Nome */}
-                            <div>
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Nome do Produto</label>
-                                <p className="text-xl font-black dark:text-white leading-tight">{previewItem.name}</p>
-                            </div>
-
-                            {/* Descrição */}
-                            <div>
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Descrição</label>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                                    {previewItem.description || 'Nenhuma descrição disponível para este produto.'}
-                                </p>
-                            </div>
-
-                            {/* Status (se disponível) */}
-                            {previewItem.is_active !== undefined && (
-                                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Status do Produto</span>
-                                    <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${previewItem.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
-                                        {previewItem.is_active ? 'Ativo' : 'Pausado'}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Footer com Ações */}
-                        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-800 flex gap-3">
-                            <Button
-                                fullWidth
-                                variant="secondary"
-                                onClick={() => setShowPreviewModal(false)}
-                                className="rounded-xl"
-                            >
-                                Fechar
-                            </Button>
-                            {previewItem.id_temp && (
-                                <Button
-                                    fullWidth
-                                    onClick={() => {
-                                        startEdit(previewItem);
-                                        setShowPreviewModal(false);
-                                    }}
-                                    className="rounded-xl"
+                                <button
+                                    onClick={() => setShowPreviewModal(false)}
+                                    className="p-2 hover:bg-white/20 rounded-xl transition-all"
                                 >
-                                    <Edit2 className="w-4 h-4 mr-2" />
-                                    Editar
-                                </Button>
-                            )}
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
                         </div>
                     </div>
+
+                    {/* Conteúdo */}
+                    <div className="p-6 space-y-5">
+                        {/* Categoria e Preço */}
+                        <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-800">
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.15em] py-2 px-3 bg-brand-50 dark:bg-brand-900/20 rounded-full border border-brand-100 dark:border-brand-900/30">
+                                <Package className="w-3 h-3" />
+                                {previewItem.category_name || previewItem.category || 'Sem categoria'}
+                            </span>
+                            <div className="text-right">
+                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Preço</p>
+                                <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                                    {previewItem.price?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Nome */}
+                        <div>
+                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Nome do Produto</label>
+                            <p className="text-xl font-black dark:text-white leading-tight">{previewItem.name}</p>
+                        </div>
+
+                        {/* Descrição */}
+                        <div>
+                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Descrição</label>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                                {previewItem.description || 'Nenhuma descrição disponível para este produto.'}
+                            </p>
+                        </div>
+
+                        {/* Status (se disponível) */}
+                        {previewItem.is_active !== undefined && (
+                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Status do Produto</span>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${previewItem.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                    {previewItem.is_active ? 'Ativo' : 'Pausado'}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer com Ações */}
+                    <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-800 flex gap-3">
+                        <Button
+                            fullWidth
+                            variant="secondary"
+                            onClick={() => setShowPreviewModal(false)}
+                            className="rounded-xl"
+                        >
+                            Fechar
+                        </Button>
+                        {previewItem.id_temp && (
+                            <Button
+                                fullWidth
+                                onClick={() => {
+                                    startEdit(previewItem);
+                                    setShowPreviewModal(false);
+                                }}
+                                className="rounded-xl"
+                            >
+                                <Edit2 className="w-4 h-4 mr-2" />
+                                Editar
+                            </Button>
+                        )}
+                    </div>
                 </div>
-            )}
-        </div>
-    );
+            </div>
+        )}
+    </div>
+);
 };

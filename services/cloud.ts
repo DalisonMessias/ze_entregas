@@ -1366,6 +1366,26 @@ export const getShopSettings = async (): Promise<ShopSettings | null> => {
     return data;
 };
 
+export const getAPIKey = async (provider: string): Promise<string | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    try {
+        const { data, error } = await sb
+            .from('api_keys')
+            .select('key_value')
+            .eq('provider', provider)
+            .single();
+
+        if (error || !data) return null;
+        return data.key_value;
+    } catch (e) {
+        console.error(`Error fetching API key for ${provider}:`, e);
+        return null;
+    }
+};
+
+
 // --- STORE PRODUCTS ---
 
 export const getStoreProducts = async (targetStoreId?: string, signal?: AbortSignal): Promise<StoreProduct[]> => {
