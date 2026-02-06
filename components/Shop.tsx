@@ -305,6 +305,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
         try {
             // 1. Create Order Locally
             const order = await cloud.createOrder({
+                store_id: 'PLATFORM',
                 items: cart.map(item => ({ product_id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price })),
                 total_price: total,
                 payment_method: 'PENDING', // Will be updated by webhook
@@ -805,29 +806,4 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
             )}
         </div>
     );
-
-
-
-    // SUCCESS VIEW - (Handling Redirect Return)
-    if (view === 'success' && finalOrder) return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-6 animate-in zoom-in-95">
-            <div className="bg-white dark:bg-gray-900 p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-brand-500"></div>
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Pedido Recebido!</h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">
-                    Seu pedido <span className="font-mono font-bold text-gray-900 dark:text-white">#{finalOrder.id.substring(0, 8)}</span> foi criado.
-                </p>
-
-                <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl text-blue-800 dark:text-blue-300 text-sm font-medium">
-                    Aguardando confirmação do pagamento. Você será notificado.
-                </div>
-
-                <Button onClick={() => { setView('list'); setCart([]); setFinalOrder(null); }} variant="outline" className="w-full py-4 rounded-2xl border-2">
-                    Voltar para Loja
-                </Button>
-            </div >
-        </div >
-    );
-
-    return null;
 };

@@ -8385,16 +8385,6 @@ DROP POLICY IF EXISTS "Authenticated users can insert api logs" ON public.api_lo
 CREATE POLICY "Authenticated users can insert api logs" ON public.api_logs
     FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
--- Garantir colunas da InfinitePay em shop_settings (Migraﾃｧﾃ｣o Segura)
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shop_settings' AND column_name = 'infinitepay_handle') THEN
-        ALTER TABLE public.shop_settings ADD COLUMN infinitepay_handle TEXT;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shop_settings' AND column_name = 'infinitepay_webhook_secret') THEN
-        ALTER TABLE public.shop_settings ADD COLUMN infinitepay_webhook_secret TEXT;
-    END IF;
-END $$;
 
 -- Garantir colunas da InfinitePay em orders (Migraﾃｧﾃ｣o Segura)
 DO $$
@@ -15219,3 +15209,131 @@ $$;
 
 -- Grant execute to anon and authenticated
 GRANT EXECUTE ON FUNCTION public_get_store_by_slug(text, text) TO anon, authenticated, service_role;
+
+-- ==================================================================
+-- DASHBOARD DE DESEMPENHO (LOJISTA) - Adicionado em 2026-02-06
+-- ==================================================================
+
+CREATE OR REPLACE FUNCTION public.get_store_performance_dashboard(
+    p_store_id UUID,
+    p_start_date TIMESTAMPTZ,
+    p_end_date TIMESTAMPTZ,
+    p_granularity TEXT DEFAULT 'day'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    result JSONB;
+    v_previous_start TIMESTAMPTZ;
+    v_previous_end TIMESTAMPTZ;
+BEGIN
+    -- Determinar período anterior para comparação
+    v_previous_end := p_start_date - interval '1 second';
+    v_previous_start := v_previous_end - (p_end_date - p_start_date);
+
+    WITH 
+    -- 1. Dados do Período Atual
+    current_period AS (
+        SELECT 
+            COUNT(*) AS total_orders,
+            COALESCE(SUM(total_price), 0) AS total_revenue,
+            COALESCE(AVG(total_price), 0) AS avg_ticket,
+            COUNT(*) FILTER (WHERE status = 'CANCELLED') AS cancelled_count,
+            COUNT(*) FILTER (WHERE status = 'DELIVERED') AS completed_count,
+            -- Simulação de tempo médio: updated_at (conclusão) - created_at
+            COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) FILTER (WHERE status = 'DELIVERED'), 0) / 60 AS avg_delivery_time_min
+        FROM public.orders
+        WHERE store_id = p_store_id
+          AND created_at BETWEEN p_start_date AND p_end_date
+    ),
+    -- 2. Dados do Período Anterior
+    previous_period AS (
+        SELECT 
+            COUNT(*) AS total_orders,
+            COALESCE(SUM(total_price), 0) AS total_revenue,
+             COALESCE(AVG(total_price), 0) AS avg_ticket
+        FROM public.orders
+        WHERE store_id = p_store_id
+          AND created_at BETWEEN v_previous_start AND v_previous_end
+    ),
+    -- 3. Gráficos Temporal
+    graphs_data AS (
+        SELECT 
+            to_char(date_trunc(p_granularity, created_at), 'YYYY-MM-DD"T"HH24:MI:SS') as date_str,
+            SUM(total_price) as revenue,
+            COUNT(*) as count
+        FROM public.orders
+        WHERE store_id = p_store_id
+          AND created_at BETWEEN p_start_date AND p_end_date
+          AND status != 'CANCELLED'
+        GROUP BY date_trunc(p_granularity, created_at)
+        ORDER BY date_trunc(p_granularity, created_at)
+    ),
+    graphs AS (
+        SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'date', date_str,
+            'revenue', revenue,
+            'count', count
+        )), '[]'::jsonb) AS timeline FROM graphs_data
+    ),
+    -- 4. Top Produtos (Extraído do JSONB items)
+    -- Atenção: items é JSONB array. Precisamos expandir.
+    products_data AS (
+        SELECT 
+            item->>'name' as p_name,
+            SUM((item->>'quantity')::int) as p_qty,
+            SUM((item->>'total_price')::numeric) as p_total
+        FROM public.orders,
+             jsonb_array_elements(items) AS item
+        WHERE store_id = p_store_id
+          AND created_at BETWEEN p_start_date AND p_end_date
+          AND status = 'DELIVERED'
+        GROUP BY item->>'name'
+        ORDER BY p_total DESC
+        LIMIT 10
+    ),
+    products AS (
+        SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'name', p_name,
+            'quantity', p_qty,
+            'total', p_total
+        )), '[]'::jsonb) AS top_items FROM products_data
+    ),
+    -- 5. Horários de Pico
+    peaks_data AS (
+        SELECT 
+            EXTRACT(HOUR FROM created_at) as p_hour,
+            COUNT(*) as p_count
+        FROM public.orders
+        WHERE store_id = p_store_id
+          AND created_at BETWEEN p_start_date AND p_end_date
+        GROUP BY EXTRACT(HOUR FROM created_at)
+        ORDER BY p_hour
+    ),
+    peaks AS (
+        SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'hour', p_hour,
+            'count', p_count
+        )), '[]'::jsonb) AS hourly_distribution FROM peaks_data
+    )
+    SELECT jsonb_build_object(
+        'current', (SELECT row_to_json(c) FROM current_period c),
+        'previous', (SELECT row_to_json(p) FROM previous_period p),
+        'timeline', (SELECT timeline FROM graphs),
+        'top_products', (SELECT top_items FROM products),
+        'peak_hours', (SELECT hourly_distribution FROM peaks)
+    ) INTO result;
+
+    -- Se timeline estiver null, retornar array vazio na estrutura final para evitar crash no front
+    IF result->'timeline' IS NULL THEN
+        result := jsonb_set(result, '{timeline}', '[]'::jsonb);
+    END IF;
+
+    RETURN result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) TO service_role;

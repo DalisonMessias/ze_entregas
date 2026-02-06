@@ -429,7 +429,7 @@ export const AddressBook: React.FC<AddressBookProps> = ({ onClose, onNavigateInt
                       disabled={isGeocoding}
                       className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm disabled:opacity-50 whitespace-nowrap"
                     >
-                      {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Navigation className="w-3 h-3 mr-1.5" /> Abrir no Waze</>}
+                      {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Navigation className="w-3 h-3 mr-1.5" /> Navegar</>}
                     </button>
 
                     <button

@@ -241,62 +241,10 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
         saveAndSetItems(newItems);
     };
 
-    const handleOpenGpsModal = (item: RouteListItem) => {
-        setSelectedRouteForGps(item);
-        setGpsModalOpen(true);
-    };
-
-    const launchGps = (app: 'waze' | 'google') => {
-        if (!selectedRouteForGps) return;
-        const { lat, lng } = selectedRouteForGps;
-
-        // Tentar obter localização atual para origem com alta precisão
-        if (navigator.geolocation) {
-            // Opções para forçar GPS real (não IP geolocation)
-            const geoOptions = {
-                enableHighAccuracy: true, // Força uso de GPS ao invés de WiFi/IP
-                timeout: 10000, // Máximo 10 segundos para obter localização
-                maximumAge: 0 // Não usar cache, forçar leitura nova
-            };
-
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const { latitude: currentLat, longitude: currentLng } = position.coords;
-                    console.log('📍 Localização GPS obtida:', { currentLat, currentLng, accuracy: position.coords.accuracy });
-
-                    if (app === 'waze') {
-                        // Waze com origem e destino
-                        window.open(`https://waze.com/ul?ll=${lat},${lng}&from=${currentLat},${currentLng}&navigate=yes`, '_blank');
-                    } else {
-                        // Google Maps com Origem e Destino
-                        window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${lat},${lng}&travelmode=driving`, '_blank');
-                    }
-                    setGpsModalOpen(false);
-                },
-                (error) => {
-                    console.warn("Erro ao obter localização GPS:", error.message, error.code);
-                    // Fallback: usar apenas destino se GPS falhar
-                    if (app === 'waze') {
-                        window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
-                    } else {
-                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank');
-                    }
-                    setGpsModalOpen(false);
-                },
-                geoOptions // Aplicar opções de alta precisão
-            );
-        } else {
-            // Fallback sem geolocation support
-            if (app === 'waze') {
-                window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
-            } else {
-                window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank');
-            }
-            setGpsModalOpen(false);
-        }
-
+    const handleOpenGps = (item: RouteListItem) => {
+        openNavigation(item.lat, item.lng, item.address, { label: item.name });
         if (onNavigate) {
-            onNavigate({ lat, lng, name: selectedRouteForGps.name, fullAddress: selectedRouteForGps.address });
+            onNavigate({ lat: item.lat, lng: item.lng, name: item.name, fullAddress: item.address });
         }
     };
 
@@ -490,11 +438,11 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                                 </button>
 
                                 <Button
-                                    onClick={() => handleOpenGpsModal(item)}
+                                    onClick={() => handleOpenGps(item)}
                                     className="px-3 sm:px-4 py-2 h-auto text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-sm whitespace-nowrap flex-1 sm:flex-none"
                                 >
                                     <Navigation className="w-3 h-3 sm:mr-1.5" />
-                                    <span className="hidden sm:inline ml-1">GPS</span>
+                                    <span className="hidden sm:inline ml-1">Navegar</span>
                                 </Button>
 
                                 <button
@@ -574,45 +522,6 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
             </BaseModal>
 
 
-            {/* GPS Selection Modal */}
-            <BaseModal
-                isOpen={gpsModalOpen}
-                onClose={() => setGpsModalOpen(false)}
-                title="Escolha o GPS"
-                icon={<Navigation className="w-6 h-6 text-purple-600" />}
-            >
-                <div className="grid grid-cols-2 gap-4 p-4">
-                    <button
-                        onClick={() => launchGps('waze')}
-                        className="flex flex-col items-center justify-center gap-3 p-6 bg-gray-50 hover:bg-blue-50 dark:bg-gray-700 dark:hover:bg-blue-900/30 rounded-2xl border-2 border-transparent hover:border-blue-400 transition-all group"
-                    >
-                        {/* Waze Icon - Ícone oficial */}
-                        <div className="w-16 h-16 flex items-center justify-center rounded-xl group-hover:scale-110 transition-transform">
-                            <img
-                                src="/waze-icon.png"
-                                alt="Waze"
-                                className="w-full h-full object-contain"
-                            />
-                        </div>
-                        <span className="font-bold text-gray-700 dark:text-gray-200">Waze</span>
-                    </button>
-
-                    <button
-                        onClick={() => launchGps('google')}
-                        className="flex flex-col items-center justify-center gap-3 p-6 bg-gray-50 hover:bg-green-50 dark:bg-gray-700 dark:hover:bg-green-900/30 rounded-2xl border-2 border-transparent hover:border-green-500 transition-all group"
-                    >
-                        {/* Google Maps Icon - Ícone oficial */}
-                        <div className="w-16 h-16 flex items-center justify-center rounded-xl group-hover:scale-110 transition-transform">
-                            <img
-                                src="/google-maps-icon.png"
-                                alt="Google Maps"
-                                className="w-full h-full object-contain"
-                            />
-                        </div>
-                        <span className="font-bold text-gray-700 dark:text-gray-200">Google Maps</span>
-                    </button>
-                </div>
-            </BaseModal>
         </div>
     );
 };

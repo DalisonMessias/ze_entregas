@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon } from 'lucide-react';
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
@@ -44,6 +44,7 @@ const StoreRequest = React.lazy(() => import('./StoreRequest').then(module => ({
 const OrderHistory = React.lazy(() => import('./OrderHistory'));
 const StoreTeam = React.lazy(() => import('./StoreTeam').then(module => ({ default: module.StoreTeam })));
 const StoreReports = React.lazy(() => import('./StoreReports').then(module => ({ default: module.StoreReports })));
+const StorePerformance = React.lazy(() => import('./StorePerformance').then(module => ({ default: module.StorePerformance })));
 const StoreMarketing = React.lazy(() => import('./StoreMarketing').then(module => ({ default: module.StoreMarketing })));
 const StoreIntegrations = React.lazy(() => import('./StoreIntegrations').then(module => ({ default: module.StoreIntegrations })));
 const PrintCatalogGenerator = React.lazy(() => import('./PrintCatalogGenerator').then(module => ({ default: module.PrintCatalogGenerator })));
@@ -98,6 +99,7 @@ const StreetRequestPage = React.lazy(() => import('../src/pages/StreetRequestPag
 const StreetRequestsAdmin = React.lazy(() => import('../src/pages/StreetRequestsAdmin').then(m => ({ default: m.StreetRequestsAdmin })));
 const MerchantPOSMobile = React.lazy(() => import('./MerchantPOSMobile').then(m => ({ default: m.MerchantPOSMobile })));
 const MerchantPOSDesktop = React.lazy(() => import('./MerchantPOSDesktop').then(m => ({ default: m.MerchantPOSDesktop })));
+const DeliveryNavigation = React.lazy(() => import('./DeliveryNavigation').then(m => ({ default: m.DeliveryNavigation })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -401,6 +403,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         store_status: 'Status da Loja',
         store_team: 'Equipe',
         store_reports: 'Relatórios',
+        store_performance: 'Desempenho',
         store_marketing: 'Marketing',
         store_integrations: 'Integrações',
         store_settings: 'Configurações',
@@ -670,8 +673,11 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     const order = await cloud.getOrderByShortId(shortId);
                     if (order && order.is_location_delivery && order.shipping_address?.latitude && order.shipping_address?.longitude) {
                         const { latitude, longitude } = order.shipping_address;
-                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-                        window.location.href = mapsUrl;
+                        const address = order.shipping_address?.fullAddress || '';
+                        // Usar navegação interna em vez de link externo
+                        import('../utils/mapHelpers').then(({ openNavigation }) => {
+                            openNavigation(latitude, longitude, address, { label: `Pedido #${order.id.slice(0, 8)}` });
+                        });
                         return;
                     } else if (order) {
                         // Se for um pedido normal, talvez queira abrir no tracking? 
@@ -687,7 +693,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             return;
         }
         const authTabs = ['login', 'signup', 'forgot_password'];
-        const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq'];
+        const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq', 'delivery_navigation'];
         const isAuthenticated = userId && userId !== 'guest';
 
         // DEBUG ROUTING
@@ -1012,6 +1018,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'history': return <OrderHistory userRole={effectiveRole as 'store_partner'} />;
                 case 'store_team': return <StoreTeam />;
                 case 'store_reports': return <StoreReports />;
+                case 'store_performance': return <StorePerformance />;
                 case 'store_marketing':
                     return (
                         <DesktopOnlyGate
@@ -1136,6 +1143,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'upgrade_to_partner': return <UpgradeToPartnerPage />;
                 case 'settings': return <SettingsPage onBack={() => navigate(effectiveRole === 'user' ? 'profile' : (isDriver ? 'daily_panel' : 'shop'))} userRole={effectiveRole} />;
                 case 'streets_list': return <StreetsList />;
+                case 'delivery_navigation': return <DeliveryNavigation userRole={effectiveRole} />;
                 case 'not_found': return <NotFound />;
 
                 default: return <div className="p-10 text-center text-gray-500">Etapa não implementada: {activeTab}</div>;
@@ -1194,6 +1202,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 { label: 'Solicitar Entrega', tab: 'new_request', icon: Truck },
                 { label: 'Comanda', tab: 'internal_orders_new', icon: FileText },
                 { label: 'Pedidos', tab: 'internal_orders', icon: ClipboardList, badge: pendingTicketsCount },
+                { label: 'GPS Navegador', tab: 'delivery_navigation', icon: Navigation },
                 { label: 'Status da Loja', tab: 'store_status', icon: Power }
             ]
         },
@@ -1202,6 +1211,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             items: [
                 { label: 'Equipe', tab: 'store_team', icon: Users },
                 { label: 'Relatórios', tab: 'store_reports', icon: BarChart3 },
+                { label: 'Desempenho', tab: 'store_performance', icon: TrendingUp },
                 { label: 'Configurações', tab: 'store_settings', icon: Settings }
             ]
         },
@@ -1381,7 +1391,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             items: [
                 { label: 'Painel Diário', tab: 'daily_panel', icon: ClipboardList },
                 { label: 'Corridas', tab: 'partner', icon: Truck },
-                { label: 'Pedidos da Loja', tab: 'associate_orders', icon: Package }
+                { label: 'Pedidos da Loja', tab: 'associate_orders', icon: Package },
+                { label: 'GPS Navegador', tab: 'delivery_navigation', icon: Navigation }
             ]
         },
         {
@@ -1536,7 +1547,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     // Verificação de rotas públicas internas que devem renderizar sem sidebar (Full Width)
-    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq'];
+    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq', 'delivery_navigation'];
     const isPublicTab = publicTabs.includes(activeTab);
     const showStoreBottomNav = isStore && !isPublicTab;
     const showDriverBottomNav = isDriver && !isPublicTab;
@@ -1766,6 +1777,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                                     <MenuSection title="Gestão" />
                                     <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
+                                    <MenuButton icon={TrendingUp} label="Desempenho" tab="store_performance" />
                                     <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
                                     <MenuButton icon={Star} label="Destaque na Cidade" tab="store_highlight" />
                                     <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />

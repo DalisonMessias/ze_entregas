@@ -14,7 +14,9 @@ import { DistrictSearchSelect } from './DistrictSearchSelect';
 import { LocationHelpModal } from './LocationHelpModal';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Logo } from './Logo';
+import { openNavigation } from '../utils/mapHelpers';
 import { useDebounce } from '../hooks/useDebounce';
+
 import { useMemo } from 'react';
 import { TablesManager } from './TablesManager';
 import { MobileTabsSelect } from './MobileTabsSelect';
@@ -2632,14 +2634,12 @@ const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode = 'full'
 
                                                 {((lastOrder as any).shipping_address?.latitude && (lastOrder as any).shipping_address?.longitude) && (
                                                     <div className="space-y-2 no-print">
-                                                        <a
-                                                            href={`https://www.google.com/maps/search/?api=1&query=${(lastOrder as any).shipping_address.latitude},${(lastOrder as any).shipping_address.longitude}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
+                                                        <button
+                                                            onClick={() => openNavigation((lastOrder as any).shipping_address.latitude, (lastOrder as any).shipping_address.longitude, (lastOrder as any).delivery_location_reference || 'Localização do Pedido', { label: `Pedido #${lastOrder.id.slice(0, 8)}` })}
                                                             className="flex items-center justify-center gap-2 bg-white text-orange-600 border border-orange-200 font-bold text-xs py-2 px-3 rounded-xl hover:bg-orange-50 transition-colors w-full"
                                                         >
-                                                            <MapPin className="w-3 h-3" /> Abrir no Maps
-                                                        </a>
+                                                            <MapPin className="w-3 h-3" /> Navegar
+                                                        </button>
 
                                                         {/* Link Curto (Atalho) */}
                                                         <div className="flex flex-col gap-1">

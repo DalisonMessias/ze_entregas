@@ -11,3 +11,12 @@
 - Orientação sobre execução delta para evitar erro 'Query too large': Concluído.
 - Divisão do SQL Global em duas partes (part1 e part2) para facilitar a execução: Concluído.
 - Correção de erro de sintaxe remanescente na Parte 2 do SQL Global: Concluído.
+- Remo��o de todas as refer�ncias de API keys da tabela shop_settings nos arquivos SQL Part 1 e Part 2: Conclu�do.
+- [x] Implementar RPC get_store_performance_dashboard e serviço frontend
+- [x] Implementar UI StorePerformance.tsx com gráficos CSS
+- [x] Integrar StorePerformance.tsx ao App.tsx (Rotas e Menu)
+- [x] Atualizar task.md e criar walkthrough.md
+- [x] Fix: Adicionar 'Desempenho' na Sidebar Desktop e StoreWallet
+- [ ] Fix: Liberar permissão de acesso para 'store_performance' (Access Denied)
+- [x] Fix: Permissão 'store_performance' adicionada em accessControl.ts
+- [x] Fix: Recriar RPC get_store_performance_dashboard em supabase_global.sql

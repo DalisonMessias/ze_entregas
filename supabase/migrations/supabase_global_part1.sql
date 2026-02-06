@@ -796,7 +796,48 @@ CREATE TRIGGER handle_user_terminals_updated_at BEFORE UPDATE ON public.user_ter
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ALTER TABLE public.user_terminals ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can manage their own terminals" ON public.user_terminals;
-DO $$
+
+-- ==================================================================
+-- 2.2 NAVEGAÇÃO E ÍCONES (Adicionado em 2026-02-06)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.navigation_icons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    vehicle_type public.vehicle_type NOT NULL,
+    icon_url TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT unique_vehicle_icon UNIQUE (vehicle_type)
+);
+
+-- Trigger para updated_at
+DROP TRIGGER IF EXISTS handle_navigation_icons_updated_at ON public.navigation_icons;
+CREATE TRIGGER handle_navigation_icons_updated_at BEFORE UPDATE ON public.navigation_icons
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS para navigation_icons
+ALTER TABLE public.navigation_icons ENABLE ROW LEVEL SECURITY;
+
+-- Permissões: Todos podem ler os ícones, apenas Admin gerencia
+DROP POLICY IF EXISTS "Anyone can view navigation icons" ON public.navigation_icons;
+CREATE POLICY "Anyone can view navigation icons" ON public.navigation_icons FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage navigation icons" ON public.navigation_icons;
+CREATE POLICY "Admins can manage navigation icons" ON public.navigation_icons FOR ALL USING (public.is_admin());
+
+GRANT SELECT ON public.navigation_icons TO anon, authenticated;
+GRANT ALL ON public.navigation_icons TO service_role;
+
+-- Inserir ícones padrão se não existirem
+INSERT INTO public.navigation_icons (vehicle_type, icon_url)
+VALUES 
+    ('car', '/pwa/icons/car.png'),
+    ('moto', '/pwa/icons/moto.png'),
+    ('bike', '/pwa/icons/bike.png')
+ON CONFLICT (vehicle_type) DO NOTHING;
+
+DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage their own terminals' AND tablename = 'user_terminals') THEN
         CREATE POLICY "Users can manage their own terminals" ON public.user_terminals FOR ALL USING (auth.uid()::text = user_id::text);
@@ -1777,11 +1818,12 @@ CREATE TABLE IF NOT EXISTS public.shop_settings (
     support_hours_end VARCHAR(5),
     support_status_override public.support_status_override_type,
 
+    navigation_voice_id TEXT DEFAULT '21m00Tcm4lfs74u9DeyB', -- Rachel (ElevenLabs default)
+    navigation_voice_enabled BOOLEAN DEFAULT FALSE,
+    navigation_sounds_enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    google_gemini_api_key TEXT,
-    open_route_service_api_key TEXT
-);
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+ );
 DROP TRIGGER IF EXISTS handle_shop_settings_updated_at ON public.shop_settings;
 CREATE TRIGGER handle_shop_settings_updated_at BEFORE UPDATE ON public.shop_settings
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -1803,16 +1845,9 @@ CREATE POLICY "Admins can manage shop_settings" ON public.shop_settings FOR ALL 
 
 INSERT INTO public.shop_settings (id) VALUES ('1') ON CONFLICT (id) DO NOTHING;
 
--- Garantir colunas de API se nﾃ｣o existirem
-ALTER TABLE public.shop_settings ADD COLUMN IF NOT EXISTS google_gemini_api_key TEXT;
-ALTER TABLE public.shop_settings ADD COLUMN IF NOT EXISTS open_route_service_api_key TEXT;
-
-
-
-
--- ==================================================================
--- WALLET FUNCTIONS
--- ==================================================================
+ -- ==================================================================
+ -- WALLET FUNCTIONS
+ -- ==================================================================
 
 CREATE OR REPLACE FUNCTION public.credit_store_wallet(
     p_store_id UUID,

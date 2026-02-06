@@ -391,8 +391,10 @@ export interface ShopSettings {
     support_hours_start?: string;
     support_hours_end?: string;
     support_status_override?: 'AUTO' | 'OPEN' | 'CLOSED';
-    google_gemini_api_key?: string;
-    open_route_service_api_key?: string;
+    navigation_voice_id?: string;
+    navigation_voice_enabled?: boolean;
+    navigation_sounds_enabled?: boolean;
+    created_at?: string;
     infinitepay_handle?: string;
     infinitepay_webhook_secret?: string;
 }

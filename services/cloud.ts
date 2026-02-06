@@ -224,11 +224,20 @@ export const getPendingTicketsCount = async (): Promise<number> => {
         .eq('status', 'pending')
         .eq('store_id', userData.user.id);
 
-    if (error) {
-        console.error('getPendingTicketsCount error', error);
-        return 0;
-    }
     return count || 0;
+};
+
+export const getNavigationIcons = async () => {
+    const sb = getClient();
+    if (!sb) return [];
+    try {
+        const { data, error } = await sb.from('navigation_icons').select('*').eq('is_active', true);
+        if (error) throw error;
+        return data || [];
+    } catch (err) {
+        console.error('getNavigationIcons error', err);
+        return [];
+    }
 };
 
 // --- IMPERSONATION HELPER ---
@@ -1631,14 +1640,14 @@ export const adminUpdateApiKey = async (serviceName: string, value: string) => {
         const { error } = await sb.from('api_keys').update({
             encrypted_key: value,
             key_token: value, // Use the key as token too for these services
-            name: serviceName, // Sync name field
+            name: serviceName.replace(/_/g, ' ').toUpperCase(), // Sync name field
             updated_at: new Date().toISOString()
         }).eq('id', existing.id);
         if (error) throw error;
     } else {
         const { error } = await sb.from('api_keys').insert({
             service_name: serviceName,
-            name: serviceName, // Provide name
+            name: serviceName.replace(/_/g, ' ').toUpperCase(), // Provide name
             encrypted_key: value,
             key_token: value,
             permissions: { all: true },
@@ -2268,8 +2277,8 @@ export const getShopData = async (signal?: AbortSignal) => {
 
     try {
         const [p, c, s] = await Promise.all([
-            (sb.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(2000) as any).abortSignal(signal || new AbortController().signal),
-            (sb.from('categories').select('*').order('name', { ascending: true }).limit(1000) as any).abortSignal(signal || new AbortController().signal),
+            (sb.from('shop_platform_products').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(2000) as any).abortSignal(signal || new AbortController().signal),
+            (sb.from('shop_platform_categories').select('*').order('name', { ascending: true }).limit(1000) as any).abortSignal(signal || new AbortController().signal),
             (sb.from('shop_settings').select('*').limit(1).single() as any).abortSignal(signal || new AbortController().signal)
         ]);
         return { products: p.data || [], categories: c.data || [], settings: s.data };
@@ -2292,7 +2301,7 @@ export const createOrder = async (order: Partial<Order>) => {
         ...order,
         store_id: order.store_id || user.id, // Se for pedido interno, store_id é o próprio usuário logado
         user_id: (order.origin === 'INTERNAL' || !order.user_id) ? null : order.user_id,
-        status: order.status || 'PENDING', // Default to UPPERCASE 'PENDING' matching DB Enum
+        status: order.status || 'PENDING',
         origin: order.origin || 'INTERNAL',
         created_at: new Date().toISOString()
     };
@@ -5153,6 +5162,30 @@ export const adminCreateLoanType = async (loanType: any): Promise<void> => {
         ...loanType,
         target_audience: loanType.target_audience || 'BOTH'
     });
+    if (error) throw error;
+};
+
+export const adminUpdateNavigationSettings = async (settings: { voice_id?: string, voice_enabled?: boolean, sounds_enabled?: boolean }) => {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase client not initialized");
+    const updateData: any = {};
+    if (settings.voice_id !== undefined) updateData.navigation_voice_id = settings.voice_id;
+    if (settings.voice_enabled !== undefined) updateData.navigation_voice_enabled = settings.voice_enabled;
+    if (settings.sounds_enabled !== undefined) updateData.navigation_sounds_enabled = settings.sounds_enabled;
+
+    const { error } = await supabase
+        .from('shop_settings')
+        .update(updateData)
+        .eq('id', 'shop');
+    if (error) throw error;
+};
+
+export const adminManageNavigationIcon = async (type: 'car' | 'moto' | 'bike', url: string, active: boolean = true) => {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase client not initialized");
+    const { error } = await supabase
+        .from('navigation_icons')
+        .upsert({ vehicle_type: type, icon_url: url, is_active: active }, { onConflict: 'vehicle_type' });
     if (error) throw error;
 };
 

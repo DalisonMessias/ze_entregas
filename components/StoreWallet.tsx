@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Wallet, Plus, AlertTriangle, MapPin, Star, MessageCircle, Crown, ChevronRight, Truck, Send, Users, BarChart3, History, Settings, CreditCard, Headphones, ShoppingBag, Search, FileText, Landmark, UploadCloud, Banknote } from 'lucide-react';
+import { Wallet, Plus, AlertTriangle, MapPin, Star, MessageCircle, Crown, ChevronRight, Truck, Send, Users, BarChart3, History, Settings, CreditCard, Headphones, ShoppingBag, Search, FileText, Landmark, UploadCloud, Banknote, TrendingUp } from 'lucide-react';
 import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
@@ -306,6 +306,7 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
             title: 'Relatórios & Vendas',
             items: [
                 { id: 'relatorios', label: 'Relatórios', icon: BarChart3, tab: 'store_reports', color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' },
+                { id: 'desempenho', label: 'Desempenho', icon: TrendingUp, tab: 'store_performance', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
                 { id: 'verificar_vendas', label: 'Verificar Vendas', icon: BarChart3, tab: 'store_reports', color: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' },
                 { id: 'estatisticas', label: 'Estatísticas', icon: BarChart3, tab: 'store_reports', color: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400' }
             ]

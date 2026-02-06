@@ -25,6 +25,7 @@ export const generalTabs = new Set<ActiveTab>([
   'login',
   'signup',
   'order_tracking',
+  'delivery_navigation',
   'my_orders',
   'store_public_chat',
   'street_request',
@@ -45,7 +46,7 @@ export const allowedTabsByRole: Record<UserRole, Set<ActiveTab>> = {
     'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing',
     'store_integrations', 'store_settings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel',
     'zepay_store', 'zebank', 'internal_orders', 'internal_orders_new', 'store_catalog', 'store_print_catalog',
-    'store_api_docs', 'store_loans', 'store_promotions', 'store_highlight', 'internal_chat', 'store_drivers_chat', 'zepoint'
+    'store_api_docs', 'store_loans', 'store_promotions', 'store_highlight', 'internal_chat', 'store_drivers_chat', 'zepoint', 'store_performance'
   ]),
   delivery_partner: new Set<ActiveTab>([
     'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history',

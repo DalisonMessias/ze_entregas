@@ -18,19 +18,49 @@ export interface GeoJSONCollection {
   features: GeoJSONFeature[];
 }
 
-// 1. Deep Linking Logic
-export const openNavigation = (lat: number, lng: number, address?: string) => {
-  // O link universal waze.com/ul é a forma mais confiável de abrir o app se estiver instalado, 
-  // ou o site do Waze no navegador como fallback.
-  let wazeUrl = '';
-  if (lat && lng) {
-    wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
-  } else if (address) {
-    wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
-  } else {
+// 1. Navigation Logic
+export const saveNavigationState = (state: any) => {
+  localStorage.setItem('navigation_state', JSON.stringify({
+    ...state,
+    created_at: new Date().toISOString()
+  }));
+};
+
+export const clearNavigationState = () => {
+  localStorage.removeItem('navigation_state');
+};
+
+export const openNavigation = (lat: number, lng: number, address?: string, options: any = {}) => {
+  if (!lat || !lng) {
+    if (address) {
+      const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
+      window.open(wazeUrl, '_blank');
+      return;
+    }
     return;
   }
-  window.open(wazeUrl, '_blank');
+
+  // Preparar estado para navegação interna
+  const navState = {
+    active: true,
+    destination: {
+      lat,
+      lng,
+      address,
+      label: options.label || address || 'Destino'
+    },
+    context_id: options.context_id,
+    vehicle_type: options.vehicle_type,
+    return_tab: options.return_tab || (window.location.pathname.includes('/entregador') ? 'daily_panel' : 'history')
+  };
+
+  saveNavigationState(navState);
+
+  // Disparar evento de navegação
+  const navEvent = new CustomEvent('navigateToTab', {
+    detail: { tab: 'delivery_navigation' }
+  });
+  window.dispatchEvent(navEvent);
 };
 
 

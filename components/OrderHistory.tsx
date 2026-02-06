@@ -12,7 +12,9 @@ import { CustomDateInput } from './CustomDateInput';
 import { CustomSelect } from './CustomSelect';
 import { Skeleton } from './Skeleton';
 import { ExclusiveLock } from './ExclusiveLock';
+import { openNavigation } from '../utils/mapHelpers';
 import { StoreOrderChat } from './InternalOrderChat/StoreOrderChat';
+
 import { ReportOrderModal } from './ReportOrderModal';
 
 interface OrderHistoryProps {
@@ -464,10 +466,10 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                                         <Button
                                             fullWidth
                                             size="sm"
-                                            onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedOrder.latitude},${selectedOrder.longitude}`, '_blank')}
+                                            onClick={() => openNavigation(selectedOrder.latitude!, selectedOrder.longitude!, selectedOrder.delivery_address, { label: `Pedido #${selectedOrder.id.slice(0, 8)}` })}
                                             className="bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 text-xs font-bold py-2"
                                         >
-                                            Abrir no Maps
+                                            Navegar
                                         </Button>
                                     </div>
                                 )}

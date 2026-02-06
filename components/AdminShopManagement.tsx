@@ -4,6 +4,7 @@ import * as cloud from '../services/cloud';
 import { Product, Category, ShopSettings, ShopCoupon } from '../types';
 import { Button } from './Button';
 import { Switch } from './Switch';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { useDialog } from '../utils/dialogService';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);

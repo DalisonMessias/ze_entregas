@@ -787,7 +787,7 @@ export const StoreRequest: React.FC<StoreRequestProps> = ({ onNavigate }) => {
                         {addr.validated && (
                             <div className="flex items-center justify-between text-xs text-green-600 mt-1 font-bold p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                                 <span className="flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Endereço válido</span>
-                                <button onClick={() => openNavigation(addr.lat!, addr.lng!)} className="p-1 hover:bg-green-100 rounded-full" title="Abrir no Waze">
+                                <button onClick={() => openNavigation(addr.lat!, addr.lng!)} className="p-1 hover:bg-green-100 rounded-full" title="Navegar">
                                     <Navigation className="w-4 h-4" />
                                 </button>
                             </div>

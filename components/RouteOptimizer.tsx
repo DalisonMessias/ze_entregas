@@ -6,7 +6,9 @@ import { SavedAddress, RouteListItem } from '../types';
 import { MapPin, ListPlus, Loader2, AlertTriangle, Settings, Save } from 'lucide-react';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
+import { openNavigation } from '../utils/mapHelpers';
 import { useDialog } from '../utils/dialogService';
+
 
 interface Coordinate {
   latitude: number;
@@ -204,8 +206,7 @@ const RouteOptimizer: React.FC = () => {
     const coords = await geocodeAddress(firstStop);
 
     if (coords) {
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${coords.latitude},${coords.longitude}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
+      openNavigation(coords.latitude, coords.longitude, firstStop, { label: 'Início da Rota' });
     } else {
       setError(`Não foi possível obter as coordenadas para: ${firstStop}`);
     }

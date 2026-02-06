@@ -332,59 +332,8 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
         window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
     };
 
-    // GPS Navigation com alta precisão
-    const handleOpenGpsModal = (address: string) => {
-        setSelectedAddressForGps(address);
-        setGpsModalOpen(true);
-    };
-
-    const launchGps = (app: 'waze' | 'google') => {
-        if (!selectedAddressForGps) return;
-
-        // Tentar obter localização atual para origem com alta precisão
-        if (navigator.geolocation) {
-            // Opções para forçar GPS real (não IP geolocation)
-            const geoOptions = {
-                enableHighAccuracy: true, // Força uso de GPS ao invés de WiFi/IP
-                timeout: 10000, // Máximo 10 segundos para obter localização
-                maximumAge: 0 // Não usar cache, forçar leitura nova
-            };
-
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const { latitude: currentLat, longitude: currentLng } = position.coords;
-                    console.log('📍 Localização GPS obtida:', { currentLat, currentLng, accuracy: position.coords.accuracy });
-
-                    if (app === 'waze') {
-                        // Waze com origem e destino
-                        window.open(`https://waze.com/ul?q=${encodeURIComponent(selectedAddressForGps)}&from=${currentLat},${currentLng}&navigate=yes`, '_blank');
-                    } else {
-                        // Google Maps com Origem e Destino
-                        window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${encodeURIComponent(selectedAddressForGps)}&travelmode=driving`, '_blank');
-                    }
-                    setGpsModalOpen(false);
-                },
-                (error) => {
-                    console.warn("Erro ao obter localização GPS:", error.message, error.code);
-                    // Fallback: usar apenas destino se GPS falhar
-                    if (app === 'waze') {
-                        window.open(`https://waze.com/ul?q=${encodeURIComponent(selectedAddressForGps)}&navigate=yes`, '_blank');
-                    } else {
-                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selectedAddressForGps)}&travelmode=driving`, '_blank');
-                    }
-                    setGpsModalOpen(false);
-                },
-                geoOptions // Aplicar opções de alta precisão
-            );
-        } else {
-            // Fallback sem geolocation support
-            if (app === 'waze') {
-                window.open(`https://waze.com/ul?q=${encodeURIComponent(selectedAddressForGps)}&navigate=yes`, '_blank');
-            } else {
-                window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selectedAddressForGps)}&travelmode=driving`, '_blank');
-            }
-            setGpsModalOpen(false);
-        }
+    const handleOpenGps = (address: string, options: any = {}) => {
+        openNavigation(0, 0, address, options);
     };
 
     // --- SHIFT HANDLERS ---
@@ -684,6 +633,12 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Meu Score</span>
                             </Button>
+                            <Button onClick={() => onNavigate('delivery_navigation')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
+                                    <Navigation className="w-5 h-5" />
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">GPS Navegador</span>
+                            </Button>
                         </div>
 
                         <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2">Ferramentas</h3>
@@ -730,7 +685,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                     <>
                                         <Button fullWidth onClick={handleConfirmPickup} disabled={processingAction}>{processingAction ? <Loader2 className="animate-spin" /> : 'Cheguei na Coleta'}</Button>
                                         <div className="flex gap-2">
-                                            <Button variant="outline" className="flex-1" onClick={() => handleOpenGpsModal(activeDelivery.pickup_address)}><Navigation className="w-4 h-4 mr-2" /> GPS</Button>
+                                            <Button variant="outline" className="flex-1" onClick={() => handleOpenGps(activeDelivery.pickup_address, { label: activeDelivery.store?.name || 'Coleta' })}><Navigation className="w-4 h-4 mr-2" /> Navegar</Button>
                                             <Button variant="outline" className="flex-1" onClick={() => setShowChat(true)}><MessageCircle className="w-4 h-4 mr-2" /> Chat</Button>
                                             {activeDelivery.store?.phone_number && (
                                                 <Button variant="outline" className="flex-1 text-green-600 border-green-200 bg-green-50" onClick={handleWhatsAppContact}><MessageCircle className="w-4 h-4 mr-2" /> WhatsApp</Button>
@@ -741,7 +696,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 {activeDelivery.status === 'IN_TRANSIT' && (
                                     <>
                                         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-center text-xs text-blue-600 mb-2 font-bold animate-pulse">Sua localização está sendo compartilhada com a loja.</div>
-                                        <Button variant="outline" fullWidth onClick={() => handleOpenGpsModal(activeDelivery.delivery_address)}><Navigation className="w-4 h-4 mr-2" /> GPS / Waze / Maps</Button>
+                                        <Button variant="outline" fullWidth onClick={() => handleOpenGps(activeDelivery.delivery_address, { label: `Pedido #${activeDelivery.id.slice(0, 8)}` })}><Navigation className="w-4 h-4 mr-2" /> Navegar</Button>
                                         <div className="flex gap-2">
                                             <Button variant="outline" className="flex-1" onClick={() => setShowChat(true)}><MessageCircle className="w-4 h-4 mr-2" /> Chat</Button>
                                             {activeDelivery.store?.phone_number && (
@@ -919,45 +874,6 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
             {showNotifications && <NotificationCenter onClose={() => setShowNotifications(false)} />}
 
-            {/* GPS Selection Modal */}
-            <BaseModal
-                isOpen={gpsModalOpen}
-                onClose={() => setGpsModalOpen(false)}
-                title="Escolha o GPS"
-                icon={<Navigation className="w-6 h-6 text-purple-600" />}
-            >
-                <div className="grid grid-cols-2 gap-4 p-4">
-                    <button
-                        onClick={() => launchGps('waze')}
-                        className="flex flex-col items-center justify-center gap-3 p-6 bg-gray-50 hover:bg-blue-50 dark:bg-gray-700 dark:hover:bg-blue-900/30 rounded-2xl border-2 border-transparent hover:border-blue-400 transition-all group"
-                    >
-                        {/* Waze Icon */}
-                        <div className="w-16 h-16 flex items-center justify-center rounded-xl group-hover:scale-110 transition-transform">
-                            <img
-                                src="/waze-icon.png"
-                                alt="Waze"
-                                className="w-full h-full object-contain"
-                            />
-                        </div>
-                        <span className="font-bold text-gray-700 dark:text-gray-200">Waze</span>
-                    </button>
-
-                    <button
-                        onClick={() => launchGps('google')}
-                        className="flex flex-col items-center justify-center gap-3 p-6 bg-gray-50 hover:bg-green-50 dark:bg-gray-700 dark:hover:bg-green-900/30 rounded-2xl border-2 border-transparent hover:border-green-500 transition-all group"
-                    >
-                        {/* Google Maps Icon */}
-                        <div className="w-16 h-16 flex items-center justify-center rounded-xl group-hover:scale-110 transition-transform">
-                            <img
-                                src="/google-maps-icon.png"
-                                alt="Google Maps"
-                                className="w-full h-full object-contain"
-                            />
-                        </div>
-                        <span className="font-bold text-gray-700 dark:text-gray-200">Google Maps</span>
-                    </button>
-                </div>
-            </BaseModal>
 
         </div >
     );

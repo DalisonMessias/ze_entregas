@@ -69,6 +69,7 @@ import { AdminStoreCategories } from './AdminStoreCategories';
 import { AdminImageGallery } from './Admin/AdminImageGallery';
 import { StreetRequestsAdmin } from '../src/pages/StreetRequestsAdmin';
 import { AdminMediation } from './AdminMediation';
+import { AdminNavigationConfig } from './AdminNavigationConfig';
 import { MobileTabsSelect } from './MobileTabsSelect';
 
 

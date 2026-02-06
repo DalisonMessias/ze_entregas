@@ -45,6 +45,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/galeria-imagens': 'admin_image_gallery',
     '/admin/solicitacoes-ruas': 'admin_street_requests',
     '/admin/mediacao': 'admin_mediation',
+    '/admin/config-navegacao': 'admin_navigation_config',
     '/admin/zepoint': 'zepoint',
 
     // Shared / Core Routes
@@ -95,6 +96,7 @@ const routeMap: Record<string, ActiveTab> = {
     // Store Partner Routes
     '/loja/equipe': 'store_team',
     '/loja/relatorios': 'store_reports',
+    '/loja/desempenho': 'store_performance',
     '/loja/marketing': 'store_marketing',
     '/loja/destaque': 'store_highlight',
     '/loja/integracoes': 'store_integrations',
@@ -134,11 +136,13 @@ const routeMap: Record<string, ActiveTab> = {
     '/entregador/pedidos': 'associate_orders',
     '/entregador/pontuacao': 'score',
     '/entregador/zepoint': 'zepoint',
+    '/entregador/navegacao': 'delivery_navigation',
 
     // Public/Misc
     '/instalar': 'install_app',
     '/upgrade': 'upgrade_to_partner',
     '/ruas': 'streets_list',
+    '/navegacao': 'delivery_navigation',
     '/home': 'home',
     '/': 'home',
     '/partner-store': 'partner_store',
