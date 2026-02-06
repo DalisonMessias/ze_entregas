@@ -10,6 +10,8 @@ export interface AssistantStoreInsights {
   topProducts: Array<{ name: string; price: number; stock: number | null }>;
   internalOrdersRecent: number;
   internalOrdersPending: number;
+  lowSalesProducts?: Array<{ product_id: string | null; name: string; quantity: number; revenue: number }>;
+  salesWindowDays?: number;
   report?: {
     totalRequests: number;
     totalValue: number;
@@ -200,6 +202,7 @@ DIRETRIZES:
 - Se usar dados estruturados, prefira JSON puro ou bloco \`\`\`json\`\`\`.
 - Nunca misture dados de outro usuário/loja.
 - Se o perfil for lojista, priorize respostas com foco em catálogo, pedidos, financeiro e operação da loja logada.
+- Se houver dados de baixa saída disponíveis, responda com eles antes de pedir relatórios extras.
 
 FORMATO PADRÃO:
 RESUMO: (1 a 3 frases)
@@ -223,6 +226,9 @@ export const buildUserPrompt = ({
   storeInsights
 }: UserPromptContext) => {
   const recentTransactions = transactions.slice(-5);
+  const salesWindowLabel = storeInsights?.salesWindowDays
+    ? `${storeInsights.salesWindowDays} dias`
+    : 'últimos 7 dias';
   const storeBlock = userRole === 'store_partner' && storeInsights
     ? `
 DADOS REAIS DO LOJISTA (LOJA LOGADA):
@@ -234,6 +240,11 @@ DADOS REAIS DO LOJISTA (LOJA LOGADA):
         ? `requisições=${storeInsights.report.totalRequests}, valor=${storeInsights.report.totalValue}, concluídos=${storeInsights.report.completedCount}, cancelados=${storeInsights.report.cancelledCount}`
         : 'indisponível'}
 - Financeiro ZePay: saldo corporativo R$ ${(storeInsights.financial?.corporateBalance || 0).toFixed(2)}
+${storeInsights.lowSalesProducts && storeInsights.lowSalesProducts.length > 0
+        ? `- Baixa saída (${salesWindowLabel}): ${storeInsights.lowSalesProducts
+          .map(item => `${item.name} (qtd ${item.quantity}, R$ ${item.revenue.toFixed(2)})`)
+          .join('; ')}`
+        : ''}
 `
     : '';
 

@@ -63,8 +63,9 @@ if (typeof window !== 'undefined' && !rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-// Register Service Worker
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+// Register Service Worker (only when enabled)
+const enableServiceWorker = (import.meta as any).env?.PROD || (import.meta as any).env?.VITE_ENABLE_SW === 'true';
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && enableServiceWorker) {
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');

@@ -998,6 +998,8 @@ export interface StoreReportData {
     failedCount: number;
     peakHours: { hour: number, count: number }[];
     driverPerformance: { partner_id: string, partner_name: string, count: number }[];
+    lowSalesProducts?: Array<{ product_id: string | null; name: string; quantity: number; revenue: number }>;
+    salesWindowDays?: number;
 }
 
 export interface StoreShippingRule {

@@ -94,6 +94,15 @@ const buildStoreInsights = (
     }
     : null;
 
+  const lowSalesProducts = Array.isArray(reports?.lowSalesProducts)
+    ? reports!.lowSalesProducts.slice(0, 5).map(item => ({
+      product_id: item.product_id ?? null,
+      name: item.name || 'Produto',
+      quantity: Number(item.quantity || 0),
+      revenue: Number(item.revenue || 0)
+    }))
+    : [];
+
   const recentTransactions = Array.isArray(zePayDashboard?.recent_transactions)
     ? zePayDashboard.recent_transactions.slice(0, 5).map((tx: any) => ({
       type: String(tx?.type || tx?.direction || 'N/A'),
@@ -111,6 +120,8 @@ const buildStoreInsights = (
     topProducts,
     internalOrdersRecent: safeOrders.length,
     internalOrdersPending,
+    lowSalesProducts: lowSalesProducts.length > 0 ? lowSalesProducts : undefined,
+    salesWindowDays: reports?.salesWindowDays ?? 7,
     report: reportSummary,
     financial: {
       corporateBalance: Number(zePayDashboard?.balance || 0),

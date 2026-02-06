@@ -691,15 +691,18 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         const isAuthenticated = userId && userId !== 'guest';
 
         // DEBUG ROUTING
-        console.log('[App Routing Debug]', {
-            path,
-            tabFromUrl,
-            isAuthenticated,
-            userId,
-            effectiveRole,
-            isInPublicTabs: tabFromUrl && publicTabs.includes(tabFromUrl),
-            isInAuthTabs: tabFromUrl && authTabs.includes(tabFromUrl)
-        });
+        const debugRouting = (import.meta as any).env?.VITE_DEBUG_ROUTING === 'true';
+        if (debugRouting) {
+            console.log('[App Routing Debug]', {
+                path,
+                tabFromUrl,
+                isAuthenticated,
+                userId,
+                effectiveRole,
+                isInPublicTabs: tabFromUrl && publicTabs.includes(tabFromUrl),
+                isInAuthTabs: tabFromUrl && authTabs.includes(tabFromUrl)
+            });
+        }
 
         // REDIRECIONAMENTO: Se o usuário estiver logado, não pode acessar as páginas de autenticação
         if (isAuthenticated && tabFromUrl && authTabs.includes(tabFromUrl)) {
