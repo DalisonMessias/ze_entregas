@@ -127,7 +127,7 @@ export const AddonModal: React.FC<AddonModalProps> = ({ isOpen, onClose, groupTo
                 is_active: true
             };
 
-            if (groupToEdit) {
+            if (groupToEdit && groupToEdit.id) {
                 await cloud.updateStoreAddonGroup({ ...groupData, id: groupToEdit.id });
                 setToast({ message: 'Grupo atualizado com sucesso!', type: 'success' });
             } else {

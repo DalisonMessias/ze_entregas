@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { StoreProduct, Category } from '../types';
+import { StoreProduct, Category, StoreAddonGroup } from '../types';
 import { StoreAIGenerator } from './StoreAIGenerator';
 import { SuperStoreModal } from './SuperStoreModal';
+import { AddonModal } from './AddonModal';
 import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera, Eye, Image as ImageIcon } from 'lucide-react';
 import { Loading } from './Loading';
 import { Button } from './Button';
@@ -65,6 +66,8 @@ export const StoreCatalog: React.FC = () => {
     const [missingFields, setMissingFields] = useState<string[]>([]);
     const [draftSaveCallback, setDraftSaveCallback] = useState<(() => void) | null>(null);
     const [draftAddonSaveCallback, setDraftAddonSaveCallback] = useState<(() => void) | null>(null);
+    const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
+    const [editingAddonGroup, setEditingAddonGroup] = useState<Partial<StoreAddonGroup>>({});
 
 
     // Super Store State
@@ -251,14 +254,22 @@ export const StoreCatalog: React.FC = () => {
     };
 
     const handleEditAddonGroupFromAI = (group: Partial<StoreAddonGroup>, onSaved?: () => void) => {
-        // Cast para StoreAddonGroup pois o modal espera o tipo completo, mas lidamos com partial na criacao
-        setEditingAddonGroup(group as StoreAddonGroup);
+        setEditingAddonGroup(group);
         if (onSaved) {
             setDraftAddonSaveCallback(() => onSaved);
         } else {
             setDraftAddonSaveCallback(null);
         }
         setIsAddonModalOpen(true);
+    };
+
+    const handleAddonSaved = () => {
+        setIsAddonModalOpen(false);
+
+        if (draftAddonSaveCallback) {
+            draftAddonSaveCallback();
+            setDraftAddonSaveCallback(null);
+        }
     };
 
     const filteredProducts = useMemo(() => {
@@ -296,17 +307,16 @@ export const StoreCatalog: React.FC = () => {
     return (
         <div className="flex flex-col lg:flex-row gap-4 md:h-[calc(100vh-140px)] animate-in fade-in duration-500 max-w-full md:overflow-hidden">
             {/* Left Column: AI Assistant - Peristent across tabs for SuperStore */}
-            {isSuperStore && (
-                <div className="w-full lg:w-[400px] flex-shrink-0 h-full">
-                    <StoreAIGenerator
-                        onProductCreated={loadData}
-                        categories={categories}
-                        products={products}
-                        onEditProduct={handleEditAIDraft}
-                        onEditAddonGroup={handleEditAddonGroupFromAI}
-                    />
-                </div>
-            )}
+            <div className="w-full lg:w-[400px] flex-shrink-0 h-full">
+                <StoreAIGenerator
+                    onProductCreated={loadData}
+                    categories={categories}
+                    products={products}
+                    onEditProduct={handleEditAIDraft}
+                    onEditAddonGroup={handleEditAddonGroupFromAI}
+                    isSuperStore={isSuperStore}
+                />
+            </div>
 
             {/* Toast Notification */}
             {toast && (
@@ -405,23 +415,6 @@ export const StoreCatalog: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
-
-                            {!isSuperStore && (
-                                <div className="mb-8 bg-gradient-to-br from-brand-50 to-indigo-50 dark:from-brand-900/10 dark:to-indigo-900/10 rounded-[2.5rem] p-6 border border-brand-100/50 dark:border-brand-900/20 flex flex-col md:flex-row items-center gap-6 shadow-sm">
-                                    <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-3xl flex items-center justify-center shadow-md animate-pulse">
-                                        <Sparkles className="w-8 h-8 text-brand-500" />
-                                    </div>
-                                    <div className="flex-1 text-center md:text-left">
-                                        <h3 className="font-black text-lg dark:text-white">Potencialize com IA</h3>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                            Torne-se <strong>Super Lojista</strong> para automação completa e análise inteligente.
-                                        </p>
-                                    </div>
-                                    <Button variant="secondary" onClick={() => setShowSuperModal(true)} className="rounded-2xl shadow-lg hover:shadow-xl transition-all">
-                                        <Crown className="w-4 h-4 mr-2" /> Upgrade Agora
-                                    </Button>
-                                </div>
-                            )}
 
                             {isLoading ? (
                                 <div className="flex flex-col items-center justify-center py-20">
@@ -627,6 +620,13 @@ export const StoreCatalog: React.FC = () => {
                 product={editingProduct}
                 onSave={handleSaveProduct}
                 isSaving={isSaving}
+            />
+
+            <AddonModal
+                isOpen={isAddonModalOpen}
+                onClose={() => setIsAddonModalOpen(false)}
+                groupToEdit={editingAddonGroup as StoreAddonGroup}
+                onSave={handleAddonSaved}
             />
 
             {showSuperModal && (

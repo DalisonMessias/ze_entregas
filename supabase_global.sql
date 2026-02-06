@@ -1,6 +1,10 @@
 -- RPC para Dashboard de Desempenho do Lojista
 -- Copie e execute este comando no SQL Editor do Supabase
 
+-- Adicionando colunas necessárias na tabela de pedidos
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES public.profiles(id);
+CREATE INDEX IF NOT EXISTS idx_orders_store_id ON public.orders(store_id);
+
 CREATE OR REPLACE FUNCTION public.get_store_performance_dashboard(
     p_store_id UUID,
     p_start_date TIMESTAMPTZ,
@@ -124,19 +128,23 @@ GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMP
 -- Tabela de Chaves de API (Segurança)
 CREATE TABLE IF NOT EXISTS public.api_keys (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    store_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     provider TEXT NOT NULL, -- 'google', 'openai', etc
     key_value TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(store_id, provider)
+    UNIQUE(provider)
 );
 
 -- RLS para api_keys
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own keys" ON public.api_keys
-    FOR SELECT USING (auth.uid() = store_id);
+-- Remover regras antigas baseadas em store_id (caso existam)
+DROP POLICY IF EXISTS "Users can view their own keys" ON public.api_keys;
+DROP POLICY IF EXISTS "Users can insert/update their own keys" ON public.api_keys;
 
-CREATE POLICY "Users can insert/update their own keys" ON public.api_keys
-    FOR ALL USING (auth.uid() = store_id);
+-- Novas políticas: Leitura para autenticados, Escrita restrita (ex: service_role ou admin via role)
+CREATE POLICY "Authenticated users can view keys" ON public.api_keys
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Service Role can manage keys" ON public.api_keys
+    FOR ALL USING (auth.role() = 'service_role');
