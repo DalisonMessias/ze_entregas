@@ -46,6 +46,7 @@ const StoreTeam = React.lazy(() => import('./StoreTeam').then(module => ({ defau
 const StoreReports = React.lazy(() => import('./StoreReports').then(module => ({ default: module.StoreReports })));
 const StorePerformance = React.lazy(() => import('./StorePerformance').then(module => ({ default: module.StorePerformance })));
 const StoreMarketing = React.lazy(() => import('./StoreMarketing').then(module => ({ default: module.StoreMarketing })));
+const AdminStoreRatings = React.lazy(() => import('./AdminStoreRatings').then(module => ({ default: module.AdminStoreRatings })));
 const StoreIntegrations = React.lazy(() => import('./StoreIntegrations').then(module => ({ default: module.StoreIntegrations })));
 const PrintCatalogGenerator = React.lazy(() => import('./PrintCatalogGenerator').then(module => ({ default: module.PrintCatalogGenerator })));
 const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => ({ default: module.StoreSettings })));
@@ -54,8 +55,6 @@ const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => 
 const StoreApiDocs = React.lazy(() => import('./StoreApiDocs').then(module => ({ default: module.StoreApiDocs })));
 const StoreReceivingPayment = React.lazy(() => import('./StoreReceivingPayment').then(module => ({ default: module.StoreReceivingPayment })));
 const AdminMercadoPagoConfig = React.lazy(() => import('./AdminMercadoPagoConfig').then(module => ({ default: module.AdminMercadoPagoConfig })));
-const AdminAIConfig = React.lazy(() => import('./AdminAIConfig').then(module => ({ default: module.AdminAIConfig })));
-const AdminInsuranceConfig = React.lazy(() => import('./AdminInsuranceConfig').then(module => ({ default: module.AdminInsuranceConfig })));
 const AdminPlatformCoupons = React.lazy(() => import('./AdminPlatformCoupons'));
 const StorePromotions = React.lazy(() => import('./StorePromotions').then(module => ({ default: module.StorePromotions })));
 
@@ -413,6 +412,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         zebank: 'ZéBank',
         store_loans: 'Empréstimos',
         store_api_docs: 'Docs API',
+        store_ratings: 'Minhas Avaliações',
         internal_chat: 'Chat com Clientes',
         store_drivers_chat: 'Chat com Entregadores',
         zepoint: 'ZéPoint'
@@ -950,11 +950,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             const subTab = activeTab.replace('admin_', '') as any;
             return (
                 <SectionErrorBoundary componentName="Admin Panel">
-                    {activeTab === 'admin_ai_config' && <AdminAIConfig />}
                     {activeTab === 'admin_mercadopago' && <AdminMercadoPagoConfig />}
-                    {activeTab === 'admin_insurance' && <AdminInsuranceConfig />}
                     {activeTab === 'admin_global_coupons' && <AdminPlatformCoupons />}
-                    {activeTab !== 'admin_ai_config' && activeTab !== 'admin_mercadopago' && activeTab !== 'admin_insurance' && activeTab !== 'admin_global_coupons' && <AdminPanel activeSubTab={subTab} />}
+                    {activeTab !== 'admin_mercadopago' && activeTab !== 'admin_global_coupons' && <AdminPanel activeSubTab={subTab} />}
                 </SectionErrorBoundary>
             );
         }
@@ -1080,6 +1078,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         </DesktopOnlyGate>
                     );
                 case 'store_promotions': return <StorePromotions storeId={userId} />;
+                case 'store_ratings': return <AdminStoreRatings />;
                 case 'store_api_docs':
                     return (
                         <DesktopOnlyGate
@@ -1212,6 +1211,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 { label: 'Equipe', tab: 'store_team', icon: Users },
                 { label: 'Relatórios', tab: 'store_reports', icon: BarChart3 },
                 { label: 'Desempenho', tab: 'store_performance', icon: TrendingUp },
+                { label: 'Avaliações', tab: 'store_ratings', icon: Star },
                 { label: 'Configurações', tab: 'store_settings', icon: Settings }
             ]
         },
@@ -1750,11 +1750,10 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Newspaper} label="Novidades da Plataforma" tab="admin_platform_news" />
 
                                     <MenuSection title="Configurações do Sistema" />
-                                    <MenuButton icon={Bot} label="Inteligência Artificial" tab="admin_ai_config" />
                                     <MenuButton icon={Cloud} label="APIs & Integrações" tab="admin_api_keys" />
                                     <MenuButton icon={Smartphone} label="App PWA" tab="admin_pwa" />
+                                    <MenuButton icon={DollarSign} label="Taxas & Custos" tab="admin_fees" />
                                     <MenuButton icon={Headphones} label="Suporte & Tickets" tab="admin_support" />
-                                    <MenuButton icon={Route} label="Config. Roteamento" tab="admin_routing" />
                                     <MenuButton icon={TrendingUp} label="Gestão de Investimentos" tab="admin_investments" />
                                 </>
                             )}
@@ -1781,6 +1780,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
                                     <MenuButton icon={Star} label="Destaque na Cidade" tab="store_highlight" />
                                     <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
+                                    <MenuButton icon={Star} label="Avaliações" tab="store_ratings" />
                                     <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
                                     <MenuButton icon={Smartphone} label="Recebimento PIX" tab="store_receiving_payment" />
                                     <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />

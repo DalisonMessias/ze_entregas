@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Smartphone, Save, CheckCircle, AlertTriangle, Upload, Plus, Trash2, Image as ImageIcon, Layout, Settings, List } from 'lucide-react';
 import { Button } from './Button';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import * as cloud from '../services/cloud';
 import { PWASettings, PWAIcon, PWAScreenshot, PWAShortcut } from '../types';
 import { getClient } from '../services/cloud';
+import { SelectPersonalizado } from './SelectPersonalizado';
 
 export const AdminPWASettings: React.FC = () => {
     const [settings, setSettings] = useState<PWASettings>({} as PWASettings);
@@ -246,21 +248,29 @@ export const AdminPWASettings: React.FC = () => {
                                 <p className="text-xs text-gray-400 mt-1">Cor exibida enquanto o app carrega (splash screen).</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Modo de Exibição (Display)</label>
-                                <select value={settings?.display || 'standalone'} onChange={e => handleChange('display', e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
-                                    <option value="standalone">Standalone (App Nativo)</option>
-                                    <option value="fullscreen">Fullscreen (Tela Cheia)</option>
-                                    <option value="minimal-ui">Minimal UI</option>
-                                    <option value="browser">Browser (Navegador)</option>
-                                </select>
+                                <SelectPersonalizado
+                                    label="Modo de Exibição (Display)"
+                                    value={settings?.display || 'standalone'}
+                                    onChange={val => handleChange('display', val)}
+                                    options={[
+                                        { label: 'Standalone (App Nativo)', value: 'standalone' },
+                                        { label: 'Fullscreen (Tela Cheia)', value: 'fullscreen' },
+                                        { label: 'Minimal UI', value: 'minimal-ui' },
+                                        { label: 'Browser (Navegador)', value: 'browser' }
+                                    ]}
+                                />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Orientação</label>
-                                <select value={settings?.orientation || 'portrait'} onChange={e => handleChange('orientation', e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
-                                    <option value="any">Qualquer</option>
-                                    <option value="portrait">Retrato (Vertical)</option>
-                                    <option value="landscape">Paisagem (Horizontal)</option>
-                                </select>
+                                <SelectPersonalizado
+                                    label="Orientação"
+                                    value={settings?.orientation || 'portrait'}
+                                    onChange={val => handleChange('orientation', val)}
+                                    options={[
+                                        { label: 'Qualquer', value: 'any' },
+                                        { label: 'Retrato (Vertical)', value: 'portrait' },
+                                        { label: 'Paisagem (Horizontal)', value: 'landscape' }
+                                    ]}
+                                />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cor da Barra de Status</label>

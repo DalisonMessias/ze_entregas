@@ -15335,5 +15335,45 @@ BEGIN
 END;
 $$;
 
+
 GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) TO service_role;
+
+-- ============================================
+-- TABELA: base_addon_groups
+-- Catálogo base de grupos de adicionais
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.base_addon_groups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('SINGLE', 'MULTIPLE')),
+    min INTEGER DEFAULT 0,
+    max INTEGER DEFAULT 1,
+    options JSONB NOT NULL DEFAULT '[]'::jsonb,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Trigger de updated_at
+DROP TRIGGER IF EXISTS handle_base_addon_groups_updated_at ON public.base_addon_groups;
+CREATE TRIGGER handle_base_addon_groups_updated_at 
+BEFORE UPDATE ON public.base_addon_groups
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS
+ALTER TABLE public.base_addon_groups ENABLE ROW LEVEL SECURITY;
+
+-- Leitura pública (todos podem visualizar)
+DROP POLICY IF EXISTS "Public read access to base_addon_groups" ON public.base_addon_groups;
+CREATE POLICY "Public read access to base_addon_groups" 
+ON public.base_addon_groups FOR SELECT USING (true);
+
+-- Apenas admins podem criar, editar e deletar
+DROP POLICY IF EXISTS "Admins can manage base_addon_groups" ON public.base_addon_groups;
+CREATE POLICY "Admins can manage base_addon_groups" 
+ON public.base_addon_groups FOR ALL USING (public.is_admin());
+
+-- Grants
+GRANT ALL ON public.base_addon_groups TO authenticated;
+GRANT ALL ON public.base_addon_groups TO service_role;

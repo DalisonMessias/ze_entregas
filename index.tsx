@@ -48,6 +48,21 @@ if (typeof window !== 'undefined') {
     try {
       // console.error('Unhandled rejection captured:', event.reason);
       const detail = { ts: Date.now(), reason: event.reason };
+      // Inject Leaflet Scripts & CSS
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => {
+        // Now load rotate plugin from root (no /dist/ in v0.3.1)
+        const rotateScript = document.createElement('script');
+        rotateScript.src = 'https://unpkg.com/leaflet-rotate-map@0.3.1/leaflet.js';
+        document.head.appendChild(rotateScript);
+      };
+      document.head.appendChild(script);
       try {
         const logs = JSON.parse(localStorage.getItem('__appLogs') || '[]');
         logs.push({ level: 'warn', ...detail });

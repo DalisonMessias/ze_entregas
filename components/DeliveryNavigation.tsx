@@ -40,6 +40,7 @@ import { CitySearchSelect } from './CitySearchSelect';
 import { City } from '../types';
 import { useUserCity } from '../src/hooks/useUserCity';
 import { Switch } from './Switch';
+import { useDialog } from '../utils/dialogService';
 
 interface DeliveryNavigationProps {
     userRole: UserRole;
@@ -61,6 +62,7 @@ const ROUTE_CACHE_MS = 15000;
 const DISPLACEMENT_CACHE_M = 15;
 
 export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole }) => {
+    const { toast } = useDialog();
     // Estados principais
     const [navState, setNavState] = useState<NavigationState | null>(null);
     const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
@@ -108,6 +110,7 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
     const [allStreets, setAllStreets] = useState<string[]>([]);
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [loadingAllStreets, setLoadingAllStreets] = useState(false);
+    const [gmapsLink, setGmapsLink] = useState('');
     const [navIcons, setNavIcons] = useState<Record<string, string>>({});
     const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
     const lastSpokenRef = useRef<string>('');
@@ -138,8 +141,9 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
                 const [icons, settings, elevenKey] = await Promise.all([
                     cloud.getNavigationIcons(),
                     cloud.getShopSettings(),
-                    cloud.getApiKey('eleven_labs_api_key')
+                    cloud.getApiKey('eleven_labs')
                 ]);
+
 
                 const iconMap: Record<string, string> = {};
                 icons.forEach(i => {
@@ -148,8 +152,9 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
                 setNavIcons(iconMap);
                 setShopSettings({
                     ...settings,
-                    eleven_labs_api_key: elevenKey || ''
+                    eleven_labs: elevenKey || ''
                 } as any);
+
             } catch (err) {
                 console.error("Erro ao carregar configurações de navegação:", err);
             }
@@ -174,7 +179,8 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
 
     // Função para falar instrução usando ElevenLabs
     const speak = useCallback(async (text: string) => {
-        const elevenLabsApiKey = await cloud.getApiKey('eleven_labs_api_key');
+        const elevenLabsApiKey = await cloud.getApiKey('eleven_labs');
+
         if (!elevenLabsApiKey || !shopSettings?.navigation_voice_enabled) return;
         if (lastSpokenRef.current === text) return;
 
@@ -375,7 +381,8 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
         if (!navigator.onLine) return null;
 
         try {
-            const apiKey = await cloud.getApiKey('open_route_service_api_key');
+            const apiKey = await cloud.getApiKey('open_route_service');
+
 
             if (!apiKey) {
                 console.warn('ORS API Key not found in api_keys table');
@@ -618,6 +625,28 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
         }
     }, [currentPos, heading, route, mapMode, navState]);
 
+    const handleNextWaypoint = () => {
+        if (!navState || !navState.waypoints) return;
+
+        const nextIndex = (navState.current_waypoint_index || 0) + 1;
+        if (nextIndex < navState.waypoints.length) {
+            const nextDest = navState.waypoints[nextIndex];
+            const newState = {
+                ...navState,
+                destination: nextDest,
+                current_waypoint_index: nextIndex
+            };
+            saveNavigationState(newState);
+            setNavState(newState);
+            setRoute(null);
+            setNextStep(null);
+            toast({ message: `Indo para parada ${nextIndex + 1}: ${nextDest.label || nextDest.address}`, type: 'success' });
+        } else {
+            toast({ message: 'Você concluiu todas as paradas!', type: 'success' });
+            handleFinish();
+        }
+    };
+
     const handleFinish = () => {
         clearNavigationState();
         setNavState(null);
@@ -640,11 +669,24 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
         setRoute(null);
         setNextStep(null);
         setShowSearchOverlay(false);
+
+        // Redireciona para o painel diário (entregador/inicio)
+        const event = new CustomEvent('navigateToTab', { detail: { tab: 'daily_panel' } });
+        window.dispatchEvent(event as any);
     };
 
     const recenter = () => {
         if (mapRef.current && currentPos) {
             mapRef.current.setView(currentPos, 18);
+        }
+    };
+
+    const handleSearchBack = () => {
+        setShowSearchOverlay(false);
+        // Se estivermos em modo idle e houver uma aba de retorno (veio de outra página)
+        if (navigationMode === 'idle' && navState?.return_tab) {
+            const event = new CustomEvent('navigateToTab', { detail: { tab: navState.return_tab } });
+            window.dispatchEvent(event as any);
         }
     };
 
@@ -688,6 +730,56 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
         setStreetResults([]);
         setRoute(null);
         setNextStep(null);
+    };
+
+    const handleGoogleMapsLink = async (link: string) => {
+        if (!link || !link.trim()) return;
+
+        try {
+            // Regex aprimorada para múltiplos formatos de links do Google Maps
+            const patterns = [
+                /@(-?\d+\.\d+),(-?\d+\.\d+)/,           // @lat,lng (comum em URLs de navegação)
+                /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,       // !3dLat!4dLng (comum em links de busca/local)
+                /place\/(-?\d+\.\d+),(-?\d+\.\d+)/,     // place/lat,lng
+                /dir\/.*\/(-?\d+\.\d+),(-?\d+\.\d+)/,   // dir/.../lat,lng (links de rota)
+                /q=(-?\d+\.\d+),(-?\d+\.\d+)/,          // q=lat,lng (links de busca simples)
+                /(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/       // lat,lng (formato genérico de coordenadas)
+            ];
+
+            let lat = '';
+            let lon = '';
+
+            for (const pattern of patterns) {
+                const match = link.match(pattern);
+                if (match) {
+                    lat = match[1];
+                    lon = match[2];
+                    break;
+                }
+            }
+
+            if (lat && lon) {
+                toast({ message: 'Localizando endereço...', type: 'info' });
+
+                // Buscar endereço amigável via Nominatim usando as coordenadas
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+                const data = await response.json();
+
+                handleSelectResult({
+                    lat,
+                    lon,
+                    display_name: data.display_name || `Destino (${lat}, ${lon})`
+                });
+                toast({ message: 'GPS configurado com o link!', type: 'success' });
+            } else if (link.includes('maps.app.goo.gl') || link.includes('goo.gl/maps')) {
+                toast({ message: 'Links curtos (maps.app.goo.gl) podem não carregar diretamente. Tente usar o link completo do navegador.', type: 'warning' });
+            } else {
+                toast({ message: 'Não encontramos coordenadas neste link. Verifique e tente novamente.', type: 'error' });
+            }
+        } catch (err) {
+            console.error('Erro ao processar link do Maps:', err);
+            toast({ message: 'Erro ao processar o link.', type: 'error' });
+        }
     };
 
     const handleStartNavigation = () => {
@@ -840,6 +932,28 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
                             </div>
                         </div>
 
+                        {/* Indicador de Waypoints */}
+                        {navState?.waypoints && navState.waypoints.length > 0 && (
+                            <div className="mb-4 flex items-center justify-between px-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex gap-1">
+                                        {navState.waypoints.map((_, i) => (
+                                            <div
+                                                key={i}
+                                                className={`h-1.5 rounded-full transition-all ${i === navState.current_waypoint_index ? 'w-6 bg-brand-600' : i < (navState.current_waypoint_index || 0) ? 'w-2 bg-green-500' : 'w-2 bg-gray-200 dark:bg-gray-700'}`}
+                                            />
+                                        ))}
+                                    </div>
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                        Parada {(navState.current_waypoint_index || 0) + 1} de {navState.waypoints.length}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] font-bold text-brand-600 truncate max-w-[150px]">
+                                    {navState.destination?.label || navState.destination?.address}
+                                </p>
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => {
@@ -865,13 +979,20 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
                                     INICIAR NAVEGAÇÃO
                                 </Button>
                             ) : navigationMode === 'guided' ? (
-                                <Button
-                                    onClick={handleFinish}
-                                    className="flex-1 h-16 rounded-[1.5rem] bg-brand-600 text-white font-black text-lg shadow-lg hover:bg-brand-700 active:scale-95 transition-all flex items-center justify-center gap-3"
-                                >
-                                    <CheckCircle2 className="w-6 h-6" />
-                                    CHEGUEI / FINALIZAR
-                                </Button>
+                                navState?.waypoints && (navState.current_waypoint_index || 0) < navState.waypoints.length - 1 ? (
+                                    <Button onClick={handleNextWaypoint} size="lg" className="flex-1 bg-green-600 text-white rounded-3xl text-lg font-black h-14 shadow-xl shadow-green-500/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+                                        <CheckCircle2 className="w-6 h-6" />
+                                        Próxima Parada
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        onClick={handleFinish}
+                                        className="flex-1 h-16 rounded-[1.5rem] bg-brand-600 text-white font-black text-lg shadow-lg hover:bg-brand-700 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                    >
+                                        <CheckCircle2 className="w-6 h-6" />
+                                        CHEGUEI / FINALIZAR
+                                    </Button>
+                                )
                             ) : (
                                 <Button
                                     onClick={() => setShowSearchOverlay(true)}
@@ -947,7 +1068,7 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
             {showSearchOverlay && (
                 <div className="fixed inset-0 z-[110] bg-white dark:bg-gray-900 animate-in fade-in slide-in-from-bottom-4 duration-300 flex flex-col">
                     <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-4">
-                        <button onClick={() => setShowSearchOverlay(false)} className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
+                        <button onClick={handleSearchBack} className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
                             <ArrowLeft className="w-6 h-6" />
                         </button>
                         <h2 className="text-xl font-black text-gray-900 dark:text-white">Buscar Destino</h2>
@@ -979,6 +1100,35 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
                                     {searchingStreets ? <Loader2 className="animate-spin" /> : <Search />}
                                 </Button>
                             </div>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 block">
+                                Ou cole um link do Google Maps
+                            </label>
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-600">
+                                        <Share2 className="w-5 h-5" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={gmapsLink}
+                                        onChange={(e) => setGmapsLink(e.target.value)}
+                                        placeholder="Cole o link aqui..."
+                                        onPaste={(e) => {
+                                            const link = e.clipboardData.getData('text');
+                                            setGmapsLink(link);
+                                            handleGoogleMapsLink(link);
+                                        }}
+                                        className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-800 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 outline-none font-medium text-sm"
+                                    />
+                                </div>
+                                <Button onClick={() => handleGoogleMapsLink(gmapsLink)} disabled={!gmapsLink.trim()} className="px-6 py-4 bg-brand-600 text-white rounded-2xl font-bold shadow-lg shadow-brand-600/20 active:scale-95 transition-all">
+                                    Carregar
+                                </Button>
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-2 ml-2 italic">Dica: abra o local no Google Maps, clique em compartilhar e cole o link acima.</p>
                         </div>
 
                         {/* Sugestões da Cidade (Overpass) */}

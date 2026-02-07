@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getClient } from '../services/cloud';
+import { getApiKey as fetchGlobalApiKey } from '../services/cloud';
 
 interface GeocodingResult {
     lat: number;
@@ -27,18 +27,7 @@ export const useGeocoding = () => {
      * Busca a API key do OpenRouteService configurada no admin
      */
     const getApiKey = async (): Promise<string | null> => {
-        try {
-            const supabase = getClient();
-            const { data } = await supabase
-                .from('shop_settings')
-                .select('open_route_service_api_key')
-                .single();
-
-            return data?.open_route_service_api_key || null;
-        } catch (err) {
-            console.error('Erro ao buscar API key:', err);
-            return null;
-        }
+        return fetchGlobalApiKey('open_route_service_api_key');
     };
 
     /**

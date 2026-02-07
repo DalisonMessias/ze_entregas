@@ -1,6 +1,8 @@
-# Ajuste na Tabela api_keys
-
-- [x] Remover coluna `store_id` da tabela `public.api_keys` em `supabase_global.sql`
-- [x] Atualizar constraint `UNIQUE` para remover `store_id`
-- [x] Atualizar políticas RLS da tabela `api_keys` para acesso administrativo
-- [x] Atualizar `checklist.txt` com as alterações
+- [x] Ajustar tempo de cooldown de 3 para 5 minutos (300 segundos) em todos os componentes de IA.
+- [x] Implementar salvamento da última mensagem e imagem enviada pelo usuário para re-tentativa.
+- [x] Atualizar lógica do botão "Tentar Novamente" para limpar a mensagem de manutenção e reenviar automaticamente o conteúdo para o backend.
+- [x] Aplicar mudanças no AdminBaseAddonManager.tsx (Admin - Adicionais Base).
+- [x] Aplicar mudanças no AdminBaseCatalog.tsx (Admin - Catálogo Base).
+- [x] Aplicar mudanças no StoreAIGenerator.tsx (Lojista - Gerador IA).
+- [x] Corrigir erros de sintaxe e garantir que inputs/textareas sejam desabilitados durante o cooldown.
+- [x] Documentar mudanças no checklist.txt e TASK_LIST.md.

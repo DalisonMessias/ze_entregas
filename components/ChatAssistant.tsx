@@ -334,11 +334,11 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
           setStoreInsights(null);
         }
 
-        let settings: { google_gemini_api_key?: string | null } | null = null;
+        let geminiKey: string | null = null;
         try {
-          settings = await cloud.getShopSettings();
+          geminiKey = await cloud.getApiKey('google_gemini');
         } catch {
-          settings = null;
+          geminiKey = null;
         }
 
         if (userRole === 'collaborator') {
@@ -355,8 +355,8 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
           setCollaboratorFunction(null);
         }
 
-        if (settings?.google_gemini_api_key) {
-          setApiKey(settings.google_gemini_api_key);
+        if (geminiKey) {
+          setApiKey(geminiKey);
         } else {
           const envKey = (process as any)?.env?.GEMINI_API_KEY || (import.meta as any)?.env?.VITE_GEMINI_API_KEY;
           if (envKey) setApiKey(envKey);
@@ -624,9 +624,8 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
               </div>
 
               <div
-                className={`${
-                  activeMobileTab !== 'chat' ? 'hidden md:flex' : 'flex'
-                } flex-1 min-h-0 flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/70`}
+                className={`${activeMobileTab !== 'chat' ? 'hidden md:flex' : 'flex'
+                  } flex-1 min-h-0 flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-gray-800/60 dark:bg-gray-900/70`}
               >
                 {!apiKey && (
                   <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center text-xs font-bold text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
@@ -664,11 +663,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                       <div key={index} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`flex max-w-[85%] flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                           <div
-                            className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                              msg.role === 'user'
-                                ? 'bg-gray-900 text-white'
-                                : 'bg-white text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                            }`}
+                            className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${msg.role === 'user'
+                              ? 'bg-gray-900 text-white'
+                              : 'bg-white text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                              }`}
                           >
                             {msg.role === 'user' ? (
                               renderFormattedText(msg.parts[0].text, true)
@@ -721,11 +719,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                   <div className="mt-3 flex items-center gap-2 rounded-3xl border border-gray-200 bg-white p-2 shadow-sm focus-within:border-brand-400 dark:border-gray-700 dark:bg-gray-900">
                     <button
                       onClick={handleVoiceInput}
-                      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                        isListening
-                          ? 'bg-red-100 text-red-500'
-                          : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                      }`}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${isListening
+                        ? 'bg-red-100 text-red-500'
+                        : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                        }`}
                       disabled={!apiKey}
                     >
                       <Mic className="h-5 w-5" />
@@ -747,11 +744,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                     <button
                       onClick={() => handleSend()}
                       disabled={isLoading || !input.trim() || !apiKey}
-                      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                        input.trim() && apiKey
-                          ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/20'
-                          : 'bg-gray-200 text-gray-400 dark:bg-gray-800'
-                      }`}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${input.trim() && apiKey
+                        ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/20'
+                        : 'bg-gray-200 text-gray-400 dark:bg-gray-800'
+                        }`}
                     >
                       {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </button>

@@ -774,49 +774,16 @@ export class ZeAssistantService {
      * Busca API Key do Gemini com estratégia robusta de Fallback
      */
     private async getGeminiApiKey(storeId: string): Promise<string | null> {
-        const supabase = supabaseAdmin;
-        if (!supabase) return null;
-
         try {
-            // Nomes aceitos para a chave (legado e novo)
-            const possibleNames = ['google_gemini', 'google_gemini_api_key'];
+            // Usa o novo serviço centralizado que já lida com isolamento por loja e fallback global
+            const key = await cloud.getAPIKey('google_gemini', storeId);
 
-            // 1. Tentar Buscar da Loja (Prioridade)
-            const { data: storeKeys } = await supabase
-                .from('api_keys')
-                .select('key_token, encrypted_key')
-                .in('name', possibleNames)
-                .eq('user_id', storeId)
-                .limit(1);
-
-            if (storeKeys && storeKeys.length > 0) {
-                const k = storeKeys[0];
-                const key = k.key_token || k.encrypted_key;
-                if (key) {
-                    console.log(`[ZeAssistant] 🔑 Usando API Key da LOJA (${storeId})`);
-                    return key;
-                }
+            if (key) {
+                console.log(`[ZeAssistant] 🔑 API Key obtida via serviço centralizado (Store: ${storeId})`);
+                return key;
             }
 
-            // 2. Fallback: Buscar Chave Global (Sistema/Admin)
-            // ...
-            const { data: globalKeys } = await supabase
-                .from('api_keys')
-                .select('key_token, encrypted_key')
-                .in('name', possibleNames)
-                .is('user_id', null) // Tenta pegar a global (sem user_id)
-                .limit(1);
-
-            if (globalKeys && globalKeys.length > 0) {
-                const k = globalKeys[0];
-                const key = k.key_token || k.encrypted_key;
-                if (key) {
-                    console.log('[ZeAssistant] 🔑 Usando API Key GLOBAL (Fallback)');
-                    return key;
-                }
-            }
-
-            // 3. Fallback Terminal: Variável de Ambiente
+            // Fallback Terminal: Variável de Ambiente (apenas se o banco falhar e houver .env)
             const envKey = process.env.GEMINI_API_KEY;
             if (envKey) {
                 console.log('[ZeAssistant] 🔑 Usando API Key do ambiente (ENV)');
@@ -824,10 +791,9 @@ export class ZeAssistantService {
             }
 
             console.warn('[ZeAssistant] ⚠️ Nenhuma API Key do Gemini encontrada!');
-
             return null;
         } catch (error) {
-            // Silencioso para não poluir logs, o erro principal será tratado pelo chamador
+            console.error('[ZeAssistant] Erro ao recuperar API Key:', error);
             return null;
         }
     }

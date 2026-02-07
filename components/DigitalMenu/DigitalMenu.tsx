@@ -15,6 +15,7 @@ import { PixPaymentModal } from '../PixPaymentModal';
 import { ShippingRulesModal } from './ShippingRulesModal';
 import { AuthRequiredModal } from './AuthRequiredModal';
 import { MobileTabsSelect } from '../MobileTabsSelect';
+import { SelectPersonalizado } from '../SelectPersonalizado';
 
 interface DigitalMenuProps {
     citySlug: string;
@@ -33,6 +34,81 @@ interface CartItem {
         quantity: number;
     }[];
 }
+
+const CommentsList: React.FC<{ storeId: string, showComments?: boolean }> = ({ storeId, showComments = true }) => {
+    const [ratings, setRatings] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const data = await cloud.getStoreRatings(storeId, showComments);
+                setRatings(data);
+            } catch (e) {
+                console.error("Error loading ratings for menu:", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, [storeId, showComments]);
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-brand-600" /></div>;
+    if (ratings.length === 0) return <p className="text-center text-gray-500 py-8">Nenhum comentário disponível ainda.</p>;
+
+    const formatName = (fullName: string) => {
+        if (!fullName) return 'Cliente';
+        const parts = fullName.trim().split(/\s+/);
+        if (parts.length <= 1) return parts[0] || 'Cliente';
+        return `${parts[0]} ${parts[parts.length - 1]}`;
+    };
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {ratings.map((r) => {
+                const displayName = r.is_anonymous ? 'Cliente Anônimo' : formatName(r.evaluator?.name);
+                const displayInitial = r.is_anonymous ? '?' : (displayName.charAt(0).toUpperCase());
+
+                return (
+                    <div key={r.id} className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-all hover:border-gray-200 dark:hover:border-gray-700">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center text-brand-600 font-bold text-xs uppercase">
+                                    {displayInitial}
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-gray-900 dark:text-white leading-none mb-1">
+                                        {displayName}
+                                    </p>
+                                    <p className="text-[10px] text-gray-400 font-medium">
+                                        {new Date(r.created_at).toLocaleDateString('pt-BR')}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-0.5">
+                                {[...Array(5)].map((_, i) => (
+                                    <Star key={i} className={`w-3 h-3 ${i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200 dark:text-gray-700'}`} />
+                                ))}
+                            </div>
+                        </div>
+                        {!r.is_anonymous && r.comment && (
+                            <p className="text-sm text-gray-600 dark:text-gray-300 italic">"{r.comment}"</p>
+                        )}
+                        {r.store_response && (
+                            <div className="mt-4 pl-4 border-l-2 border-brand-200 dark:border-brand-900/30">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                    <StoreIcon className="w-3 h-3 text-brand-500" />
+                                    <p className="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">Resposta da Loja</p>
+                                </div>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">"{r.store_response}"</p>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
 
 export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug }) => {
     const [loading, setLoading] = useState(true);
@@ -80,6 +156,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [paymentMethod, setPaymentMethod] = useState('PIX');
     const [changeFor, setChangeFor] = useState('');
     const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+    const [isReviewsModalOpen, setIsReviewsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPixModalOpen, setIsPixModalOpen] = useState(false);
     const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
@@ -794,6 +871,24 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         )}
 
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                            {store.average_rating !== undefined && (
+                                <div
+                                    onClick={() => {
+                                        if (store.show_comments_on_menu && store.ratings_count && store.ratings_count > 0) {
+                                            setIsReviewsModalOpen(true);
+                                        } else {
+                                            setIsRatingModalOpen(true);
+                                        }
+                                    }}
+                                    className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm cursor-pointer hover:border-amber-300 transition-colors"
+                                >
+                                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                                    <span>{store.average_rating ? store.average_rating.toFixed(1).replace('.', ',') : 'Novo'}</span>
+                                    {store.ratings_count && store.ratings_count > 0 && (
+                                        <span className="text-gray-400 font-medium">({store.ratings_count})</span>
+                                    )}
+                                </div>
+                            )}
                             {store.opening_hours && (
                                 <div className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-gray-700 dark:text-gray-200 border border-gray-200/70 dark:border-gray-800 px-3 py-1.5 rounded-full backdrop-blur shadow-sm">
                                     <Clock className="w-4 h-4 text-gray-500 dark:text-gray-300" /> {store.opening_hours}
@@ -830,18 +925,27 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 <StoreIcon className="w-4 h-4 text-gray-500 dark:text-gray-300" /> {products.length} itens
                             </div>
 
-                            {/* Botão de Avaliação - Sempre visível na barra de badges */}
+                            {/* Botão de Avaliação Unificado */}
                             <div
                                 onClick={() => setIsRatingModalOpen(true)}
                                 className="flex items-center gap-1.5 bg-white/90 dark:bg-gray-900/70 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 px-3 py-1.5 rounded-full cursor-pointer hover:border-amber-300 transition-colors shadow-sm"
                             >
                                 <Star className="w-4 h-4 fill-current" />
-                                <span className="font-bold">
-                                    {store.average_rating ? store.average_rating.toFixed(1) : 'Avaliar'}
-                                </span>
+                                <span className="font-bold">Avaliar</span>
                             </div>
 
-                            {/* Botão Falar com a Loja - Fixo ao lado do Avaliar */}
+                            {/* Botão Ver Avaliações - Se habilitado pelo lojista */}
+                            {store.show_comments_on_menu && store.ratings_count && store.ratings_count > 0 && (
+                                <div
+                                    onClick={() => setIsReviewsModalOpen(true)}
+                                    className="flex items-center gap-1.5 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-200 border border-brand-200/60 dark:border-brand-800/60 px-3 py-1.5 rounded-full cursor-pointer hover:bg-brand-100 transition-colors shadow-sm"
+                                >
+                                    <MessageSquare className="w-4 h-4" />
+                                    <span className="font-bold">Ver Avaliações</span>
+                                </div>
+                            )}
+
+                            {/* Botão Falar com a Loja */}
                             <div
                                 onClick={() => {
                                     window.history.pushState({}, '', `/${citySlug}/${storeSlug}/chat`);
@@ -1254,19 +1358,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                                         <div className="grid grid-cols-1 gap-4">
                                             {deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' ? (
-                                                <div>
-                                                    <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1 block uppercase tracking-wide">Bairro (Taxa de Entrega)</label>
-                                                    <select
-                                                        value={selectedNeighborhoodId}
-                                                        onChange={e => setSelectedNeighborhoodId(e.target.value)}
-                                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-medium"
-                                                    >
-                                                        <option value="">Selecione o bairro...</option>
-                                                        {fees.map(fee => (
-                                                            <option key={fee.id} value={fee.id}>{fee.neighborhood_name} (+ R$ {fee.fee.toFixed(2)})</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
+                                                <SelectPersonalizado
+                                                    label="Bairro (Taxa de Entrega)"
+                                                    value={selectedNeighborhoodId}
+                                                    onChange={val => setSelectedNeighborhoodId(val as string)}
+                                                    options={[
+                                                        { label: 'Selecione o bairro...', value: '' },
+                                                        ...fees.map(fee => ({
+                                                            label: `${fee.neighborhood_name} (+ R$ ${fee.fee.toFixed(2)})`,
+                                                            value: fee.id
+                                                        }))
+                                                    ]}
+                                                />
                                             ) : (
                                                 <CustomInput label="Bairro" value={addressNeighborhood} onChange={e => setAddressNeighborhood(e.target.value)} placeholder="Seu bairro" />
                                             )}
@@ -1419,13 +1522,32 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             )}
 
 
-            {/* Ratings Modal */}
+            {/* Comments Section */}
+            {store.show_comments_on_menu && (
+                <div className="container mx-auto px-4 py-12 border-t border-gray-200/70 dark:border-gray-800">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Avaliações da Loja</h2>
+                            <p className="text-sm text-gray-500">O que nossos clientes estão dizendo</p>
+                        </div>
+                        <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                            <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                            <span className="text-lg font-bold text-amber-700 dark:text-amber-400">
+                                {store.average_rating ? store.average_rating.toFixed(1).replace('.', ',') : '0,0'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <CommentsList storeId={store.id} showComments={store.show_comments_on_menu} />
+                </div>
+            )}
             {isRatingModalOpen && store && (
                 <StoreRatingModal
                     isOpen={isRatingModalOpen}
                     onClose={() => setIsRatingModalOpen(false)}
                     storeId={store.id}
                     storeName={store.store_name || store.name}
+                    onRatingSuccess={() => loadStoreData()}
                 />
             )}
 
@@ -1488,6 +1610,45 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     onConfirm={handleConfirmAddons}
                     initialAddons={currentEditingCartItemId ? cart.find(i => i.id === currentEditingCartItemId)?.selectedAddons : []}
                 />
+            )}
+
+            {/* Modal de Avaliações Detalhado */}
+            {isReviewsModalOpen && store && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsReviewsModalOpen(false)} />
+                    <div className="relative bg-white dark:bg-gray-900 w-full max-w-2xl rounded-[28px] border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[85vh]">
+                        <div className="p-6 border-b border-gray-200/70 dark:border-gray-800 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Avaliações da Loja</h3>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <div className="flex items-center gap-1 text-amber-500">
+                                        <Star className="w-4 h-4 fill-current" />
+                                        <span className="font-bold text-sm">{store.average_rating ? store.average_rating.toFixed(1) : '0.0'}</span>
+                                    </div>
+                                    <span className="text-gray-400 text-xs">•</span>
+                                    <span className="text-gray-500 text-xs font-medium">{store.ratings_count || 0} avaliações</span>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsReviewsModalOpen(false)} className="p-2.5 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <CommentsList storeId={store.id} showComments={store.show_comments_on_menu} />
+                        </div>
+                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200/70 dark:border-gray-800 flex justify-center">
+                            <button
+                                onClick={() => {
+                                    setIsReviewsModalOpen(false);
+                                    setIsRatingModalOpen(true);
+                                }}
+                                className="text-sm font-bold text-brand-600 hover:text-brand-700 transition-colors"
+                            >
+                                Deixar minha avaliação
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
         </div>

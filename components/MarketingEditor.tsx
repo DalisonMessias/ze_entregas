@@ -113,12 +113,13 @@ export const MarketingEditor: React.FC<MarketingEditorProps> = ({ template, desi
     const { alert: showMessage } = useDialog();
 
     useEffect(() => {
-        cloud.getShopSettings().then(settings => {
-            if (settings?.google_gemini_api_key) {
-                setApiKey(settings.google_gemini_api_key);
+        cloud.getApiKey('google_gemini').then(key => {
+            if (key) {
+                setApiKey(key);
             }
         });
     }, []);
+
 
     const handleGenerateDesign = async () => {
         if (!apiKey) {

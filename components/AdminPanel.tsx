@@ -23,7 +23,7 @@ import {
 } from '../services/cloud';
 import { ManagedUser, UserRole, UserStatus, PartnerProfile, PartnerDocument, City, CityRequest, AdminSubTab, PartnerLevelBenefit, StreetRequest } from '../types';
 import { Button } from './Button';
-import { CustomSelect } from './CustomSelect';
+import { SelectPersonalizado } from './SelectPersonalizado';
 import { CitySelector } from './CitySelector';
 import { useDialog } from '../utils/dialogService';
 import { Switch } from './Switch';
@@ -43,6 +43,7 @@ import { AdminClaims } from './AdminClaims';
 import { AdminFees } from './AdminFees';
 import { AdminPWASettings } from './AdminPWASettings';
 import { AdminRatings } from './AdminRatings';
+import { AdminStoreRatings } from './AdminStoreRatings';
 import { AdminBlacklist } from './AdminBlacklist';
 import { AdminInstitutionalContent } from './AdminInstitutionalContent';
 import { AdminPlatformNews } from './AdminPlatformNews';
@@ -51,8 +52,7 @@ import { AdminMercadoPagoConfig } from './AdminMercadoPagoConfig';
 import { AdminPixConfig } from './AdminPixConfig';
 import { AdminInfinitePayConfig } from './AdminInfinitePayConfig';
 import { AdminApiKeysUnified } from './AdminApiKeysUnified';
-import { AdminAIConfig } from './AdminAIConfig';
-import { AdminRoutingConfig } from './AdminRoutingConfig';
+
 import { AdminPartnerLevels } from './AdminPartnerLevels';
 import { AdminMaintenance } from './AdminMaintenance';
 import { AdminLoanConfig } from './AdminLoanConfig';
@@ -495,7 +495,7 @@ const UserManagement: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Função</label>
-                                        <CustomSelect
+                                        <SelectPersonalizado
                                             value={editForm.role}
                                             onChange={val => setEditForm(prev => ({ ...prev, role: val as UserRole }))}
                                             options={[
@@ -508,7 +508,7 @@ const UserManagement: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Status da Conta</label>
-                                        <CustomSelect
+                                        <SelectPersonalizado
                                             value={editForm.status}
                                             onChange={val => setEditForm(prev => ({ ...prev, status: val as UserStatus }))}
                                             options={[
@@ -543,7 +543,7 @@ const UserManagement: React.FC = () => {
                                     })()}
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Status Verificação</label>
-                                        <CustomSelect
+                                        <SelectPersonalizado
                                             value={editForm.verification_status}
                                             onChange={val => setEditForm(prev => ({ ...prev, verification_status: val }))}
                                             options={[
@@ -556,7 +556,7 @@ const UserManagement: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Nível de Parceiro</label>
-                                        <CustomSelect
+                                        <SelectPersonalizado
                                             value={editForm.partner_level}
                                             onChange={val => setEditForm(prev => ({ ...prev, partner_level: val }))}
                                             options={[
@@ -702,7 +702,7 @@ const UserManagement: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Função</label>
-                                        <CustomSelect
+                                        <SelectPersonalizado
                                             value={addForm.role}
                                             onChange={val => setAddForm(prev => ({ ...prev, role: val as UserRole }))}
                                             options={[
@@ -1192,12 +1192,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'shop': return <AdminShopManagement />;
             case 'support': return <AdminClaims />;
             case 'claims': return <AdminClaims />;
-            case 'ai_config': return <AdminAIConfig />;
             case 'api_keys': return <AdminApiKeysUnified />;
             case 'infinitepay': return <AdminInfinitePayConfig />;
             case 'fees': return <AdminFees />;
             case 'pwa': return <AdminPWASettings />;
-            case 'routing': return <AdminRoutingConfig />;
             case 'cities': return <CityManagement />;
             case 'ratings': return <AdminRatings />;
             case 'security': return <SecurityManagement />;
@@ -1225,6 +1223,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'image_gallery': return <AdminImageGallery />;
             case 'street_requests': return <StreetRequestsAdmin />;
             case 'mediation': return <AdminMediation />;
+            case 'store_ratings': return <AdminStoreRatings />;
 
 
             default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;

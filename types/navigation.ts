@@ -20,6 +20,7 @@
     | 'store_performance'
     | 'store_marketing'
     | 'store_integrations'
+    | 'store_ratings'
     | 'store_settings'
     | 'store_product_import'
     | 'store_status'

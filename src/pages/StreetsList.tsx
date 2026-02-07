@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { baseURL } from '../utils/baseURL';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useUserCity } from '../hooks/useUserCity';
-import { Copy, Download, MapPin, Route, RefreshCw, AlertCircle, Edit3, List } from 'lucide-react';
+import { Copy, Download, MapPin, Route, RefreshCw, AlertCircle, Edit3, List, Navigation } from 'lucide-react';
 import { CitySearchSelect } from '../../components/CitySearchSelect';
 import { CustomInput } from '../../components/CustomInput';
 import { useDialog } from '../../utils/dialogService';
+import * as cloud from '../../services/cloud';
+import { saveNavigationState } from '../../utils/mapHelpers';
+import { UserRole } from '../../types';
 
 interface BoundingBox {
     south: number;
@@ -39,16 +41,26 @@ export default function StreetsList() {
     const [loading, setLoading] = useState(false);
     const [copyingAll, setCopyingAll] = useState(false);
     const [copyingItem, setCopyingItem] = useState<string | null>(null);
+    const [openingMap, setOpeningMap] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { city, displayName, loading: cityLoading } = useUserCity();
     const [query, setQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
     const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [userRole, setUserRole] = useState<UserRole | null>(null);
 
     const [selectedCity, setSelectedCity] = useState<string>('');
     const [isManualMode, setIsManualMode] = useState(false);
 
     const abortControllerRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        const loadUserRole = async () => {
+            const userData = await cloud.getInitialUserData();
+            if (userData?.role) setUserRole(userData.role);
+        };
+        loadUserRole();
+    }, []);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedQuery(query), 300);
@@ -101,10 +113,10 @@ export default function StreetsList() {
                 south: parseFloat(cityInfo.boundingbox[0]),
                 north: parseFloat(cityInfo.boundingbox[1]),
                 west: parseFloat(cityInfo.boundingbox[2]),
-                east: parseFloat(cityInfo.boundingbox[3])
+                east: parseFloat(cityInfo.boundingbox[1])
             };
 
-            const overpassQuery = `[out:json][timeout:90];(way["highway"]["name"](${bbox.south},${bbox.west},${bbox.north},${bbox.east}););out tags;`;
+            const overpassQuery = `[out:json][timeout:90];(way["highway"]["name"](${cityInfo.boundingbox[0]},${cityInfo.boundingbox[2]},${cityInfo.boundingbox[1]},${cityInfo.boundingbox[3]}););out tags;`;
 
             const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
                 method: 'POST',
@@ -142,7 +154,7 @@ export default function StreetsList() {
                         result_count: nominatimData.length
                     },
                     overpass: {
-                        query_summary: `BBox: ${bbox.south},${bbox.west},${bbox.north},${bbox.east}`,
+                        query_summary: `BBox: ${cityInfo.boundingbox[0]},${cityInfo.boundingbox[2]},${cityInfo.boundingbox[1]},${cityInfo.boundingbox[3]}`,
                         elements_returned: overpassData.elements?.length || 0
                     }
                 },
@@ -193,23 +205,10 @@ export default function StreetsList() {
             let score = 0;
             if (rl.startsWith(q)) score = 3;
             else if (rl.includes(q)) score = 2 - rl.indexOf(q) * 0.001;
-            else {
-                const m = rl.length; const n = q.length;
-                if (n > 20) return { r, score: 0 };
-                const dp = Array(n + 1).fill(0).map((_, i) => i);
-                for (let i = 1; i <= m; i++) {
-                    let prev = dp[0]; dp[0] = i;
-                    for (let j = 1; j <= n; j++) {
-                        const temp = dp[j];
-                        dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (rl[i - 1] === q[j - 1] ? 0 : 1));
-                        prev = temp;
-                    }
-                }
-                score = 1 / (1 + dp[n]);
-            }
+            else score = 0;
             return { r, score };
         })
-            .filter(x => x.score > 0.2)
+            .filter(x => x.score > 0)
             .sort((x, y) => y.score - x.score)
             .slice(0, 12)
             .map(x => x.r);
@@ -221,9 +220,51 @@ export default function StreetsList() {
         try {
             if (itemId) setCopyingItem(itemId);
             await navigator.clipboard.writeText(text);
+            toast({ message: 'Copiado!', type: 'success' });
             setTimeout(() => { if (itemId) setCopyingItem(null); }, 1000);
         } catch (err) {
-            toast({ message: 'Erro ao copiar para a área de transferência', type: 'error' });
+            toast({ message: 'Erro ao copiar', type: 'error' });
+        }
+    };
+
+    const handleOpenMap = async (rua: string) => {
+        setOpeningMap(rua);
+        try {
+            const query = `${rua}, ${data?.cidade || ''}`;
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+            const results = await response.json();
+
+            if (results && results.length > 0) {
+                const { lat, lon } = results[0];
+                const latitude = parseFloat(lat);
+                const longitude = parseFloat(lon);
+
+                if (userRole === 'delivery_person' || userRole === 'delivery_partner') {
+                    // Abrir no GPS Interno
+                    saveNavigationState({
+                        active: true,
+                        destination: {
+                            lat: latitude,
+                            lng: longitude,
+                            address: results[0].display_name,
+                            label: rua
+                        },
+                        vehicle_type: 'moto',
+                        return_tab: 'streets_list'
+                    });
+                    const event = new CustomEvent('navigateToTab', { detail: { tab: 'delivery_navigation' } });
+                    window.dispatchEvent(event);
+                } else {
+                    // Abrir no Google Maps
+                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`, '_blank');
+                }
+            } else {
+                toast({ message: 'Não foi possível encontrar as coordenadas desta rua.', type: 'error' });
+            }
+        } catch (err) {
+            toast({ message: 'Erro ao buscar localização da rua.', type: 'error' });
+        } finally {
+            setOpeningMap(null);
         }
     };
 
@@ -248,20 +289,10 @@ export default function StreetsList() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 p-6 animate-pulse">
-                <div className="max-w-6xl mx-auto">
-                    <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="h-7 w-48 bg-gray-200 rounded"></div>
-                            <div className="h-8 w-24 bg-gray-200 rounded-lg"></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="h-20 bg-gray-100 rounded-lg"></div>
-                            <div className="h-20 bg-gray-100 rounded-lg"></div>
-                        </div>
-                    </div>
-                    <div className="bg-white rounded-lg shadow-sm p-6 mb-6 h-32"></div>
-                    <div className="bg-white rounded-lg shadow-sm p-6 h-64"></div>
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-8 animate-pulse">
+                <div className="max-w-6xl mx-auto space-y-6">
+                    <div className="h-40 bg-white dark:bg-gray-900 rounded-[32px] shadow-sm"></div>
+                    <div className="h-64 bg-white dark:bg-gray-900 rounded-[32px] shadow-sm"></div>
                 </div>
             </div>
         );
@@ -269,22 +300,20 @@ export default function StreetsList() {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-50 p-6">
-                <div className="max-w-4xl mx-auto">
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                        <div className="flex items-center mb-4 text-red-800">
-                            <AlertCircle className="h-6 w-6 mr-2" />
-                            <h2 className="text-lg font-semibold">Erro ao carregar dados</h2>
-                        </div>
-                        <p className="text-red-700 mb-4">{error}</p>
-                        <div className="flex gap-2">
-                            <button onClick={() => fetchData()} className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg">
-                                <RefreshCw className="h-4 w-4 mr-2" /> Tentar novamente
-                            </button>
-                            <button onClick={() => { setError(null); setIsManualMode(true); }} className="flex items-center px-4 py-2 bg-white text-red-600 border border-red-200 rounded-lg">
-                                <Edit3 className="h-4 w-4 mr-2" /> Mudar Cidade
-                            </button>
-                        </div>
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-6 flex items-center justify-center">
+                <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-[32px] p-8 shadow-xl text-center border border-gray-100 dark:border-gray-800">
+                    <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6 text-red-600">
+                        <AlertCircle className="w-10 h-10" />
+                    </div>
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Ops! Ocorreu um erro</h2>
+                    <p className="text-gray-500 dark:text-gray-400 mb-8">{error}</p>
+                    <div className="flex flex-col gap-3">
+                        <button onClick={() => fetchData()} className="w-full py-4 bg-brand-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-brand-600/20 active:scale-95 transition-all">
+                            <RefreshCw className="w-5 h-5" /> Tentar Novamente
+                        </button>
+                        <button onClick={() => { setError(null); setIsManualMode(true); }} className="w-full py-4 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl font-bold active:scale-95 transition-all">
+                            Selecionar Outra Cidade
+                        </button>
                     </div>
                 </div>
             </div>
@@ -294,91 +323,135 @@ export default function StreetsList() {
     if (!data) return null;
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-6xl mx-auto">
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                        <div className="flex items-center">
-                            <MapPin className="h-8 w-8 text-blue-600 mr-3" />
+        <div className="min-h-screen bg-[#f8fafc] dark:bg-gray-950 p-4 md:p-8">
+            <div className="max-w-6xl mx-auto space-y-6">
+                {/* Header Card */}
+                <div className="bg-white dark:bg-gray-900 rounded-[32px] p-6 md:p-10 shadow-sm border border-gray-100 dark:border-gray-800 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                        <MapPin className="w-40 h-40" />
+                    </div>
+
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                        <div className="flex items-center gap-5">
+                            <div className="w-16 h-16 bg-brand-50 dark:bg-brand-900/30 rounded-3xl flex items-center justify-center text-brand-600">
+                                <MapPin className="w-8 h-8" />
+                            </div>
                             <div>
-                                <h1 className="text-2xl font-bold text-gray-900">Ruas por Cidade</h1>
-                                <p className="text-sm text-gray-500">Busque todas as ruas de qualquer cidade</p>
+                                <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Ruas por Cidade</h1>
+                                <p className="text-gray-500 dark:text-gray-400 font-medium">Explore o mapeamento completo de ruas da sua região</p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            <div className="px-5 py-3 bg-brand-50 dark:bg-brand-900/30 rounded-2xl border border-brand-100 dark:border-brand-800">
+                                <p className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Cidade Atual</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{data.cidade}</p>
+                            </div>
+                            <div className="px-5 py-3 bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl border border-emerald-100 dark:border-emerald-800">
+                                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Ruas Mapeadas</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{data.contagens.ruas.toLocaleString()}</p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mb-6">
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                                <MapPin className="w-3 h-3" /> Cidade Selecionada
-                            </label>
-                            <button onClick={() => setIsManualMode(!isManualMode)} className="text-xs text-blue-600 underline flex items-center gap-1">
-                                {isManualMode ? <><List className="w-3 h-3" /> Buscar na Lista</> : <><Edit3 className="w-3 h-3" /> Digitar manualmente</>}
-                            </button>
-                        </div>
-
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                {isManualMode ? (
-                                    <CustomInput value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} placeholder="Cidade - UF" />
-                                ) : (
-                                    <CitySearchSelect value={selectedCity} onSelect={(c) => setSelectedCity(`${c.name} - ${c.state}`)} placeholder="Pesquise..." />
-                                )}
+                    <div className="mt-10 grid grid-cols-1 md:grid-cols-1 gap-4">
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-[28px] p-5 border border-gray-100 dark:border-gray-800">
+                            <div className="flex items-center justify-between mb-3 px-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    Localização de Busca
+                                </label>
+                                <button onClick={() => setIsManualMode(!isManualMode)} className="text-xs font-bold text-brand-600 hover:underline flex items-center gap-1">
+                                    {isManualMode ? <><List className="w-3 h-3" /> Usar Lista</> : <><Edit3 className="w-3 h-3" /> Digitar Manual</>}
+                                </button>
                             </div>
-                            <button onClick={() => fetchData()} className="px-4 py-2 bg-blue-600 text-white rounded-lg h-[42px] mt-[1px]">
-                                <RefreshCw className="h-5 w-5" />
-                            </button>
-                        </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                            <h3 className="font-bold text-blue-900 text-lg">{data.cidade}</h3>
-                            <p className="text-xs text-blue-700">Cidade Atual</p>
-                        </div>
-                        <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                            <h3 className="font-bold text-green-900 text-lg">{data.contagens.ruas.toLocaleString()}</h3>
-                            <p className="text-xs text-green-700">Ruas Mapeadas</p>
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    {isManualMode ? (
+                                        <CustomInput value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} placeholder="Ex: São Paulo - SP" />
+                                    ) : (
+                                        <CitySearchSelect value={selectedCity} onSelect={(c) => setSelectedCity(`${c.name} - ${c.state}`)} placeholder="Selecione uma cidade..." />
+                                    )}
+                                </div>
+                                <button onClick={() => fetchData()} className="px-6 bg-brand-600 text-white rounded-2xl font-bold shadow-lg shadow-brand-600/20 active:scale-95 transition-all">
+                                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Buscar Rua</h2>
-                    <div className="flex flex-wrap gap-3 items-center">
-                        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Digite o nome da rua" className="flex-1 min-w-[240px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                        <button onClick={copyAllStreets} disabled={copyingAll || !data.ruas.length} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-400">
-                            <Copy className="h-4 w-4 mr-2" /> {copyingAll ? 'Copiando...' : 'Copiar Todas'}
-                        </button>
-                        <button onClick={downloadCSV} disabled={!data.ruas.length} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg disabled:bg-gray-400">
-                            <Download className="h-4 w-4 mr-2" /> Baixar CSV
-                        </button>
+                {/* Filters & Actions */}
+                <div className="bg-white dark:bg-gray-900 rounded-[32px] p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-800">
+                    <div className="flex flex-col md:flex-row gap-4 items-center">
+                        <div className="flex-1 w-full relative">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                                <Route className="w-5 h-5" />
+                            </div>
+                            <input
+                                value={query}
+                                onChange={e => setQuery(e.target.value)}
+                                placeholder="Filtrar por nome da rua..."
+                                className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-800 border-none rounded-2xl focus:ring-2 focus:ring-brand-500 outline-none font-medium text-gray-900 dark:text-white"
+                            />
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <button onClick={copyAllStreets} disabled={copyingAll || !data.ruas.length} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl font-bold hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-all">
+                                <Copy className="w-4 h-4" /> Copiar Tudo
+                            </button>
+                            <button onClick={downloadCSV} disabled={!data.ruas.length} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 active:scale-95 transition-all disabled:opacity-50">
+                                <Download className="w-4 h-4" /> CSV
+                            </button>
+                        </div>
                     </div>
+
                     {suggestions.length > 0 && (
-                        <div className="mt-4 max-h-80 overflow-y-auto bg-gray-50 rounded-lg p-2 border border-gray-200">
+                        <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800/30 rounded-3xl border border-gray-100 dark:border-gray-800/50 space-y-1">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-2">Sugestões de busca</p>
                             {suggestions.map((rua, index) => (
-                                <button key={index} onClick={() => copyToClipboard(rua, `sug-${index}`)} className="w-full text-left px-3 py-2 rounded-md hover:bg-white flex items-center justify-between">
-                                    <span className="text-gray-800 text-sm">{rua}</span>
-                                    {copyingItem === `sug-${index}` ? <span>✓</span> : <Copy className="h-3 w-3 text-blue-600" />}
+                                <button key={index} onClick={() => copyToClipboard(rua, `sug-${index}`)} className="w-full text-left px-4 py-3 rounded-xl hover:bg-white dark:hover:bg-gray-800 flex items-center justify-between group transition-all">
+                                    <span className="text-gray-700 dark:text-gray-300 font-medium group-hover:text-brand-600 transition-colors">{rua}</span>
+                                    <div className="flex items-center gap-2">
+                                        <Copy className="w-4 h-4 text-gray-300 group-hover:text-brand-600" />
+                                    </div>
                                 </button>
                             ))}
                         </div>
                     )}
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                    <div className="flex items-center mb-4">
-                        <Route className="h-5 w-5 text-blue-600 mr-2" />
-                        <h2 className="text-lg font-semibold text-gray-900">Lista de Ruas</h2>
-                        <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">{data.ruas.length}</span>
+                {/* List Container */}
+                <div className="bg-white dark:bg-gray-900 rounded-[32px] p-6 md:p-8 shadow-sm border border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center justify-between mb-8 px-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-brand-50 dark:bg-brand-900/30 rounded-xl flex items-center justify-center text-brand-600">
+                                <List className="w-5 h-5" />
+                            </div>
+                            <h2 className="text-xl font-black text-gray-900 dark:text-white">Listagem Completa</h2>
+                        </div>
+                        <span className="px-4 py-1.5 bg-brand-50 dark:bg-brand-900/30 text-brand-600 text-xs font-black rounded-full border border-brand-100 dark:border-brand-800">{data.ruas.length} Ruas</span>
                     </div>
-                    <div className="max-h-96 overflow-y-auto space-y-2">
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                         {data.ruas.map((rua, index) => (
-                            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <span className="text-gray-800 text-sm flex-1">{rua}</span>
-                                <button onClick={() => copyToClipboard(rua, `rua-${index}`)} className="p-2 bg-blue-600 text-white rounded">
-                                    {copyingItem === `rua-${index}` ? '✓' : <Copy className="h-3 w-3" />}
-                                </button>
+                            <div key={index} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-transparent hover:border-brand-100 dark:hover:border-brand-900 hover:bg-white dark:hover:bg-gray-800 transition-all group">
+                                <span className="text-gray-700 dark:text-gray-300 font-bold text-sm truncate mr-4">{rua}</span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        onClick={() => handleOpenMap(rua)}
+                                        disabled={openingMap === rua}
+                                        title="Abrir no Mapa"
+                                        className="p-3 bg-white dark:bg-gray-700 text-brand-600 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 hover:bg-brand-600 hover:text-white active:scale-95 transition-all"
+                                    >
+                                        {openingMap === rua ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+                                    </button>
+                                    <button
+                                        onClick={() => copyToClipboard(rua, `rua-${index}`)}
+                                        className="p-3 bg-brand-600 text-white rounded-xl shadow-lg shadow-brand-600/20 active:scale-95 transition-all opacity-0 group-hover:opacity-100 md:opacity-100"
+                                    >
+                                        {copyingItem === `rua-${index}` ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>

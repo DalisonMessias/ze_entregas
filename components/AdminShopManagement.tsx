@@ -5,6 +5,7 @@ import { Product, Category, ShopSettings, ShopCoupon } from '../types';
 import { Button } from './Button';
 import { Switch } from './Switch';
 import { MobileTabsSelect } from './MobileTabsSelect';
+import { SelectPersonalizado } from './SelectPersonalizado';
 import { useDialog } from '../utils/dialogService';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -425,14 +426,15 @@ export const AdminShopManagement: React.FC = () => {
                                     onChange={e => setCurrentProduct(prev => prev ? { ...prev, stock_quantity: e.target.value === '' ? null : Number(e.target.value) } : null)}
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                                 />
-                                <select
+                                <SelectPersonalizado
+                                    label="Categoria"
                                     value={currentProduct?.category_id || ''}
-                                    onChange={e => setCurrentProduct(prev => prev ? { ...prev, category_id: e.target.value } : null)}
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
-                                >
-                                    <option value="">Selecionar Categoria</option>
-                                    {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                                </select>
+                                    onChange={val => setCurrentProduct(prev => prev ? { ...prev, category_id: val } : null)}
+                                    options={[
+                                        { label: 'Selecionar Categoria', value: '' },
+                                        ...categories.map(cat => ({ label: cat.name, value: cat.id }))
+                                    ]}
+                                />
                                 <Switch
                                     checked={currentProduct?.is_active || false}
                                     onChange={c => setCurrentProduct(prev => prev ? { ...prev, is_active: c } : null)}

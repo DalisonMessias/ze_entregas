@@ -63,6 +63,26 @@ export const openNavigation = (lat: number, lng: number, address?: string, optio
   window.dispatchEvent(navEvent);
 };
 
+export const startMultiStopNavigation = (waypoints: { lat: number, lng: number, address?: string, label?: string }[], options: any = {}) => {
+  if (!waypoints || waypoints.length === 0) return;
+
+  const navState = {
+    active: true,
+    destination: waypoints[0], // Começa pela primeira parada
+    waypoints: waypoints,
+    current_waypoint_index: 0,
+    vehicle_type: options.vehicle_type || 'car',
+    return_tab: options.return_tab || 'route_tools'
+  };
+
+  saveNavigationState(navState);
+
+  const navEvent = new CustomEvent('navigateToTab', {
+    detail: { tab: 'delivery_navigation' }
+  });
+  window.dispatchEvent(navEvent);
+};
+
 
 // 2. Debounce Function
 export function debounce<T extends (...args: any[]) => void>(func: T, wait: number): T {

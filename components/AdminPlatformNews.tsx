@@ -6,6 +6,7 @@ import * as cloud from '../services/cloud';
 import { Button } from './Button';
 import { Switch } from './Switch';
 import { useDialog } from '../utils/dialogService';
+import { SelectPersonalizado } from './SelectPersonalizado';
 
 // Helper to select icon
 const ICON_OPTIONS = [
@@ -115,13 +116,15 @@ export const AdminPlatformNews: React.FC = () => {
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Descrição</label>
                         <textarea value={news.description || ''} onChange={e => setCurrentNews(prev => prev ? { ...prev, description: e.target.value } : null)} rows={4} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 resize-y" />
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ícone</label>
-                        <select value={news.icon_name || ''} onChange={e => setCurrentNews(prev => prev ? { ...prev, icon_name: e.target.value } : null)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
-                            <option value="">Selecione um Ícone</option>
-                            {ICON_OPTIONS.map(icon => <option key={icon.name} value={icon.name}>{icon.name}</option>)}
-                        </select>
-                    </div>
+                    <SelectPersonalizado
+                        label="Ícone"
+                        value={news.icon_name || ''}
+                        onChange={val => setCurrentNews(prev => prev ? { ...prev, icon_name: val } : null)}
+                        options={[
+                            { label: 'Selecione um Ícone', value: '' },
+                            ...ICON_OPTIONS.map(icon => ({ label: icon.name, value: icon.name }))
+                        ]}
+                    />
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ordem de Exibição</label>
                         <input type="number" value={news.sort_order || 0} onChange={e => setCurrentNews(prev => prev ? { ...prev, sort_order: Number(e.target.value) } : null)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600" />

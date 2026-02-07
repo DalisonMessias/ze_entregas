@@ -8,6 +8,7 @@ import {
     Clock,
     Activity
 } from 'lucide-react';
+import { SelectPersonalizado } from '../../SelectPersonalizado';
 
 interface DashboardStats {
     totalConversations: number;
@@ -108,18 +109,15 @@ export const ZeAssistantDashboard: React.FC<ZeAssistantDashboardProps> = ({ stor
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-gray-800">Desempenho</h3>
-                <div className="relative">
-                    <select
+                <div className="w-48">
+                    <SelectPersonalizado
                         value={period}
-                        onChange={(e) => setPeriod(e.target.value as '7d' | '30d')}
-                        className="appearance-none bg-white border border-gray-200 text-gray-700 py-1.5 pl-3 pr-8 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all cursor-pointer hover:bg-gray-50"
-                    >
-                        <option value="7d">Últimos 7 dias</option>
-                        <option value="30d">Últimos 30 dias</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                    </div>
+                        onChange={(val) => setPeriod(val as '7d' | '30d')}
+                        options={[
+                            { label: 'Últimos 7 dias', value: '7d' },
+                            { label: 'Últimos 30 dias', value: '30d' }
+                        ]}
+                    />
                 </div>
             </div>
 

@@ -3,6 +3,8 @@ import * as cloud from '../../services/cloud';
 import { Button } from '../Button';
 import { Loader2, Trash2, Shield, Eye, Activity, Terminal } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { MobileTabsSelect } from '../MobileTabsSelect';
+
 
 // Cliente Supabase (assumindo que já existe em cloud service, mas aqui instanciamos para acesso direto ou usamos cloud functions)
 // Por consistência, vamos usar cloud service methods se existissem, mas como são novos, vamos fazer queries diretas aqui com RLS ou adicionar ao cloud service.
@@ -12,7 +14,7 @@ const supabase = createClient((import.meta as any).env.VITE_SUPABASE_URL, (impor
 
 interface ApiKey {
     id: string;
-    name: string;
+    service_name: string; // Alinhado com AdminApiKeysUnified
     key_token: string;
     permissions: any;
     is_active: boolean;
@@ -23,7 +25,7 @@ interface ApiKey {
         name: string;
         email: string;
         store_name?: string;
-    }
+    } | { name: string; email: string; store_name?: string; }[];
 }
 
 interface ApiLog {
@@ -54,8 +56,10 @@ export const ApiManagement: React.FC = () => {
             if (activeTab === 'keys') {
                 const { data, error } = await supabase
                     .from('api_keys')
-                    .select('*, user_profiles(name, email, store_name)')
+                    .select('id, service_name, key_token, permissions, is_active, created_at, last_used_at, user_id, user_profiles(name, email, store_name)')
                     .order('created_at', { ascending: false });
+
+
                 if (data) setKeys(data);
             } else {
                 const { data, error } = await supabase
@@ -124,10 +128,14 @@ export const ApiManagement: React.FC = () => {
                                     {keys.map(k => (
                                         <tr key={k.id} className="border-b dark:border-gray-700">
                                             <td className="px-4 py-3">
-                                                <div className="font-bold dark:text-white">{k.user_profiles?.store_name || k.user_profiles?.name}</div>
-                                                <div className="text-xs text-gray-500">{k.user_profiles?.email}</div>
+                                                <div className="font-bold dark:text-white">
+                                                    {Array.isArray(k.user_profiles) ? k.user_profiles[0]?.store_name || k.user_profiles[0]?.name : (k.user_profiles as any)?.store_name || (k.user_profiles as any)?.name}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    {Array.isArray(k.user_profiles) ? k.user_profiles[0]?.email : (k.user_profiles as any)?.email}
+                                                </div>
                                             </td>
-                                            <td className="px-4 py-3">{k.name}</td>
+                                            <td className="px-4 py-3">{k.service_name}</td>
                                             <td className="px-4 py-3 font-mono text-xs">{k.key_token.substring(0, 10)}...</td>
                                             <td className="px-4 py-3">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-bold ${k.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

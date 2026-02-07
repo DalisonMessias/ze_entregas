@@ -15,7 +15,7 @@ import { NotFound } from '../src/pages/NotFound';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Logo } from './Logo';
 import { CustomInput } from './CustomInput';
-import { CustomSelect } from './CustomSelect';
+import { SelectPersonalizado } from './SelectPersonalizado';
 import { CollaboratorModule } from './CollaboratorModule';
 
 import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
@@ -1055,7 +1055,7 @@ export const AuthWrapper: React.FC = () => {
                   <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest pl-1">Informações da Loja</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <CustomInput type="text" placeholder="Nome Comercial da Loja" icon={StoreIcon} value={storeName} onChange={e => setStoreName(e.target.value)} />
-                    <CustomSelect
+                    <SelectPersonalizado
                       label="Categoria da Loja"
                       value={storeCategoryId}
                       onChange={setStoreCategoryId}

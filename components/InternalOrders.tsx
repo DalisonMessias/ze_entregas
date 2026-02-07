@@ -500,8 +500,8 @@ const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode = 'full'
             let realRouteResult = false;
 
             try {
-                const shopSettings = await cloud.getShopSettings();
-                const orsKey = shopSettings?.open_route_service_api_key;
+                const orsKey = await cloud.getApiKey('open_route_service');
+
 
                 if (orsKey) {
                     // console.log('[InternalOrders] Usando OpenRouteService para rota real...');

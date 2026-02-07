@@ -3385,7 +3385,6 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
   encrypted_key text NOT NULL,
   permissions JSONB DEFAULT '{}'::jsonb,
   is_active boolean NULL DEFAULT true,
-  user_id UUID REFERENCES public.user_profiles(id),
   created_at timestamp with time zone NULL DEFAULT now(),
   updated_at timestamp with time zone NULL DEFAULT now(),
   constraint api_keys_pkey primary key (id),
@@ -5932,7 +5931,8 @@ CREATE POLICY "Auth Delete Products" ON storage.objects
 -- Tabela de Chaves de API
 CREATE TABLE IF NOT EXISTS public.api_keys (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    -- user_id removido para chaves globais
+
     name VARCHAR(255) NOT NULL,
     key_token TEXT UNIQUE NOT NULL, -- O token em si (sk_...)
     service_name TEXT, -- Nome do serviﾃｧo (ex: google_gemini_api_key)
@@ -5948,9 +5948,8 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
 -- Garantir colunas em api_keys (Migraﾃｧﾃ｣o Segura)
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'user_id') THEN
-        ALTER TABLE public.api_keys ADD COLUMN user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE;
-    END IF;
+    -- User_id removido da migração segura para api_keys pois agora é global
+
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'permissions') THEN
         ALTER TABLE public.api_keys ADD COLUMN permissions JSONB DEFAULT '{"all": true}'::jsonb;
     END IF;
@@ -5971,8 +5970,9 @@ BEGIN
     END IF;
 END $$;
 
-CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON public.api_keys (user_id);
+
 CREATE INDEX IF NOT EXISTS api_keys_key_token_idx ON public.api_keys (key_token);
+
 
 -- Correﾃｧﾃ｣o de Constraints (Fix para duplicidade global)
 DO $$

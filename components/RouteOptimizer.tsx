@@ -3,11 +3,13 @@ import { Button } from './Button';
 import { AddressBook } from './AddressBook';
 import { BaseModal } from './BaseModal';
 import { SavedAddress, RouteListItem } from '../types';
-import { MapPin, ListPlus, Loader2, AlertTriangle, Settings, Save } from 'lucide-react';
+import { MapPin, ListPlus, Loader2, AlertTriangle, Settings, Save, Lock, Unlock, Search as SearchIcon, Flag, X as CloseIcon } from 'lucide-react';
 import * as storage from '../services/storage';
 import * as cloud from '../services/cloud';
-import { openNavigation } from '../utils/mapHelpers';
+import { startMultiStopNavigation } from '../utils/mapHelpers';
 import { useDialog } from '../utils/dialogService';
+import { useUserCity } from '../src/hooks/useUserCity';
+import { Navigation2, Target, CheckCircle2, Navigation } from 'lucide-react';
 
 
 interface Coordinate {
@@ -26,10 +28,21 @@ const RouteOptimizer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [optimizedRoute, setOptimizedRoute] = useState<{ stops: string[], distance: number, duration: number } | null>(null);
+  const [currentCoords, setCurrentCoords] = useState<Coordinate | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isStartLocked, setIsStartLocked] = useState(true);
+  const [allStreets, setAllStreets] = useState<string[]>([]);
+  const [startSuggestions, setStartSuggestions] = useState<string[]>([]);
+  const [endSuggestions, setEndSuggestions] = useState<string[]>([]);
+  const [activeStopIdx, setActiveStopIdx] = useState<number | null>(null);
+  const [stopSuggestions, setStopSuggestions] = useState<string[]>([]);
+  const [isLoadingStreets, setIsLoadingStreets] = useState(false);
+  const [currentStreet, setCurrentStreet] = useState<string | null>(null);
 
   const [orsApiKey, setOrsApiKey] = useState<string | null>(null);
   const [isKeyLoading, setIsKeyLoading] = useState(true);
   const { prompt, alert } = useDialog();
+  const { city } = useUserCity();
 
   useEffect(() => {
     const loadApiKey = async () => {
@@ -42,14 +55,182 @@ const RouteOptimizer: React.FC = () => {
           setError("A chave da API de roteamento não está configurada. Vá para o painel de administração para adicioná-la.");
         }
       } catch (e) {
-        // console.error("Error loading ORS API key:", e);
         setError("Não foi possível carregar a configuração de roteamento.");
       } finally {
         setIsKeyLoading(false);
       }
     };
     loadApiKey();
+    handleGetCurrentLocation();
   }, []);
+
+  useEffect(() => {
+    if (city && !isStartLocked) {
+      loadCityStreets();
+    }
+  }, [city, isStartLocked]);
+
+  const loadCityStreets = async () => {
+    if (!city) return;
+    setIsLoadingStreets(true);
+    try {
+      const [cityName, stateName] = city.split(' - ');
+      const query = `${cityName}, ${stateName}`;
+      const nominatimRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=1&q=${encodeURIComponent(query)}`);
+      const nominatimData = await nominatimRes.json();
+
+      if (nominatimData && nominatimData.length > 0) {
+        const cityInfo = nominatimData[0];
+        const bbox = {
+          south: parseFloat(cityInfo.boundingbox[0]),
+          north: parseFloat(cityInfo.boundingbox[1]),
+          west: parseFloat(cityInfo.boundingbox[2]),
+          east: parseFloat(cityInfo.boundingbox[3])
+        };
+
+        const overpassQuery = `[out:json][timeout:90];(way["highway"]["name"](${bbox.south},${bbox.west},${bbox.north},${bbox.east}););out tags;`;
+        const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'data=' + encodeURIComponent(overpassQuery)
+        });
+
+        const overpassData = await overpassRes.json();
+        const ruasSet = new Set<string>();
+        if (overpassData.elements) {
+          for (const elem of overpassData.elements) {
+            if (elem.tags?.name && elem.tags.highway) {
+              ruasSet.add(elem.tags.name);
+            }
+          }
+        }
+        setAllStreets(Array.from(ruasSet).sort((a, b) => a.localeCompare(b, 'pt-BR')));
+      }
+    } catch (err) {
+      console.error('Erro ao carregar ruas da cidade:', err);
+    } finally {
+      setIsLoadingStreets(false);
+    }
+  };
+
+  // Filtragem de sugestões para Partida
+  useEffect(() => {
+    if (!startAddress.trim() || allStreets.length === 0 || isStartLocked) {
+      setStartSuggestions([]);
+      return;
+    }
+    const q = startAddress.trim().toLowerCase();
+    setStartSuggestions(allStreets.filter(r => r.toLowerCase().includes(q)).slice(0, 10));
+  }, [startAddress, allStreets, isStartLocked]);
+
+  // Filtragem de sugestões para Chegada
+  useEffect(() => {
+    if (!endAddress.trim() || allStreets.length === 0) {
+      setEndSuggestions([]);
+      return;
+    }
+    const q = endAddress.trim().toLowerCase();
+    setEndSuggestions(allStreets.filter(r => r.toLowerCase().includes(q)).slice(0, 10));
+  }, [endAddress, allStreets]);
+
+  // Filtragem de sugestões para Paradas Intermediárias
+  useEffect(() => {
+    if (activeStopIdx === null || !intermediateStops[activeStopIdx]?.trim() || allStreets.length === 0) {
+      setStopSuggestions([]);
+      return;
+    }
+    const q = intermediateStops[activeStopIdx].trim().toLowerCase();
+    setStopSuggestions(allStreets.filter(r => r.toLowerCase().includes(q)).slice(0, 10));
+  }, [activeStopIdx, intermediateStops, allStreets]);
+
+  const handleSelectStartStreet = async (streetName: string) => {
+    setStartAddress(streetName);
+    setStartSuggestions([]);
+    setIsLoading(true);
+    try {
+      const query = `${streetName}, ${city || ''}`;
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+      const data = await response.json();
+      if (data && data.length > 0) {
+        setCurrentCoords({
+          latitude: parseFloat(data[0].lat),
+          longitude: parseFloat(data[0].lon)
+        });
+        toast({ message: 'Endereço de partida definido!', type: 'success' });
+      }
+    } catch (err) {
+      console.error('Error selecting street:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectEndStreet = (streetName: string) => {
+    setEndAddress(streetName);
+    setEndSuggestions([]);
+  };
+
+  const handleSelectStopStreet = (streetName: string, index: number) => {
+    const newStops = [...intermediateStops];
+    newStops[index] = streetName;
+    setIntermediateStops(newStops);
+    setActiveStopIdx(null);
+    setStopSuggestions([]);
+  };
+
+  const handleGetCurrentLocation = () => {
+    setIsLocating(true);
+    setIsStartLocked(true);
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setCurrentCoords({ latitude, longitude });
+          setStartAddress('Minha Localização Atual');
+
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+            const data = await response.json();
+            let street = data.address?.road || data.address?.pedestrian || data.address?.suburb;
+
+            if (!street) {
+              const manualStreet = await prompt({
+                title: 'Localização não identificada',
+                message: 'Não conseguimos identificar sua rua automaticamente. Por favor, digite o nome da rua onde você está:',
+                placeholder: 'Ex: Rua das Flores'
+              });
+              street = manualStreet || null;
+            }
+
+            setCurrentStreet(street);
+          } catch (err) {
+            console.error("Error reverse geocoding:", err);
+          } finally {
+            setIsLocating(false);
+          }
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          setIsLocating(false);
+          setIsLocating(false);
+        }
+      );
+    } else {
+      setIsLocating(false);
+    }
+  };
+
+  const handleToggleStartLock = () => {
+    if (isStartLocked) {
+      // Unlocking
+      setIsStartLocked(false);
+      setStartAddress('');
+    } else {
+      // Locking
+      setIsStartLocked(true);
+      setStartAddress('Minha Localização Atual');
+    }
+  };
 
   const handleAddStop = () => {
     setIntermediateStops([...intermediateStops, '']);
@@ -103,7 +284,12 @@ const RouteOptimizer: React.FC = () => {
     setOptimizedRoute(null);
 
     // Geocode startAddress
-    const initialStartCoord = await geocodeAddress(startAddress);
+    let initialStartCoord = currentCoords;
+
+    if (startAddress !== 'Minha Localização Atual' || !currentCoords) {
+      initialStartCoord = await geocodeAddress(startAddress);
+    }
+
     if (!initialStartCoord) {
       setError('Não foi possível encontrar as coordenadas para o endereço de partida.');
       setIsLoading(false);
@@ -199,17 +385,45 @@ const RouteOptimizer: React.FC = () => {
     }
   };
 
-  const handleNavigate = async () => {
+  const handleSendToGPS = async () => {
     if (!optimizedRoute || optimizedRoute.stops.length === 0) return;
 
-    const firstStop = optimizedRoute.stops[0];
-    const coords = await geocodeAddress(firstStop);
+    setIsLoading(true);
+    try {
+      toast({ message: 'Preparando rota para o GPS...', type: 'info' });
 
-    if (coords) {
-      openNavigation(coords.latitude, coords.longitude, firstStop, { label: 'Início da Rota' });
-    } else {
-      setError(`Não foi possível obter as coordenadas para: ${firstStop}`);
+      const waypointPromises = optimizedRoute.stops.map(async (stop, index) => {
+        const coords = await geocodeAddress(stop);
+        return {
+          lat: coords?.latitude || 0,
+          lng: coords?.longitude || 0,
+          address: stop,
+          label: `Parada ${index + 1}`
+        };
+      });
+
+      const waypoints = await Promise.all(waypointPromises);
+      const validWaypoints = waypoints.filter(w => w.lat !== 0);
+
+      if (validWaypoints.length > 0) {
+        startMultiStopNavigation(validWaypoints, {
+          vehicle_type: 'car', // Pode ser dinâmico no futuro
+          return_tab: 'route_tools'
+        });
+      } else {
+        setError('Não foi possível obter coordenadas para as paradas.');
+      }
+    } catch (err) {
+      console.error('Erro ao enviar para o GPS:', err);
+      setError('Erro ao preparar navegação.');
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const toast = ({ message, type }: { message: string, type: 'success' | 'info' | 'error' | 'warning' }) => {
+    // Pequeno helper local se não houver useDialog().toast
+    alert({ title: type.toUpperCase(), message });
   };
 
   useEffect(() => {
@@ -219,7 +433,7 @@ const RouteOptimizer: React.FC = () => {
   }, [optimizedRoute]);
 
   const handleSelectFromAddressBook = (addresses: SavedAddress[]) => {
-    const newStops = addresses.map(addr => addr.fullAddress);
+    const newStops = addresses.map(addr => addr.fullAddress.split(',')[0].trim());
     const currentStops = intermediateStops.filter(stop => stop.trim() !== '');
     setIntermediateStops([...currentStops, ...newStops]);
     setIsAddressBookOpen(false);
@@ -256,7 +470,7 @@ const RouteOptimizer: React.FC = () => {
   const handleImportFromRouteList = () => {
     const routeItems: RouteListItem[] = storage.getRouteListItems();
     if (routeItems && routeItems.length > 0) {
-      const newStops = routeItems.map(item => item.address);
+      const newStops = routeItems.map(item => item.address.split(',')[0].trim());
       const currentStops = intermediateStops.filter(stop => stop.trim() !== '');
       setIntermediateStops([...currentStops, ...newStops]);
     }
@@ -277,65 +491,175 @@ const RouteOptimizer: React.FC = () => {
         <h2 className="text-2xl font-bold mb-4 text-gray-800">Otimizador de Rotas Inteligente</h2>
 
         <div className="space-y-4">
-          <div>
-            <label htmlFor="startAddress" className="block text-sm font-medium text-gray-700">
-              Endereço de Partida (Obrigatório)
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <label htmlFor="startAddress" className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+              Endereço de Partida
             </label>
-            <input
-              type="text"
-              id="startAddress"
-              value={startAddress}
-              onChange={(e) => setStartAddress(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              placeholder="Digite o endereço de partida"
-            />
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-600">
+                <Target className={`w-5 h-5 ${isLocating ? 'animate-pulse' : ''}`} />
+              </div>
+              <input
+                type="text"
+                id="startAddress"
+                value={startAddress}
+                readOnly={isStartLocked}
+                onChange={(e) => setStartAddress(e.target.value)}
+                className={`w-full pl-10 pr-24 py-3 border-none rounded-xl font-bold transition-all ${isStartLocked ? 'bg-gray-100 dark:bg-gray-900/50 text-gray-500' : 'bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-brand-500'}`}
+                placeholder="Ex: Minha Localização Atual"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  onClick={handleToggleStartLock}
+                  className={`p-2 rounded-lg transition-all ${isStartLocked ? 'text-gray-400 hover:bg-gray-200' : 'text-brand-600 bg-brand-50 hover:bg-brand-100'}`}
+                  title={isStartLocked ? "Clique para editar" : "Clique para bloquear"}
+                >
+                  {isStartLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={handleGetCurrentLocation}
+                  className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-all"
+                  title="Usar minha localização atual"
+                >
+                  <Navigation2 className="w-4 h-4" />
+                </button>
+              </div>
+
+              {!isStartLocked && (startSuggestions.length > 0 || isLoadingStreets) && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[100] max-h-60 overflow-y-auto overflow-x-hidden p-1 animate-in fade-in slide-in-from-top-2">
+                  {isLoadingStreets ? (
+                    <div className="flex items-center justify-center p-4 gap-2 text-gray-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-[10px] font-bold uppercase">Carregando ruas...</span>
+                    </div>
+                  ) : (
+                    startSuggestions.map((rua, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSelectStartStreet(rua)}
+                        className="w-full text-left p-3 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg flex items-center gap-3 transition-colors group"
+                      >
+                        <SearchIcon className="w-4 h-4 text-gray-300 group-hover:text-brand-500" />
+                        <span className="font-bold text-sm text-gray-700 dark:text-gray-200">{rua}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2 italic">
+              Por padrão, usamos onde você está agora: <span className="text-brand-600 font-bold">{currentStreet || 'Localização não identificada'}</span>
+            </p>
           </div>
 
-          <div>
-            <label htmlFor="endAddress" className="block text-sm font-medium text-gray-700">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <label htmlFor="endAddress" className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
               Endereço de Chegada (Opcional)
             </label>
-            <input
-              type="text"
-              id="endAddress"
-              value={endAddress}
-              onChange={(e) => setEndAddress(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              placeholder="Deixar em branco se for o mesmo da partida"
-            />
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-600">
+                <Flag className="w-5 h-5" />
+              </div>
+              <input
+                type="text"
+                id="endAddress"
+                value={endAddress}
+                onChange={(e) => setEndAddress(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl font-bold text-gray-800 dark:text-white focus:ring-2 focus:ring-brand-500"
+                placeholder="Vazio para retornar à partida"
+              />
+              {endSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[100] max-h-60 overflow-y-auto overflow-x-hidden p-1 animate-in fade-in slide-in-from-top-2">
+                  {endSuggestions.map((rua, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSelectEndStreet(rua)}
+                      className="w-full text-left p-3 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg flex items-center gap-3 transition-colors group"
+                    >
+                      <SearchIcon className="w-4 h-4 text-gray-300 group-hover:text-brand-500" />
+                      <span className="font-bold text-sm text-gray-700 dark:text-gray-200">{rua}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div>
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-800">Pontos de Parada Intermediários</h3>
-              <div className="flex items-center gap-2">
-                <Button onClick={handleImportFromRouteList} variant="outline" size="sm" className="flex items-center gap-2">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Paradas Intermediárias
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleImportFromRouteList}
+                  className="p-2 text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                  title="Importar do histórico"
+                >
                   <ListPlus className="w-4 h-4" />
-                  Importar
-                </Button>
-                <Button onClick={() => setIsAddressBookOpen(true)} variant="outline" size="sm" className="flex items-center gap-2">
+                </button>
+                <button
+                  onClick={() => setIsAddressBookOpen(true)}
+                  className="p-2 text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                  title="Agenda de endereços"
+                >
                   <MapPin className="w-4 h-4" />
-                  Agenda
-                </Button>
+                </button>
               </div>
             </div>
 
-            {intermediateStops.map((stop, index) => (
-              <div key={index} className="flex items-center space-x-2 mt-2">
-                <input
-                  type="text"
-                  value={stop}
-                  onChange={(e) => handleStopChange(index, e.target.value)}
-                  className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder={`Parada ${index + 1}`}
-                />
-                <Button onClick={() => handleRemoveStop(index)} className="bg-red-500 hover:bg-red-600 text-white">
-                  Remover
-                </Button>
-              </div>
-            ))}
-            <Button onClick={handleAddStop} className="mt-2 bg-blue-500 hover:bg-blue-600 text-white">
-              Adicionar Parada
+            <div className="space-y-3">
+              {intermediateStops.map((stop, index) => (
+                <div key={index} className="relative group">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-brand-500 transition-colors">
+                    <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-[10px] font-black">
+                      {index + 1}
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={stop}
+                    onFocus={() => setActiveStopIdx(index)}
+                    onBlur={() => setTimeout(() => setActiveStopIdx(null), 200)}
+                    onChange={(e) => handleStopChange(index, e.target.value)}
+                    className="w-full pl-12 pr-12 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl font-bold text-gray-800 dark:text-white focus:ring-2 focus:ring-brand-500"
+                    placeholder={`Endereço da parada ${index + 1}`}
+                  />
+                  {intermediateStops.length > 1 && (
+                    <button
+                      onClick={() => handleRemoveStop(index)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                    >
+                      <CloseIcon className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {activeStopIdx === index && stopSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[110] max-h-60 overflow-y-auto overflow-x-hidden p-1 animate-in fade-in slide-in-from-top-2">
+                      {stopSuggestions.map((rua, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleSelectStopStreet(rua, index)}
+                          className="w-full text-left p-3 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg flex items-center gap-3 transition-colors group"
+                        >
+                          <SearchIcon className="w-4 h-4 text-gray-300 group-hover:text-brand-500" />
+                          <span className="font-bold text-sm text-gray-700 dark:text-gray-200">{rua}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <Button
+              variant="outline"
+              fullWidth
+              onClick={handleAddStop}
+              className="mt-4 border-dashed border-2 hover:border-brand-500 hover:text-brand-600 transition-all rounded-xl py-3"
+              icon={<ListPlus className="w-4 h-4" />}
+            >
+              Adicionar Nova Parada
             </Button>
           </div>
         </div>
@@ -364,15 +688,17 @@ const RouteOptimizer: React.FC = () => {
                 <p className="text-xl font-bold">{Math.floor(optimizedRoute.duration / 3600)}h {Math.round((optimizedRoute.duration % 3600) / 60)}min</p>
               </div>
             </div>
-            <div className="flex gap-2 mt-4">
-              <Button onClick={handleNavigate} variant="outline" className="w-full flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                Navegar
+            <div className="flex flex-col gap-2 mt-4">
+              <Button onClick={handleSendToGPS} className="w-full h-14 bg-brand-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-brand-500/20 flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
+                <Navigation className="w-6 h-6" />
+                ENVIAR PARA O GPS INTERNO
               </Button>
-              <Button onClick={handleSaveRoute} className="w-full flex items-center gap-2" disabled={isSaving}>
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Salvar Rota
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveRoute} variant="outline" className="flex-1 h-12 rounded-xl flex items-center justify-center gap-2" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Salvar Rota
+                </Button>
+              </div>
             </div>
           </div>
         )}

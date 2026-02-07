@@ -22,9 +22,11 @@ const tabs: TabConfig[] = [
 
 interface ApiKey {
     id: string;
-    name: string;
+    service_name: string;
+    name?: string; // Mantido para compatibilidade se necessário
     key_token: string;
-    permissions: any;
+    encrypted_key?: string;
+    permissions?: any; // Mantido para compatibilidade
     is_active: boolean;
     created_at: string;
     last_used_at: string | null;
@@ -33,7 +35,7 @@ interface ApiKey {
         name: string;
         email: string;
         store_name?: string;
-    }
+    } | { name: string; email: string; store_name?: string; }[];
 }
 
 interface ApiLog {
@@ -62,26 +64,28 @@ export const AdminApiKeysUnified: React.FC = () => {
     const [storeLogs, setStoreLogs] = useState<ApiLog[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
     const [globalKeys, setGlobalKeys] = useState<{ [key: string]: string }>({
-        google_gemini_api_key: '',
-        open_route_service_api_key: '',
-        eleven_labs_api_key: ''
+        google_gemini: '',
+        open_route_service: '',
+        eleven_labs: ''
     });
+
 
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
             // Carregar chaves globais da tabela api_keys
             const [gemini, ors, eleven] = await Promise.all([
-                cloud.getApiKey('google_gemini_api_key'),
-                cloud.getApiKey('open_route_service_api_key'),
-                cloud.getApiKey('eleven_labs_api_key')
+                cloud.getApiKey('google_gemini'),
+                cloud.getApiKey('open_route_service'),
+                cloud.getApiKey('eleven_labs')
             ]);
 
             setGlobalKeys({
-                google_gemini_api_key: gemini || '',
-                open_route_service_api_key: ors || '',
-                eleven_labs_api_key: eleven || ''
+                google_gemini: gemini || '',
+                open_route_service: ors || '',
+                eleven_labs: eleven || ''
             });
+
 
             const s = await cloud.getShopSettings();
             setShopSettings(s);
@@ -105,8 +109,9 @@ export const AdminApiKeysUnified: React.FC = () => {
             if (activeTab === 'integrations') {
                 const { data, error } = await sb
                     .from('api_keys')
-                    .select('*, user_profiles(name, email, store_name)')
+                    .select('id, service_name, key_token, encrypted_key, is_active, created_at, last_used_at, user_id, user_profiles(name, email, store_name)')
                     .order('created_at', { ascending: false });
+
                 if (data) setStoreKeys(data);
             } else if (activeTab === 'logs') {
                 const { data, error } = await sb
@@ -139,15 +144,16 @@ export const AdminApiKeysUnified: React.FC = () => {
         try {
             const keyUpdatePromises = [];
 
-            if (globalKeys.google_gemini_api_key !== undefined) {
-                keyUpdatePromises.push(cloud.adminUpdateApiKey('google_gemini_api_key', globalKeys.google_gemini_api_key));
+            if (globalKeys.google_gemini !== undefined) {
+                keyUpdatePromises.push(cloud.adminUpdateApiKey('google_gemini', globalKeys.google_gemini));
             }
-            if (globalKeys.open_route_service_api_key !== undefined) {
-                keyUpdatePromises.push(cloud.adminUpdateApiKey('open_route_service_api_key', globalKeys.open_route_service_api_key));
+            if (globalKeys.open_route_service !== undefined) {
+                keyUpdatePromises.push(cloud.adminUpdateApiKey('open_route_service', globalKeys.open_route_service));
             }
-            if (globalKeys.eleven_labs_api_key !== undefined) {
-                keyUpdatePromises.push(cloud.adminUpdateApiKey('eleven_labs_api_key', globalKeys.eleven_labs_api_key));
+            if (globalKeys.eleven_labs !== undefined) {
+                keyUpdatePromises.push(cloud.adminUpdateApiKey('eleven_labs', globalKeys.eleven_labs));
             }
+
 
             await Promise.all(keyUpdatePromises);
 
@@ -189,15 +195,17 @@ export const AdminApiKeysUnified: React.FC = () => {
         }
     };
 
-    const renderApiKeyInput = (id: string, label: string, placeholder: string, link: string, linkText: string) => (
+    const renderApiKeyInput = (id: string, label: string, placeholder: string, link: string, linkText: string, description: string) => (
         <div className="mb-6">
             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">{label}</label>
-            <div className="relative">
+            <div className="relative mb-2">
                 <input
                     type={showKeys[id] ? "text" : "password"}
                     placeholder={placeholder}
                     value={globalKeys[id] || ''}
                     onChange={e => setGlobalKeys(prev => ({ ...prev, [id]: e.target.value }))}
+                    autoComplete="off"
+                    spellCheck={false}
                     className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white pl-11 pr-12 font-mono text-sm"
                 />
                 <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -208,38 +216,71 @@ export const AdminApiKeysUnified: React.FC = () => {
                     {showKeys[id] ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
                 </button>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1 ml-1">Obtenha sua chave em <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">{linkText}</a>.</p>
+            <div className="flex flex-col gap-1 px-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{description}</p>
+                <p className="text-[10px] text-gray-400">
+                    <span className="font-bold">Como obter:</span> Visite o <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{linkText}</a>, crie uma nova chave e cole-a acima.
+                </p>
+            </div>
         </div>
     );
 
     const renderExternalServicesTab = () => (
         <div className="space-y-6">
             {/* Google Gemini AI */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
                 <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                    <Bot className="w-6 h-6 text-brand-600" /> Zé Assistente (Google Gemini)
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                        <Bot className="w-6 h-6 text-blue-600" />
+                    </div>
+                    Zé Assistente (Google Gemini)
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Integre o assistente virtual Gemini no aplicativo.</p>
-                {renderApiKeyInput('google_gemini_api_key', 'Chave de API do Google Gemini', 'YOUR_GEMINI_API_KEY', 'https://aistudio.google.com/app/apikey', 'Google AI Studio')}
+                {renderApiKeyInput(
+                    'google_gemini',
+                    'Chave de API do Google Gemini',
+                    'AIzaSy...',
+                    'https://aistudio.google.com/app/apikey',
+                    'Google AI Studio',
+                    'Responsável pela inteligência do Zé Assistente, permitindo que ele gere respostas para o suporte, analise catálogos e interaja com os usuários de forma humana.'
+                )}
             </div>
 
             {/* OpenRouteService */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
                 <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                    <Navigation className="w-6 h-6 text-brand-600" /> OpenRouteService (Rotas)
+                    <div className="p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+                        <Navigation className="w-6 h-6 text-purple-600" />
+                    </div>
+                    OpenRouteService (Logística)
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Integre o serviço de rotas OpenStreetMap.</p>
-                {renderApiKeyInput('open_route_service_api_key', 'Chave de API do ORS', 'YOUR_ORS_API_KEY', 'https://openrouteservice.org/dev/#/home', 'ORS Dashboard')}
+                {renderApiKeyInput(
+                    'open_route_service',
+                    'Chave de API do ORS',
+                    '5b3ce3...',
+                    'https://openrouteservice.org/dev/#/home',
+                    'Dashboard do ORS',
+                    'Fundamental para o cálculo preciso de taxas de entrega por distância (km), otimização de rotas e navegação GPS dentro do aplicativo.'
+                )}
             </div>
 
             {/* ElevenLabs TTS */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
                 <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                    <Bot className="w-6 h-6 text-brand-600" /> ElevenLabs (Voz de Navegação)
+                    <div className="p-2 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                        <Activity className="w-6 h-6 text-green-600" />
+                    </div>
+                    ElevenLabs (Vozes de IA)
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Integre vozes realistas para a navegação passo a passo.</p>
-                {renderApiKeyInput('eleven_labs_api_key', 'Chave de API do ElevenLabs', 'YOUR_ELEVENLABS_API_KEY', 'https://elevenlabs.io/app/settings/api-keys', 'ElevenLabs Settings')}
+                {renderApiKeyInput(
+                    'eleven_labs',
+                    'Chave de API do ElevenLabs',
+                    'sk_...',
+                    'https://elevenlabs.io/app/settings/api-keys',
+                    'Configurações do ElevenLabs',
+                    'Proporciona vozes extremamente realistas para as instruções de navegação e alertas, tornando a experiência do entregador mais profissional e fluida.'
+                )}
             </div>
+
 
             {/* Feedback and Save Button */}
             <div className="mt-8 space-y-4">
@@ -283,7 +324,7 @@ export const AdminApiKeysUnified: React.FC = () => {
                                             {Array.isArray(k.user_profiles) ? k.user_profiles[0]?.email : (k.user_profiles as any)?.email}
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3">{k.name}</td>
+                                    <td className="px-4 py-3">{k.service_name}</td>
                                     <td className="px-4 py-3 font-mono text-xs">{k.key_token.substring(0, 10)}...</td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${k.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

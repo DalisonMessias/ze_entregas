@@ -1,162 +1,209 @@
 <!DOCTYPE html>
 <html lang="pt-BR" class="scroll-smooth">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Zé Entregas</title>
-    
-    <!-- QR Code & Barcode Generators -->
-    <script src="https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    
-    <!-- QR Code Reader -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
-    <!-- Leaflet Maps & Heatmap -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="https://unpkg.com/leaflet-rotate-map@0.2.0/dist/leaflet-rotate-map.js"></script>
-    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Zé Entregas</title>
 
-    
-    <link rel="manifest" href="/pwa/manifest.json" />
-    <meta name="theme-color" content="#e50039" />
-    <meta name="description" content="Rastreador de entregas diárias - Zé Entregas" />
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  <!-- QR Code & Barcode Generators -->
+  <script src="https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
-      /* Custom Font Injection - Using Inter for UI body, Amsi for Headlines */
-      @font-face {
-        font-family: 'AmsiProUltra';
-        src: url('https://raw.githubusercontent.com/DalisonMessias/cdn.rabbit.gg/main/assets/AmsiProNarw-Ultra.otf') format('opentype');
-        font-weight: normal;
-        font-style: normal;
-        font-display: swap;
-      }
-      
-      /* Headings keep the Brand Identity */
-      h1, h2, h3, h4, h5, h6, .brand-font, font-bold {
-        font-family: 'AmsiProUltra', ui-sans-serif, system-ui, sans-serif !important;
-        letter-spacing: 0.02em;
+  <!-- QR Code Reader -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <!-- Leaflet Maps & Heatmap -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet-rotate-map@0.3.1/leaflet.js"></script>
+
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+
+  <link rel="manifest" href="/pwa/manifest.json" />
+  <meta name="theme-color" content="#e50039" />
+  <meta name="description" content="Rastreador de entregas diárias - Zé Entregas" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    /* Custom Font Injection - Using Inter for UI body, Amsi for Headlines */
+    @font-face {
+      font-family: 'AmsiProUltra';
+      src: url('https://raw.githubusercontent.com/DalisonMessias/cdn.rabbit.gg/main/assets/AmsiProNarw-Ultra.otf') format('opentype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    /* Headings keep the Brand Identity */
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    .brand-font,
+    font-bold {
+      font-family: 'AmsiProUltra', ui-sans-serif, system-ui, sans-serif !important;
+      letter-spacing: 0.02em;
+    }
+
+    /* Body text gets the clean "Tech/App" look */
+    body,
+    p,
+    span,
+    input,
+    textarea,
+    select,
+    button {
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    }
+
+    body {
+      overscroll-behavior-y: contain;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Hide scrollbar on main body */
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar {
+      display: none;
+    }
+
+    html,
+    body {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Custom Scrollbar for modals and internal elements */
+    .custom-scrollbar::-webkit-scrollbar {
+      display: block;
+      width: 6px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #d1d5db;
+      /* gray-300 */
+      border-radius: 6px;
+    }
+
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #4b5563;
+      /* gray-600 */
+    }
+
+    /* iFood Style Inputs */
+    .ifood-input {
+      background-color: #f3f4f6;
+      /* gray-100 */
+      border: none;
+      border-radius: 0.75rem;
+      /* rounded-xl */
+      transition: all 0.2s;
+    }
+
+    .dark .ifood-input {
+      background-color: #1f2937;
+      /* gray-800 */
+      color: white;
+    }
+
+    .ifood-input:focus {
+      outline: 2px solid #e50039;
+      /* brand-600 */
+      background-color: white;
+    }
+
+    .dark .ifood-input:focus {
+      background-color: #111827;
+    }
+
+    /* Custom Select Styling */
+    select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+      background-position: right 0.75rem center;
+      background-repeat: no-repeat;
+      background-size: 1.2em 1.2em;
+      padding-right: 2.5rem !important;
+    }
+
+    /* Animations */
+    @keyframes subtle-bounce-in {
+      0% {
+        transform: scale(1);
       }
 
-      /* Body text gets the clean "Tech/App" look */
-      body, p, span, input, textarea, select, button {
-        font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      50% {
+        transform: scale(1.02);
       }
 
-      body {
-        overscroll-behavior-y: contain;
-        -webkit-tap-highlight-color: transparent;
+      100% {
+        transform: scale(1);
       }
-      
-      /* Hide scrollbar on main body */
-      html::-webkit-scrollbar, body::-webkit-scrollbar {
-        display: none;
-      }
-      html, body {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
-      
-      /* Custom Scrollbar for modals and internal elements */
-      .custom-scrollbar::-webkit-scrollbar {
-          display: block;
-          width: 6px;
-      }
-      .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #d1d5db; /* gray-300 */
-          border-radius: 6px;
-      }
-      .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #4b5563; /* gray-600 */
+    }
+
+    .animate-subtle-bounce-in {
+      animation: subtle-bounce-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Animation for Platform News */
+    @keyframes slide-in-bottom {
+      0% {
+        transform: translateY(50px);
+        opacity: 0;
       }
 
-      /* iFood Style Inputs */
-      .ifood-input {
-        background-color: #f3f4f6; /* gray-100 */
-        border: none;
-        border-radius: 0.75rem; /* rounded-xl */
-        transition: all 0.2s;
+      100% {
+        transform: translateY(0);
+        opacity: 1;
       }
-      .dark .ifood-input {
-        background-color: #1f2937; /* gray-800 */
-        color: white;
-      }
-      .ifood-input:focus {
-        outline: 2px solid #e50039; /* brand-600 */
-        background-color: white;
-      }
-      .dark .ifood-input:focus {
-        background-color: #111827;
-      }
-      
-      /* Custom Select Styling */
-      select {
-        appearance: none;
-        -webkit-appearance: none;
-        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-        background-position: right 0.75rem center;
-        background-repeat: no-repeat;
-        background-size: 1.2em 1.2em;
-        padding-right: 2.5rem !important;
-      }
-      
-      /* Animations */
-      @keyframes subtle-bounce-in {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.02); }
-        100% { transform: scale(1); }
-      }
-      .animate-subtle-bounce-in {
-        animation: subtle-bounce-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-      }
+    }
 
-      /* Animation for Platform News */
-      @keyframes slide-in-bottom {
-        0% {
-          transform: translateY(50px);
-          opacity: 0;
-        }
-        100% {
-          transform: translateY(0);
-          opacity: 1;
-        }
-      }
-      .animate-slide-in {
-        animation-fill-mode: backwards;
-      }
-      .is-visible .animate-slide-in {
-        animation-name: slide-in-bottom;
-        animation-duration: 0.7s;
-        animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      }
+    .animate-slide-in {
+      animation-fill-mode: backwards;
+    }
 
-      /* Override for space-y-6 requested by user */
-      .space-y-6 > :not([hidden]) ~ :not([hidden]) {
-        --tw-space-y-reverse: 0;
-        margin-top: calc(calc(1 - var(--tw-space-y-reverse))) !important;
-        margin-bottom: calc(1.5rem * var(--tw-space-y-reverse)) !important;
-      }
-    </style>
-<link rel="stylesheet" href="/index.css">
+    .is-visible .animate-slide-in {
+      animation-name: slide-in-bottom;
+      animation-duration: 0.7s;
+      animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    /* Override for space-y-6 requested by user */
+    .space-y-6> :not([hidden])~ :not([hidden]) {
+      --tw-space-y-reverse: 0;
+      margin-top: calc(calc(1 - var(--tw-space-y-reverse))) !important;
+      margin-bottom: calc(1.5rem * var(--tw-space-y-reverse)) !important;
+    }
+  </style>
+  <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased selection:bg-brand-100 selection:text-brand-900 transition-colors duration-300">
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('SW registered:', registration);
-          }).catch(error => {
-            console.log('SW registration failed:', error);
-          });
+
+<body
+  class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased selection:bg-brand-100 selection:text-brand-900 transition-colors duration-300">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+          console.log('SW registered:', registration);
+        }).catch(error => {
+          console.log('SW registration failed:', error);
         });
-      }
-    </script>
-  </body>
+      });
+    }
+  </script>
+</body>
+
 </html>

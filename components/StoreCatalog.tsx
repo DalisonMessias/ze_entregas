@@ -93,7 +93,10 @@ export const StoreCatalog: React.FC = () => {
     }, [activeTab]); // Reload when tab changes impacting categories/products
 
     const [baseProducts, setBaseProducts] = useState<any[]>([]);
+    const [baseAddons, setBaseAddons] = useState<any[]>([]);
+    const [storeAddons, setStoreAddons] = useState<any[]>([]);
     const [isImportLoading, setIsImportLoading] = useState(false);
+    const [importSubTab, setImportSubTab] = useState<'products' | 'addons'>('products');
 
     const loadData = async (signal?: AbortSignal) => {
         setIsLoading(true);
@@ -117,6 +120,8 @@ export const StoreCatalog: React.FC = () => {
                 if (activeTab === 'import') {
                     // Import base products doesn't strictly need abort signal as it's secondary
                     loadBaseProducts();
+                    loadBaseAddons();
+                    loadStoreAddons();
                 }
             }
         } catch (error: any) {
@@ -141,6 +146,24 @@ export const StoreCatalog: React.FC = () => {
             console.error("Erro ao carregar catálogo base:", error);
         } finally {
             setIsImportLoading(false);
+        }
+    };
+
+    const loadBaseAddons = async () => {
+        try {
+            const data = await cloud.getBaseAddonGroups();
+            setBaseAddons(data);
+        } catch (error) {
+            console.error("Erro ao carregar adicionais base:", error);
+        }
+    };
+
+    const loadStoreAddons = async () => {
+        try {
+            const data = await cloud.getStoreAddonGroups();
+            setStoreAddons(data);
+        } catch (error) {
+            console.error("Erro ao carregar adicionais da loja:", error);
         }
     };
 
@@ -178,6 +201,17 @@ export const StoreCatalog: React.FC = () => {
     };
 
     const handleImportProduct = async (baseProduct: any) => {
+        // Verificar duplicação
+        const isDuplicate = products.some(p =>
+            p.base_product_id === baseProduct.id ||
+            p.name.toLowerCase() === baseProduct.name.toLowerCase()
+        );
+
+        if (isDuplicate) {
+            setToast({ message: `"${baseProduct.name}" já foi importado anteriormente.`, type: 'warning' });
+            return;
+        }
+
         setIsSaving(true);
         try {
             await cloud.importBaseProductToStore(baseProduct);
@@ -185,6 +219,31 @@ export const StoreCatalog: React.FC = () => {
             loadData();
         } catch (error) {
             setToast({ message: 'Erro ao importar produto.', type: 'error' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleImportAddonGroup = async (baseAddonGroup: any) => {
+        // Verificar duplicação
+        const isDuplicate = storeAddons.some(sa =>
+            sa.base_addon_group_id === baseAddonGroup.id ||
+            sa.name.toLowerCase() === baseAddonGroup.name.toLowerCase()
+        );
+
+        if (isDuplicate) {
+            setToast({ message: `"${baseAddonGroup.name}" já foi importado anteriormente.`, type: 'warning' });
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            await cloud.importBaseAddonToStore(baseAddonGroup);
+            setToast({ message: `"${baseAddonGroup.name}" importado com sucesso!`, type: 'success' });
+            // Recarregar adicionais da loja
+            await loadStoreAddons();
+        } catch (error) {
+            setToast({ message: 'Erro ao importar adicional.', type: 'error' });
         } finally {
             setIsSaving(false);
         }
@@ -542,11 +601,36 @@ export const StoreCatalog: React.FC = () => {
 
                     {activeTab === 'import' && (
                         <div className="animate-in fade-in duration-300">
-                            <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-                                <div>
-                                    <h2 className="text-xl font-black dark:text-white mb-2">Sugestões da Plataforma</h2>
-                                    <p className="text-sm text-gray-500">Produtos otimizados e prontos para o seu cardápio</p>
+                            <div className="mb-6">
+                                <h2 className="text-xl font-black dark:text-white mb-2">Sugestões da Plataforma</h2>
+                                <p className="text-sm text-gray-500 mb-4">Recursos otimizados e prontos para o seu cardápio</p>
+
+                                {/* Sub-abas de Importação */}
+                                <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
+                                    <button
+                                        onClick={() => setImportSubTab('products')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tight transition-all flex items-center gap-2 whitespace-nowrap flex-1 md:flex-none ${importSubTab === 'products'
+                                            ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm'
+                                            : 'text-gray-500'
+                                            }`}
+                                    >
+                                        <Package className="w-4 h-4" />
+                                        Produtos
+                                    </button>
+                                    <button
+                                        onClick={() => setImportSubTab('addons')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tight transition-all flex items-center gap-2 whitespace-nowrap flex-1 md:flex-none ${importSubTab === 'addons'
+                                            ? 'bg-white dark:bg-gray-700 text-brand-600 shadow-sm'
+                                            : 'text-gray-500'
+                                            }`}
+                                    >
+                                        <Layers className="w-4 h-4" />
+                                        Adicionais
+                                    </button>
                                 </div>
+                            </div>
+
+                            <div className="mb-6 flex justify-end">
                                 <div className="relative w-full md:w-80">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
@@ -559,55 +643,185 @@ export const StoreCatalog: React.FC = () => {
                                 </div>
                             </div>
 
-                            {isImportLoading ? (
-                                <div className="flex flex-col items-center justify-center py-20">
-                                    <Loading variant="container" size="lg" message="Buscando sugestões..." />
-                                </div>
-                            ) : baseProducts.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
-                                    <Sparkles className="w-16 h-16 mb-4 text-amber-500" />
-                                    <h3 className="font-bold text-lg dark:text-white">Nenhum produto disponível</h3>
-                                    <p className="text-sm">Aguarde novas sugestões da administração.</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {baseProducts
-                                        .filter(bp =>
-                                            !searchTerm ||
-                                            isFuzzyMatch(bp.name, searchTerm) ||
-                                            (bp.category && isFuzzyMatch(bp.category, searchTerm))
-                                        )
-                                        .map(bp => (
-                                            <div key={bp.id} className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex flex-col">
-                                                <div className="flex gap-4 mb-4">
-                                                    <div className="w-16 h-16 rounded-2xl bg-white dark:bg-gray-800 flex items-center justify-center border border-gray-100 dark:border-gray-700 flex-shrink-0">
-                                                        <Package className="w-8 h-8 text-amber-500" />
+                            {/* Conteúdo baseado na sub-aba selecionada */}
+                            {importSubTab === 'products' ? (
+                                // Lista de Produtos
+                                isImportLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-20">
+                                        <Loading variant="container" size="lg" message="Buscando sugestões..." />
+                                    </div>
+                                ) : baseProducts.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
+                                        <Sparkles className="w-16 h-16 mb-4 text-amber-500" />
+                                        <h3 className="font-bold text-lg dark:text-white">Nenhum produto disponível</h3>
+                                        <p className="text-sm">Aguarde novas sugestões da administração.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {baseProducts
+                                            .filter(bp =>
+                                                !searchTerm ||
+                                                isFuzzyMatch(bp.name, searchTerm) ||
+                                                (bp.category && isFuzzyMatch(bp.category, searchTerm))
+                                            )
+                                            .map(bp => {
+                                                const isAlreadyImported = products.some(p =>
+                                                    p.base_product_id === bp.id ||
+                                                    p.name.toLowerCase() === bp.name.toLowerCase()
+                                                );
+
+                                                return (
+                                                    <div
+                                                        key={bp.id}
+                                                        className={`bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[2.5rem] border flex flex-col relative ${isAlreadyImported
+                                                                ? 'border-green-200 dark:border-green-900/30 opacity-60'
+                                                                : 'border-gray-100 dark:border-gray-800'
+                                                            }`}
+                                                    >
+                                                        {isAlreadyImported && (
+                                                            <div className="absolute top-4 right-4 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full">
+                                                                ✓ Importado
+                                                            </div>
+                                                        )}
+                                                        <div className="flex gap-4 mb-4">
+                                                            <div className="w-16 h-16 rounded-2xl bg-white dark:bg-gray-800 flex items-center justify-center border border-gray-100 dark:border-gray-700 flex-shrink-0">
+                                                                <Package className="w-8 h-8 text-amber-500" />
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[10px] font-black uppercase text-brand-600 block mb-1">{bp.category || 'Geral'}</span>
+                                                                <h4 className="font-bold dark:text-white leading-tight">{bp.name}</h4>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 line-clamp-3 mb-4 flex-1">{bp.description}</p>
+                                                        <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+                                                            <div>
+                                                                <p className="text-[10px] text-gray-400 font-bold uppercase">Preço Sugerido</p>
+                                                                <p className="text-xl font-black dark:text-white">
+                                                                    R$ {bp.valor_sugerido?.toFixed(2)}
+                                                                </p>
+                                                            </div>
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleImportProduct(bp)}
+                                                                disabled={isSaving || isAlreadyImported}
+                                                                variant={isAlreadyImported ? 'secondary' : 'primary'}
+                                                            >
+                                                                {isAlreadyImported ? (
+                                                                    <>
+                                                                        <Check className="w-4 h-4 mr-2" />
+                                                                        Já Importado
+                                                                    </>
+                                                                ) : (
+                                                                    'Importar'
+                                                                )}
+                                                            </Button>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <span className="text-[10px] font-black uppercase text-brand-600 block mb-1">{bp.category || 'Geral'}</span>
-                                                        <h4 className="font-bold dark:text-white leading-tight">{bp.name}</h4>
-                                                    </div>
-                                                </div>
-                                                <p className="text-xs text-gray-500 line-clamp-3 mb-4 flex-1">{bp.description}</p>
-                                                <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
-                                                    <div>
-                                                        <p className="text-[10px] text-gray-400 font-bold uppercase">Preço Sugerido</p>
-                                                        <p className="text-xl font-black dark:text-white">
-                                                            R$ {bp.valor_sugerido?.toFixed(2)}
-                                                        </p>
-                                                    </div>
-                                                    <Button size="sm" onClick={() => handleImportProduct(bp)} disabled={isSaving}>
-                                                        Importar
-                                                    </Button>
-                                                </div>
+                                                );
+                                            })}
+                                        {baseProducts.length > 0 && baseProducts.filter(bp => !searchTerm || isFuzzyMatch(bp.name, searchTerm) || (bp.category && isFuzzyMatch(bp.category, searchTerm))).length === 0 && (
+                                            <div className="col-span-full py-10 text-center opacity-50">
+                                                <p>Nenhum produto encontrado com "{searchTerm}"</p>
                                             </div>
-                                        ))}
-                                    {baseProducts.length > 0 && baseProducts.filter(bp => !searchTerm || isFuzzyMatch(bp.name, searchTerm) || (bp.category && isFuzzyMatch(bp.category, searchTerm))).length === 0 && (
-                                        <div className="col-span-full py-10 text-center opacity-50">
-                                            <p>Nenhum produto encontrado com "{searchTerm}"</p>
-                                        </div>
-                                    )}
-                                </div>
+                                        )}
+                                    </div>
+                                )
+                            ) : (
+                                // Lista de Adicionais
+                                baseAddons.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
+                                        <Layers className="w-16 h-16 mb-4 text-amber-500" />
+                                        <h3 className="font-bold text-lg dark:text-white">Nenhum adicional disponível</h3>
+                                        <p className="text-sm">Aguarde novas sugestões da administração.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {baseAddons
+                                            .filter(ba =>
+                                                !searchTerm ||
+                                                isFuzzyMatch(ba.name, searchTerm)
+                                            )
+                                            .map(ba => {
+                                                const isAlreadyImported = storeAddons.some(sa =>
+                                                    sa.base_addon_group_id === ba.id ||
+                                                    sa.name.toLowerCase() === ba.name.toLowerCase()
+                                                );
+
+                                                return (
+                                                    <div
+                                                        key={ba.id}
+                                                        className={`bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[2.5rem] border flex flex-col relative ${isAlreadyImported
+                                                            ? 'border-green-200 dark:border-green-900/30 opacity-60'
+                                                            : 'border-gray-100 dark:border-gray-800'
+                                                            }`}
+                                                    >
+                                                        {isAlreadyImported && (
+                                                            <div className="absolute top-4 right-4 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full">
+                                                                ✓ Importado
+                                                            </div>
+                                                        )}
+                                                        <div className="flex gap-4 mb-4">
+                                                            <div className="w-16 h-16 rounded-2xl bg-white dark:bg-gray-800 flex items-center justify-center border border-gray-100 dark:border-gray-700 flex-shrink-0">
+                                                                <Layers className="w-8 h-8 text-purple-500" />
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <span className="text-[10px] font-black uppercase text-purple-600 block mb-1">{ba.type === 'SINGLE' ? 'Escolha Única' : 'Múltipla Escolha'}</span>
+                                                                <h4 className="font-bold dark:text-white leading-tight">{ba.name}</h4>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mb-4">
+                                                            <span className="text-xs text-gray-500">{ba.options?.length || 0} opções</span>
+                                                            <span className="text-xs text-gray-400">•</span>
+                                                            <span className="text-xs text-gray-500">Min: {ba.min || 0} | Max: {ba.max || 1}</span>
+                                                        </div>
+                                                        <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl p-3 mb-4 max-h-32 overflow-y-auto">
+                                                            {ba.options && ba.options.length > 0 ? (
+                                                                <div className="space-y-1">
+                                                                    {ba.options.slice(0, 5).map((opt: any, idx: number) => (
+                                                                        <div key={idx} className="flex justify-between text-xs">
+                                                                            <span className="text-gray-700 dark:text-gray-300">{opt.name}</span>
+                                                                            <span className="font-bold text-gray-900 dark:text-white">
+                                                                                {opt.price > 0 ? `+R$ ${opt.price.toFixed(2)}` : 'Grátis'}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                    {ba.options.length > 5 && (
+                                                                        <p className="text-[10px] text-gray-400 text-center mt-2">+{ba.options.length - 5} opções</p>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-xs text-gray-400 italic">Sem opções</p>
+                                                            )}
+                                                        </div>
+                                                        <Button
+                                                            size="sm"
+                                                            fullWidth
+                                                            onClick={() => handleImportAddonGroup(ba)}
+                                                            disabled={isSaving || isAlreadyImported}
+                                                            variant={isAlreadyImported ? 'secondary' : 'primary'}
+                                                        >
+                                                            {isAlreadyImported ? (
+                                                                <>
+                                                                    <Check className="w-4 h-4 mr-2" />
+                                                                    Já Importado
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Plus className="w-4 h-4 mr-2" />
+                                                                    Importar
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            })}
+                                        {baseAddons.length > 0 && baseAddons.filter(ba => !searchTerm || isFuzzyMatch(ba.name, searchTerm)).length === 0 && (
+                                            <div className="col-span-full py-10 text-center opacity-50">
+                                                <p>Nenhum adicional encontrado com "{searchTerm}"</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
                             )}
                         </div>
                     )}

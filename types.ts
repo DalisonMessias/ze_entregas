@@ -98,6 +98,8 @@ export interface MaintenanceData {
 export interface NavigationState {
     active: boolean;
     destination?: { lat: number, lng: number, address?: string, label?: string };
+    waypoints?: { lat: number, lng: number, address?: string, label?: string }[];
+    current_waypoint_index?: number;
     context_id?: string;
     vehicle_type?: VehicleType | 'foot';
     return_tab?: ActiveTab;
@@ -267,6 +269,9 @@ export interface ManagedUser {
     super_store_expiration?: string;
     store_document?: string;
     store_category_id?: string;
+    show_comments_on_menu?: boolean;
+    ratings_count?: number;
+    ratings_sum?: number;
 }
 
 // CompanyInfo consolidated at line 916
@@ -315,6 +320,7 @@ export interface StoreAddonGroup {
     max: number;
     options: StoreAddonOption[];
     is_active: boolean;
+    base_addon_group_id?: string; // Rastreamento de importação do catálogo base
     created_at: string;
     updated_at: string;
 }
@@ -330,8 +336,8 @@ export interface StoreProduct {
     category_id?: string | null; // Correct: ID
     image_url?: string;
     is_active: boolean;
-    created_at: string;
-    updated_at: string;
+    created_at?: string;
+    updated_at?: string;
     internal_code?: string;
     variations?: any[];
     availability?: any;
@@ -352,8 +358,8 @@ export interface CatalogBaseProduct {
     observations?: string;
     valor_sugerido: number;
     is_active: boolean;
-    created_at: string;
-    updated_at: string;
+    created_at?: string;
+    updated_at?: string;
 
     // Suporte para detecção de duplicados (UI/Staging)
     isDuplicate?: boolean;
@@ -396,8 +402,8 @@ export interface ShopSettings {
     navigation_sounds_enabled?: boolean;
     created_at?: string;
     infinitepay_handle?: string;
-    infinitepay_webhook_secret?: string;
 }
+
 
 export interface Category {
     id: string;
@@ -525,6 +531,8 @@ export interface PartnerFeeSettings {
     emergency_message?: string;
     pos_min_value?: number;
     pos_max_value?: number;
+    combo_discount_percent?: number;
+    combo_discount_enabled?: boolean;
 }
 
 export interface PWASettings {
@@ -676,7 +684,6 @@ export interface PartnerProfile {
     vehicle_model?: string;
     vehicle_year?: string;
     partner_level?: string;
-    average_rating?: number;
     completed_deliveries?: number;
     association_code?: string;
     share_phone_offline?: boolean;
@@ -723,6 +730,10 @@ export interface PartnerProfile {
     receive_orders_via_chat?: boolean;
     chat_number?: string;
     config?: any;
+    show_comments_on_menu?: boolean;
+    ratings_count?: number;
+    ratings_sum?: number;
+    average_rating?: number;
 }
 
 export interface StoreDailyReport {
@@ -855,6 +866,9 @@ export interface PartnerRating {
     comment: string;
     direction: RatingDirection;
     created_at: string;
+    store_response?: string;
+    store_response_at?: string;
+    evaluated_city_slug?: string;
 }
 
 // WorkShift consolidated at line 875
@@ -1235,6 +1249,11 @@ export interface PartnerRating {
     evaluated_name?: string;
     evaluator_id?: string;
     evaluated_id?: string;
+    store_response?: string;
+    store_response_at?: string;
+    is_anonymous?: boolean;
+    evaluated_slug?: string;
+    evaluated_city_slug?: string;
 }
 
 // Removed duplicate OfflineDriver
@@ -1764,3 +1783,63 @@ export interface Coupon {
     created_at?: string;
     updated_at?: string;
 }
+
+export interface RatingChangeRequest {
+    id: string;
+    protocol: string;
+    store_id: string;
+    rating_id: string;
+    request_types: ('EDIT_COMMENT' | 'DELETE_RATING')[];
+    status: 'OPEN' | 'IN_ANALYSIS' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
+    reason: string;
+    new_comment?: string;
+    fee_charged: number;
+    base_value?: number;
+    discount_percent_applied?: number;
+    discount_value?: number;
+    final_value?: number;
+    executed_by?: string;
+    admin_notes?: string;
+    created_at: string;
+    updated_at: string;
+    store?: {
+        name: string;
+        store_name?: string;
+    };
+    rating?: PartnerRating;
+}
+
+
+export interface SystemFee {
+    key: string;
+    description: string;
+    value: number;
+    updated_at?: string;
+    updated_by?: string;
+}
+
+// ============================================================================
+// ADICIONAIS - CATÁLOGO BASE (ADMIN)
+// ============================================================================
+
+export interface BaseAddonGroup {
+    id: string;
+    name: string;
+    type: 'SINGLE' | 'MULTIPLE';
+    min: number;
+    max: number;
+    is_active: boolean;
+    options: BaseAddonOption[];
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface BaseAddonOption {
+    id: string;
+    group_id: string;
+    name: string;
+    price: number;
+    is_active: boolean;
+    created_at?: string;
+}
+

@@ -386,20 +386,6 @@ export const AdminDashboard = () => {
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Financeiro Loja</span>
                     </Button>
 
-                    <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_ai_config' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
-                        <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300">
-                            <Bot className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">IA Config</span>
-                    </Button>
-
-                    <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_routing' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
-                        <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
-                            <MapPin className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Roteamento</span>
-                    </Button>
-
 
 
                     <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_infinitepay' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">

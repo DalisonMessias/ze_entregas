@@ -1,6 +1,6 @@
 import express from 'express';
 import { processMediationMessage, MediationContext } from '../../services/ai_mediation.js';
-import { getClient } from '../../services/cloud.js';
+import { getClient, getAPIKey } from '../../services/cloud.js';
 
 const router = express.Router();
 
@@ -15,26 +15,12 @@ router.post('/run', async (req, res) => {
             return;
         }
 
-        // 1. Buscar API Key na tabela api_keys
-        const sb = getClient();
-        if (!sb) {
-            res.status(500).json({ message: 'Database client error' });
-            return;
-        }
+        // 1. Buscar API Key via serviço centralizado
+        const apiKey = await getAPIKey('google_gemini', storeId);
 
-        const { data: keyData, error: keyError } = await sb
-            .from('api_keys')
-            .select('key_token')
-            .eq('user_id', storeId) // O storeId é o user_id dono da chave
-            .eq('service_name', 'google_gemini') // Nome do serviço conforme dados
-            .eq('is_active', true)
-            .single();
-
-        const apiKey = keyData?.key_token;
-
-        if (keyError || !apiKey) {
-            console.warn(`[Mediation] Missing 'google_gemini' API Key for store ${storeId}`, keyError);
-            res.status(500).json({ message: 'Gemini API Key not configured for this store in api_keys table.' });
+        if (!apiKey) {
+            console.warn(`[Mediation] Missing 'google_gemini' API Key for store ${storeId}`);
+            res.status(500).json({ message: 'Gemini API Key not configured for this store or globally.' });
             return;
         }
 

@@ -9,6 +9,7 @@ import { BaseModal } from './BaseModal';
 import { openNavigation } from '../utils/mapHelpers';
 import { useDialog } from '../utils/dialogService';
 import { StreetAutocomplete } from './StreetAutocomplete';
+import { useUserCity } from '../src/hooks/useUserCity';
 
 interface RouteListProps {
     userRole: UserRole;
@@ -36,9 +37,9 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
     const [editName, setEditName] = useState('');
 
     // New state for city and feedback
+    const { city: dbCity, loading: cityLoading } = useUserCity();
     const [userCity, setUserCity] = useState<string>('');
     const [feedback, setFeedback] = useState<{ type: 'error' | 'success', message: string } | null>(null);
-    const [isProfileLoading, setIsProfileLoading] = useState(true);
 
     // Info Modal State
     const [infoItem, setInfoItem] = useState<RouteListItem | null>(null);
@@ -110,38 +111,20 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
             if (savedItems && savedItems.length > 0) {
                 setItems(savedItems);
             } else {
-                // Fallback to local storage if empty (migration) or just empty
                 const localItems = storage.getRouteListItems();
                 if (localItems.length > 0) {
                     setItems(localItems);
-                    // Optional: migrate to cloud immediately?
-                    // cloud.saveCurrentRouteList(localItems);
                 }
             }
         };
         loadItems();
-        const fetchProfile = async () => {
-            setIsProfileLoading(true);
-            if (userRole !== 'delivery_partner' && userRole !== 'delivery_person') {
-                setIsProfileLoading(false);
-                return;
-            }
-            try {
-                const profile = await cloud.getMyPartnerProfile();
-                if (profile?.city) {
-                    setUserCity(profile.city.trim());
-                } else {
-                    setFeedback({ type: 'error', message: 'Sua cidade de atuação não está configurada no perfil.' });
-                }
-            } catch (e) {
-                // console.error("Failed to fetch profile for city", e);
-                setFeedback({ type: 'error', message: 'Erro ao carregar dados do seu perfil.' });
-            } finally {
-                setIsProfileLoading(false);
-            }
-        };
-        fetchProfile();
-    }, [userRole]);
+    }, []);
+
+    useEffect(() => {
+        if (dbCity) {
+            setUserCity(dbCity.trim());
+        }
+    }, [dbCity]);
 
     const saveAndSetItems = (newItems: RouteListItem[]) => {
         setItems(newItems);
@@ -310,12 +293,12 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                             onChange={e => setNewItemName(e.target.value)}
                             placeholder="Nome (Opcional)"
                             className="w-full p-3 pr-8 bg-gray-50 dark:bg-gray-800 rounded-xl outline-none border border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
-                            disabled={isProfileLoading || isSearching}
+                            disabled={isSearching}
                         />
                         <button
                             onClick={() => handleVoiceInput('name')}
                             className={`absolute right-2 top-2.5 p-1 rounded-full ${listeningField === 'name' ? 'bg-red-100 text-red-500' : 'text-gray-400 hover:text-purple-500'}`}
-                            disabled={isProfileLoading || isSearching}
+                            disabled={isSearching}
                         >
                             <Mic className="w-3 h-3" />
                         </button>
@@ -326,7 +309,7 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                             value={search}
                             onChange={(val) => setSearch(val)}
                             placeholder="Endereço (Rua)"
-                            disabled={isProfileLoading || isSearching}
+                            disabled={isSearching}
                             className="w-full p-3 bg-gray-50 dark:bg-gray-800 rounded-xl outline-none border border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50"
                         />
                     </div>
@@ -336,7 +319,7 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                         onChange={e => setNewItemNumber(e.target.value)}
                         placeholder="N°"
                         className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl outline-none border border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50 w-[80px]"
-                        disabled={isProfileLoading || isSearching}
+                        disabled={isSearching}
                     />
                     <input
                         type="text"
@@ -344,12 +327,12 @@ export const RouteList: React.FC<RouteListProps> = ({ userRole, onNavigate }) =>
                         onChange={e => setNewItemNeighborhood(e.target.value)}
                         placeholder="Bairro"
                         className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl outline-none border border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-900 dark:text-white text-sm transition-all disabled:opacity-50 flex-grow max-w-[200px]"
-                        disabled={isProfileLoading || isSearching}
+                        disabled={isSearching}
                     />
 
                     <Button
                         onClick={handleAddAddress}
-                        disabled={isProfileLoading || isSearching}
+                        disabled={isSearching}
                         className="h-[50px] w-[100px] bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-sm"
                     >
                         {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar"}

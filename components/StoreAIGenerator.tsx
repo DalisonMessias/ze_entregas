@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Package, Loader2, BarChart3, Edit2, Trash2, Check, Send, Layers, Sparkles, X, AlertCircle, Plus, Image as ImageIcon } from 'lucide-react';
+import { Bot, Package, Loader2, BarChart3, Edit2, Trash2, Check, Send, Layers, Sparkles, X, AlertCircle, Plus, Image as ImageIcon, Clock, RefreshCw } from 'lucide-react';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { StoreProduct, Category, StoreAddonGroup } from '../types';
@@ -63,6 +63,8 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
     const [analysisSuggestions, setAnalysisSuggestions] = useState<AnalysisSuggestion[]>([]);
+    const [cooldownSeconds, setCooldownSeconds] = useState(0);
+    const [lastUserMessage, setLastUserMessage] = useState<{ text: string, image: string | null } | null>(null);
 
     const [isSaving, setIsSaving] = useState(false);
     // Initializing removed to prevent UI block
@@ -76,6 +78,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         role: 'user' | 'model';
         content: string;
         image?: string;
+        isError?: boolean;
     }
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
@@ -86,6 +89,16 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatHistory, isAILoading]);
+
+    useEffect(() => {
+        let timer: any;
+        if (cooldownSeconds > 0) {
+            timer = setInterval(() => {
+                setCooldownSeconds(prev => prev - 1);
+            }, 1000);
+        }
+        return () => clearInterval(timer);
+    }, [cooldownSeconds]);
 
     const loadSettings = async () => {
         try {
@@ -131,6 +144,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     };
 
     const handleSendMessage = async () => {
+        if (cooldownSeconds > 0) return;
         if (!aiMessage.trim() && !selectedImage) return;
 
         if (!apiKey) {
@@ -141,6 +155,8 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         const userMsg = aiMessage;
         const currentImage = selectedImage;
         const currentPreview = imagePreview;
+
+        setLastUserMessage({ text: userMsg, image: currentImage });
 
         setAiMessage('');
         setSelectedImage(null);
@@ -231,15 +247,31 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             console.error("Erro na IA:", error);
             let msg = error.message || "Erro desconhecido";
             if (msg.includes('429') || msg.includes('quota') || msg.includes('limit')) {
-                msg = "<b>IA em Manutenção</b><br>O sistema de inteligência artificial atingiu o limite de requisições momentâneo. Por favor, tente novamente em alguns instantes.";
+                msg = "<strong>Sistema em Manutenção</strong><br>O motor de inteligência artificial está sendo otimizado. Tente novamente daqui a pouco.";
+                setCooldownSeconds(300); // 5 minutos
+                setChatHistory(prev => [...prev, { role: 'model', content: msg, isError: true }]);
+            } else {
+                setChatHistory(prev => [...prev, { role: 'model', content: msg }]);
             }
-            setChatHistory(prev => [...prev, { role: 'model', content: msg }]);
         } finally {
             setIsAILoading(false);
         }
     };
 
+    const handleRetryAfterCooldown = () => {
+        if (!lastUserMessage) return;
+        setChatHistory(prev => prev.filter(msg => !msg.isError));
+        setAiMessage(lastUserMessage.text);
+        if (lastUserMessage.image) {
+            setSelectedImage(lastUserMessage.image);
+            setImagePreview(lastUserMessage.image);
+        }
+        setCooldownSeconds(0);
+        setTimeout(() => handleSendMessage(), 200);
+    };
+
     const handleBatchGenerate = async () => {
+        if (cooldownSeconds > 0) return;
         if (!batchInput.trim()) return;
         if (!apiKey) {
             showMessage({ title: 'Configuração Necessária', message: 'API Key não configurada.' });
@@ -288,7 +320,8 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
         } catch (error: any) {
             let msg = error.message;
             if (msg.includes('429') || msg.includes('quota')) {
-                msg = "O sistema de Inteligência Artificial está passando por uma manutenção rápida. Tente novamente em alguns instantes.";
+                msg = "O sistema de Inteligência Artificial está passando por uma manutenção rápida. Tente novamente daqui a pouco.";
+                setCooldownSeconds(300);
             }
             showMessage({ title: 'Cota de IA', message: msg });
         } finally {
@@ -297,6 +330,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     };
 
     const handleAnalyzeCatalog = async () => {
+        if (cooldownSeconds > 0) return;
         if (!apiKey) {
             showMessage({ title: 'Configuração Necessária', message: 'API Key não configurada.' });
             return;
@@ -364,6 +398,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             let msg = error.message;
             if (msg.includes('429') || msg.includes('quota')) {
                 msg = "O assistente de análise está passando por uma manutenção preventiva. Por favor, tente novamente em breve.";
+                setCooldownSeconds(300);
             }
             showMessage({ title: 'Aviso da IA', message: msg });
         } finally {
@@ -372,6 +407,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
     };
 
     const handleSendAddonsMessage = async () => {
+        if (cooldownSeconds > 0) return;
         if (!addonMessage.trim()) return;
         if (!apiKey) {
             showMessage({ title: 'Configuração Necessária', message: 'API Key não configurada.' });
@@ -609,11 +645,33 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                             {/* History */}
                             {chatHistory.map((msg, idx) => (
                                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed ${msg.role === 'user' ? 'bg-brand-600 text-white rounded-tr-none' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-tl-none'}`}>
+                                    <div className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed ${msg.role === 'user' ? 'bg-brand-600 text-white rounded-tr-none' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-tl-none'} ${msg.isError ? 'border-2 border-red-500 bg-red-50 dark:bg-red-900/10' : ''}`}>
                                         {msg.image && (
                                             <img src={msg.image} alt="Upload" className="w-full h-32 object-cover rounded-lg mb-2" />
                                         )}
                                         <div dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br/>') }} />
+
+                                        {msg.isError && (
+                                            <div className="mt-4 pt-4 border-t border-red-100 dark:border-red-900/30 flex justify-center">
+                                                <button
+                                                    onClick={handleRetryAfterCooldown}
+                                                    disabled={cooldownSeconds > 0}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg hover:shadow-red-200"
+                                                >
+                                                    {cooldownSeconds > 0 ? (
+                                                        <>
+                                                            <Clock className="w-3 h-3 animate-pulse" />
+                                                            Aguarde {Math.floor(cooldownSeconds / 60)}:{(cooldownSeconds % 60).toString().padStart(2, '0')}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <RefreshCw className="w-3 h-3" />
+                                                            Tentar Novamente
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -743,12 +801,12 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                                     }}
                                     placeholder="Ex: Crie um X-Bacon suculento e uma Coca-Cola..."
                                     className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl py-3 px-4 text-xs h-[48px] max-h-32 resize-none focus:ring-2 focus:ring-brand-500 scrollbar-hide dark:text-white"
-                                    disabled={isAILoading}
+                                    disabled={isAILoading || cooldownSeconds > 0}
                                 />
 
                                 <button
                                     onClick={handleSendMessage}
-                                    disabled={(!aiMessage.trim() && !selectedImage) || isAILoading}
+                                    disabled={(!aiMessage.trim() && !selectedImage) || isAILoading || cooldownSeconds > 0}
                                     className="p-3 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl transition-all shadow-sm hover:shadow-md h-[48px] w-[48px] flex items-center justify-center"
                                 >
                                     {isAILoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
