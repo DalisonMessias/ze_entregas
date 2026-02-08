@@ -25,6 +25,8 @@ export const AdminPlatformCoupons: React.FC = () => {
     const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
     const [formData, setFormData] = useState<any>({});
+    const [cities, setCities] = useState<any[]>([]);
+    const [categories, setCategories] = useState<any[]>([]);
 
     const discountTypeOptions = [
         { label: 'Valor Fixo (R$)', value: 'FIXED' },
@@ -39,21 +41,22 @@ export const AdminPlatformCoupons: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            // Fetch ALL coupons that are platform coupons
             const sb = cloud.getClient();
             if (!sb) return;
 
-            const { data, error } = await sb
-                .from('coupons')
-                .select('*')
-                .eq('is_platform_coupon', true)
-                .order('created_at', { ascending: false });
+            const [couponsRes, citiesRes, categoriesRes] = await Promise.all([
+                sb.from('coupons').select('*').eq('is_platform_coupon', true).order('created_at', { ascending: false }),
+                sb.from('cities').select('id, name').eq('is_active', true).order('name'),
+                sb.from('categories').select('id, name').order('name')
+            ]);
 
-            if (error) throw error;
-            setCoupons(data || []);
+            if (couponsRes.error) throw couponsRes.error;
+            setCoupons(couponsRes.data || []);
+            setCities(citiesRes.data || []);
+            setCategories(categoriesRes.data || []);
         } catch (error) {
             console.error(error);
-            alert({ title: 'Erro', message: 'Falha ao carregar cupons.' });
+            alert({ title: 'Erro', message: 'Falha ao carregar dados.' });
         } finally {
             setLoading(false);
         }
@@ -67,7 +70,10 @@ export const AdminPlatformCoupons: React.FC = () => {
 
         const payload = {
             store_id: null, // Global Coupon
+            city_id: formData.city_id || null,
+            category_id: formData.category_id || null,
             is_platform_coupon: true,
+            is_stackable: formData.is_stackable || false,
             code: formData.code.toUpperCase(),
             description: formData.description,
             discount_type: formData.discount_type || 'PERCENTAGE',
@@ -208,7 +214,7 @@ export const AdminPlatformCoupons: React.FC = () => {
                                 {formData.discount_type !== 'FREE_SHIPPING' && (
                                     <CustomInput
                                         label={formData.discount_type === 'PERCENTAGE' ? "Valor do Desconto (%)" : "Valor do Desconto (R$)"}
-                                        mask={formData.discount_type === 'FIXED' ? 'currency' : 'number'}
+                                        mask={formData.discount_type === 'FIXED' ? 'currency' : undefined}
                                         value={formData.discount_value || ''}
                                         onChange={e => setFormData({ ...formData, discount_value: e.target.value })}
                                         placeholder="0.00"
@@ -220,6 +226,34 @@ export const AdminPlatformCoupons: React.FC = () => {
                                 <CustomInput label="Pedido Mínimo (R$)" mask="currency" value={formData.min_order_value || ''} onChange={e => setFormData({ ...formData, min_order_value: e.target.value })} placeholder="R$ 0,00" />
                                 <CustomInput label="Desconto Máximo (R$)" mask="currency" value={formData.max_discount_value || ''} onChange={e => setFormData({ ...formData, max_discount_value: e.target.value })} placeholder="Opcional" />
                                 <CustomInput label="Limite Global de Usos" type="number" value={formData.usage_limit || ''} onChange={e => setFormData({ ...formData, usage_limit: e.target.value })} placeholder="Ilimitado" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <CustomInput label="Limite por Usuário" type="number" value={formData.user_usage_limit || ''} onChange={e => setFormData({ ...formData, user_usage_limit: e.target.value })} placeholder="Ilimitado" />
+                                <div className="flex flex-col">
+                                    <label className="block text-sm font-bold mb-2">Acumulável</label>
+                                    <label className="flex items-center gap-3 cursor-pointer h-12 bg-gray-50 dark:bg-gray-800 rounded-xl px-4 border border-transparent focus-within:border-brand-500 transition-all shadow-sm shadow-black/5" onClick={() => setFormData({ ...formData, is_stackable: !formData.is_stackable })}>
+                                        <div className={`relative w-10 min-w-[40px] h-6 rounded-full transition-colors duration-200 ${formData.is_stackable ? 'bg-brand-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                                            <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${formData.is_stackable ? 'translate-x-4' : 'translate-x-0'}`} />
+                                        </div>
+                                        <span className="text-xs font-bold text-gray-500">{formData.is_stackable ? 'Sim (Pode usar outros cupons)' : 'Não'}</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <CustomSelect
+                                    label="Restringir por Cidade (Opcional)"
+                                    value={formData.city_id}
+                                    onChange={value => setFormData({ ...formData, city_id: value })}
+                                    options={[{ label: 'Todas as Cidades', value: '' }, ...cities.map(c => ({ label: c.name, value: c.id }))]}
+                                />
+                                <CustomSelect
+                                    label="Restringir por Categoria (Opcional)"
+                                    value={formData.category_id}
+                                    onChange={value => setFormData({ ...formData, category_id: value })}
+                                    options={[{ label: 'Todas as Categorias', value: '' }, ...categories.map(c => ({ label: c.name, value: c.id }))]}
+                                />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">

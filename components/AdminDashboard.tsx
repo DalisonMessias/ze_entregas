@@ -232,6 +232,13 @@ export const AdminDashboard = () => {
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Validação</span>
                     </Button>
 
+                    <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_global_coupons' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                        <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
+                            <Banknote className="w-5 h-5" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Cupons</span>
+                    </Button>
+
                     <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_wallet_control' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                             <Wallet className="w-5 h-5" />

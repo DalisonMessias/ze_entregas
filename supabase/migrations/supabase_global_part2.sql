@@ -6141,6 +6141,8 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.coupons (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   store_id uuid,
+  city_id uuid,
+  category_id uuid,
   code text NOT NULL,
   description text,
   discount_type text NOT NULL CHECK (discount_type = ANY (ARRAY['FIXED'::text, 'PERCENTAGE'::text, 'FREE_SHIPPING'::text])),
@@ -6153,13 +6155,16 @@ CREATE TABLE IF NOT EXISTS public.coupons (
   start_date timestamp with time zone NOT NULL,
   end_date timestamp with time zone,
   is_active boolean DEFAULT true,
+  is_stackable boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   is_platform_coupon boolean DEFAULT false,
   created_by uuid,
   CONSTRAINT coupons_pkey PRIMARY KEY (id),
   CONSTRAINT coupons_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.user_profiles(id),
-  CONSTRAINT coupons_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id)
+  CONSTRAINT coupons_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_profiles(id),
+  CONSTRAINT coupons_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.cities(id),
+  CONSTRAINT coupons_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
 );
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public can view active coupons" ON public.coupons;

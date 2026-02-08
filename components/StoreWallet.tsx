@@ -262,9 +262,9 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
     };
 
     const handleRatePartner = async (rating: number, comment: string) => {
-        if (!ratingRequest) return;
+        if (!ratingRequest || !ratingRequest.partner_id) return;
         try {
-            await cloud.submitRating(ratingRequest.id, rating, comment, 'STORE_TO_PARTNER');
+            await cloud.submitRating(userId, ratingRequest.partner_id, rating, comment, 'STORE_TO_PARTNER');
             await alert({ title: "Avaliação Enviada", message: "Obrigado pela avaliação!" });
             setRatingRequest(null);
             loadAllData();
@@ -309,6 +309,13 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                 { id: 'desempenho', label: 'Desempenho', icon: TrendingUp, tab: 'store_performance', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
                 { id: 'verificar_vendas', label: 'Verificar Vendas', icon: BarChart3, tab: 'store_reports', color: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' },
                 { id: 'estatisticas', label: 'Estatísticas', icon: BarChart3, tab: 'store_reports', color: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400' }
+            ]
+        },
+        {
+            title: 'Marketing & Vendas',
+            items: [
+                { id: 'promocoes_cupons', label: 'Promoções e Cupons', icon: Banknote, tab: 'store_promotions', color: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' },
+                { id: 'destaque_cidade', label: 'Destaque na Cidade', icon: Star, tab: 'store_highlight', color: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' }
             ]
         },
         {

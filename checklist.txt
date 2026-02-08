@@ -10,3 +10,12 @@
 - Redesign Premium completo do ReferralProgram.tsx com Glassmorphism e gradientes modernos.
 - Melhoria do logging técnico em cloud.ts para diagnóstico resiliente.
 - Estabilização da tabela claimed_rewards no schema global.
+- Implementado suporte a cupons de "Frete Grátis" no sistema.
+- Criadas colunas city_id, category_id e is_stackable na tabela public.coupons.
+- Atualizadas interfaces Coupon e ShopCoupon no types.ts.
+- Atualizada interface de Lojista (StorePromotions.tsx) para gerenciar cupons de frete grátis e acumuláveis.
+- Atualizada interface de Administrador (AdminPlatformCoupons.tsx) com suporte a escopo e tipo frete grátis.
+- Implementada lógica de frete grátis no carrinho (Shop.tsx) com recalculação automática.
+- Configuradas URLs amigáveis /admin/cupons e /loja/promocoes no routeMap.ts.
+- Adicionados atalhos de cupons nos dashboards do administrador e lojista.
+- Corrigido erro de tipagem na chamada submitRating no StoreWallet.tsx.

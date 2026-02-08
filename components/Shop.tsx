@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import { ShoppingBag, X, ArrowLeft, Plus, Minus, CreditCard, Barcode, QrCode, Copy, Check, Loader2, AlertTriangle, Search, Wallet, MapPin, ChevronRight, Star, Clock, Tag, Truck, Ticket, Heart, Zap, Shield } from 'lucide-react';
 import * as cloud from '../services/cloud';
-import { Product, ShopSettings, CartItem, PaymentMethod, Order, Category } from '../types';
+import { Product, ShopSettings, CartItem, PaymentMethod, Order, Category, ShopCoupon } from '../types';
 import { DataErrorDisplay } from './DataErrorDisplay';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
@@ -78,7 +78,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
     // Coupon
     const [couponCode, setCouponCode] = useState('');
-    const [appliedDiscount, setAppliedDiscount] = useState(0); // Value in percentage (0-100) or amount? Let's use % from admin settings
+    const [appliedCoupon, setAppliedCoupon] = useState<ShopCoupon | null>(null);
     const [couponMessage, setCouponMessage] = useState('');
 
 
@@ -164,12 +164,29 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
 
     // Calculations
     const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0), [cart]);
-    const discountAmount = useMemo(() => (subtotal * appliedDiscount) / 100, [subtotal, appliedDiscount]);
+
+    const discountAmount = useMemo(() => {
+        if (!appliedCoupon) return 0;
+        if (appliedCoupon.discount_type === 'PERCENTAGE') {
+            return (subtotal * (appliedCoupon.discount_percent || 0)) / 100;
+        }
+        if (appliedCoupon.discount_type === 'FIXED') {
+            return appliedCoupon.discount_value || 0;
+        }
+        return 0;
+    }, [subtotal, appliedCoupon]);
+
+    const finalShippingCost = useMemo(() => {
+        if (shippingCost === null) return null;
+        if (appliedCoupon?.discount_type === 'FREE_SHIPPING') return 0;
+        return shippingCost;
+    }, [shippingCost, appliedCoupon]);
+
     const total = useMemo(() => {
         let t = subtotal - discountAmount;
-        if (shippingCost !== null) t += shippingCost;
+        if (finalShippingCost !== null) t += finalShippingCost;
         return t;
-    }, [subtotal, discountAmount, shippingCost]);
+    }, [subtotal, discountAmount, finalShippingCost]);
 
     const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
 
@@ -274,10 +291,16 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
         const coupon = settings.coupons.find(c => c.code === couponCode.toUpperCase() && c.active);
 
         if (coupon) {
-            setAppliedDiscount(coupon.discount_percent);
-            setCouponMessage(`Desconto de ${coupon.discount_percent}% aplicado!`);
+            setAppliedCoupon(coupon);
+            if (coupon.discount_type === 'FREE_SHIPPING') {
+                setCouponMessage(`Frete Grátis aplicado!`);
+            } else if (coupon.discount_type === 'FIXED') {
+                setCouponMessage(`Desconto de R$ ${coupon.discount_value} aplicado!`);
+            } else {
+                setCouponMessage(`Desconto de ${coupon.discount_percent}% aplicado!`);
+            }
         } else {
-            setAppliedDiscount(0);
+            setAppliedCoupon(null);
             setCouponMessage('Cupom inválido ou expirado.');
         }
     };
@@ -312,7 +335,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                 shipping_address: shippingAddress,
                 shipping_cost: shippingCost,
                 discount: discountAmount,
-                coupon_code: appliedDiscount > 0 ? couponCode : undefined
+                coupon_code: appliedCoupon ? couponCode : undefined
             });
 
             // 2. Generate InfinitePay Link
@@ -756,7 +779,7 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                                             APLICAR
                                         </button>
                                     </div>
-                                    {couponMessage && <p className={`text-xs mt-2 px-4 font-bold ${appliedDiscount > 0 ? 'text-green-500' : 'text-red-500'}`}>{couponMessage}</p>}
+                                    {couponMessage && <p className={`text-xs mt-2 px-4 font-bold ${appliedCoupon ? 'text-green-500' : 'text-red-500'}`}>{couponMessage}</p>}
                                 </section>
                             )}
                         </div>
@@ -769,10 +792,10 @@ export const Shop: React.FC<ShopProps> = ({ cart, setCart, userLoggedIn }) => {
                                         <span>Subtotal</span>
                                         <span>{formatCurrency(subtotal)}</span>
                                     </div>
-                                    {shippingCost !== null && (
+                                    {finalShippingCost !== null && (
                                         <div className="flex justify-between text-sm text-gray-500">
                                             <span>Frete</span>
-                                            <span className="text-gray-900 dark:text-white font-medium">{shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}</span>
+                                            <span className="text-gray-900 dark:text-white font-medium">{finalShippingCost === 0 ? 'Grátis' : formatCurrency(finalShippingCost)}</span>
                                         </div>
                                     )}
                                     {discountAmount > 0 && (

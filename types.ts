@@ -384,7 +384,12 @@ export interface AdminOrder {
 export interface ShopCoupon {
     code: string;
     discount_percent: number;
+    discount_type?: 'PERCENTAGE' | 'FIXED' | 'FREE_SHIPPING';
+    discount_value?: number;
     active: boolean;
+    is_stackable?: boolean;
+    city_id?: string;
+    category_id?: string;
 }
 
 export interface ShopSettings {
@@ -1776,6 +1781,8 @@ export interface Promotion {
 export interface Coupon {
     id: string;
     store_id: string;
+    city_id?: string | null;
+    category_id?: string | null;
     code: string;
     description?: string;
     discount_type: 'PERCENTAGE' | 'FIXED' | 'FREE_SHIPPING';
@@ -1788,6 +1795,7 @@ export interface Coupon {
     start_date: string;
     end_date?: string | null;
     is_active: boolean;
+    is_stackable: boolean;
     created_at?: string;
     updated_at?: string;
 }

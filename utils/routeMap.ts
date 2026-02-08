@@ -45,6 +45,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/mediacao': 'admin_mediation',
     '/admin/config-navegacao': 'admin_navigation_config',
     '/admin/zepoint': 'zepoint',
+    '/admin/cupons': 'admin_global_coupons',
 
     // Shared / Core Routes
     '/perfil': 'profile',
@@ -100,6 +101,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/integracoes': 'store_integrations',
     '/loja/configuracoes': 'store_settings',
     '/loja/avaliacoes': 'store_ratings',
+    '/loja/promocoes': 'store_promotions',
     '/loja/receiving-payment': 'store_receiving_payment',
     '/loja/produtos': 'store_product_import',
     '/loja/status': 'store_status',

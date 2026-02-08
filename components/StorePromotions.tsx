@@ -106,6 +106,7 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
             max_discount_value: formData.max_discount_value ? parseFloat(formData.max_discount_value) : null,
             usage_limit: formData.usage_limit ? parseInt(formData.usage_limit) : null,
             user_usage_limit: formData.user_usage_limit ? parseInt(formData.user_usage_limit) : null,
+            is_stackable: formData.is_stackable || false,
             start_date: new Date(formData.start_date).toISOString(),
             end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null,
             is_active: formData.is_active !== undefined ? formData.is_active : true,
@@ -424,7 +425,20 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
 
                             <div className="grid grid-cols-2 gap-4">
                                 <CustomInput label="Pedido Mínimo (R$)" type="number" value={formData.min_order_value || ''} onChange={e => setFormData({ ...formData, min_order_value: e.target.value })} placeholder="0.00" />
-                                <CustomInput label="Limite de Quantidade (Global)" type="number" value={formData.usage_limit || ''} onChange={e => setFormData({ ...formData, usage_limit: e.target.value })} placeholder="Ilimitado" />
+                                <CustomInput label="Limite de Uso (Global)" type="number" value={formData.usage_limit || ''} onChange={e => setFormData({ ...formData, usage_limit: e.target.value })} placeholder="Ilimitado" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <CustomInput label="Limite por Usuário" type="number" value={formData.user_usage_limit || ''} onChange={e => setFormData({ ...formData, user_usage_limit: e.target.value })} placeholder="Ilimitado" />
+                                <div className="flex flex-col">
+                                    <label className="block text-sm font-bold mb-2">Acumulável</label>
+                                    <label className="flex items-center gap-2 cursor-pointer h-full">
+                                        <span className={`w-10 h-6 rounded-full flex items-center p-1 transition-colors ${formData.is_stackable ? 'bg-brand-500' : 'bg-gray-300'}`} onClick={() => setFormData({ ...formData, is_stackable: !formData.is_stackable })}>
+                                            <span className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${formData.is_stackable ? 'translate-x-4' : ''}`} />
+                                        </span>
+                                        <span className="text-xs font-bold text-gray-500">{formData.is_stackable ? 'Sim' : 'Não'}</span>
+                                    </label>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
