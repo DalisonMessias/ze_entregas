@@ -7437,12 +7437,10 @@ export const getPromotions = async (storeId: string): Promise<Promotion[]> => {
     const sb = getClient();
     if (!sb) return [];
 
+    // Buscar as promoções
     const { data: promos, error } = await sb
         .from('store_promotions')
-        .select(`
-            *,
-            promotion_products(product_id)
-        `)
+        .select('*')
         .eq('store_id', storeId)
         .order('created_at', { ascending: false });
 
@@ -7451,10 +7449,24 @@ export const getPromotions = async (storeId: string): Promise<Promotion[]> => {
         return [];
     }
 
-    return (promos || []).map(p => ({
-        ...p,
-        products: p.promotion_products?.map((pp: any) => pp.product_id) || []
-    }));
+    if (!promos || promos.length === 0) return [];
+
+    // Buscar os produtos de cada promoção separadamente
+    const promosWithProducts = await Promise.all(
+        promos.map(async (promo) => {
+            const { data: productRelations } = await sb
+                .from('promotion_products')
+                .select('product_id')
+                .eq('promotion_id', promo.id);
+
+            return {
+                ...promo,
+                products: productRelations?.map(pp => pp.product_id) || []
+            };
+        })
+    );
+
+    return promosWithProducts;
 };
 
 export const createPromotion = async (promotion: Partial<Promotion>, productIds: string[] = []) => {

@@ -19,3 +19,7 @@
 - Configuradas URLs amigáveis /admin/cupons e /loja/promocoes no routeMap.ts.
 - Adicionados atalhos de cupons nos dashboards do administrador e lojista.
 - Corrigido erro de tipagem na chamada submitRating no StoreWallet.tsx.
+- Corrigido erro PGRST200 em getPromotions (cloud.ts) usando queries separadas em vez de select aninhado.
+- Substituídos selects nativos por CustomSelect em StorePromotions.tsx (modais de promoções e cupons).
+- Adicionadas máscaras de moeda nos campos "Pedido Mínimo" e "Valor do Desconto" (condicional para tipo FIXED).
+- Substituídos campos de data nativos por CustomDateInput em StorePromotions.tsx (formatação DD/MM/AAAA).

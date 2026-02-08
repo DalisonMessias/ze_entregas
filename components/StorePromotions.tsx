@@ -7,6 +7,8 @@ import * as cloud from '../services/cloud';
 import { Promotion, Coupon, StoreProduct } from '../types';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
+import { CustomSelect } from './CustomSelect';
+import CustomDateInput from './CustomDateInput';
 import { useDialog } from '../utils/dialogService';
 
 interface AdminPromotionsProps {
@@ -333,26 +335,44 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
                             <CustomInput label="Descrição (Opcional)" placeholder="Detalhes da oferta..." value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
 
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold mb-2">Tipo de Desconto</label>
-                                    <select className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none outline-none focus:ring-2 focus:ring-brand-500" value={formData.discount_type} onChange={e => setFormData({ ...formData, discount_type: e.target.value })}>
-                                        <option value="PERCENTAGE">Porcentagem (%)</option>
-                                        <option value="FIXED">Valor Fixo (R$)</option>
-                                        <option value="FREE_SHIPPING">Frete Grátis</option>
-                                    </select>
-                                </div>
+                                <CustomSelect
+                                    label="Tipo de Desconto"
+                                    value={formData.discount_type || 'PERCENTAGE'}
+                                    onChange={(val) => setFormData({ ...formData, discount_type: val })}
+                                    options={[
+                                        { label: 'Porcentagem (%)', value: 'PERCENTAGE' },
+                                        { label: 'Valor Fixo (R$)', value: 'FIXED' },
+                                        { label: 'Frete Grátis', value: 'FREE_SHIPPING' }
+                                    ]}
+                                />
                                 {formData.discount_type !== 'FREE_SHIPPING' && (
-                                    <CustomInput label="Valor do Desconto" type="number" value={formData.discount_value || ''} onChange={e => setFormData({ ...formData, discount_value: e.target.value })} placeholder="0.00" />
+                                    <CustomInput
+                                        label="Valor do Desconto"
+                                        mask={formData.discount_type === 'FIXED' ? 'currency' : undefined}
+                                        type={formData.discount_type === 'PERCENTAGE' ? 'number' : undefined}
+                                        value={formData.discount_value || ''}
+                                        onChange={e => setFormData({ ...formData, discount_value: e.target.value })}
+                                        placeholder={formData.discount_type === 'FIXED' ? 'R$ 0,00' : '0'}
+                                    />
                                 )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                                <CustomInput label="Pedido Mínimo (R$)" type="number" value={formData.min_order_value || ''} onChange={e => setFormData({ ...formData, min_order_value: e.target.value })} placeholder="0.00" />
+                                <CustomInput label="Pedido Mínimo (R$)" mask="currency" value={formData.min_order_value || ''} onChange={e => setFormData({ ...formData, min_order_value: e.target.value })} placeholder="R$ 0,00" />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                                <CustomInput label="Data Inicial" type="date" value={formData.start_date || ''} onChange={e => setFormData({ ...formData, start_date: e.target.value })} />
-                                <CustomInput label="Data Final (Opcional)" type="date" value={formData.end_date || ''} onChange={e => setFormData({ ...formData, end_date: e.target.value })} />
+                                <CustomDateInput
+                                    label="Data Inicial"
+                                    value={formData.start_date || null}
+                                    onChange={(date) => setFormData({ ...formData, start_date: date || '' })}
+                                    required
+                                />
+                                <CustomDateInput
+                                    label="Data Final (Opcional)"
+                                    value={formData.end_date || null}
+                                    onChange={(date) => setFormData({ ...formData, end_date: date || '' })}
+                                />
                             </div>
 
                             <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
@@ -410,21 +430,30 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
                             <CustomInput label="Descrição (Opcional)" placeholder="Para novos clientes..." value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
 
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold mb-2">Tipo de Desconto</label>
-                                    <select className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-none outline-none focus:ring-2 focus:ring-brand-500" value={formData.discount_type} onChange={e => setFormData({ ...formData, discount_type: e.target.value })}>
-                                        <option value="PERCENTAGE">Porcentagem (%)</option>
-                                        <option value="FIXED">Valor Fixo (R$)</option>
-                                        <option value="FREE_SHIPPING">Frete Grátis</option>
-                                    </select>
-                                </div>
+                                <CustomSelect
+                                    label="Tipo de Desconto"
+                                    value={formData.discount_type || 'PERCENTAGE'}
+                                    onChange={(val) => setFormData({ ...formData, discount_type: val })}
+                                    options={[
+                                        { label: 'Porcentagem (%)', value: 'PERCENTAGE' },
+                                        { label: 'Valor Fixo (R$)', value: 'FIXED' },
+                                        { label: 'Frete Grátis', value: 'FREE_SHIPPING' }
+                                    ]}
+                                />
                                 {formData.discount_type !== 'FREE_SHIPPING' && (
-                                    <CustomInput label="Valor do Desconto" type="number" value={formData.discount_value || ''} onChange={e => setFormData({ ...formData, discount_value: e.target.value })} placeholder="0.00" />
+                                    <CustomInput
+                                        label="Valor do Desconto"
+                                        mask={formData.discount_type === 'FIXED' ? 'currency' : undefined}
+                                        type={formData.discount_type === 'PERCENTAGE' ? 'number' : undefined}
+                                        value={formData.discount_value || ''}
+                                        onChange={e => setFormData({ ...formData, discount_value: e.target.value })}
+                                        placeholder={formData.discount_type === 'FIXED' ? 'R$ 0,00' : '0'}
+                                    />
                                 )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                                <CustomInput label="Pedido Mínimo (R$)" type="number" value={formData.min_order_value || ''} onChange={e => setFormData({ ...formData, min_order_value: e.target.value })} placeholder="0.00" />
+                                <CustomInput label="Pedido Mínimo (R$)" mask="currency" value={formData.min_order_value || ''} onChange={e => setFormData({ ...formData, min_order_value: e.target.value })} placeholder="R$ 0,00" />
                                 <CustomInput label="Limite de Uso (Global)" type="number" value={formData.usage_limit || ''} onChange={e => setFormData({ ...formData, usage_limit: e.target.value })} placeholder="Ilimitado" />
                             </div>
 
@@ -442,8 +471,17 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                                <CustomInput label="Data Inicial" type="date" value={formData.start_date || ''} onChange={e => setFormData({ ...formData, start_date: e.target.value })} />
-                                <CustomInput label="Data Final (Opcional)" type="date" value={formData.end_date || ''} onChange={e => setFormData({ ...formData, end_date: e.target.value })} />
+                                <CustomDateInput
+                                    label="Data Inicial"
+                                    value={formData.start_date || null}
+                                    onChange={(date) => setFormData({ ...formData, start_date: date || '' })}
+                                    required
+                                />
+                                <CustomDateInput
+                                    label="Data Final (Opcional)"
+                                    value={formData.end_date || null}
+                                    onChange={(date) => setFormData({ ...formData, end_date: date || '' })}
+                                />
                             </div>
 
                             <label className="flex items-center gap-2 cursor-pointer mt-4">
