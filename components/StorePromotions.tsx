@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Plus, Tag, Ticket, Calendar, Search, Trash2, Edit2, CheckCircle, XCircle, AlertCircle, Percent, DollarSign, Truck, Package, Info, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Tag, Ticket, Calendar, Search, Trash2, Edit2, CheckCircle, XCircle, AlertCircle, Percent, DollarSign, Truck, Package, Info, ArrowRight, ChevronUp, ChevronDown } from 'lucide-react';
 import { Loading } from './Loading';
 import { MobileTabsSelect } from './MobileTabsSelect';
 import * as cloud from '../services/cloud';
@@ -9,6 +9,7 @@ import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
 import CustomDateInput from './CustomDateInput';
+import { Switch } from './Switch';
 import { useDialog } from '../utils/dialogService';
 
 interface AdminPromotionsProps {
@@ -34,6 +35,7 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
     // Form States
     const [formData, setFormData] = useState<any>({});
     const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+    const productListRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         loadData();
@@ -375,39 +377,68 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
                                 />
                             </div>
 
-                            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                                <label className="flex items-center gap-3 cursor-pointer mb-4">
-                                    <input type="checkbox" className="w-5 h-5 accent-brand-600 rounded-md" checked={formData.applies_to_all_products} onChange={e => setFormData({ ...formData, applies_to_all_products: e.target.checked })} />
-                                    <span className="font-bold text-gray-700 dark:text-gray-300">Aplicar a todos os produtos</span>
-                                </label>
+                            <div className={`p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 ${formData.applies_to_all_products ? 'flex items-center' : ''}`}>
+                                <Switch
+                                    checked={formData.applies_to_all_products}
+                                    onChange={(checked) => setFormData({ ...formData, applies_to_all_products: checked })}
+                                    label="Aplicar a todos os produtos"
+                                    className=""
+                                />
 
                                 {!formData.applies_to_all_products && (
-                                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-2">Selecione os produtos:</p>
-                                        {products.map(prod => (
-                                            <label key={prod.id} className="flex items-center gap-2 p-2 hover:bg-white dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
-                                                <input
-                                                    type="checkbox"
-                                                    className="w-4 h-4 accent-brand-600"
-                                                    checked={selectedProducts.includes(prod.id)}
-                                                    onChange={e => {
-                                                        if (e.target.checked) setSelectedProducts([...selectedProducts, prod.id]);
-                                                        else setSelectedProducts(selectedProducts.filter(id => id !== prod.id));
-                                                    }}
-                                                />
-                                                <span className="text-sm truncate">{prod.name}</span>
-                                            </label>
-                                        ))}
+                                    <div className="relative">
+                                        <div ref={productListRef} className="space-y-1 max-h-60 overflow-y-auto no-scrollbar scroll-smooth">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-3 mt-3">Selecione os produtos:</p>
+                                            {products.map(prod => (
+                                                <div
+                                                    key={prod.id}
+                                                    className="group flex items-center justify-between gap-3 px-3 py-2.5 bg-white dark:bg-gray-800/50 hover:bg-brand-600 dark:hover:bg-brand-600 rounded-xl transition-all duration-200 border border-gray-100 dark:border-gray-700 hover:border-brand-600"
+                                                >
+                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-white truncate flex-1">
+                                                        {prod.name}
+                                                    </span>
+                                                    <Switch
+                                                        checked={selectedProducts.includes(prod.id)}
+                                                        onChange={(checked) => {
+                                                            if (checked) setSelectedProducts([...selectedProducts, prod.id]);
+                                                            else setSelectedProducts(selectedProducts.filter(id => id !== prod.id));
+                                                        }}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Botões de navegação */}
+                                        {products.length > 3 && (
+                                            <div className="flex gap-2 mt-3 justify-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => productListRef.current?.scrollBy({ top: -150, behavior: 'smooth' })}
+                                                    className="p-2 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-900/40 transition-colors"
+                                                    title="Rolar para cima"
+                                                >
+                                                    <ChevronUp className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => productListRef.current?.scrollBy({ top: 150, behavior: 'smooth' })}
+                                                    className="p-2 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-900/40 transition-colors"
+                                                    title="Rolar para baixo"
+                                                >
+                                                    <ChevronDown className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
 
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <span className={`w-10 h-6 rounded-full flex items-center p-1 transition-colors ${formData.is_active ? 'bg-green-500' : 'bg-gray-300'}`} onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}>
-                                    <span className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${formData.is_active ? 'translate-x-4' : ''}`} />
-                                </span>
-                                <span className="text-sm font-bold">Promoção Ativa</span>
-                            </label>
+
+                            <Switch
+                                checked={formData.is_active}
+                                onChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                                label="Promoção Ativa"
+                            />
                         </div>
                         <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3">
                             <Button variant="outline" onClick={() => setIsPromoModalOpen(false)}>Cancelar</Button>
@@ -484,12 +515,13 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
                                 />
                             </div>
 
-                            <label className="flex items-center gap-2 cursor-pointer mt-4">
-                                <span className={`w-10 h-6 rounded-full flex items-center p-1 transition-colors ${formData.is_active ? 'bg-green-500' : 'bg-gray-300'}`} onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}>
-                                    <span className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${formData.is_active ? 'translate-x-4' : ''}`} />
-                                </span>
-                                <span className="text-sm font-bold">Cupom Ativo</span>
-                            </label>
+
+                            <Switch
+                                checked={formData.is_active}
+                                onChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                                label="Cupom Ativo"
+                                className="mt-4"
+                            />
                         </div>
                         <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3">
                             <Button variant="outline" onClick={() => setIsCouponModalOpen(false)}>Cancelar</Button>

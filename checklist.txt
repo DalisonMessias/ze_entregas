@@ -23,3 +23,14 @@
 - Substituídos selects nativos por CustomSelect em StorePromotions.tsx (modais de promoções e cupons).
 - Adicionadas máscaras de moeda nos campos "Pedido Mínimo" e "Valor do Desconto" (condicional para tipo FIXED).
 - Substituídos campos de data nativos por CustomDateInput em StorePromotions.tsx (formatação DD/MM/AAAA).
+- Melhorado design do CustomDateInput com estilo moderno, bordas arredondadas, suporte a dark mode e cores do sistema.
+- Implementado calendário dropdown personalizado no CustomDateInput com navegação por meses, seleção visual, validação e botão 'Hoje'.
+- Implementado controle para permitir apenas um calendário aberto por vez usando sistema de eventos customizados.
+- Corrigido bug do sistema de calendário único gerando IDs automáticos com useRef.
+- Implementado layout responsivo para mobile: calendário centralizado na tela (fixed) em vez de preso ao input.
+- Adicionado backdrop escuro transparente (bg-black/50) em mobile ao abrir o calendário.
+- Corrigido posicionamento do calendário no desktop para abrir para cima (bottom-full) em vez de para baixo.
+- Substituídos TODOS os checkboxes e toggles por componentes Switch padronizados (inclui produtos individuais).
+- Melhorado design da lista de produtos: barra de rolagem oculta, hover brand-600 com texto branco, bordas e espaçamento aprimorado.
+- Adicionados botões de navegação (setas cima/baixo) na lista de produtos para rolagem suave sem arrastar.
+- Centralizado verticalmente o Switch "Aplicar a todos os produtos" quando ativo (sem lista visível).
