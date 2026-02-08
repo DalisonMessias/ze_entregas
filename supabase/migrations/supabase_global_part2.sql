@@ -15377,3 +15377,438 @@ ON public.base_addon_groups FOR ALL USING (public.is_admin());
 -- Grants
 GRANT ALL ON public.base_addon_groups TO authenticated;
 GRANT ALL ON public.base_addon_groups TO service_role;
+-- 2. Tabela de ConfiguraÃ§Ã£o Geral do Programa
+CREATE TABLE IF NOT EXISTS public.referral_config (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    is_active BOOLEAN DEFAULT true,
+    points_per_referral_user INTEGER DEFAULT 100,
+    points_per_referral_store INTEGER DEFAULT 500,
+    points_per_referral_courier INTEGER DEFAULT 200,
+    reward_validity_days INTEGER DEFAULT 180,
+    min_order_value_for_credit NUMERIC DEFAULT 0, -- Se 0, credita no cadastro. Se > 0, credita na 1Âª compra acima desse valor.
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_by UUID REFERENCES public.user_profiles(id)
+);
+
+-- Inserir configuraÃ§Ã£o padrÃ£o se nÃ£o existir
+INSERT INTO public.referral_config (is_active)
+SELECT true WHERE NOT EXISTS (SELECT 1 FROM public.referral_config);
+
+-- RLS para Config (Administrativo)
+ALTER TABLE public.referral_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public view config" ON public.referral_config;
+CREATE POLICY "Public view config" ON public.referral_config FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admin manage config" ON public.referral_config;
+CREATE POLICY "Admin manage config" ON public.referral_config FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- Permissões básicas (GRANTs)
+GRANT SELECT ON public.referral_config TO authenticated, anon;
+GRANT ALL ON public.referral_config TO service_role;
+GRANT ALL ON public.referral_config TO authenticated; -- Admin usa essa role no client
+
+-- 3. CatÃ¡logo de Recompensas (Troca de Pontos)
+CREATE TABLE IF NOT EXISTS public.referral_rewards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    description TEXT,
+    cost_points INTEGER NOT NULL,
+    reward_type TEXT NOT NULL CHECK (reward_type IN ('CUPOM_FIXED', 'CUPOM_PERCENT', 'FREE_SHIPPING')),
+    reward_value NUMERIC NOT NULL DEFAULT 0, -- Valor do desconto (R$ ou %)
+    min_order_value NUMERIC DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS para Rewards
+ALTER TABLE public.referral_rewards ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read rewards" ON public.referral_rewards;
+CREATE POLICY "Public read rewards" ON public.referral_rewards FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Admin manage rewards" ON public.referral_rewards;
+CREATE POLICY "Admin manage rewards" ON public.referral_rewards FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- Permissões básicas (GRANTs)
+GRANT SELECT ON public.referral_rewards TO authenticated, anon;
+GRANT ALL ON public.referral_rewards TO service_role;
+GRANT ALL ON public.referral_rewards TO authenticated;
+
+-- 4. Extrato de Pontos (Ledger)
+CREATE TABLE IF NOT EXISTS public.referral_points_ledger (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    operation_type TEXT NOT NULL CHECK (operation_type IN ('CREDIT_REFERRAL', 'DEBIT_REDEEM', 'CREDIT_BONUS', 'REVERSAL')),
+    amount INTEGER NOT NULL,
+    balance_after INTEGER NOT NULL,
+    description TEXT,
+    reference_id UUID, -- ID do usuÃ¡rio indicado ou ID da recompensa/pedido
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS para Ledger
+ALTER TABLE public.referral_points_ledger ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "My ledger" ON public.referral_points_ledger;
+CREATE POLICY "My ledger" ON public.referral_points_ledger FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Admin view ledger" ON public.referral_points_ledger;
+CREATE POLICY "Admin view ledger" ON public.referral_points_ledger FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- Permissões básicas (GRANTs)
+GRANT SELECT ON public.referral_points_ledger TO authenticated;
+GRANT ALL ON public.referral_points_ledger TO service_role;
+GRANT ALL ON public.referral_points_ledger TO authenticated;
+
+-- 5. FunÃ§Ã£o para Gerar CÃ³digo de IndicaÃ§Ã£o Ãšnico
+CREATE OR REPLACE FUNCTION public.generate_referral_code()
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    new_code TEXT;
+    exists_code BOOLEAN;
+BEGIN
+    LOOP
+        -- Gera cÃ³digo formato REF-XXXXXX (6 caracteres hex aleatÃ³rios)
+        new_code := 'REF-' || upper(substring(md5(random()::text) from 1 for 6));
+        
+        -- Verifica colisÃ£o
+        SELECT EXISTS (SELECT 1 FROM public.user_profiles WHERE referral_code = new_code) INTO exists_code;
+        
+        EXIT WHEN NOT exists_code;
+    END LOOP;
+    RETURN new_code;
+END;
+$$;
+
+-- 6. Trigger para criar cÃ³digo ao inserir usuÃ¡rio (se nÃ£o vier preenchido)
+CREATE OR REPLACE FUNCTION public.trigger_ensure_referral_code()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.referral_code IS NULL THEN
+        NEW.referral_code := public.generate_referral_code();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS on_user_created_gen_code ON public.user_profiles;
+CREATE TRIGGER on_user_created_gen_code
+    BEFORE INSERT ON public.user_profiles
+    FOR EACH ROW EXECUTE FUNCTION public.trigger_ensure_referral_code();
+
+-- Tentar preencher cÃ³digos para usuÃ¡rios antigos que nÃ£o tenham
+DO $$
+DECLARE 
+    r RECORD;
+BEGIN
+    FOR r IN SELECT id FROM public.user_profiles WHERE referral_code IS NULL LOOP
+        UPDATE public.user_profiles 
+        SET referral_code = public.generate_referral_code() 
+        WHERE id = r.id;
+    END LOOP;
+END $$;
+
+
+-- 7. RPC: Validar CÃ³digo de IndicaÃ§Ã£o (para o frontend do cadastro)
+CREATE OR REPLACE FUNCTION public.validate_referral_code(p_code TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_referrer RECORD;
+BEGIN
+    SELECT id, name, role FROM public.user_profiles 
+    WHERE referral_code = upper(trim(p_code)) 
+    LIMIT 1 
+    INTO v_referrer;
+
+    IF v_referrer.id IS NULL THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'CÃ³digo nÃ£o encontrado');
+    END IF;
+
+    -- NÃ£o permitir indicar a si mesmo
+    IF v_referrer.id = auth.uid() THEN
+         RETURN jsonb_build_object('valid', false, 'message', 'Auto-indicaÃ§Ã£o nÃ£o permitida');
+    END IF;
+
+    RETURN jsonb_build_object(
+        'valid', true, 
+        'referrer_id', v_referrer.id,
+        'referrer_name', v_referrer.name
+    );
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.validate_referral_code(TEXT) TO anon, authenticated, service_role;
+
+
+-- 8. RPC: Resgatar Pontos (Trocar por Recompensa)
+CREATE OR REPLACE FUNCTION public.redeem_referral_points(p_reward_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_reward RECORD;
+    v_current_balance INTEGER;
+    v_new_balance INTEGER;
+    v_coupon_code TEXT;
+    v_coupon_id UUID;
+BEGIN
+    v_user_id := auth.uid();
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'NÃ£o autorizado';
+    END IF;
+
+    -- Buscar recompensa
+    SELECT * INTO v_reward FROM public.referral_rewards WHERE id = p_reward_id AND is_active = true;
+    IF v_reward.id IS NULL THEN
+        RAISE EXCEPTION 'Recompensa indisponÃ­vel';
+    END IF;
+
+    -- Verificar saldo
+    SELECT referral_points_balance INTO v_current_balance FROM public.user_profiles WHERE id = v_user_id;
+    IF v_current_balance < v_reward.cost_points THEN
+        RAISE EXCEPTION 'Saldo insuficiente';
+    END IF;
+
+    -- Gerar Cupom
+    -- Assumindo que a tabela coupons existe (baseada no types.ts e contexto geral)
+    -- Vamos criar um cÃ³digo Ãºnico para o cupom: PROMO-XXXX
+    v_coupon_code := 'RESGATE-' || upper(substring(md5(random()::text) from 1 for 6));
+    
+    -- CriaÃ§Ã£o de tabela de cupons resgatados (se nÃ£o existir)
+    CREATE TABLE IF NOT EXISTS public.claimed_rewards (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES public.user_profiles(id),
+        reward_id UUID REFERENCES public.referral_rewards(id),
+        coupon_code TEXT,
+        status TEXT DEFAULT 'ACTIVE', -- ACTIVE, USED, EXPIRED
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        expires_at TIMESTAMPTZ
+    );
+    
+    -- RLS da Claimed Rewards
+    ALTER TABLE public.claimed_rewards ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "My claimed rewards" ON public.claimed_rewards;
+    CREATE POLICY "My claimed rewards" ON public.claimed_rewards FOR SELECT USING (user_id = auth.uid());
+
+    -- Permissões básicas (GRANTs)
+    GRANT SELECT ON public.claimed_rewards TO authenticated;
+    GRANT ALL ON public.claimed_rewards TO service_role;
+    GRANT ALL ON public.claimed_rewards TO authenticated;
+
+
+    INSERT INTO public.claimed_rewards (user_id, reward_id, coupon_code, expires_at)
+    VALUES (v_user_id, v_reward.id, v_coupon_code, NOW() + interval '30 days');
+
+    -- Debitar Pontos
+    v_new_balance := v_current_balance - v_reward.cost_points;
+    
+    UPDATE public.user_profiles 
+    SET referral_points_balance = v_new_balance 
+    WHERE id = v_user_id;
+
+    -- Registrar no Ledger
+    INSERT INTO public.referral_points_ledger (
+        user_id, operation_type, amount, balance_after, description, reference_id
+    ) VALUES (
+        v_user_id, 'DEBIT_REDEEM', v_reward.cost_points, v_new_balance, 'Resgate: ' || v_reward.title, v_reward.id
+    );
+
+    RETURN jsonb_build_object('success', true, 'new_balance', v_new_balance, 'coupon_code', v_coupon_code);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.redeem_referral_points(UUID) TO authenticated;
+
+
+-- 9. RPC: Obter Resumo do Painel (Saldo + HistÃ³rico + Recompensas)
+CREATE OR REPLACE FUNCTION public.get_referral_dashboard_data()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_balance INTEGER;
+    v_code TEXT;
+    v_ledger JSONB;
+    v_rewards JSONB;
+    v_my_claims JSONB;
+BEGIN
+    v_user_id := auth.uid();
+    IF v_user_id IS NULL THEN RETURN '{}'::jsonb; END IF;
+
+    -- Dados do UsuÃ¡rio
+    SELECT referral_points_balance, referral_code INTO v_balance, v_code 
+    FROM public.user_profiles WHERE id = v_user_id;
+
+    -- Extrato (Ãšltimos 20)
+    SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) INTO v_ledger
+    FROM (
+        SELECT * FROM public.referral_points_ledger 
+        WHERE user_id = v_user_id 
+        ORDER BY created_at DESC LIMIT 20
+    ) t;
+
+    -- Recompensas DisponÃ­veis
+    SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) INTO v_rewards
+    FROM (
+        SELECT * FROM public.referral_rewards WHERE is_active = true ORDER BY cost_points ASC
+    ) r;
+
+    -- Meus Resgates Ativos
+    SELECT COALESCE(jsonb_agg(c), '[]'::jsonb) INTO v_my_claims
+    FROM (
+        SELECT * FROM public.claimed_rewards 
+        WHERE user_id = v_user_id AND status = 'ACTIVE'
+    ) c;
+
+    RETURN jsonb_build_object(
+        'balance', COALESCE(v_balance, 0),
+        'my_code', v_code,
+        'history', v_ledger,
+        'rewards', v_rewards,
+        'active_claims', v_my_claims
+    );
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.get_referral_dashboard_data() TO authenticated;
+
+-- 10. RPC: Administração - Obter Histórico Global com Joins
+DROP FUNCTION IF EXISTS public.admin_get_referral_ledger();
+CREATE OR REPLACE FUNCTION public.admin_get_referral_ledger()
+RETURNS TABLE (
+    t_id UUID,
+    t_user_id UUID,
+    t_operation_type TEXT,
+    t_amount INTEGER,
+    t_balance_after INTEGER,
+    t_description TEXT,
+    t_reference_id UUID,
+    t_created_at TIMESTAMPTZ,
+    referrer_name TEXT,
+    referrer_role TEXT,
+    referred_name TEXT
+) 
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- Verifica se é admin
+    IF NOT EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin') THEN
+        RAISE EXCEPTION 'Acesso negado';
+    END IF;
+
+    RETURN QUERY
+    SELECT 
+        l.id as t_id,
+        l.user_id as t_user_id,
+        l.operation_type as t_operation_type,
+        l.amount as t_amount,
+        l.balance_after as t_balance_after,
+        l.description as t_description,
+        l.reference_id as t_reference_id,
+        l.created_at as t_created_at,
+        u.name as referrer_name,
+        u.role::text as referrer_role,
+        r.name as referred_name
+    FROM public.referral_points_ledger l
+    LEFT JOIN public.user_profiles u ON u.id = l.user_id
+    LEFT JOIN public.user_profiles r ON r.id = l.reference_id
+    ORDER BY l.created_at DESC;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.admin_get_referral_ledger() TO authenticated;
+
+
+
+
+-- ==================================================================
+-- TRIGGERS DE REFERRAL (METADATA + RECOMPENSA)
+-- ==================================================================
+
+-- TRIGGER 1: Sincronizar referred_by do metadata (BEFORE INSERT)
+CREATE OR REPLACE FUNCTION public.sync_referral_from_auth()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_referral_code TEXT;
+    v_referrer_id UUID;
+    v_auth_data JSONB;
+BEGIN
+    SELECT raw_user_meta_data INTO v_auth_data FROM auth.users WHERE id = NEW.id;
+    v_referral_code := v_auth_data->>'referral_code';
+    
+    IF v_referral_code IS NOT NULL AND NEW.referred_by IS NULL THEN
+         SELECT id INTO v_referrer_id FROM public.user_profiles WHERE referral_code = upper(v_referral_code);
+         IF v_referrer_id IS NOT NULL THEN
+             NEW.referred_by := v_referrer_id;
+         END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_user_profile_created_check_referral ON public.user_profiles;
+CREATE TRIGGER on_user_profile_created_check_referral
+    BEFORE INSERT ON public.user_profiles
+    FOR EACH ROW EXECUTE FUNCTION public.sync_referral_from_auth();
+
+
+-- TRIGGER 2: Processar Recompensa de Cadastro (AFTER INSERT)
+CREATE OR REPLACE FUNCTION public.process_referral_reward_on_signup()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_config RECORD;
+    v_points INTEGER := 0;
+    v_referrer_balance INTEGER;
+BEGIN
+    IF NEW.referred_by IS NULL THEN RETURN NEW; END IF;
+
+    SELECT * INTO v_config FROM public.referral_config LIMIT 1;
+    
+    IF v_config.is_active IS NOT TRUE OR v_config.min_order_value_for_credit > 0 THEN
+        RETURN NEW;
+    END IF;
+
+    CASE NEW.role 
+        WHEN 'USER' THEN v_points := v_config.points_per_referral_user;
+        WHEN 'STORE_PARTNER' THEN v_points := v_config.points_per_referral_store;
+        WHEN 'DELIVERY_PARTNER' THEN v_points := v_config.points_per_referral_courier;
+        ELSE v_points := 0;
+    END CASE;
+    
+    IF v_points > 0 THEN
+        UPDATE public.user_profiles 
+        SET referral_points_balance = COALESCE(referral_points_balance, 0) + v_points 
+        WHERE id = NEW.referred_by
+        RETURNING referral_points_balance INTO v_referrer_balance;
+        
+        INSERT INTO public.referral_points_ledger (
+            user_id, operation_type, amount, balance_after, description, reference_id
+        ) VALUES (
+            NEW.referred_by, 
+            'CREDIT_REFERRAL', 
+            v_points, 
+            v_referrer_balance, 
+            'IndicaÃ§Ã£o de novo usuÃ¡rio (Cadastro): ' || NEW.name || ' (' || NEW.role || ')', 
+            NEW.id
+        );
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_user_profile_created_reward ON public.user_profiles;
+CREATE TRIGGER on_user_profile_created_reward
+    AFTER INSERT ON public.user_profiles
+    FOR EACH ROW EXECUTE FUNCTION public.process_referral_reward_on_signup();
+
+

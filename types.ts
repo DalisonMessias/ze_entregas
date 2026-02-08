@@ -300,6 +300,10 @@ export interface Product {
     observations?: string;
     origin_prefix?: string;
     store_id?: string;
+    has_sizes?: boolean;
+    available_sizes?: string[];
+    price_by_size?: Record<string, number>;
+    default_size?: string;
     addon_group_id?: string | null;
     addon_options?: StoreAddonOption[] | null;
 }
@@ -345,6 +349,10 @@ export interface StoreProduct {
     origin_prefix?: string;
     stock_quantity?: number | null;
     base_product_id?: string | null;
+    has_sizes?: boolean;
+    available_sizes?: string[];
+    price_by_size?: Record<string, number>;
+    default_size?: string;
     addon_group_id?: string | null;
     addon_options?: StoreAddonOption[] | null;
 }
@@ -1843,3 +1851,71 @@ export interface BaseAddonOption {
     created_at?: string;
 }
 
+// ============================================================================
+// SISTEMA DE INDIQUE E GANHE (PONTOS)
+// ============================================================================
+
+export interface ReferralConfig {
+    id: string;
+    is_active: boolean;
+    points_per_referral_user: number;
+    points_per_referral_store: number;
+    points_per_referral_courier: number;
+    reward_validity_days: number;
+    min_order_value_for_credit: number;
+    updated_at: string;
+}
+
+export interface ReferralReward {
+    id: string;
+    title: string;
+    description?: string;
+    cost_points: number;
+    reward_type: 'CUPOM_FIXED' | 'CUPOM_PERCENT' | 'FREE_SHIPPING';
+    reward_value: number;
+    min_order_value: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface ReferralPointTransaction {
+    id: string;
+    user_id: string;
+    operation_type: 'CREDIT_REFERRAL' | 'DEBIT_REDEEM' | 'CREDIT_BONUS' | 'REVERSAL';
+    amount: number;
+    balance_after: number;
+    description: string;
+    reference_id?: string;
+    created_at: string;
+}
+
+export interface ClaimedReward {
+    id: string;
+    user_id: string;
+    reward_id: string;
+    coupon_code: string;
+    status: 'ACTIVE' | 'USED' | 'EXPIRED';
+    created_at: string;
+    expires_at: string;
+}
+
+export interface ReferralDashboardData {
+    balance: number;
+    my_code: string;
+    history: ReferralPointTransaction[];
+    rewards: ReferralReward[];
+    active_claims: ClaimedReward[];
+}
+
+export interface ValidateReferralCodeResponse {
+    valid: boolean;
+    referrer_id?: string;
+    referrer_name?: string;
+    message?: string;
+}
+
+export interface AdminReferralHistoryEntry extends ReferralPointTransaction {
+    referrer_name?: string;
+    referrer_role?: string;
+    referred_name?: string;
+}

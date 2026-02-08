@@ -17,7 +17,8 @@ import {
     FinancialTransaction, BlacklistEntry, PartnerRating, Claim,
     CatalogBaseProduct, QuickReply, StreetRequest, ApprovedStreet,
     Promotion, Coupon, InsurancePlan, InsurancePartner, InsuranceSubscription,
-    BaseAddonGroup, BaseAddonOption
+    BaseAddonGroup, BaseAddonOption,
+    ReferralConfig, ReferralReward, ReferralPointTransaction, ClaimedReward, ReferralDashboardData, ValidateReferralCodeResponse, AdminReferralHistoryEntry
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -190,6 +191,66 @@ export const getBlockingDetails = async (): Promise<{ reason: string; created_at
     }
 };
 
+
+
+export const getInitialUserData = async (): Promise<{ role: UserRole, status: UserStatus }> => {
+    const sb = getClient();
+    if (!sb) return { role: 'delivery_person' as UserRole, status: 'error' as UserStatus };
+
+    try {
+        const { user } = await getUserWithCache();
+        if (!user) return { role: 'delivery_person' as UserRole, status: 'not_found' as any };
+
+        // IMPERSONATION CHECK
+        const impersonatedStoreId = getImpersonationId();
+        if (impersonatedStoreId) {
+            const { data: storeData } = await sb.from('user_profiles')
+                .select('role, status')
+                .eq('id', impersonatedStoreId)
+                .single();
+
+            if (storeData) {
+                return {
+                    role: 'store_partner',
+                    status: (storeData.status as UserStatus) || 'active'
+                };
+            }
+        }
+
+        const { data, error } = await sb.from('user_profiles').select('role, status').eq('id', user.id).single();
+
+        if (error) {
+            console.error('[getInitialUserData] DB Error:', error);
+            if (error.code === 'PGRST116') return { role: 'delivery_person' as UserRole, status: 'not_found' as any };
+            return { role: 'delivery_person' as UserRole, status: 'error' as any };
+        }
+
+        return {
+            role: (data?.role?.toLowerCase() as UserRole) || 'delivery_person',
+            status: (data?.status as UserStatus) || 'active'
+        };
+    } catch (err) {
+        console.error('[getInitialUserData] Exception:', err);
+        return { role: 'delivery_person' as UserRole, status: 'error' as any };
+    }
+};
+
+export const getPendingTicketsCount = async (): Promise<number> => {
+    const sb = getClient();
+    if (!sb) return 0;
+
+    const { data: userData } = await sb.auth.getUser();
+    if (!userData?.user?.id) return 0;
+
+    const { count, error } = await sb
+        .from('orders_tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending')
+        .eq('store_id', userData.user.id);
+
+    return count || 0;
+};
+
 /**
  * Consolida Notificações, Status de Manutenção e Role do Usuário em uma ÚNICA chamada.
  * Reduz o polling triplo do App.tsx para apenas uma requisição.
@@ -211,22 +272,9 @@ export const getSystemPulse = async (): Promise<{
     return { notifications, maintenance, role, pendingTicketsCount };
 };
 
-export const getPendingTicketsCount = async (): Promise<number> => {
-    const sb = getClient();
-    if (!sb) return 0;
 
-    // Buscar o usuário autenticado para pegar o store_id
-    const { data: userData } = await sb.auth.getUser();
-    if (!userData?.user?.id) return 0;
 
-    const { count, error } = await sb
-        .from('orders_tickets')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending')
-        .eq('store_id', userData.user.id);
 
-    return count || 0;
-};
 
 export const getNavigationIcons = async () => {
     const sb = getClient();
@@ -256,54 +304,7 @@ const getImpersonationId = (): string | null => {
     }
 };
 
-export const getInitialUserData = async (): Promise<{ role: UserRole, status: UserStatus }> => {
-    const sb = getClient();
-    if (!sb) return { role: 'delivery_person' as UserRole, status: 'error' as UserStatus };
 
-    try {
-        const { user } = await getUserWithCache();
-        if (!user) return { role: 'delivery_person' as UserRole, status: 'not_found' as any };
-
-        // IMPERSONATION CHECK
-        const impersonatedStoreId = getImpersonationId();
-        // Verificar se realmente somos admin para permitir (camada extra de segurança no client)
-        // Mas como getInitialUserData é chamado muito cedo, vamos confiar no localStorage momentaneamente 
-        // e validar se o usuário real tem permissão se necessário. 
-        // Na prática, se o token do Supabase for de Admin, o RLS permite ler a loja alvo.
-
-        if (impersonatedStoreId) {
-            // Se estamos em modo impersonation, simulamos que somos a loja
-            // Precisamos buscar o status da loja alvo para não quebrar a UI
-            const { data: storeData } = await sb.from('user_profiles')
-                .select('role, status')
-                .eq('id', impersonatedStoreId)
-                .single();
-
-            if (storeData) {
-                return {
-                    role: 'store_partner', // Força papel de loja
-                    status: (storeData.status as UserStatus) || 'active'
-                };
-            }
-        }
-
-        const { data, error } = await sb.from('user_profiles').select('role, status').eq('id', user.id).single();
-
-        if (error) {
-            console.error('[getInitialUserData] DB Error:', error);
-            if (error.code === 'PGRST116') return { role: 'delivery_person' as UserRole, status: 'not_found' as any };
-            return { role: 'delivery_person' as UserRole, status: 'error' as any };
-        }
-
-        return {
-            role: (data?.role?.toLowerCase() as UserRole) || 'delivery_person',
-            status: (data?.status as UserStatus) || 'active'
-        };
-    } catch (err) {
-        console.error('[getInitialUserData] Exception:', err);
-        return { role: 'delivery_person' as UserRole, status: 'error' as any };
-    }
-};
 
 export const getUserRole = async (): Promise<UserRole> => {
     const { role } = await getInitialUserData();
@@ -1047,6 +1048,7 @@ export const registerUserWithType = async (
         address_zip?: string;
         address_state?: string;
         store_category_id?: string;
+        referral_code?: string;
     }
 
 ) => {
@@ -1500,8 +1502,153 @@ export const getStoreProducts = async (targetStoreId?: string, signal?: AbortSig
     }
 };
 
+// ============================================================================
+// SISTEMA DE INDIQUE E GANHE (PONTOS)
+// ============================================================================
+
+export const validateReferralCode = async (code: string): Promise<ValidateReferralCodeResponse> => {
+    const sb = getClient();
+    if (!sb) return { valid: false, message: 'Client not ready' };
+
+    const { data, error } = await sb.rpc('validate_referral_code', { p_code: code });
+    if (error) {
+        console.error('Error validating referral code:', error);
+        return { valid: false, message: 'Erro ao validar código' };
+    }
+    return data as ValidateReferralCodeResponse;
+};
+
+export const getReferralDashboardData = async (): Promise<ReferralDashboardData | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb.rpc('get_referral_dashboard_data');
+    if (error) {
+        console.error('Error fetching referral dashboard:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+        });
+        return null;
+    }
+    return data as ReferralDashboardData;
+};
+
+export const redeemReferralPoints = async (rewardId: string): Promise<{ success: boolean; new_balance?: number; coupon_code?: string; error?: string }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    const { data, error } = await sb.rpc('redeem_referral_points', { p_reward_id: rewardId });
+    if (error) {
+        console.error('Error redeeming points:', error);
+        return { success: false, error: error.message };
+    }
+    return data;
+};
+
+export const adminGetReferralRewards = async (): Promise<ReferralReward[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb.from('referral_rewards').select('*').order('cost_points', { ascending: true });
+    if (error) {
+        console.error('Error fetching rewards:', error);
+        return [];
+    }
+    return data as ReferralReward[];
+};
 
 
+export const adminCreateReferralReward = async (reward: Partial<ReferralReward>): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    const { error } = await sb.from('referral_rewards').insert(reward);
+    if (error) {
+        console.error('Error creating reward:', error);
+        return false;
+    }
+    return true;
+};
+
+export const adminUpdateReferralReward = async (id: string, updates: Partial<ReferralReward>): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    const { error } = await sb.from('referral_rewards').update(updates).eq('id', id);
+    if (error) {
+        console.error('Error updating reward:', error);
+        return false;
+    }
+    return true;
+};
+
+export const adminDeleteReferralReward = async (id: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    // Soft delete (desativar) em vez de excluir para manter integridade ref
+    const { error } = await sb.from('referral_rewards').update({ is_active: false }).eq('id', id);
+    if (error) {
+        console.error('Error deleting (deactivating) reward:', error);
+        return false;
+    }
+    return true;
+};
+
+export const adminGetReferralConfig = async (): Promise<ReferralConfig | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb.from('referral_config').select('*').limit(1).single();
+    if (error) {
+        console.error('Error fetching referral config:', error);
+        return null;
+    }
+    return data as ReferralConfig;
+};
+
+export const adminUpdateReferralConfig = async (id: string, updates: Partial<ReferralConfig>): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    // get user for audit
+    const { data: { user } } = await sb.auth.getUser();
+
+    const { error } = await sb.from('referral_config').update({ ...updates, updated_at: new Date(), updated_by: user?.id }).eq('id', id);
+    if (error) {
+        console.error('Error updating referral config:', error);
+        return false;
+    }
+    return true;
+};
+
+export const adminGetReferralHistory = async (): Promise<AdminReferralHistoryEntry[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb.rpc('admin_get_referral_ledger');
+
+    if (error) {
+        console.error('Error fetching referral history via RPC:', error);
+        return [];
+    }
+
+    return (data || []).map((d: any) => ({
+        id: d.t_id,
+        user_id: d.t_user_id,
+        operation_type: d.t_operation_type,
+        amount: d.t_amount,
+        balance_after: d.t_balance_after,
+        description: d.t_description,
+        reference_id: d.t_reference_id,
+        created_at: d.t_created_at,
+        referrer_name: d.referrer_name,
+        referrer_role: d.referrer_role,
+        referred_name: d.referred_name
+    })) as AdminReferralHistoryEntry[];
+};
 export const getStoreCategories = async (signal?: AbortSignal): Promise<any[]> => {
     const sb = getClient();
     if (!sb) return [];
@@ -1598,7 +1745,10 @@ export const createStoreProduct = async (product: Partial<StoreProduct>, targetS
         updated_at: new Date().toISOString()
     });
 
-    if (error) throw error;
+    if (error) {
+        console.error("Error creating store product:", error, dbPayload);
+        throw error;
+    }
 };
 
 export const updateStoreProduct = async (product: Partial<StoreProduct>, targetStoreId?: string) => {
@@ -1642,14 +1792,18 @@ export const updateStoreProduct = async (product: Partial<StoreProduct>, targetS
 
     // Only filter by store_id if not admin/overridden (though good practice to ensure ownership)
     // But if admin is editing, we want to ensure we edit the correct product.
-    if (userId) {
-        query.eq('store_id', userId);
-    }
+    // if (userId) {
+    //     query.eq('store_id', userId);
+    // }
 
     const { error } = await query;
 
-    if (error) throw error;
+    if (error) {
+        console.error("Error updating store product:", error, dbPayload);
+        throw error;
+    }
 };
+
 
 export const deleteStoreProduct = async (id: string) => {
     const sb = getClient();
@@ -1677,47 +1831,10 @@ export const adminUpdateShopSettings = async (settings: Partial<ShopSettings>) =
 
 
 
-export const adminUpdateApiKey = async (serviceName: string, value: string) => {
-    const sb = getClient();
-    if (!sb) return;
+// [DEPRECATED] adminUpdateApiKey removida em favor da implementação no final do arquivo com suporte a VoiceID
+// Ver linha ~8150
 
-    // Normalização para evitar duplicidade (ex: google_gemini vs google_gemini_api_key)
-    const normalizedName = serviceName.toLowerCase().replace(/_api_key$/, '');
 
-    // Manual Upsert to avoid "no unique constraint" error if index is missing
-    const { data: existing } = await sb.from('api_keys')
-        .select('id')
-        .or(`service_name.eq.${normalizedName},service_name.eq.${normalizedName}_api_key`)
-        .maybeSingle();
-
-    // Get current user for user_id field
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) throw new Error("Usuário não autenticado.");
-
-    if (existing) {
-        const { error } = await sb.from('api_keys').update({
-            service_name: normalizedName,
-            provider: normalizedName, // Compatibilidade retroativa
-            encrypted_key: value,
-            key_token: value,
-            key_value: value, // Compatibilidade retroativa
-            updated_at: new Date().toISOString()
-        }).eq('id', existing.id);
-        if (error) throw error;
-    } else {
-        const { error } = await sb.from('api_keys').insert({
-            service_name: normalizedName,
-            provider: normalizedName,
-            encrypted_key: value,
-            key_token: value,
-            key_value: value,
-            user_id: user?.id,
-            is_active: true
-        });
-        if (error) throw error;
-    }
-
-};
 
 
 // getApiKey removido pois foi consolidado acima
@@ -8116,4 +8233,84 @@ export const importMultipleBaseAddons = async (baseGroupIds: string[]): Promise<
         await importBaseAddonToStore(id);
     }
 };
+
+/**
+ * Busca chave de API e Voice ID (específico para ElevenLabs).
+ */
+export const getApiKeyDetails = async (provider: string): Promise<{ key: string; voice_id?: string } | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    try {
+        const { data, error } = await sb
+            .from('api_keys')
+            .select('key_token, voice_id')
+            .eq('service_name', provider)
+            .eq('is_active', true)
+            .single();
+
+        if (error || !data) {
+            // Silently fail or log if needed, common if key not set
+            return null;
+        }
+        return { key: data.key_token, voice_id: data.voice_id };
+    } catch (e) {
+        console.error(`Error fetching API key details for ${provider}:`, e);
+        return null;
+    }
+};
+
+/**
+ * Atualiza ou cria uma chave de API, suportando Voice ID opcional.
+ */
+export const adminUpdateApiKey = async (provider: string, key: string, voiceId?: string) => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) return { success: false, error: 'Unauthorized' };
+
+        // Check if exists
+        const { data: existing } = await sb
+            .from('api_keys')
+            .select('id')
+            .eq('service_name', provider)
+            .single();
+
+        if (existing) {
+            // Update
+            const { error } = await sb
+                .from('api_keys')
+                .update({
+                    key_token: key,
+                    voice_id: voiceId || null,
+                    updated_at: new Date().toISOString(),
+                    is_active: true
+                })
+                .eq('id', existing.id);
+            if (error) throw error;
+        } else {
+            // Insert
+            const { error } = await sb
+                .from('api_keys')
+                .insert({
+                    service_name: provider,
+                    key_token: key,
+                    voice_id: voiceId || null,
+                    user_id: user.id,
+                    is_active: true
+                });
+            if (error) throw error;
+        }
+
+        return { success: true };
+    } catch (e: any) {
+        console.error('Error updating API key:', e);
+        return { success: false, error: e.message };
+    }
+};
+
+
+
+
 

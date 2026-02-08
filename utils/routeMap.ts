@@ -146,6 +146,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/': 'home',
     '/partner-store': 'partner_store',
     '/partner-delivery': 'partner_delivery',
+    '/indique': 'referral_public',
     // User Routes (Novas)
 
     '/user/inicio': 'home', // Usuário comum cai na home (landing page busca)
@@ -155,7 +156,13 @@ const routeMap: Record<string, ActiveTab> = {
     // Authentication Routes
     '/login': 'login',
     '/cadastro': 'signup',
-    '/recuperar-senha': 'forgot_password'
+    '/recuperar-senha': 'forgot_password',
+
+    // Referral Dashboard Routes (Role-Specific)
+    '/admin/indique': 'referral_info',
+    '/loja/indique': 'referral_info',
+    '/entregador/indique': 'referral_info',
+    '/user/indique': 'referral_info'
 };
 
 // Agrupa caminhos por Tab para busca eficiente por Role
@@ -187,6 +194,10 @@ export const getTabFromUrl = (pathname: string): ActiveTab | null => {
     const productsMatch = pathname.match(/^\/[^\/]+\/[^\/]+\/produtos$/);
     if (productsMatch) {
         return 'digital_menu';
+    }
+
+    if (pathname === '/indique') {
+        return 'referral_public';
     }
 
     const cleanPath = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;

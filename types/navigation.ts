@@ -77,4 +77,6 @@
     | 'store_public_chat'
     | 'street_request'
     | 'zepoint'
+    | 'referral_info'
+    | 'referral_public'
     | 'not_found';

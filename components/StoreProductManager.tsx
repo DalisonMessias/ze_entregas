@@ -44,6 +44,7 @@ export const StoreProductManager: React.FC<StoreProductManagerProps> = ({ target
     }, [loadData]);
 
     const handleAddEditProduct = async (productData: Partial<StoreProduct>) => {
+        console.log("StoreProductManager: handleAddEditProduct started", productData);
         setSubmitting(true);
         try {
             // Adapt frontend model to DB model if necessary
@@ -60,7 +61,7 @@ export const StoreProductManager: React.FC<StoreProductManagerProps> = ({ target
             loadData(true);
             await alert({ title: 'Sucesso', message: 'Produto salvo com sucesso!' });
         } catch (e: any) {
-            console.error(e);
+            console.error("StoreProductManager: Error saving product:", e);
             await alert({ title: 'Erro', message: "Erro ao salvar: " + (e.message || 'Erro desconhecido') });
         } finally {
             setSubmitting(false);

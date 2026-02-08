@@ -13,6 +13,7 @@ interface CustomDialogProps {
     confirmButtonText?: string;
     cancelButtonText?: string;
     placeholder?: string; // For prompt input
+    children?: React.ReactNode;
 }
 
 export const CustomDialog: React.FC<CustomDialogProps> = ({
@@ -26,6 +27,7 @@ export const CustomDialog: React.FC<CustomDialogProps> = ({
     confirmButtonText = 'Confirmar',
     cancelButtonText = 'Cancelar',
     placeholder = '',
+    children
 }) => {
     const [inputValue, setInputValue] = useState('');
 
@@ -55,7 +57,9 @@ export const CustomDialog: React.FC<CustomDialogProps> = ({
     return (
         <BaseModal isOpen={isOpen} onClose={onClose} title={title} icon={iconComponent}>
             <div className="space-y-4 text-gray-600 dark:text-gray-300">
-                <p className="whitespace-pre-wrap">{message}</p>
+                {message && <p className="whitespace-pre-wrap">{message}</p>}
+
+                {children}
 
                 {type === 'prompt' && (
                     <input

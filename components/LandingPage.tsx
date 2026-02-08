@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Shield, Zap, Star, Instagram, Facebook, Twitter, Linkedin, ChevronLeft, ChevronRight, ArrowRight, Activity, DollarSign, Users, BarChart, Store, Bike, CheckCircle, Smartphone, Download, BarChart3, MessageCircle, Gift, Bell, Map, Headphones, Newspaper, Wallet, Megaphone, ShoppingBag, Bot, Navigation, MapPin, X } from 'lucide-react';
+import { Shield, Zap, Star, Instagram, Facebook, Twitter, Linkedin, ChevronLeft, ChevronRight, ArrowRight, Activity, DollarSign, Users, BarChart, Store, Bike, CheckCircle, Smartphone, Download, BarChart3, MessageCircle, Gift, Bell, Map, Headphones, Newspaper, Wallet, Megaphone, ShoppingBag, Bot, Navigation, MapPin, X, Trophy } from 'lucide-react';
 import { Button } from './Button';
 import { TermsOfService } from './TermsOfService';
 import { PrivacyPolicy } from './PrivacyPolicy';
@@ -11,7 +11,7 @@ import { LandingCitySelector } from './LandingCitySelector';
 import { StoreCard } from './StoreCard';
 import { InstallApp } from './InstallApp';
 import * as cloud from '../services/cloud';
-import { ShopSettings, PublicStoreProfile, City } from '../types';
+import { ShopSettings, PublicStoreProfile, City, ReferralConfig } from '../types';
 
 interface LandingPageProps {
     isAuthenticated: boolean;
@@ -23,6 +23,7 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLoginClick, onSignupClick, onDashboardClick }) => {
     const [scrolled, setScrolled] = useState(false);
     const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
+    const [referralConfig, setReferralConfig] = useState<ReferralConfig | null>(null);
 
     // Cidade e Lojas
     const [selectedCity, setSelectedCity] = useState<string>('');
@@ -110,6 +111,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
             try {
                 const settings = await cloud.getShopSettings();
                 setShopSettings(settings);
+
+                const refConfig = await cloud.adminGetReferralConfig();
+                setReferralConfig(refConfig);
             } catch (e: any) { }
         };
 
@@ -480,6 +484,72 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
                         <div className="flex-1 relative -mb-16 md:-mb-32">
                             <div className="bg-white/20 w-80 h-80 rounded-full blur-3xl absolute -z-10 top-0 left-0"></div>
                             <Smartphone className="w-64 h-auto text-white opacity-20 transform rotate-12 mx-auto md:ml-auto" />
+                        </div>
+                    </div>
+                </section>
+
+                {/* Seção "Indique e Ganhe" - Novo */}
+                <section className="py-24 px-4 bg-gray-50 dark:bg-gray-950 overflow-hidden relative">
+                    <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-16">
+                        <div className="flex-1 order-2 md:order-1">
+                            <div className="relative group">
+                                <div className="absolute -inset-4 bg-gradient-to-r from-brand-500 to-orange-500 rounded-[48px] blur-2xl opacity-10 group-hover:opacity-20 transition-opacity"></div>
+                                <div className="relative bg-white dark:bg-gray-900 p-8 md:p-12 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden">
+                                    <div className="flex flex-col gap-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center">
+                                                <Users className="w-6 h-6 text-brand-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black uppercase text-gray-400">Indique Amigos</p>
+                                                <p className="font-black text-gray-900 dark:text-white">Ganhe até {referralConfig?.points_per_referral_user || 100} pts</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center">
+                                                <Store className="w-6 h-6 text-brand-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black uppercase text-gray-400">Indique Lojas</p>
+                                                <p className="font-black text-gray-900 dark:text-white">Ganhe até {referralConfig?.points_per_referral_store || 500} pts</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center">
+                                                <Bike className="w-6 h-6 text-brand-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black uppercase text-gray-400">Indique Entregadores</p>
+                                                <p className="font-black text-gray-900 dark:text-white">Ganhe até {referralConfig?.points_per_referral_courier || 200} pts</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Gift className="w-32 h-32 text-brand-500/5 absolute -right-8 -bottom-8 transform rotate-12" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex-1 order-1 md:order-2">
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 text-sm font-black uppercase tracking-widest mb-6">
+                                <Trophy className="w-4 h-4" /> Novo: Indique e Ganhe
+                            </div>
+                            <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white mb-6 leading-tight">
+                                Ganhe pontos por cada <br />
+                                <span className="text-brand-600">nova indicação.</span>
+                            </h2>
+                            <p className="text-gray-600 dark:text-gray-400 text-lg mb-10 font-medium">
+                                Transforme sua influência em benefícios reais. Convide amigos, lojistas e entregadores e troque seus pontos por benefícios exclusivos no Zé Entregas.
+                            </p>
+                            <div className="flex flex-wrap gap-4">
+                                <Button
+                                    onClick={() => {
+                                        window.history.pushState({ tab: 'referral_info' }, '', '/indique');
+                                        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'referral_info' } }));
+                                    }}
+                                    className="bg-brand-600 text-white hover:bg-brand-700 px-10 py-5 rounded-2xl text-lg font-black shadow-xl shadow-brand-600/10"
+                                >
+                                    Saiba mais
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </section>

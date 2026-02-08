@@ -28,7 +28,8 @@ export const generalTabs = new Set<ActiveTab>([
   'delivery_navigation',
   'my_orders',
   'store_public_chat',
-  'street_request',
+  'referral_info',
+  'referral_public',
   'not_found'
 ]);
 

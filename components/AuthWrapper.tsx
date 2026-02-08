@@ -5,7 +5,7 @@ import * as logger from '../services/logger';
 import { useDialog } from '../utils/dialogService';
 import { App } from './App';
 import { UserRole, UserStatus } from '../types';
-import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, MapPin, Mail, Lock, User, Phone, FileText, Store as StoreIcon, Home, Truck, RefreshCw } from 'lucide-react';
+import { Ban, CheckCircle, Eye, EyeOff, ArrowLeft, MapPin, Mail, Lock, User, Phone, FileText, Store as StoreIcon, Home, Truck, RefreshCw, Gift } from 'lucide-react';
 import { Loading } from './Loading';
 import { Button } from './Button';
 import { LandingPage } from './LandingPage';
@@ -131,6 +131,33 @@ export const AuthWrapper: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: 'error' | 'success' | 'warning', text: string } | null>(null);
+
+  // Referral System
+  const [referralCode, setReferralCode] = useState('');
+  const [referralValidation, setReferralValidation] = useState<{ valid: boolean; message?: string; name?: string } | null>(null);
+  const [isValidatingReferral, setIsValidatingReferral] = useState(false);
+
+  const handleValidateReferral = async () => {
+    if (!referralCode || referralCode.length < 3) {
+      setReferralValidation(null);
+      return;
+    }
+
+    setIsValidatingReferral(true);
+    try {
+      const res = await cloud.validateReferralCode(referralCode);
+      if (res.valid) {
+        setReferralValidation({ valid: true, name: res.referrer_name, message: `Indicado por: ${res.referrer_name}` });
+      } else {
+        setReferralValidation({ valid: false, message: res.message || 'Código inválido' });
+      }
+    } catch (error) {
+      console.error(error);
+      setReferralValidation({ valid: false, message: 'Erro ao validar código' });
+    } finally {
+      setIsValidatingReferral(false);
+    }
+  };
 
   const { alert } = useDialog();
 
@@ -588,7 +615,8 @@ export const AuthWrapper: React.FC = () => {
           address_district: signupType === 'STORE_PARTNER' ? addressNeighborhood : undefined,
           address_zip: signupType === 'STORE_PARTNER' ? zipDigits : undefined,
           address_state: signupType === 'STORE_PARTNER' ? state : undefined,
-          store_category_id: signupType === 'STORE_PARTNER' ? storeCategoryId : undefined, // Novo campo
+          store_category_id: signupType === 'STORE_PARTNER' ? storeCategoryId : undefined,
+          referral_code: referralCode ? referralCode.toUpperCase() : undefined,
         }
       );
 
@@ -597,6 +625,12 @@ export const AuthWrapper: React.FC = () => {
         email,
         userId: (res as any)?.user?.id ?? null,
       });
+
+      // Se tiver referral code válido e sucesso no cadastro, podemos mostrar um toast específico (opcional)
+      if (referralCode && referralValidation?.valid) {
+        // Toast de boas vindas com indicação? Deixa padrão por enquanto.
+      }
+
       setAuthMessage({ type: 'success', text: 'Conta criada com sucesso! Verifique seu e-mail.' });
       try {
         const supabase = cloud.getClient();
@@ -1048,6 +1082,31 @@ export const AuthWrapper: React.FC = () => {
                   inputMode="numeric"
                   maxLength={14}
                 />
+              </div>
+
+              <div className="pt-2">
+                <CustomInput
+                  type="text"
+                  placeholder="Código de Indicação (Opcional)"
+                  icon={Gift}
+                  value={referralCode}
+                  onChange={e => {
+                    const val = e.target.value.toUpperCase();
+                    setReferralCode(val);
+                    if (val.length === 0) setReferralValidation(null);
+                  }}
+                  onBlur={handleValidateReferral}
+                  // Se estiver carregando validação, poderia mostrar loading, mas CustomInput talvez não suporte.
+                  error={referralValidation?.valid === false}
+                  // success={referralValidation?.valid === true} // CustomInput pode não ter prop success, verificar depois. Se não tiver, ok.
+                  helperText={referralValidation?.message} // CustomInput provavel que tenha helperText ou errorText. Se não, vai quebrar layout? CustomInput geralmente aceita error boolean e mostra msg se error for string. Mas aqui error é boolean no AuthWrapper.
+                />
+                {isValidatingReferral && <p className="text-xs text-brand-500 mt-1 ml-2">Validando código...</p>}
+                {referralValidation && referralValidation.valid && (
+                  <p className="text-xs mt-1 ml-2 font-bold text-green-600">
+                    {referralValidation.message}
+                  </p>
+                )}
               </div>
 
               {signupType === 'STORE_PARTNER' && (

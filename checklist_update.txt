@@ -1,0 +1,2 @@
+[x] Adicionado colunas de tamanho na tabela store_products (supabase_global.sql)
+[x] Atualizado tipos StoreProduct e Product em types.ts

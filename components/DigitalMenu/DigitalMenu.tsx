@@ -33,6 +33,8 @@ interface CartItem {
         optionPrice: number;
         quantity: number;
     }[];
+    selectedSize?: string;
+    sizePrice?: number;
 }
 
 const CommentsList: React.FC<{ storeId: string, showComments?: boolean }> = ({ storeId, showComments = true }) => {
@@ -133,6 +135,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
     const [currentEditingCartItemId, setCurrentEditingCartItemId] = useState<string | null>(null);
 
+    // Size State
+    const [selectedSize, setSelectedSize] = useState<string>('');
+    const [currentPrice, setCurrentPrice] = useState<number>(0);
+
     // Checkout State
     const [customerName, setCustomerName] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
@@ -172,6 +178,20 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     useEffect(() => {
         loadStoreData();
     }, [citySlug, storeSlug]);
+
+    useEffect(() => {
+        if (selectedProduct) {
+            if (selectedProduct.has_sizes && selectedProduct.default_size) {
+                setSelectedSize(selectedProduct.default_size);
+                setCurrentPrice(selectedProduct.price_by_size?.[selectedProduct.default_size] || selectedProduct.price);
+            } else {
+                setSelectedSize('');
+                setCurrentPrice(selectedProduct.price);
+            }
+            setProductQuantity(1);
+            setProductObservation('');
+        }
+    }, [selectedProduct]);
 
     const loadStoreData = async () => {
         setLoading(true);
@@ -292,20 +312,23 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     }, [cart, store?.id, cartRestored]);
 
     // --- CART LOGIC ---
-    const addToCart = (product: StoreProduct, quantity: number, addons: any[], observation?: string) => {
+    const addToCart = (product: StoreProduct, quantity: number, addons: any[], observation?: string, size?: string, price?: number) => {
         setCart(prev => {
             const newItem: CartItem = {
                 id: crypto.randomUUID(),
                 product,
                 quantity,
                 selectedAddons: addons,
-                observation: observation
+                observation: observation,
+                selectedSize: size,
+                sizePrice: price
             };
             return [...prev, newItem];
         });
         setSelectedProduct(null);
         setProductQuantity(1);
         setProductObservation('');
+        setSelectedSize('');
     };
 
     const handleOpenAddonModal = async (product: StoreProduct, cartItemId?: string, quantity?: number, observation?: string) => {
@@ -314,7 +337,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         const obs = observation || productObservation || '';
 
         if (!hasAddons) {
-            addToCart(product, qty, [], obs);
+            addToCart(product, qty, [], obs, selectedSize, currentPrice);
             return;
         }
 
@@ -342,7 +365,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 item.id === currentEditingCartItemId ? { ...item, selectedAddons } : item
             ));
         } else if (selectedProduct) {
-            addToCart(selectedProduct, productQuantity, selectedAddons, productObservation);
+            addToCart(selectedProduct, productQuantity, selectedAddons, productObservation, selectedSize, currentPrice);
         }
         setIsAddonModalOpen(false);
         setCurrentEditingCartItemId(null);
@@ -393,7 +416,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     const cartSubtotal = cart.reduce((sum, item) => {
         const addonsPrice = (item.selectedAddons || []).reduce((s, a) => s + (a.optionPrice * a.quantity), 0);
-        return sum + ((item.product.price + addonsPrice) * item.quantity);
+        const basePrice = item.sizePrice !== undefined ? item.sizePrice : item.product.price;
+        return sum + ((basePrice + addonsPrice) * item.quantity);
     }, 0);
 
     const deliveryFee = useMemo(() => {
@@ -513,10 +537,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 // Prepare Items
                 const orderItems = cart.map(item => ({
                     product_id: item.product.id,
-                    name: item.product.name,
+                    name: item.product.name + (item.selectedSize ? ` (${item.selectedSize})` : ''),
                     quantity: item.quantity,
-                    price: item.product.price,
-                    total_price: (item.product.price + (item.selectedAddons || []).reduce((s, a) => s + (a.optionPrice * a.quantity), 0)) * item.quantity,
+                    price: item.sizePrice !== undefined ? item.sizePrice : item.product.price,
+                    total_price: ((item.sizePrice !== undefined ? item.sizePrice : item.product.price) + (item.selectedAddons || []).reduce((s, a) => s + (a.optionPrice * a.quantity), 0)) * item.quantity,
                     observation: item.observation,
                     image_url: item.product.image_url,
                     selected_addons: item.selectedAddons
@@ -1086,12 +1110,45 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             <div className="mb-6">
                                 <h3 className="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white leading-tight mb-2">{selectedProduct.name}</h3>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xl font-semibold text-brand-600">R$ {selectedProduct.price.toFixed(2).replace('.', ',')}</span>
+                                    <span className="text-xl font-semibold text-brand-600">R$ {currentPrice.toFixed(2).replace('.', ',')}</span>
                                     {selectedProduct.category && <span className="bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider border border-gray-200/70 dark:border-gray-800">{selectedProduct.category}</span>}
                                 </div>
                             </div>
 
                             <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-6">{selectedProduct.description}</p>
+
+                            {/* Size Selection */}
+                            {selectedProduct.has_sizes && selectedProduct.available_sizes && selectedProduct.available_sizes.length > 0 && (
+                                <div className="mb-6">
+                                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-3">Escolha o Tamanho</h3>
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedProduct.available_sizes.map(size => {
+                                            const isSelected = selectedSize === size;
+                                            const price = selectedProduct.price_by_size?.[size];
+                                            return (
+                                                <button
+                                                    key={size}
+                                                    onClick={() => {
+                                                        setSelectedSize(size);
+                                                        if (price !== undefined) setCurrentPrice(price);
+                                                    }}
+                                                    className={`px-4 py-2 rounded-xl border-2 transition-all text-sm font-bold flex items-center gap-2 ${isSelected
+                                                            ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
+                                                            : 'border-gray-200/70 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300'
+                                                        }`}
+                                                >
+                                                    {size}
+                                                    {price !== undefined && (
+                                                        <span className={`text-xs font-normal ${isSelected ? 'text-brand-600' : 'text-gray-400'}`}>
+                                                            R$ {price.toFixed(2).replace('.', ',')}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="mb-8">
                                 <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-2">Alguma observação?</label>

@@ -178,26 +178,30 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             ENTRADA: "${userMsg}" ${currentImage ? 'e IMAGEM (analise detalhes visuais).' : '.'}
 
             DIRETRIZES DE OURO:
-            1. PERSONA: Você é um mestre em vendas. Suas descrições devem ser IRRESISTÍVEIS, usando gatilhos de apetite, frescor e conveniência.
-            2. PROATIVIDADE MÁXIMA: Se detectar itens vendáveis, SEMPRE gere "PRODUCT_CREATION". Se falta preço, sugira um valor "premium" de mercado.
-            3. EXTRAÇÃO DE IMAGEM: Se for um cardápio, ignore ruídos e extraia TODOS os itens com precisão cirúrgica.
-            4. COPYWRITING:
-                - Artesanal: "Pão brioche selado na manteiga, blend suculento de 180g, queijo cheddar derretido..." (Liste ingredientes de forma poética).
-                - Industrial: "Coca-Cola trincando de gelada, o acompanhamento perfeito para sua refeição." (Foco no momento de consumo).
+            1. PERSONA: Você é um mestre em vendas. Suas descrições devem ser IRRESISTÍVEIS (gatilhos de apetite, frescor, conveniência).
+            2. PROATIVIDADE: Se detectar itens vendáveis, SEMPRE gere "PRODUCT_CREATION". Se falta preço, sugira um valor "premium".
+            3. EXTRAÇÃO: Se for um cardápio, extraia TODOS os itens com precisão cirúrgica.
+            4. VARIAÇÕES DE TAMANHO: Se o produto tiver variações claras (Pequeno, Médio, Grande, ou ml/L), ative "has_sizes".
+               - Ex: Pizzas (P, M, G), Açaí (300ml, 500ml), Porções.
+               - Preencha: "available_sizes" (lista), "price_by_size" (objeto json), "default_size" (o mais comum).
+               - O "price" principal deve ser igual ao preço do "default_size".
 
             JSON ESPERADO:
             {
                 "type": "PRODUCT_CREATION",
-                "content": "Texto vendedor confirmando a ação e justificando preços sugeridos",
+                "content": "Texto vendedor...",
                 "products": [
                     {
                         "name": "Nome Impactante",
-                        "description": "Copy irresistível seguindo as regras",
+                        "description": "Copy irresistível",
                         "price": 0.00,
-                        "category_name": "Categoria mais adequada",
+                        "category_name": "Categoria",
+                        "has_sizes": false,
+                        "available_sizes": ["P", "M", "G"],
+                        "price_by_size": { "P": 20.00, "M": 30.00, "G": 40.00 },
+                        "default_size": "M",
                         "addon_options": [
-                            { "name": "Bacon Extra", "price": 5.00, "is_active": true },
-                            { "name": "Molho Especial", "price": 0.00, "is_active": true }
+                            { "name": "Bacon Extra", "price": 5.00, "is_active": true }
                         ]
                     }
                 ]
@@ -289,16 +293,20 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
             TAREFA: Transformar cada linha em um produto de alta conversão.
             - Se a linha estiver bagunçada, use inteligência para deduzir Nome, Preço e Categoria.
             - Se não houver preço, aplique um valor médio de mercado.
-            - Gere descrições RICAS e CRIATIVAS para cada item (Artesanal = Ingredientes, Industrial = Comercial).
+            - IDENTIFIQUE TAMANHOS: Se o produto tiver variações (P, M, G), preencha "has_sizes", "price_by_size", etc.
 
             RETORNE APENAS JSON ARRAY:
             [
                 {
-                    "name": "Nome do Produto",
-                    "description": "Copy persuasiva e detalhada",
+                    "name": "Nome",
+                    "description": "Copy persuasiva",
                     "price": 0.00,
                     "category_name": "Categoria",
-                    "addon_options": [{ "name": "...", "price": 0, "is_active": true }]
+                    "has_sizes": false,
+                    "available_sizes": [],
+                    "price_by_size": {},
+                    "default_size": "",
+                    "addon_options": []
                 }
             ]`;
 
@@ -523,7 +531,11 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                 price: Number(prod.price) || 0,
                 category_id: catId,
                 is_active: true,
-                addon_options: prod.addon_options || []
+                addon_options: prod.addon_options || [],
+                has_sizes: prod.has_sizes || false,
+                available_sizes: prod.available_sizes || [],
+                price_by_size: prod.price_by_size || {},
+                default_size: prod.default_size || ''
             });
 
             if (sourceList === 'chat') {

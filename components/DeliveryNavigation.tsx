@@ -177,20 +177,61 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
 
     const audioEnabled = shopSettings?.navigation_voice_enabled || shopSettings?.navigation_sounds_enabled;
 
-    // Função para falar instrução usando ElevenLabs
-    const speak = useCallback(async (text: string) => {
-        const elevenLabsApiKey = await cloud.getApiKey('eleven_labs');
+    // Função de Fallback (Voz Nativa)
+    const speakNative = useCallback((text: string) => {
+        if (!('speechSynthesis' in window)) return;
 
-        if (!elevenLabsApiKey || !shopSettings?.navigation_voice_enabled) return;
+        // Cancelar falas anteriores para evitar fila
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.1; // Um pouco mais rápido para navegação
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        // Tentar selecionar voz PT-BR Feminina
+        const voices = window.speechSynthesis.getVoices();
+        const ptVoices = voices.filter(v => v.lang.includes('pt-BR') || v.lang.includes('pt_BR'));
+
+        let selectedVoice = ptVoices.find(v => v.name.includes('Google') && v.name.includes('Female')); // Tenta Google Female
+        if (!selectedVoice) selectedVoice = ptVoices.find(v => v.name.includes('Maria')); // Tenta Microsoft Maria
+        if (!selectedVoice) selectedVoice = ptVoices.find(v => v.name.includes('Google')); // Tenta qualquer Google PT-BR
+        if (!selectedVoice) selectedVoice = ptVoices[0]; // Qualquer PT-BR
+
+        if (selectedVoice) utterance.voice = selectedVoice;
+
+        window.speechSynthesis.speak(utterance);
+    }, []);
+
+    // Função para falar instrução usando ElevenLabs com Fallback
+    const speak = useCallback(async (text: string) => {
+        if (!shopSettings?.navigation_voice_enabled) return;
         if (lastSpokenRef.current === text) return;
 
+        // Tenta obter chave e voice_id
+        // Se falhar a chave, tenta nativo direto
+        const apiKeyDetails = await cloud.getApiKeyDetails('eleven_labs');
+
+        // Se não tiver chave configurada, usa nativo automaticamente
+        if (!apiKeyDetails || !apiKeyDetails.key) {
+            speakNative(text);
+            lastSpokenRef.current = text;
+            return;
+        }
+
         try {
-            const voiceId = shopSettings.navigation_voice_id || '21m00Tcm4lfs74u9DeyB';
+            // Usa o ID configurado ou fallback para um ID padrão (Rachel)
+            const voiceId = apiKeyDetails.voice_id || '21m00Tcm4lfs74u9DeyB';
+
+            // Timeout para evitar silêncio se a API demorar
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
             const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'xi-api-key': elevenLabsApiKey
+                    'xi-api-key': apiKeyDetails.key
                 },
                 body: JSON.stringify({
                     text: text,
@@ -199,10 +240,13 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
                         stability: 0.5,
                         similarity_boost: 0.75
                     }
-                })
+                }),
+                signal: controller.signal
             });
 
-            if (!response.ok) throw new Error('Falha ao gerar áudio');
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`ElevenLabs API Error: ${response.status}`);
 
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
@@ -214,12 +258,31 @@ export const DeliveryNavigation: React.FC<DeliveryNavigationProps> = ({ userRole
                 audioRef.current = new Audio(url);
             }
 
-            audioRef.current.play();
+            audioRef.current.onended = () => {
+                URL.revokeObjectURL(url);
+            };
+
+            audioRef.current.onerror = () => {
+                console.warn('Erro na reprodução do áudio ElevenLabs, usando fallback.');
+                speakNative(text);
+            };
+
+            const playPromise = audioRef.current.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error('Playback prevent:', error);
+                    speakNative(text);
+                });
+            }
+
             lastSpokenRef.current = text;
+
         } catch (err) {
-            console.error("Erro ao reproduzir áudio:", err);
+            console.warn("Falha no ElevenLabs, ativando fallback nativo:", err);
+            speakNative(text);
+            lastSpokenRef.current = text;
         }
-    }, [shopSettings]);
+    }, [shopSettings, speakNative]);
 
     // Monitorar mudança de instrução para falar
     useEffect(() => {

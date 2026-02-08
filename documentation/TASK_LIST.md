@@ -1,8 +1,14 @@
-- [x] Ajustar tempo de cooldown de 3 para 5 minutos (300 segundos) em todos os componentes de IA.
-- [x] Implementar salvamento da última mensagem e imagem enviada pelo usuário para re-tentativa.
-- [x] Atualizar lógica do botão "Tentar Novamente" para limpar a mensagem de manutenção e reenviar automaticamente o conteúdo para o backend.
-- [x] Aplicar mudanças no AdminBaseAddonManager.tsx (Admin - Adicionais Base).
-- [x] Aplicar mudanças no AdminBaseCatalog.tsx (Admin - Catálogo Base).
-- [x] Aplicar mudanças no StoreAIGenerator.tsx (Lojista - Gerador IA).
-- [x] Corrigir erros de sintaxe e garantir que inputs/textareas sejam desabilitados durante o cooldown.
-- [x] Documentar mudanças no checklist.txt e TASK_LIST.md.
+# Lista de Tarefas: Correção e Redesign do Sistema de Indicações
+
+- [x] Criar nova aba `referral_public` para a página de marketing (/indique)
+- [x] Restaurar a aba `referral_info` como Dashboard Privado (Pontos e Código)
+- [x] Mapear URL amigável `/indique` para a aba pública no `routeMap.ts`
+- [x] Liberar acesso universal à `referral_public` no `accessControl.ts`
+- [x] Reverter lógicas de autenticação global e layout redundante no `App.tsx`
+- [x] Validar que o menu lateral aponta corretamente para o dashboard (`referral_info`)
+- [x] Limpar declarações duplicadas de variáveis no `App.tsx`
+- [x] **Corrigir bug de fetch no Painel de Indicações (Erro: "Object")**
+- [x] **Mover tabela `claimed_rewards` para o escopo global no Supabase**
+- [x] **Implementar Redesign Premium no `ReferralProgram.tsx` (Glassmorphism & Gradientes)**
+- [x] **Aprimorar logging técnico em `cloud.ts` para diagnósticos futuros**
+- [x] Atualizar `checklist.txt` e `walkthrough.md`

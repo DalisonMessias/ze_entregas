@@ -411,7 +411,21 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'is_open') THEN
         ALTER TABLE public.user_profiles ADD COLUMN is_open BOOLEAN DEFAULT FALSE;
     END IF;
+
+    -- Pontuação e Sistemas de Indicação
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'referral_code') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN referral_code TEXT UNIQUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'referred_by') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN referred_by UUID REFERENCES public.user_profiles(id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'referral_points_balance') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN referral_points_balance INTEGER DEFAULT 0;
+    END IF;
+
 END $$;
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_referral_code ON public.user_profiles(referral_code);
 
 -- Função auxiliar para slugify (simples)
 CREATE OR REPLACE FUNCTION public.slugify(value TEXT)

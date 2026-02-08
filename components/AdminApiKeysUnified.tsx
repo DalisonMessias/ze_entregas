@@ -66,7 +66,8 @@ export const AdminApiKeysUnified: React.FC = () => {
     const [globalKeys, setGlobalKeys] = useState<{ [key: string]: string }>({
         google_gemini: '',
         open_route_service: '',
-        eleven_labs: ''
+        eleven_labs: '',
+        eleven_labs_voice_id: ''
     });
 
 
@@ -77,13 +78,14 @@ export const AdminApiKeysUnified: React.FC = () => {
             const [gemini, ors, eleven] = await Promise.all([
                 cloud.getApiKey('google_gemini'),
                 cloud.getApiKey('open_route_service'),
-                cloud.getApiKey('eleven_labs')
+                cloud.getApiKeyDetails('eleven_labs')
             ]);
 
             setGlobalKeys({
                 google_gemini: gemini || '',
                 open_route_service: ors || '',
-                eleven_labs: eleven || ''
+                eleven_labs: eleven?.key || '',
+                eleven_labs_voice_id: eleven?.voice_id || ''
             });
 
 
@@ -151,7 +153,7 @@ export const AdminApiKeysUnified: React.FC = () => {
                 keyUpdatePromises.push(cloud.adminUpdateApiKey('open_route_service', globalKeys.open_route_service));
             }
             if (globalKeys.eleven_labs !== undefined) {
-                keyUpdatePromises.push(cloud.adminUpdateApiKey('eleven_labs', globalKeys.eleven_labs));
+                keyUpdatePromises.push(cloud.adminUpdateApiKey('eleven_labs', globalKeys.eleven_labs, globalKeys.eleven_labs_voice_id));
             }
 
 
@@ -226,7 +228,7 @@ export const AdminApiKeysUnified: React.FC = () => {
     );
 
     const renderExternalServicesTab = () => (
-        <div className="space-y-6">
+        <div className="mt-8 space-y-8">
             {/* Google Gemini AI */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
                 <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
@@ -279,19 +281,38 @@ export const AdminApiKeysUnified: React.FC = () => {
                     'Configurações do ElevenLabs',
                     'Proporciona vozes extremamente realistas para as instruções de navegação e alertas, tornando a experiência do entregador mais profissional e fluida.'
                 )}
+
+                {/* Voice ID Input */}
+                <div className="mb-6 ml-4 border-l-2 border-gray-100 pl-4 dark:border-gray-700">
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">ID da Voz (Voice ID) - Opcional</label>
+                    <div className="relative mb-2">
+                        <input
+                            type="text"
+                            placeholder="Ex: 21m00Tcm4TlvDq8ikWAM (Rachel)"
+                            value={globalKeys.eleven_labs_voice_id || ''}
+                            onChange={e => setGlobalKeys(prev => ({ ...prev, eleven_labs_voice_id: e.target.value }))}
+                            autoComplete="off"
+                            spellCheck={false}
+                            className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 outline-none focus:ring-2 focus:ring-brand-500 dark:text-white font-mono text-sm"
+                        />
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                        Copie o ID da voz desejada na biblioteca do ElevenLabs. Se deixar em branco, o sistema usará a voz padrão ou navegador.
+                    </p>
+                </div>
             </div>
 
 
             {/* Feedback and Save Button */}
             <div className="mt-8 space-y-4">
                 {feedback && (
-                    <div className={`p-4 rounded-xl flex items-center gap-3 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+                    <div className={`p-4 mt-8 rounded-xl flex items-center gap-3 ${feedback.type === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
                         {feedback.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
                         <span className="font-bold text-sm">{feedback.text}</span>
                     </div>
                 )}
 
-                <Button fullWidth onClick={handleSaveSettings} disabled={saving} className="py-4 text-lg shadow-lg">
+                <Button fullWidth onClick={handleSaveSettings} disabled={saving} className="py-4 mt-8 mb-8 text-lg shadow-lg">
                     {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Salvar Configurações</>}
                 </Button>
             </div>
@@ -299,7 +320,7 @@ export const AdminApiKeysUnified: React.FC = () => {
     );
 
     const renderIntegrationsTab = () => (
-        <div className="space-y-6">
+        <div className="space-y-8 mt-8">
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden overflow-x-auto">
                 {dataLoading ? <div className="p-8 text-center"><Loader2 className="animate-spin mx-auto w-8 h-8" /></div> : (
                     <table className="w-full text-sm text-left">
@@ -353,7 +374,7 @@ export const AdminApiKeysUnified: React.FC = () => {
     );
 
     const renderLogsTab = () => (
-        <div className="bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-xs h-[360px] sm:h-[480px] md:h-[600px] overflow-y-auto">
+        <div className="mt-8 bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-xs h-[360px] sm:h-[480px] md:h-[600px] overflow-y-auto">
             {dataLoading ? <div className="text-center p-4"><Loader2 className="animate-spin mx-auto w-6 h-6" /></div> : (
                 <>
                     {storeLogs.map(l => (

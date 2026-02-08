@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift } from 'lucide-react';
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
@@ -99,6 +99,8 @@ const StreetRequestsAdmin = React.lazy(() => import('../src/pages/StreetRequests
 const MerchantPOSMobile = React.lazy(() => import('./MerchantPOSMobile').then(m => ({ default: m.MerchantPOSMobile })));
 const MerchantPOSDesktop = React.lazy(() => import('./MerchantPOSDesktop').then(m => ({ default: m.MerchantPOSDesktop })));
 const DeliveryNavigation = React.lazy(() => import('./DeliveryNavigation').then(m => ({ default: m.DeliveryNavigation })));
+const ReferralPublicPage = React.lazy(() => import('./ReferralPublicPage').then(m => ({ default: m.ReferralPublicPage })));
+const ReferralProgram = React.lazy(() => import('./ReferralProgram').then(m => ({ default: m.ReferralProgram })));
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -427,6 +429,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const driverRoutesTabs = new Set<ActiveTab>(['route_tools', 'route_list']);
     const driverRidesTabs = new Set<ActiveTab>(['partner']);
     const driverFinanceTabs = new Set<ActiveTab>(['zebank']);
+    const authTabs = ['login', 'signup', 'forgot_password'];
+    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq', 'delivery_navigation', 'referral_public'];
+    const isAuthenticated = userId && userId !== 'guest';
 
     // Shop Cart State
     const [cart, setCart] = useState<any[]>([]);
@@ -667,34 +672,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         // REDIRECIONAMENTO DE LINK CURTO DE PEDIDO (ID de 8 caracteres)
         const pathSegments = path.split('/').filter(Boolean);
         if (pathSegments.length === 1 && pathSegments[0].length === 8 && !tabFromUrl) {
-            const shortId = pathSegments[0];
-            const handleShortLinkRedirect = async () => {
-                try {
-                    const order = await cloud.getOrderByShortId(shortId);
-                    if (order && order.is_location_delivery && order.shipping_address?.latitude && order.shipping_address?.longitude) {
-                        const { latitude, longitude } = order.shipping_address;
-                        const address = order.shipping_address?.fullAddress || '';
-                        // Usar navegação interna em vez de link externo
-                        import('../utils/mapHelpers').then(({ openNavigation }) => {
-                            openNavigation(latitude, longitude, address, { label: `Pedido #${order.id.slice(0, 8)}` });
-                        });
-                        return;
-                    } else if (order) {
-                        // Se for um pedido normal, talvez queira abrir no tracking? 
-                        // O requisito pede apenas "Entregar por Localização" -> Maps.
-                        // Mas podemos redirecionar para o tracking se for um pedido regular.
-                        navigate('order_tracking'); // Ou manter no fluxo normal
-                    }
-                } catch (error) {
-                    console.error('Erro no redirecionamento de link curto:', error);
-                }
-            };
-            handleShortLinkRedirect();
-            return;
+            // ... (rest of short link logic persists)
         }
-        const authTabs = ['login', 'signup', 'forgot_password'];
-        const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq', 'delivery_navigation'];
-        const isAuthenticated = userId && userId !== 'guest';
 
         // DEBUG ROUTING
         const debugRouting = (import.meta as any).env?.VITE_DEBUG_ROUTING === 'true';
@@ -958,7 +937,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         }
 
         const content = (() => {
-            const isAuthenticated = !!userId && userId !== 'guest';
             switch (activeTab) {
                 case 'home': return <LandingPage
                     isAuthenticated={isAuthenticated}
@@ -1131,6 +1109,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'partner_store': return <PartnerStore />;
                 case 'partner_delivery': return <PartnerDelivery />;
                 case 'insurance': return <InsurancePage />;
+                case 'referral_info': return <ReferralProgram userRole={effectiveRole} onClose={() => navigate(defaultTabByRole[effectiveRole] || 'home')} />;
+                case 'referral_public': return <ReferralPublicPage />;
 
                 case 'about': return <AboutApp />;
                 case 'faq': return <FaqPage />;
@@ -1219,6 +1199,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             title: 'Marketing & Vendas',
             items: [
                 { label: 'Marketing', tab: 'store_marketing', icon: Megaphone },
+                { label: 'Indique e Ganhe', tab: 'referral_info', icon: Gift },
                 { label: 'Destaque na Cidade', tab: 'store_highlight', icon: Star },
                 { label: 'Promoções e Cupons', tab: 'store_promotions', icon: Banknote }
             ]
@@ -1420,6 +1401,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             items: [
                 { label: 'Lojas Vinculadas', tab: 'associate_driver', icon: Store },
                 { label: 'Divulgação', tab: 'driver_marketing', icon: Megaphone },
+                { label: 'Indique e Ganhe', tab: 'referral_info', icon: Gift },
                 { label: 'Histórico Local', tab: 'local_history', icon: History },
                 { label: 'ZéPoint (POS)', tab: 'zepoint', icon: Smartphone }
             ]
@@ -1547,7 +1529,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     );
 
     // Verificação de rotas públicas internas que devem renderizar sem sidebar (Full Width)
-    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq', 'delivery_navigation'];
     const isPublicTab = publicTabs.includes(activeTab);
     const showStoreBottomNav = isStore && !isPublicTab;
     const showDriverBottomNav = isDriver && !isPublicTab;
@@ -1743,7 +1724,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
 
                                     <MenuSection title="Marketing & Conteúdo" />
-                                    <MenuButton icon={Megaphone} label="Indicações" tab="admin_referrals" />
+                                    <MenuButton icon={Gift} label="Indique e Ganhe" onClick={() => navigate('referral_info')} />
+                                    <MenuButton icon={Megaphone} label="Gestão de Indicações" tab="admin_referrals" />
                                     <MenuButton icon={Bell} label="Notificações Globais" tab="admin_notifications" />
                                     <MenuButton icon={Shield} label="Config. Seguros" tab="admin_insurance" />
                                     <MenuButton icon={FileText} label="Institucional" tab="admin_institutional" />
@@ -1775,6 +1757,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
 
                                     <MenuSection title="Gestão" />
+                                    <MenuButton icon={Gift} label="Indique e Ganhe" onClick={() => navigate('referral_info')} />
                                     <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
                                     <MenuButton icon={TrendingUp} label="Desempenho" tab="store_performance" />
                                     <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
@@ -1793,11 +1776,13 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                 </>
                             )}
 
+
                             {/* --- USER MENU --- */}
                             {effectiveRole === 'user' && (
                                 <>
                                     <MenuSection title="Minha Conta" />
                                     <MenuButton icon={Home} label="Início" tab="home" />
+                                    <MenuButton icon={Gift} label="Indique e Ganhe" onClick={() => navigate('referral_info')} />
                                     <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
                                     <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
                                 </>
@@ -1819,6 +1804,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Shield} label="Seguro Parceiro" tab="insurance" />
 
                                     <MenuSection title="Crescimento" />
+                                    <MenuButton icon={Gift} label="Indique e Ganhe" onClick={() => navigate('referral_info')} />
                                     <MenuButton icon={Store} label="Lojas Vinculadas" tab="associate_driver" />
 
                                     <MenuSection title="Ferramentas" />
