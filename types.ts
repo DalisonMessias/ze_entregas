@@ -307,6 +307,7 @@ export interface Product {
     default_size?: string;
     addon_group_id?: string | null;
     addon_options?: StoreAddonOption[] | null;
+    excluded_addon_options?: string[] | null;
 }
 
 export interface StoreAddonOption {
@@ -356,6 +357,7 @@ export interface StoreProduct {
     default_size?: string;
     addon_group_id?: string | null;
     addon_options?: StoreAddonOption[] | null;
+    excluded_addon_options?: string[] | null;
 }
 
 export interface CatalogBaseProduct {

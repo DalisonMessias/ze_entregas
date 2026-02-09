@@ -123,7 +123,7 @@ export const ProductAddonSelector: React.FC<ProductAddonSelectorProps> = ({
                                 </p>
                             </div>
                             <div className="space-y-3">
-                                {addonGroup.options.map(option => {
+                                {addonGroup.options.filter(opt => !(product.excluded_addon_options || []).includes(opt.id)).map(option => {
                                     const isSelected = !!selectedOptions[option.id];
                                     const quantity = selectedOptions[option.id] || 0;
 

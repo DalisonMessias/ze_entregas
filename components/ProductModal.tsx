@@ -453,9 +453,52 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                                 <AddonGroupSelector
                                     groups={addonGroups}
                                     selectedGroup={editingProduct.addon_group_id || null}
-                                    onSelect={(groupId) => setEditingProduct({ ...editingProduct, addon_group_id: groupId })}
+                                    onSelect={(groupId) => {
+                                        // Ao trocar de grupo, opcionalmente limpamos exclusões antigas se os IDs forem muito diferentes,
+                                        // mas por segurança e simplicidade vamos manter, pois IDs de opções são únicos.
+                                        setEditingProduct({ ...editingProduct, addon_group_id: groupId });
+                                    }}
                                 />
                                 <p className="text-[10px] text-gray-400 uppercase font-medium px-1">Vincular um grupo pré-configurado</p>
+
+                                {/* Opções do Grupo Selecionado para Customização por Produto */}
+                                {editingProduct.addon_group_id && (
+                                    <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-50 dark:border-gray-700">
+                                            <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Opcionais do Grupo</span>
+                                            <span className="text-[9px] bg-brand-50 text-brand-600 px-2 py-0.5 rounded-full font-bold">Resumo do Produto</span>
+                                        </div>
+                                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1 no-scrollbar">
+                                            {addonGroups.find(g => g.id === editingProduct.addon_group_id)?.options?.map((opt: any) => {
+                                                const isExcluded = (editingProduct.excluded_addon_options || []).includes(opt.id);
+                                                return (
+                                                    <div key={opt.id} className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-900/50 rounded-xl transition-colors group">
+                                                        <div className="flex flex-col">
+                                                            <span className={`text-xs font-bold transition-colors ${isExcluded ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
+                                                                {opt.name}
+                                                            </span>
+                                                            <span className={`text-[10px] font-medium ${isExcluded ? 'text-gray-300' : 'text-brand-500'}`}>
+                                                                R$ {opt.price.toFixed(2).replace('.', ',')}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            onClick={() => {
+                                                                const current = editingProduct.excluded_addon_options || [];
+                                                                const next = isExcluded
+                                                                    ? current.filter(id => id !== opt.id)
+                                                                    : [...current, opt.id];
+                                                                setEditingProduct({ ...editingProduct, excluded_addon_options: next });
+                                                            }}
+                                                            className={`w-9 h-5 rounded-full p-0.5 cursor-pointer transition-colors duration-300 flex items-center ${!isExcluded ? 'bg-brand-500' : 'bg-gray-200 dark:bg-gray-700'}`}
+                                                        >
+                                                            <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 shadow-sm ${!isExcluded ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-4 p-5 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
