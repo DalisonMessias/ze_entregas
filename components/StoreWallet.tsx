@@ -98,13 +98,9 @@ const DashboardSkeleton = () => (
             <Skeleton className="h-24 w-full rounded-2xl" />
             <Skeleton className="h-24 w-full rounded-2xl" />
         </div>
-        <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+        <div className="grid gap-4 lg:grid-cols-2">
             <Skeleton className="h-52 w-full rounded-[32px]" />
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-                {Array.from({ length: 3 }).map((_, idx) => (
-                    <Skeleton key={idx} className="h-24 w-full rounded-2xl" />
-                ))}
-            </div>
+            <Skeleton className="h-52 w-full rounded-[32px]" />
         </div>
         <div className="space-y-3">
             <Skeleton className="h-5 w-44" />
@@ -379,7 +375,7 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
             <div className="space-y-8">
                 <div className="flex justify-center">
                     <div className="w-full max-w-6xl xl:max-w-7xl">
-                        <div className={`grid gap-4 ${!isSuperStore && fees ? 'lg:grid-cols-[2fr,1fr]' : 'grid-cols-1'} items-stretch`}>
+                        <div className={`grid gap-4 ${!isSuperStore && fees ? 'lg:grid-cols-2' : 'grid-cols-1'} items-stretch`}>
                             {/* Carrossel de Promoções Principal */}
                             <div className="w-full h-full">
                                 <PromoSlider audience="merchants" />
@@ -389,7 +385,7 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                             {!isSuperStore && fees && (
                                 <div
                                     onClick={() => setShowUpgradeModal(true)}
-                                    className="relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500 p-6 rounded-[2rem] shadow-lg cursor-pointer transform hover:scale-[1.01] transition-all duration-300 border border-yellow-300/30 flex flex-col justify-center items-center text-center group min-h-[160px]"
+                                    className="relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500 p-6 rounded-[2rem] shadow-lg cursor-pointer transform hover:scale-[1.01] transition-all duration-300 border border-yellow-300/30 flex flex-col justify-center items-center text-center group h-full"
                                 >
                                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                                         <Crown className="w-32 h-32 text-white rotate-12" />
