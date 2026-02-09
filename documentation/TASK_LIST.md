@@ -1,8 +1,8 @@
-# Plano de Tarefas - Ajuste Layout Dashboard
+# Plano de Tarefas - Correção Layout Dashboard
 
-- [x] Mover banner de Super Lojista para o lado do slider no `StoreWallet.tsx`.
-- [x] Ajustar responsividade da grade (em telas menores continuam empilhados).
-- [x] Implementar expansão automática do slider quando o banner for ocultado.
-- [x] Mover `TipOfTheDay` para nova posição estratégica.
-- [x] Refinar proporção do grid (2fr, 1fr) para melhor visualização.
-- [x] Validar o layout final.
+- [x] Restaurar o `PromoSlider` para o grid principal.
+- [x] Alinhar o Banner Super Lojista lado a lado com o Slider.
+- [x] Garantir expansão do Slider quando o Banner sumir.
+- [x] Manter a `TipOfTheDay` em posição estável abaixo do grid.
+- [x] Simplificar o código para evitar mudanças intrusivas.
+- [x] Validar visualização final.

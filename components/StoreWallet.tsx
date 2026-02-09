@@ -378,10 +378,14 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
 
             <div className="space-y-8">
                 <div className="flex justify-center">
-                    <div className="w-full max-w-6xl xl:max-w-7xl space-y-4">
+                    <div className="w-full max-w-6xl xl:max-w-7xl">
                         <div className={`grid gap-4 ${!isSuperStore && fees ? 'lg:grid-cols-[2fr,1fr]' : 'grid-cols-1'} items-stretch`}>
-                            <PromoSlider audience="merchants" />
+                            {/* Carrossel de Promoções Principal */}
+                            <div className="w-full h-full">
+                                <PromoSlider audience="merchants" />
+                            </div>
 
+                            {/* Banner Super Lojista (Ocultado se já for super store) */}
                             {!isSuperStore && fees && (
                                 <div
                                     onClick={() => setShowUpgradeModal(true)}
@@ -398,9 +402,9 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                                             </div>
                                         </div>
                                         <div className="space-y-1">
-                                            <h3 className="font-black text-xl text-white leading-tight">Potencialize sua Loja</h3>
+                                            <h3 className="font-black text-xl text-white leading-tight">Seja Super Lojista</h3>
                                             <p className="text-xs text-yellow-50 font-medium">
-                                                Apenas {formatCurrency(fees.super_store_monthly_fee || 0)}/mês
+                                                Acesse recursos exclusivos e taxas reduzidas
                                             </p>
                                         </div>
                                         <div className="flex justify-center">
@@ -411,8 +415,20 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                                     </div>
                                 </div>
                             )}
+
+                            {/* Se for Super Store, mostramos a Dica do Dia no lugar do Banner para manter o layout 2 colunas se preferir, 
+                                mas o usuário disse que o slide aumenta, então deixamos o slide ocupar tudo. */}
+                            {isSuperStore && (
+                                <div className="hidden lg:block lg:invisible">
+                                    {/* Espaçador opcional ou nada para o slide expandir */}
+                                </div>
+                            )}
                         </div>
-                        <TipOfTheDay role="store_partner" className="w-full" />
+
+                        {/* Tip of the Day - Posicionada logo abaixo do grid de destaque */}
+                        <div className="mt-4">
+                            <TipOfTheDay role="store_partner" className="w-full" />
+                        </div>
                     </div>
                 </div>
                 <div className="space-y-4">
