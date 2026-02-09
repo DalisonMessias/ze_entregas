@@ -375,39 +375,44 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
 
 
 
-            {!isSuperStore && fees && (
-                <div
-                    onClick={() => setShowUpgradeModal(true)}
-                    className="relative overflow-hidden bg-gradient-to-r from-yellow-400 to-orange-500 p-4 rounded-2xl shadow-lg cursor-pointer transform hover:scale-[1.01] transition-transform mx-auto max-w-3xl"
-                >
-                    <div className="absolute top-0 right-0 p-4 opacity-20">
-                        <Crown className="w-24 h-24 text-white rotate-12" />
-                    </div>
-                    <div className="relative z-10 flex flex-col items-center text-center gap-3">
-                        <div className="flex items-center gap-2">
-                            <Crown className="w-5 h-5 fill-current" />
-                            <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-lg">Novo</span>
-                        </div>
-                        <div className="space-y-1 text-white">
-                            <h3 className="font-black text-xl leading-tight">Seja Super Lojista!</h3>
-                            <p className="text-xs text-yellow-100 max-w-[240px]">
-                                Apenas {formatCurrency(fees.super_store_monthly_fee || 0)}/mês. Cancele quando quiser.
-                            </p>
-                        </div>
-                        <div className="bg-white text-orange-600 p-2 rounded-full shadow-md animate-pulse">
-                            <ChevronRight className="w-5 h-5" />
-                        </div>
-                    </div>
-                </div>
-            )}
 
             <div className="space-y-8">
                 <div className="flex justify-center">
-                    <div className="w-full max-w-6xl xl:max-w-7xl">
-                        <div className="grid gap-4 lg:grid-cols-[1.6fr,1fr] items-stretch">
+                    <div className="w-full max-w-6xl xl:max-w-7xl space-y-4">
+                        <div className={`grid gap-4 ${!isSuperStore && fees ? 'lg:grid-cols-[1.8fr,1fr]' : 'grid-cols-1'} items-stretch`}>
                             <PromoSlider audience="merchants" />
-                            <TipOfTheDay role="store_partner" />
+
+                            {!isSuperStore && fees && (
+                                <div
+                                    onClick={() => setShowUpgradeModal(true)}
+                                    className="relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500 p-6 rounded-[2rem] shadow-lg cursor-pointer transform hover:scale-[1.01] transition-all duration-300 border border-yellow-300/30 flex flex-col justify-center items-center text-center group"
+                                >
+                                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                        <Crown className="w-32 h-32 text-white rotate-12" />
+                                    </div>
+                                    <div className="relative z-10 space-y-4">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2">
+                                                <Crown className="w-3 h-3 text-white fill-current" />
+                                                <span className="text-[10px] font-black uppercase text-white tracking-widest">Premium</span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <h3 className="font-black text-xl text-white leading-tight">Seja Super Lojista</h3>
+                                            <p className="text-xs text-yellow-50 font-medium">
+                                                Apenas {formatCurrency(fees.super_store_monthly_fee || 0)}/mês
+                                            </p>
+                                        </div>
+                                        <div className="flex justify-center">
+                                            <div className="bg-white text-orange-600 w-10 h-10 rounded-full shadow-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <ChevronRight className="w-6 h-6" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
+                        <TipOfTheDay role="store_partner" className="w-full" />
                     </div>
                 </div>
                 <div className="space-y-4">
