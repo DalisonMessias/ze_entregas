@@ -628,8 +628,7 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
                             <Button
                                 fullWidth
                                 onClick={() => {
-                                    const event = new CustomEvent('openSuperStoreModal');
-                                    window.dispatchEvent(event);
+                                    window.location.href = '/loja/planos';
                                 }}
                                 className="rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all py-3 font-bold uppercase tracking-widest text-xs"
                             >
