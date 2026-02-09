@@ -95,7 +95,7 @@ export const PixPaymentModal: React.FC<PixPaymentModalProps> = ({
 
     const handleSendComprovante = () => {
         if (!storePhone) return;
-        const msg = `Olá! Acabei de fazer o pagamento via PIX do pedido #${orderId.slice(0, 8).toUpperCase()}.\n\nValor: R$ ${amount.toFixed(2).replace('.', ',')}\n\nSeguem os dados do comprovante em anexo.`;
+        const msg = `Olá! Acabei de fazer o pagamento via PIX do pedido #${orderId.slice(0, 8).toUpperCase()}.\n\nValor: R$ ${(Number(amount || 0)).toFixed(2).replace('.', ',')}\n\nSeguem os dados do comprovante em anexo.`;
         const url = `https://wa.me/55${storePhone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
     };
@@ -110,7 +110,7 @@ export const PixPaymentModal: React.FC<PixPaymentModalProps> = ({
             <div className="space-y-6 flex flex-col items-center">
                 <div className="text-center space-y-2">
                     <p className="text-sm text-gray-500 dark:text-gray-400">Escaneie o QR Code abaixo com o app do seu banco</p>
-                    <div className="text-3xl font-black text-gray-900 dark:text-white">R$ {amount.toFixed(2).replace('.', ',')}</div>
+                    <div className="text-3xl font-black text-gray-900 dark:text-white">R$ {(Number(amount || 0)).toFixed(2).replace('.', ',')}</div>
                 </div>
 
                 <div className="p-4 bg-white rounded-3xl border-4 border-brand-50 shadow-inner flex justify-center items-center min-h-[280px]">

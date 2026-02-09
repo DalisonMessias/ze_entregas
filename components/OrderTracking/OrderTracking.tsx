@@ -319,13 +319,13 @@ export const OrderTracking: React.FC = () => {
                                     <span className="font-bold text-gray-900 dark:text-white">{item.quantity}x</span>
                                     <span className="text-gray-600 dark:text-gray-300">{item.name}</span>
                                 </div>
-                                <span className="font-medium text-gray-900 dark:text-white">R$ {item.total_price.toFixed(2).replace('.', ',')}</span>
+                                <span className="font-medium text-gray-900 dark:text-white">R$ {(Number(item.total_price || (item.price * item.quantity) || 0)).toFixed(2).replace('.', ',')}</span>
                             </div>
                         ))}
                     </div>
                     <div className="border-t border-gray-100 dark:border-gray-800 mt-4 pt-4 flex justify-between items-center">
                         <span className="font-bold text-gray-500">Total</span>
-                        <span className="font-black text-xl text-brand-600">R$ {order.total_price.toFixed(2).replace('.', ',')}</span>
+                        <span className="font-black text-xl text-brand-600">R$ {(Number(order.total_price || 0)).toFixed(2).replace('.', ',')}</span>
                     </div>
                 </div>
 

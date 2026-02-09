@@ -1,13 +1,12 @@
-# Plano de# Tarefas - Correção de Cancelamento de Pedidos
+# Tarefas - Correção de Erro no Rastreamento
 
-## Problema Identificado
+## Problema
 
-✅ **CAUSA RAIZ**: O `OrderHistory.tsx` mapeia `Order[]` da tabela `orders` para `PartnerRequest[]` (compatibilidade de UI), mas usa `order.id` como ID. A função `storeCancelPartnerRequest` espera um `partner_request.id` e tenta atualizar a tabela `partner_requests`, resultando em falha silenciosa.
+- [x] Corrigir erro de renderização no componente `OrderTracking`
 
-## Tarefas de Implementação
+## Lista de Tarefas
 
-- [ ] Modificar `services/cloud.ts::storeCancelPartnerRequest` para aceitar parâmetro `isOrderId`
-- [ ] Atualizar `components/OrderHistory.tsx` para passar `isOrderId: true` no cancelamento
-- [ ] Verificar e atualizar `components/InternalOrders.tsx` se necessário
-- [ ] Testar cancelamento de pedido e verificar persistência após refresh
-- [ ] Atualizar `checklist.txt` com a correção implementada
+- [x] Analisar `OrderTracking.tsx` e o mapeamento de itens do pedido
+- [x] Implementar fallbacks robustos para campos de preço (unitário e total)
+- [x] Validar a renderização do total do pedido
+- [x] Atualizar o histórico de alterações (`checklist.txt`)
