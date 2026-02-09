@@ -419,11 +419,18 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                                         </div>
                                     </div>
 
-                                    <div className="relative z-10 flex items-center justify-between mt-2">
+                                    <div className="relative z-10 grid grid-cols-2 gap-2 mt-2">
                                         <div className="bg-white/10 backdrop-blur-sm px-3 py-2 rounded-xl border border-white/20">
-                                            <p className="text-[10px] text-yellow-100 font-bold uppercase tracking-wider">A partir de</p>
-                                            <p className="text-sm font-black text-white">{formatCurrency(fees.super_store_monthly_fee || 0)}/mês</p>
+                                            <p className="text-[9px] text-yellow-100 font-bold uppercase tracking-wider">Mensal</p>
+                                            <p className="text-xs font-black text-white">{formatCurrency(fees.super_store_monthly_fee || 0)}</p>
                                         </div>
+                                        <div className="bg-white/10 backdrop-blur-sm px-3 py-2 rounded-xl border border-white/20">
+                                            <p className="text-[9px] text-yellow-100 font-bold uppercase tracking-wider">Comissão</p>
+                                            <p className="text-xs font-black text-white">{fees.super_store_commission_percent}%</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="relative z-10 flex justify-end mt-2">
                                         <div className="bg-white text-orange-600 w-10 h-10 rounded-full shadow-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                                             <ChevronRight className="w-6 h-6" />
                                         </div>
