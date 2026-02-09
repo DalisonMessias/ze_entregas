@@ -640,6 +640,7 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS has_sizes BOOLEAN DEFAULT f
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS available_sizes JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price_by_size JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS default_size TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS excluded_addon_options JSONB DEFAULT '[]'::jsonb;
 
 -- Comentários
 COMMENT ON COLUMN public.products.has_sizes IS 'Indica se o produto possui variações de tamanho';

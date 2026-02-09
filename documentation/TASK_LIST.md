@@ -1,10 +1,9 @@
-# Plano de Tarefas - Ajuste de Grade e Sobreposição
+# Plano de Tarefas - Gestão de Opcionais por Produto
 
-- [x] Analisar as classes de grid atuais em `StoreCatalog.tsx`.
-- [x] Modificar a lógica de colunas para limitar a 4 no desktop (`2xl:grid-cols-4`).
-- [x] Corrigir z-index dos cards (`hover:z-20`) para evitar que botões fiquem escondidos.
-- [x] Reposicionar botões de ação para `absolute` para garantir visibilidade interna.
-- [x] Adicionar truncagem ao nome da categoria para evitar quebras de layout.
-- [x] Corrigir erro de aninhamento DOM (`validateDOMNesting`) em `ProductModal.tsx`.
-- [x] Atualizar o arquivo `documentation/TASK_LIST.md` e `checklist.txt`.
-- [x] Finalizar e notificar usuário.
+- [ ] Adicionar coluna `excluded_addon_options` (JSONB) em `supabase_global.sql`.
+- [ ] Atualizar as interfaces `Product` e `StoreProduct` em `types.ts`.
+- [ ] Implementar a listagem de opções do grupo no `ProductModal.tsx`.
+- [ ] Adicionar lógica de "remover/manter" (exclusão) no `ProductModal.tsx`.
+- [ ] Atualizar `ProductAddonSelector.tsx` para filtrar as opções excluídas.
+- [ ] Validar o fluxo completo desde o cadastro até a exibição no cardápio.
+- [ ] Atualizar `documentation/TASK_LIST.md` e `checklist.txt`.
