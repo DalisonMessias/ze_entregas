@@ -299,10 +299,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                                     className={wasUploaded ? "opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800" : ""}
                                 />
                                 {wasUploaded && (
-                                    <p className="text-[10px] text-brand-600 mt-2 font-bold flex items-center gap-1 animate-in fade-in">
+                                    <div className="text-[10px] text-brand-600 mt-2 font-bold flex items-center gap-1 animate-in fade-in">
                                         <div className="w-1.5 h-1.5 rounded-full bg-brand-500" />
                                         Modo Upload Ativo
-                                    </p>
+                                    </div>
                                 )}
                                 {!wasUploaded && !editingProduct.image_url && (
                                     <p className="text-[10px] text-gray-400 mt-2">

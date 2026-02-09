@@ -490,11 +490,11 @@ export const StoreCatalog: React.FC = () => {
                                     </p>
                                 </div>
                             ) : (
-                                <div className={`grid grid-cols-1 ${isSuperStore ? 'md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'} gap-4 pb-24`}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 pb-24">
                                     {filteredProducts.map(product => (
                                         <div
                                             key={product.id}
-                                            className="group bg-white dark:bg-gray-900/50 rounded-[1.5rem] p-4 border border-gray-100 dark:border-gray-800 hover:border-brand-500/30 hover:shadow-xl hover:shadow-brand-500/5 transition-all duration-500 relative flex flex-col"
+                                            className="group bg-white dark:bg-gray-900/50 rounded-[1.5rem] p-4 border border-gray-100 dark:border-gray-800 hover:border-brand-500/30 hover:shadow-xl hover:shadow-brand-500/5 hover:z-20 transition-all duration-500 relative flex flex-col"
                                         >
                                             <div className="flex gap-3 items-start mb-3">
                                                 <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gray-50 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-100 dark:border-gray-700 overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-500 relative group/img">
@@ -527,10 +527,10 @@ export const StoreCatalog: React.FC = () => {
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex justify-between items-start mb-1">
-                                                        <span className="text-[9px] font-black uppercase text-brand-600 tracking-[0.15em] py-1 px-2 bg-brand-50 dark:bg-brand-900/20 rounded-lg">
+                                                        <span className="text-[9px] font-black uppercase text-brand-600 tracking-[0.15em] py-1 px-2 bg-brand-50 dark:bg-brand-900/20 rounded-lg truncate max-w-[100px]">
                                                             {product.category || 'Geral'}
                                                         </span>
-                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 absolute top-2 right-2 z-10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm p-1 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800">
                                                             <button
                                                                 onClick={() => {
                                                                     setPreviewProduct(product);
@@ -674,8 +674,8 @@ export const StoreCatalog: React.FC = () => {
                                                     <div
                                                         key={bp.id}
                                                         className={`bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[2.5rem] border flex flex-col relative ${isAlreadyImported
-                                                                ? 'border-green-200 dark:border-green-900/30 opacity-60'
-                                                                : 'border-gray-100 dark:border-gray-800'
+                                                            ? 'border-green-200 dark:border-green-900/30 opacity-60'
+                                                            : 'border-gray-100 dark:border-gray-800'
                                                             }`}
                                                     >
                                                         {isAlreadyImported && (
