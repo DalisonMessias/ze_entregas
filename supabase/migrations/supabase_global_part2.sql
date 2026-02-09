@@ -26,7 +26,7 @@ GRANT ALL ON public.loan_level_limits TO authenticated;
 GRANT ALL ON public.loan_level_limits TO service_role;
 
 
--- Tabela de Solicitaﾃｧﾃｵes/Contratos de Emprﾃｩstimo
+-- Tabela de Solicitações/Contratos de Empréstimo
 CREATE TABLE IF NOT EXISTS public.partner_loans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.partner_loans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Migraﾃｧﾃ｣o segura: adicionar colunas se nﾃ｣o existirem
+-- Migração segura: adicionar colunas se não existirem
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_loans' AND column_name = 'disbursement_method') THEN
@@ -85,7 +85,7 @@ GRANT ALL ON public.partner_loans TO authenticated;
 GRANT ALL ON public.partner_loans TO service_role;
 
 
--- Tabela de Parcelas do Emprﾃｩstimo
+-- Tabela de Parcelas do Empréstimo
 CREATE TABLE IF NOT EXISTS public.loan_installments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     loan_id UUID NOT NULL REFERENCES public.partner_loans(id) ON DELETE CASCADE,
@@ -120,7 +120,7 @@ GRANT ALL ON public.loan_installments TO authenticated;
 GRANT ALL ON public.loan_installments TO service_role;
 
 
--- Tabela de Logs de Auditoria de Emprﾃｩstimos
+-- Tabela de Logs de Auditoria de Empréstimos
 CREATE TABLE IF NOT EXISTS public.loan_audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     loan_id UUID REFERENCES public.partner_loans(id) ON DELETE SET NULL,
@@ -145,7 +145,7 @@ GRANT ALL ON public.loan_audit_logs TO authenticated;
 -- LOAN PAYMENT PROCESSING FUNCTION (2026-01-11)
 -- ==================================================================
 
--- Funﾃｧﾃ｣o para processar pagamento de parcelas de emprﾃｩstimo
+-- Função para processar pagamento de parcelas de emprﾃｩstimo
 -- Deve ser chamada durante o processamento de repasses semanais
 CREATE OR REPLACE FUNCTION public.process_loan_installment_payments(
     p_user_id UUID,
@@ -164,7 +164,7 @@ DECLARE
     v_allow_negative BOOLEAN := FALSE;
     v_partner_level TEXT;
 BEGIN
-    -- Buscar nﾃｭvel do parceiro e verificar se permite saldo negativo
+    -- Buscar nível do parceiro e verificar se permite saldo negativo
     SELECT partner_level INTO v_partner_level 
     FROM public.user_profiles 
     WHERE id = p_user_id;
@@ -217,7 +217,7 @@ BEGIN
                     p_user_id
                 );
                 
-            -- Se o repasse nﾃ｣o cobre, mas permite saldo negativo
+            -- Se o repasse não cobre, mas permite saldo negativo
             ELSIF v_allow_negative THEN
                 -- Pagar parcela mesmo ficando negativo
                 UPDATE public.loan_installments
@@ -246,7 +246,7 @@ BEGIN
                     p_user_id
                 );
                 
-            -- Se nﾃ｣o cobre e nﾃ｣o permite negativo
+            -- Se não cobre e não permite negativo
             ELSE
                 -- Marcar como atrasada
                 UPDATE public.loan_installments
@@ -293,7 +293,7 @@ GRANT EXECUTE ON FUNCTION public.process_loan_installment_payments(UUID, NUMERIC
 -- SEEDS & BACKFILLS (LOANS MODULE) - Adicionado em 2026-01-12
 -- ==================================================================
 
--- 1. Inserir Limites por Nﾃｭvel e Tipo de Usuﾃ｡rio (Se nﾃ｣o existirem)
+-- 1. Inserir Limites por Nﾃｭvel e Tipo de Usuﾃ｡rio (Se não existirem)
 -- Limites para Entregadores
 INSERT INTO public.loan_level_limits (user_type, partner_level, max_limit, max_installments, allow_negative_balance)
 VALUES
@@ -318,23 +318,23 @@ SET max_limit = EXCLUDED.max_limit,
     max_installments = EXCLUDED.max_installments,
     allow_negative_balance = EXCLUDED.allow_negative_balance;
 
--- 2. Backfill: Garantir que usuﾃ｡rios tenham nﾃｭvel 'BRONZE' se estiver nulo
+-- 2. Backfill: Garantir que usuários tenham nível 'BRONZE' se estiver nulo
 UPDATE public.user_profiles
 SET partner_level = 'BRONZE'
 WHERE partner_level IS NULL OR partner_level = '';
 
--- 3. Inserir Tipos de Emprﾃｩstimo Padrﾃ｣o (Evitando duplicidade)
+-- 3. Inserir Tipos de Empréstimo Padrão (Evitando duplicidade)
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Antecipaﾃｧﾃ｣o de Recebﾃｭveis', 'Antecipe seus ganhos futuros com taxas reduzidas.', 2.50, 4, 1000.00, 'BOTH', true
-WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Antecipaﾃｧﾃ｣o de Recebﾃｭveis');
+SELECT 'Antecipação de Recebíveis', 'Antecipe seus ganhos futuros com taxas reduzidas.', 2.50, 4, 1000.00, 'BOTH', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Antecipação de Recebíveis');
 
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Capital de Giro', 'Emprﾃｩstimo para impulsionar seu negﾃｳcio.', 3.90, 12, 5000.00, 'STORE', true
+SELECT 'Capital de Giro', 'Empréstimo para impulsionar seu negócio.', 3.90, 12, 5000.00, 'STORE', true
 WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Capital de Giro');
 
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Crﾃｩdito Pessoal', 'Dinheiro rﾃ｡pido para emergﾃｪncias.', 4.50, 6, 2000.00, 'COURIER', true
-WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Crﾃｩdito Pessoal');
+SELECT 'Crédito Pessoal', 'Dinheiro rápido para emergências.', 4.50, 6, 2000.00, 'COURIER', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Crédito Pessoal');
 
 -- 4. Correção RLS: Permitir INSERT em loan_installments pelo usuário dono do empréstimo
 DROP POLICY IF EXISTS "Users can create loan installments" ON public.loan_installments;
@@ -618,12 +618,12 @@ BEGIN
     END IF;
 END $$;
 
--- Garantir que usuﾃ｡rios possam atualizar seu prﾃｳprio status is_open
+-- Garantir que usuários possam atualizar seu próprio status is_open
 DROP POLICY IF EXISTS "Users can update own is_open" ON public.user_profiles;
 CREATE POLICY "Users can update own is_open" ON public.user_profiles
     FOR UPDATE USING (auth.uid()::text = id::text) WITH CHECK (auth.uid()::text = id::text);
 
--- 2. Tabela de Relatﾃｳrios Diﾃ｡rios da Loja
+-- 2. Tabela de Relatórios Diários da Loja
 CREATE TABLE IF NOT EXISTS public.store_daily_reports (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -635,7 +635,7 @@ CREATE TABLE IF NOT EXISTS public.store_daily_reports (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ﾃ肱dices e Trigger de Updated At
+-- Índices e Trigger de Updated At
 CREATE INDEX IF NOT EXISTS store_daily_reports_store_id_idx ON public.store_daily_reports (store_id);
 CREATE INDEX IF NOT EXISTS store_daily_reports_date_idx ON public.store_daily_reports (report_date);
 
@@ -662,7 +662,7 @@ END $$;
 
 GRANT SELECT, INSERT ON public.store_daily_reports TO authenticated;
 
--- Garantir permissﾃｵes de leitura na tabela orders para lojistas (Correﾃｧﾃ｣o 2026-01-15)
+-- Garantir permissﾃｵes de leitura na tabela orders para lojistas (Correção 2026-01-15)
 GRANT SELECT ON public.orders TO authenticated;
 
 DROP POLICY IF EXISTS "Lojistas leem seus proprios pedidos" ON public.orders;
@@ -690,8 +690,8 @@ BEGIN
 END $$;
 
 
--- Correﾃｧﾃ｣o para get_products_for_collaborator (15/01/2026)
--- A relaﾃｧﾃ｣o store_categories nﾃ｣o existe, e a tabela store_products usa a coluna 'category' (TEXT).
+-- Correção para get_products_for_collaborator (15/01/2026)
+-- A relaﾃｧﾃ｣o store_categories não existe, e a tabela store_products usa a coluna 'category' (TEXT).
 CREATE OR REPLACE FUNCTION public.get_products_for_collaborator(p_store_id UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -732,7 +732,7 @@ CREATE TABLE IF NOT EXISTS public.store_tables (
     UNIQUE(store_id, identifier)
 );
 
--- ﾃ肱dices e Trigger
+-- Índices e Trigger
 CREATE INDEX IF NOT EXISTS store_tables_store_id_idx ON public.store_tables (store_id);
 DROP TRIGGER IF EXISTS handle_store_tables_updated_at ON public.store_tables;
 CREATE TRIGGER handle_store_tables_updated_at BEFORE UPDATE ON public.store_tables
@@ -755,7 +755,7 @@ CREATE POLICY "Colaboradores veem mesas da loja" ON public.store_tables
         )
     );
 
--- Permissﾃｵes
+-- Permissões
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_tables TO authenticated;
 
 
@@ -836,7 +836,7 @@ CREATE TABLE IF NOT EXISTS public.user_notifications (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Garantir colunas em user_notifications (Migraﾃｧﾃ｣o Segura)
+-- Garantir colunas em user_notifications (Migração Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'read') THEN
@@ -859,7 +859,7 @@ BEGIN
     END IF;
 END $$;
 
--- ﾃ肱dices
+-- Índices
 CREATE INDEX IF NOT EXISTS user_notifications_user_id_idx ON public.user_notifications(user_id);
 CREATE INDEX IF NOT EXISTS user_notifications_read_idx ON public.user_notifications("read");
 
@@ -909,7 +909,7 @@ CREATE INDEX IF NOT EXISTS partner_requests_store_status_idx ON public.partner_r
 
 
 -- Arquivo de esquema global do Supabase.
--- Todas as alteraﾃｧﾃｵes de banco de dados devem ser adicionadas aqui de forma nﾃ｣o destrutiva.
+-- Todas as alteraﾃｧﾃｵes de banco de dados devem ser adicionadas aqui de forma não destrutiva.
 -- Nﾃ｣o remova ou altere cﾃｳdigo existente, apenas adicione novas estruturas ou modificaﾃｧﾃｵes.
 
 -- ===============================================================
@@ -5492,6 +5492,10 @@ CREATE TABLE IF NOT EXISTS public.partner_fee_settings (
     global_tax_fixed NUMERIC(10, 2) DEFAULT 0.50,
     global_tax_percent NUMERIC(10, 2) DEFAULT 2.0,
     super_store_monthly_fee NUMERIC(10, 2) DEFAULT 99.00,
+    super_store_monthly_enabled BOOLEAN DEFAULT TRUE,
+    super_store_commission_enabled BOOLEAN DEFAULT FALSE,
+    super_store_commission_percent NUMERIC(5, 2) DEFAULT 0,
+    super_store_commission_fixed NUMERIC(10, 2) DEFAULT 0,
     association_fee NUMERIC(10, 2) DEFAULT 10.00,
     base_delivery_value NUMERIC(10, 2) DEFAULT 5.00,
     base_delivery_km NUMERIC(10, 2) DEFAULT 3.00,
@@ -6494,25 +6498,41 @@ CREATE TRIGGER handle_insurance_plans_updated_at BEFORE UPDATE ON public.insuran
 DROP TRIGGER IF EXISTS handle_insurance_subscriptions_updated_at ON public.insurance_subscriptions;
 CREATE TRIGGER handle_insurance_subscriptions_updated_at BEFORE UPDATE ON public.insurance_subscriptions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- Funﾃｧﾃ｣o: subscribe_to_super_store
-CREATE OR REPLACE FUNCTION public.subscribe_to_super_store(fee NUMERIC)
+-- Função: subscribe_to_super_store
+CREATE OR REPLACE FUNCTION public.subscribe_to_super_store(fee NUMERIC, p_plan_type TEXT DEFAULT 'MENSALIDADE')
 RETURNS VOID AS $$
 DECLARE
   v_user UUID := auth.uid()::uuid;
 BEGIN
-  UPDATE public.user_profiles SET is_super_store = TRUE, updated_at = now() WHERE id = v_user;
+  -- Garante que a carteira exista (lazy creation)
+  INSERT INTO public.store_wallets (store_id, balance_decimal, updated_at)
+  VALUES (v_user, 0, now())
+  ON CONFLICT (store_id) DO NOTHING;
+
+  UPDATE public.user_profiles 
+  SET is_super_store = TRUE, 
+      super_store_plan_type = p_plan_type,
+      super_store_expiration = CASE 
+        WHEN p_plan_type = 'MENSALIDADE' THEN now() + interval '30 days' 
+        ELSE NULL 
+      END,
+      updated_at = now() 
+  WHERE id = v_user;
   
-  -- Debita da carteira
-  INSERT INTO public.store_wallet_transactions(store_id, amount, description, type, status)
-  VALUES (v_user, -ABS(fee), 'Assinatura Super Store', 'DEBIT', 'COMPLETED');
-  
-  UPDATE public.store_wallets
-  SET balance_decimal = balance_decimal - ABS(fee)
-  WHERE store_id = v_user;
+  -- Debita da carteira (apenas se for MENSALIDADE e houver taxa)
+  IF p_plan_type = 'MENSALIDADE' AND fee > 0 THEN
+      INSERT INTO public.store_wallet_transactions(store_id, amount, description, type, status)
+      VALUES (v_user, -ABS(fee), 'Assinatura Super Store (MENSALIDADE)', 'DEBIT', 'COMPLETED');
+      
+      UPDATE public.store_wallets
+      SET balance_decimal = balance_decimal - ABS(fee),
+          updated_at = now()
+      WHERE store_id = v_user;
+  END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: admin_get_consolidated_wallets
+-- Função: admin_get_consolidated_wallets
 CREATE OR REPLACE FUNCTION public.admin_get_consolidated_wallets()
 RETURNS TABLE (user_id UUID, name TEXT, email TEXT, role public.user_role, balance NUMERIC) AS $$
 BEGIN
@@ -6525,7 +6545,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: get_pending_payouts_summary
+-- Função: cancel_super_store_subscription
+CREATE OR REPLACE FUNCTION public.cancel_super_store_subscription()
+RETURNS VOID AS $$
+DECLARE
+  v_user UUID := auth.uid()::uuid;
+BEGIN
+  UPDATE public.user_profiles 
+  SET is_super_store = FALSE, 
+      super_store_plan_type = NULL,
+      super_store_expiration = NULL,
+      updated_at = now() 
+  WHERE id = v_user;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Função: get_pending_payouts_summary
 CREATE OR REPLACE FUNCTION public.get_pending_payouts_summary()
 RETURNS TABLE (
     driver_id UUID,
@@ -6554,7 +6589,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Removendo assinatura antiga para evitar conflitos de overload (06/02/2026)
 DROP FUNCTION IF EXISTS public.admin_adjust_balance(UUID, NUMERIC, TEXT);
 
--- Funﾃｧﾃ｣o: admin_adjust_balance (Atualizada em 06/02/2026 para suportar Pessoal vs Corporativo)
+-- Função: admin_adjust_balance (Atualizada em 06/02/2026 para suportar Pessoal vs Corporativo)
 CREATE OR REPLACE FUNCTION public.admin_adjust_balance(
     p_user_id UUID, 
     p_amount NUMERIC, 
@@ -6610,7 +6645,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: admin_update_driver_automatic_payouts
+-- Função: admin_update_driver_automatic_payouts
 CREATE OR REPLACE FUNCTION public.admin_update_driver_automatic_payouts(p_user_id UUID, p_enabled BOOLEAN)
 RETURNS VOID AS $$
 BEGIN
@@ -6621,7 +6656,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: admin_update_driver_preferred_payout_method
+-- Função: admin_update_driver_preferred_payout_method
 CREATE OR REPLACE FUNCTION public.admin_update_driver_preferred_payout_method(p_user_id UUID, p_method_type public.payout_method_type)
 RETURNS VOID AS $$
 BEGIN
@@ -6632,7 +6667,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: generate_card_qr_token
+-- Função: generate_card_qr_token
 CREATE OR REPLACE FUNCTION public.generate_card_qr_token(card_id UUID)
 RETURNS TEXT AS $$
 BEGIN
@@ -6641,7 +6676,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: get_zebank_dashboard_data
+-- Função: get_zebank_dashboard_data
 CREATE OR REPLACE FUNCTION public.get_zebank_dashboard_data()
 RETURNS JSONB AS $$
 DECLARE
@@ -6682,7 +6717,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- Funﾃｧﾃ｣o: zebank_p2p_transfer
+-- Função: zebank_p2p_transfer
 CREATE OR REPLACE FUNCTION public.zebank_p2p_transfer(receiver_code TEXT, amount NUMERIC)
 RETURNS VOID AS $$
 DECLARE
@@ -6728,7 +6763,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- Funﾃｧﾃ｣o: zebank_manage_savings
+-- Função: zebank_manage_savings
 CREATE OR REPLACE FUNCTION public.zebank_manage_savings(action TEXT, amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
@@ -6737,7 +6772,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: admin_update_cofrinho_settings
+-- Função: admin_update_cofrinho_settings
 CREATE OR REPLACE FUNCTION public.admin_update_cofrinho_settings(
     p_yield_frequency TEXT,
     p_interest_type TEXT,
@@ -6770,7 +6805,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: zebank_create_virtual_card
+-- Função: zebank_create_virtual_card
 CREATE OR REPLACE FUNCTION public.zebank_create_virtual_card(card_name TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -6789,7 +6824,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: simulate_card_transaction
+-- Função: simulate_card_transaction
 CREATE OR REPLACE FUNCTION public.simulate_card_transaction(card_id UUID, amount NUMERIC, description TEXT)
 RETURNS VOID AS $$
 BEGIN
@@ -6798,7 +6833,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: send_global_notification
+-- Função: send_global_notification
 CREATE OR REPLACE FUNCTION public.send_global_notification(p_title TEXT, p_message TEXT, p_type TEXT DEFAULT 'info')
 RETURNS VOID AS $$
 DECLARE
@@ -6820,7 +6855,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: activate_my_terminal
+-- Função: activate_my_terminal
 CREATE OR REPLACE FUNCTION public.activate_my_terminal()
 RETURNS SETOF public.user_terminals AS $$
 DECLARE
@@ -6833,7 +6868,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: deactivate_my_terminal
+-- Função: deactivate_my_terminal
 CREATE OR REPLACE FUNCTION public.deactivate_my_terminal()
 RETURNS VOID AS $$
 DECLARE
@@ -6845,7 +6880,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: get_my_terminal_history
+-- Função: get_my_terminal_history
 CREATE OR REPLACE FUNCTION public.get_my_terminal_history()
 RETURNS SETOF public.user_terminal_transactions AS $$
 BEGIN
@@ -6853,7 +6888,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: update_my_terminal_settings
+-- Função: update_my_terminal_settings
 CREATE OR REPLACE FUNCTION public.update_my_terminal_settings(p_label TEXT)
 RETURNS VOID AS $$
 BEGIN
@@ -6861,7 +6896,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: verify_terminal_pin
+-- Função: verify_terminal_pin
 CREATE OR REPLACE FUNCTION public.verify_terminal_pin(p_pin_code TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -6872,7 +6907,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: get_zepay_dashboard_data
+-- Função: get_zepay_dashboard_data
 CREATE OR REPLACE FUNCTION public.get_zepay_dashboard_data()
 RETURNS JSONB AS $$
 BEGIN
@@ -6881,7 +6916,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: zepay_transfer
+-- Função: zepay_transfer
 CREATE OR REPLACE FUNCTION public.zepay_transfer(receiver_code TEXT, amount NUMERIC)
 RETURNS VOID AS $$
 BEGIN
@@ -6890,7 +6925,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: zepay_create_virtual_card
+-- Função: zepay_create_virtual_card
 CREATE OR REPLACE FUNCTION public.zepay_create_virtual_card(card_name TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -6909,7 +6944,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: process_user_pos_payment
+-- Função: process_user_pos_payment
 CREATE OR REPLACE FUNCTION public.process_user_pos_payment(
     p_card_id UUID,
     p_amount NUMERIC,
@@ -6933,7 +6968,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: log_client_error
+-- Função: log_client_error
 CREATE OR REPLACE FUNCTION public.log_client_error(p_category TEXT, p_message TEXT, p_context JSONB)
 RETURNS VOID AS $$
 BEGIN
@@ -6942,7 +6977,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: save_sales_simulation
+-- Função: save_sales_simulation
 CREATE OR REPLACE FUNCTION public.save_sales_simulation(
     p_sale_value NUMERIC,
     p_fee_payer TEXT,
@@ -6957,7 +6992,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: get_my_sales_simulations
+-- Função: get_my_sales_simulations
 CREATE OR REPLACE FUNCTION public.get_my_sales_simulations()
 RETURNS TABLE (
     id UUID,
@@ -6974,7 +7009,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Funﾃｧﾃ｣o: clear_my_sales_simulations
+-- Função: clear_my_sales_simulations
 CREATE OR REPLACE FUNCTION public.clear_my_sales_simulations()
 RETURNS VOID AS $$
 BEGIN
@@ -6983,7 +7018,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- Funﾃｧﾃ｣o: save_route
+-- Função: save_route
 CREATE OR REPLACE FUNCTION public.save_route(
     p_name TEXT,
     p_waypoints TEXT[],
@@ -7027,7 +7062,7 @@ END $$;
 -- 6.x STORAGE (BUCKETS E POLﾃ控ICAS)
 -- ==================================================================
 
--- Inserir buckets se nﾃ｣o existirem
+-- Inserir buckets se não existirem
 INSERT INTO storage.buckets (id, name, public, owner)
 VALUES
     ('avatars', 'avatars', TRUE, NULL),
@@ -7098,6 +7133,21 @@ DROP POLICY IF EXISTS "Admins can manage public files." ON storage.objects;
 CREATE POLICY "Admins can manage public files."
     ON storage.objects FOR ALL
     USING (bucket_id = 'public-files' AND public.is_admin());
+
+DROP POLICY IF EXISTS "Authenticated users can upload public files." ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can update public files." ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete public files." ON storage.objects;
+
+DROP POLICY IF EXISTS "Authenticated users manage public files" ON storage.objects;
+CREATE POLICY "Authenticated users manage public files"
+    ON storage.objects FOR ALL
+    TO authenticated
+    USING (bucket_id = 'public-files')
+    WITH CHECK (bucket_id = 'public-files');
+
+-- Garantir permissões de acesso ao esquema storage para usuários autenticados
+GRANT ALL ON storage.objects TO authenticated;
+GRANT ALL ON storage.buckets TO authenticated;
 
 -- ==================================================================
 -- Tabela de logs de QR Code (Novo Recurso: Item 8)
@@ -7253,7 +7303,7 @@ ALTER TABLE public.store_products ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
-    -- Permitir que a loja gerencie seus prﾃｳprios produtos
+    -- Permitir que a loja gerencie seus próprios produtos
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Store partners can manage their own products' AND tablename = 'store_products') THEN
         CREATE POLICY "Store partners can manage their own products" ON public.store_products
         FOR ALL
@@ -8020,9 +8070,9 @@ CREATE TABLE IF NOT EXISTS public.slides (
 -- Habilitar RLS
 ALTER TABLE public.slides ENABLE ROW LEVEL SECURITY;
 
--- Permissﾃｵes de acesso
+-- Permissões de acesso
 GRANT SELECT ON public.slides TO anon, authenticated;
-GRANT ALL ON public.slides TO authenticated; -- Permite que usuﾃ｡rios autenticados (admins) gerenciem via polﾃｭticas RLS
+GRANT ALL ON public.slides TO authenticated; -- Permite que usuários autenticados (admins) gerenciem via polﾃｭticas RLS
 
 -- Polﾃδｭticas de RLS
 DO $$ 
@@ -8051,8 +8101,8 @@ SELECT 'Novas Taxas Disponﾃｭveis', 'https://images.unsplash.com/photo-155422
 WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Novas Taxas Disponﾃｭveis');
 
 INSERT INTO public.slides (name, image_url, link, target_audience, is_active)
-SELECT 'Gestﾃ｣o de Estoque Facilitada', 'https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=1600&h=400', '/shop', 'merchants', true
-WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Gestﾃ｣o de Estoque Facilitada');
+SELECT 'Gestão de Estoque Facilitada', 'https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=1600&h=400', '/shop', 'merchants', true
+WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Gestão de Estoque Facilitada');
 
 INSERT INTO public.slides (name, image_url, link, target_audience, is_active)
 SELECT 'Suporte 24h', 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=1600&h=400', '/support', 'both', true
@@ -8061,7 +8111,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.slides WHERE name = 'Suporte 24h');
 -- Garantir links em slides que foram inseridos sem link anteriormente
 UPDATE public.slides SET link = '/profile' WHERE name = 'Bem-vindo ao Zﾃｩ Entregas' AND link IS NULL;
 UPDATE public.slides SET link = '/partner' WHERE name = 'Novas Taxas Disponﾃｭveis' AND link IS NULL;
-UPDATE public.slides SET link = '/shop' WHERE name = 'Gestﾃ｣o de Estoque Facilitada' AND link IS NULL;
+UPDATE public.slides SET link = '/shop' WHERE name = 'Gestão de Estoque Facilitada' AND link IS NULL;
 
 
 
@@ -8093,7 +8143,7 @@ CREATE TABLE IF NOT EXISTS public.marketing_designs (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- RLS e Permissﾃｵes
+-- RLS e Permissões
 ALTER TABLE public.marketing_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.marketing_designs ENABLE ROW LEVEL SECURITY;
 
@@ -8178,12 +8228,12 @@ END $$;
 -- Garantir colunas para produtos e pedidos de lojista
 DO $$
 BEGIN
-    -- Coluna store_id na tabela products (se nﾃ｣o existir)
+    -- Coluna store_id na tabela products (se não existir)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'store_id') THEN
         ALTER TABLE public.products ADD COLUMN store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE;
     END IF;
 
-    -- Coluna origin na tabela orders (se nﾃ｣o existir)
+    -- Coluna origin na tabela orders (se não existir)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'origin') THEN
         ALTER TABLE public.orders ADD COLUMN origin VARCHAR(50) DEFAULT 'APP';
     END IF;
@@ -8201,12 +8251,12 @@ BEGIN
         ALTER TABLE public.orders ADD COLUMN custom_payment_label VARCHAR(100);
     END IF;
 
-    -- Coluna category na tabela products (se nﾃ｣o existir, para compatibilidade com o frontend)
+    -- Coluna category na tabela products (se não existir, para compatibilidade com o frontend)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'category') THEN
         ALTER TABLE public.products ADD COLUMN category VARCHAR(255);
     END IF;
 
-    -- Coluna image_url na tabela products (se nﾃ｣o existir, para compatibilidade com o frontend)
+    -- Coluna image_url na tabela products (se não existir, para compatibilidade com o frontend)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'image_url') THEN
         ALTER TABLE public.products ADD COLUMN image_url TEXT;
     END IF;
@@ -8261,7 +8311,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Garantir colunas em api_keys (Migraﾃｧﾃ｣o Segura)
+-- Garantir colunas em api_keys (Migração Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'user_id') THEN
@@ -8290,7 +8340,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON public.api_keys (user_id);
 CREATE INDEX IF NOT EXISTS api_keys_key_token_idx ON public.api_keys (key_token);
 
--- Correﾃｧﾃ｣o de Constraints (Fix para duplicidade global)
+-- Correção de Constraints (Fix para duplicidade global)
 DO $$
 BEGIN
     -- Remover constraint antiga incorreta (que forﾃｧava service_name ﾃｺnico globalmente)
@@ -8341,7 +8391,7 @@ CREATE TABLE IF NOT EXISTS public.api_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Garantir colunas em api_logs (Migraﾃｧﾃ｣o Segura)
+-- Garantir colunas em api_logs (Migração Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'api_logs' AND column_name = 'user_id') THEN
@@ -8391,7 +8441,7 @@ CREATE POLICY "Authenticated users can insert api logs" ON public.api_logs
     FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
 
--- Garantir colunas da InfinitePay em orders (Migraﾃｧﾃ｣o Segura)
+-- Garantir colunas da InfinitePay em orders (Migração Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'infinitepay_id') THEN
@@ -8450,7 +8500,7 @@ END $$;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO service_role;
 
--- Garantir criaﾃｧﾃ｣o automﾃ｡tica de carteiras para TODOS usuﾃ｡rios relevantes
+-- Garantir criaﾃｧﾃ｣o automﾃ｡tica de carteiras para TODOS usuários relevantes
 DO $$
 DECLARE
     r RECORD;
@@ -8464,7 +8514,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- Funﾃｧﾃ｣o RPC para Ajuste de Saldo (ZeBank)
+-- Função RPC para Ajuste de Saldo (ZeBank)
 -- Permite saldos negativos conforme solicitado (representando dﾃｭvida)
 CREATE OR REPLACE FUNCTION public.adjust_wallet_balance(
     p_user_id UUID,
@@ -8606,7 +8656,7 @@ GRANT ALL ON public.app_notifications TO service_role;
 -- Mﾃ泥ULO DE EMPRﾃ唄TIMOS (2026-01-11)
 -- ==================================================================
 
--- Tabela de Tipos de Emprﾃｩstimo
+-- Tabela de Tipos de Empréstimo
 CREATE TABLE IF NOT EXISTS public.loan_types (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
@@ -8657,7 +8707,7 @@ CREATE TABLE IF NOT EXISTS public.loan_level_limits (
     CONSTRAINT loan_level_limits_user_type_partner_level_key UNIQUE (user_type, partner_level)
 );
 
--- Migraﾃｧﾃ｣o segura: adicionar coluna user_type se nﾃ｣o existir
+-- Migração segura: adicionar coluna user_type se não existir
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'loan_level_limits' AND column_name = 'user_type') THEN
@@ -8697,7 +8747,7 @@ GRANT ALL ON public.loan_level_limits TO authenticated;
 GRANT ALL ON public.loan_level_limits TO service_role;
 
 
--- Tabela de Solicitaﾃｧﾃｵes/Contratos de Emprﾃｩstimo
+-- Tabela de Solicitações/Contratos de Empréstimo
 CREATE TABLE IF NOT EXISTS public.partner_loans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -8715,7 +8765,7 @@ CREATE TABLE IF NOT EXISTS public.partner_loans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Migraﾃｧﾃ｣o segura: adicionar colunas se nﾃ｣o existirem
+-- Migração segura: adicionar colunas se não existirem
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_loans' AND column_name = 'disbursement_method') THEN
@@ -8756,7 +8806,7 @@ GRANT ALL ON public.partner_loans TO authenticated;
 GRANT ALL ON public.partner_loans TO service_role;
 
 
--- Tabela de Parcelas do Emprﾃｩstimo
+-- Tabela de Parcelas do Empréstimo
 CREATE TABLE IF NOT EXISTS public.loan_installments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     loan_id UUID NOT NULL REFERENCES public.partner_loans(id) ON DELETE CASCADE,
@@ -8791,7 +8841,7 @@ GRANT ALL ON public.loan_installments TO authenticated;
 GRANT ALL ON public.loan_installments TO service_role;
 
 
--- Tabela de Logs de Auditoria de Emprﾃｩstimos
+-- Tabela de Logs de Auditoria de Empréstimos
 CREATE TABLE IF NOT EXISTS public.loan_audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     loan_id UUID REFERENCES public.partner_loans(id) ON DELETE SET NULL,
@@ -8816,7 +8866,7 @@ GRANT ALL ON public.loan_audit_logs TO authenticated;
 -- LOAN PAYMENT PROCESSING FUNCTION (2026-01-11)
 -- ==================================================================
 
--- Funﾃｧﾃ｣o para processar pagamento de parcelas de emprﾃｩstimo
+-- Função para processar pagamento de parcelas de emprﾃｩstimo
 -- Deve ser chamada durante o processamento de repasses semanais
 CREATE OR REPLACE FUNCTION public.process_loan_installment_payments(
     p_user_id UUID,
@@ -8835,7 +8885,7 @@ DECLARE
     v_allow_negative BOOLEAN := FALSE;
     v_partner_level TEXT;
 BEGIN
-    -- Buscar nﾃｭvel do parceiro e verificar se permite saldo negativo
+    -- Buscar nível do parceiro e verificar se permite saldo negativo
     SELECT partner_level INTO v_partner_level 
     FROM public.user_profiles 
     WHERE id = p_user_id;
@@ -8888,7 +8938,7 @@ BEGIN
                     p_user_id
                 );
                 
-            -- Se o repasse nﾃ｣o cobre, mas permite saldo negativo
+            -- Se o repasse não cobre, mas permite saldo negativo
             ELSIF v_allow_negative THEN
                 -- Pagar parcela mesmo ficando negativo
                 UPDATE public.loan_installments
@@ -8917,7 +8967,7 @@ BEGIN
                     p_user_id
                 );
                 
-            -- Se nﾃ｣o cobre e nﾃ｣o permite negativo
+            -- Se não cobre e não permite negativo
             ELSE
                 -- Marcar como atrasada
                 UPDATE public.loan_installments
@@ -8964,7 +9014,7 @@ GRANT EXECUTE ON FUNCTION public.process_loan_installment_payments(UUID, NUMERIC
 -- SEEDS & BACKFILLS (LOANS MODULE) - Adicionado em 2026-01-12
 -- ==================================================================
 
--- 1. Inserir Limites por Nﾃｭvel e Tipo de Usuﾃ｡rio (Se nﾃ｣o existirem)
+-- 1. Inserir Limites por Nﾃｭvel e Tipo de Usuﾃ｡rio (Se não existirem)
 -- Limites para Entregadores
 INSERT INTO public.loan_level_limits (user_type, partner_level, max_limit, max_installments, allow_negative_balance)
 VALUES
@@ -8989,23 +9039,23 @@ SET max_limit = EXCLUDED.max_limit,
     max_installments = EXCLUDED.max_installments,
     allow_negative_balance = EXCLUDED.allow_negative_balance;
 
--- 2. Backfill: Garantir que usuﾃ｡rios tenham nﾃｭvel 'BRONZE' se estiver nulo
+-- 2. Backfill: Garantir que usuários tenham nível 'BRONZE' se estiver nulo
 UPDATE public.user_profiles
 SET partner_level = 'BRONZE'
 WHERE partner_level IS NULL OR partner_level = '';
 
--- 3. Inserir Tipos de Emprﾃｩstimo Padrﾃ｣o (Evitando duplicidade)
+-- 3. Inserir Tipos de Empréstimo Padrão (Evitando duplicidade)
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Antecipaﾃｧﾃ｣o de Recebﾃｭveis', 'Antecipe seus ganhos futuros com taxas reduzidas.', 2.50, 4, 1000.00, 'BOTH', true
-WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Antecipaﾃｧﾃ｣o de Recebﾃｭveis');
+SELECT 'Antecipação de Recebíveis', 'Antecipe seus ganhos futuros com taxas reduzidas.', 2.50, 4, 1000.00, 'BOTH', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Antecipação de Recebíveis');
 
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Capital de Giro', 'Emprﾃｩstimo para impulsionar seu negﾃｳcio.', 3.90, 12, 5000.00, 'STORE', true
+SELECT 'Capital de Giro', 'Empréstimo para impulsionar seu negócio.', 3.90, 12, 5000.00, 'STORE', true
 WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Capital de Giro');
 
 INSERT INTO public.loan_types (name, description, interest_rate_monthly, max_installments, max_amount, target_audience, is_active)
-SELECT 'Crﾃｩdito Pessoal', 'Dinheiro rﾃ｡pido para emergﾃｪncias.', 4.50, 6, 2000.00, 'COURIER', true
-WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Crﾃｩdito Pessoal');
+SELECT 'Crédito Pessoal', 'Dinheiro rápido para emergências.', 4.50, 6, 2000.00, 'COURIER', true
+WHERE NOT EXISTS (SELECT 1 FROM public.loan_types WHERE name = 'Crédito Pessoal');
 
 -- 4. Correção RLS: Permitir INSERT em loan_installments pelo usuário dono do empréstimo
 DROP POLICY IF EXISTS "Users can create loan installments" ON public.loan_installments;
@@ -9289,12 +9339,12 @@ BEGIN
     END IF;
 END $$;
 
--- Garantir que usuﾃ｡rios possam atualizar seu prﾃｳprio status is_open
+-- Garantir que usuários possam atualizar seu próprio status is_open
 DROP POLICY IF EXISTS "Users can update own is_open" ON public.user_profiles;
 CREATE POLICY "Users can update own is_open" ON public.user_profiles
     FOR UPDATE USING (auth.uid()::text = id::text) WITH CHECK (auth.uid()::text = id::text);
 
--- 2. Tabela de Relatﾃｳrios Diﾃ｡rios da Loja
+-- 2. Tabela de Relatórios Diários da Loja
 CREATE TABLE IF NOT EXISTS public.store_daily_reports (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -9306,7 +9356,7 @@ CREATE TABLE IF NOT EXISTS public.store_daily_reports (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ﾃ肱dices e Trigger de Updated At
+-- Índices e Trigger de Updated At
 CREATE INDEX IF NOT EXISTS store_daily_reports_store_id_idx ON public.store_daily_reports (store_id);
 CREATE INDEX IF NOT EXISTS store_daily_reports_date_idx ON public.store_daily_reports (report_date);
 
@@ -9333,7 +9383,7 @@ END $$;
 
 GRANT SELECT, INSERT ON public.store_daily_reports TO authenticated;
 
--- Garantir permissﾃｵes de leitura na tabela orders para lojistas (Correﾃｧﾃ｣o 2026-01-15)
+-- Garantir permissﾃｵes de leitura na tabela orders para lojistas (Correção 2026-01-15)
 GRANT SELECT ON public.orders TO authenticated;
 
 DROP POLICY IF EXISTS "Lojistas leem seus proprios pedidos" ON public.orders;
@@ -9361,8 +9411,8 @@ BEGIN
 END $$;
 
 
--- Correﾃｧﾃ｣o para get_products_for_collaborator (15/01/2026)
--- A relaﾃｧﾃ｣o store_categories nﾃ｣o existe, e a tabela store_products usa a coluna 'category' (TEXT).
+-- Correção para get_products_for_collaborator (15/01/2026)
+-- A relaﾃｧﾃ｣o store_categories não existe, e a tabela store_products usa a coluna 'category' (TEXT).
 CREATE OR REPLACE FUNCTION public.get_products_for_collaborator(p_store_id UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -9403,7 +9453,7 @@ CREATE TABLE IF NOT EXISTS public.store_tables (
     UNIQUE(store_id, identifier)
 );
 
--- ﾃ肱dices e Trigger
+-- Índices e Trigger
 CREATE INDEX IF NOT EXISTS store_tables_store_id_idx ON public.store_tables (store_id);
 DROP TRIGGER IF EXISTS handle_store_tables_updated_at ON public.store_tables;
 CREATE TRIGGER handle_store_tables_updated_at BEFORE UPDATE ON public.store_tables
@@ -9426,7 +9476,7 @@ CREATE POLICY "Colaboradores veem mesas da loja" ON public.store_tables
         )
     );
 
--- Permissﾃｵes
+-- Permissões
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_tables TO authenticated;
 
 
@@ -9507,7 +9557,7 @@ CREATE TABLE IF NOT EXISTS public.user_notifications (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Garantir colunas em user_notifications (Migraﾃｧﾃ｣o Segura)
+-- Garantir colunas em user_notifications (Migração Segura)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'read') THEN
@@ -9530,7 +9580,7 @@ BEGIN
     END IF;
 END $$;
 
--- ﾃ肱dices
+-- Índices
 CREATE INDEX IF NOT EXISTS user_notifications_user_id_idx ON public.user_notifications(user_id);
 CREATE INDEX IF NOT EXISTS user_notifications_read_idx ON public.user_notifications("read");
 
@@ -9580,7 +9630,7 @@ CREATE INDEX IF NOT EXISTS partner_requests_store_status_idx ON public.partner_r
 
 
 -- Arquivo de esquema global do Supabase.
--- Todas as alteraﾃｧﾃｵes de banco de dados devem ser adicionadas aqui de forma nﾃ｣o destrutiva.
+-- Todas as alteraﾃｧﾃｵes de banco de dados devem ser adicionadas aqui de forma não destrutiva.
 -- Nﾃ｣o remova ou altere cﾃｳdigo existente, apenas adicione novas estruturas ou modificaﾃｧﾃｵes.
 
 -- ===============================================================
@@ -14163,6 +14213,10 @@ CREATE TABLE IF NOT EXISTS public.partner_fee_settings (
     global_tax_fixed NUMERIC(10, 2) DEFAULT 0.50,
     global_tax_percent NUMERIC(10, 2) DEFAULT 2.0,
     super_store_monthly_fee NUMERIC(10, 2) DEFAULT 99.00,
+    super_store_monthly_enabled BOOLEAN DEFAULT TRUE,
+    super_store_commission_enabled BOOLEAN DEFAULT FALSE,
+    super_store_commission_percent NUMERIC(5, 2) DEFAULT 0,
+    super_store_commission_fixed NUMERIC(10, 2) DEFAULT 0,
     association_fee NUMERIC(10, 2) DEFAULT 10.00,
     base_delivery_value NUMERIC(10, 2) DEFAULT 5.00,
     base_delivery_km NUMERIC(10, 2) DEFAULT 3.00,
@@ -15816,4 +15870,538 @@ CREATE TRIGGER on_user_profile_created_reward
     AFTER INSERT ON public.user_profiles
     FOR EACH ROW EXECUTE FUNCTION public.process_referral_reward_on_signup();
 
+-- ==================================================================
+-- MELHORIAS DESTAQUE POR CIDADE - 08/02/2026
+-- ==================================================================
+
+-- 1. Adicionar colunas para suporte a arquivos em city_store_banner_request_messages
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_banner_request_messages' AND column_name = 'message_type') THEN
+        ALTER TABLE public.city_store_banner_request_messages ADD COLUMN message_type TEXT DEFAULT 'text';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_banner_request_messages' AND column_name = 'file_url') THEN
+        ALTER TABLE public.city_store_banner_request_messages ADD COLUMN file_url TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_banner_request_messages' AND column_name = 'file_name') THEN
+        ALTER TABLE public.city_store_banner_request_messages ADD COLUMN file_name TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_banner_request_messages' AND column_name = 'file_mime_type') THEN
+        ALTER TABLE public.city_store_banner_request_messages ADD COLUMN file_mime_type TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_banner_request_messages' AND column_name = 'file_size') THEN
+        ALTER TABLE public.city_store_banner_request_messages ADD COLUMN file_size INTEGER;
+    END IF;
+END $$;
+
+-- 2. Tabela de pedidos/transações de banner e destaque
+CREATE TABLE IF NOT EXISTS public.city_promotion_orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  store_id UUID NOT NULL REFERENCES public.user_profiles(id),
+  city_slug TEXT NOT NULL,
+  order_type TEXT NOT NULL, -- 'BANNER' ou 'HIGHLIGHT'
+  amount_paid NUMERIC NOT NULL,
+  duration_days INTEGER, -- Para destaque
+  payment_method TEXT NOT NULL, -- 'WALLET', 'PIX', 'CREDIT_CARD'
+  payment_status TEXT DEFAULT 'PENDING', -- 'PENDING', 'PAID', 'CANCELLED'
+  external_payment_id TEXT, -- ID do gateway se não for carteira
+  banner_request_id UUID REFERENCES public.city_store_banner_requests(id),
+  highlight_order_id UUID REFERENCES public.city_store_highlight_orders(id),
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_city_promotion_orders_store ON public.city_promotion_orders(store_id);
+CREATE INDEX IF NOT EXISTS idx_city_promotion_orders_status ON public.city_promotion_orders(payment_status);
+CREATE INDEX IF NOT EXISTS idx_city_promotion_orders_type ON public.city_promotion_orders(order_type);
+
+ALTER TABLE public.city_promotion_orders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users view own promotion orders" ON public.city_promotion_orders;
+CREATE POLICY "Users view own promotion orders" ON public.city_promotion_orders FOR SELECT USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Admins manage promotion orders" ON public.city_promotion_orders;
+CREATE POLICY "Admins manage promotion orders" ON public.city_promotion_orders FOR ALL USING (public.is_admin());
+
+DROP TRIGGER IF EXISTS handle_city_promotion_orders_updated_at ON public.city_promotion_orders;
+CREATE TRIGGER handle_city_promotion_orders_updated_at BEFORE UPDATE ON public.city_promotion_orders FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- 3. Adicionar configurações de preços para banner em city_store_highlight_settings
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_highlight_settings' AND column_name = 'banner_ready_price') THEN
+        ALTER TABLE public.city_store_highlight_settings ADD COLUMN banner_ready_price NUMERIC DEFAULT 150.00;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_highlight_settings' AND column_name = 'banner_design_price') THEN
+        ALTER TABLE public.city_store_highlight_settings ADD COLUMN banner_design_price NUMERIC DEFAULT 250.00;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_highlight_settings' AND column_name = 'banner_duration_days') THEN
+        ALTER TABLE public.city_store_highlight_settings ADD COLUMN banner_duration_days INTEGER DEFAULT 30;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_highlight_settings' AND column_name = 'banner_enabled') THEN
+        ALTER TABLE public.city_store_highlight_settings ADD COLUMN banner_enabled BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'city_store_highlight_settings' AND column_name = 'highlight_enabled') THEN
+        ALTER TABLE public.city_store_highlight_settings ADD COLUMN highlight_enabled BOOLEAN DEFAULT TRUE;
+    END IF;
+END $$;
+
+-- 4. Função RPC para comprar banner
+CREATE OR REPLACE FUNCTION public.purchase_city_store_banner(
+  p_city_slug TEXT,
+  p_banner_type TEXT, -- 'READY' ou 'DESIGN_REQUEST'
+  p_payment_method TEXT,
+  p_banner_request_id UUID DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user UUID := auth.uid();
+  v_price NUMERIC;
+  v_balance NUMERIC;
+  v_order_id UUID;
+  v_settings RECORD;
+BEGIN
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- Buscar configurações
+  SELECT * INTO v_settings
+  FROM public.city_store_highlight_settings
+  ORDER BY updated_at DESC
+  LIMIT 1;
+
+  -- Verificar se banner está habilitado
+  IF NOT COALESCE(v_settings.banner_enabled, TRUE) THEN
+    RAISE EXCEPTION 'Banner service is currently disabled';
+  END IF;
+
+  -- Determinar preço
+  IF p_banner_type = 'READY' THEN
+    v_price := COALESCE(v_settings.banner_ready_price, 150.00);
+  ELSE
+    v_price := COALESCE(v_settings.banner_design_price, 250.00);
+  END IF;
+
+  -- Se pagamento via carteira
+  IF p_payment_method = 'WALLET' THEN
+    SELECT balance_decimal INTO v_balance
+    FROM public.store_wallets
+    WHERE store_id = v_user
+    FOR UPDATE;
+
+    IF v_balance IS NULL OR v_balance < v_price THEN
+      RAISE EXCEPTION 'Saldo insuficiente';
+    END IF;
+
+    -- Debitar da carteira
+    UPDATE public.store_wallets
+    SET balance_decimal = balance_decimal - ABS(v_price),
+        updated_at = NOW()
+    WHERE store_id = v_user;
+
+    -- Registrar transação
+    INSERT INTO public.store_wallet_transactions (store_id, amount, description, type, status)
+    VALUES (v_user, -ABS(v_price), 'Compra de Banner da Cidade', 'DEBIT', 'COMPLETED');
+  END IF;
+
+  -- Criar pedido
+  INSERT INTO public.city_promotion_orders (
+    store_id, city_slug, order_type, amount_paid, 
+    payment_method, payment_status, banner_request_id
+  ) VALUES (
+    v_user, p_city_slug, 'BANNER', v_price,
+    p_payment_method, 
+    CASE WHEN p_payment_method = 'WALLET' THEN 'PAID' ELSE 'PENDING' END,
+    p_banner_request_id
+  ) RETURNING id INTO v_order_id;
+
+  RETURN jsonb_build_object(
+    'success', TRUE,
+    'order_id', v_order_id,
+    'payment_status', CASE WHEN p_payment_method = 'WALLET' THEN 'PAID' ELSE 'PENDING' END
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.purchase_city_store_banner(TEXT, TEXT, TEXT, UUID) TO authenticated, service_role;
+
+
+
+-- 5. Garantir que o registro padrão em city_store_highlight_settings existe
+INSERT INTO public.city_store_highlight_settings (id, highlight_price, highlight_duration_days, cancel_fee, banner_ready_price, banner_design_price, banner_duration_days, banner_enabled, highlight_enabled)
+VALUES ('1', 99.00, 30, 0.00, 150.00, 250.00, 30, TRUE, TRUE)
+ON CONFLICT (id) DO UPDATE SET
+  banner_ready_price = COALESCE(EXCLUDED.banner_ready_price, city_store_highlight_settings.banner_ready_price),
+  banner_design_price = COALESCE(EXCLUDED.banner_design_price, city_store_highlight_settings.banner_design_price),
+  banner_duration_days = COALESCE(EXCLUDED.banner_duration_days, city_store_highlight_settings.banner_duration_days),
+  banner_enabled = COALESCE(EXCLUDED.banner_enabled, city_store_highlight_settings.banner_enabled),
+  highlight_enabled = COALESCE(EXCLUDED.highlight_enabled, city_store_highlight_settings.highlight_enabled);
+
+GRANT SELECT ON public.city_promotion_orders TO authenticated;
+GRANT INSERT ON public.city_promotion_orders TO authenticated;
+
+
+-- Garantir registros padrão para evitar falha no .single() do frontend
+INSERT INTO public.city_store_banner_assets (id, template_link, canva_link)
+VALUES ('1', NULL, NULL)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.city_store_highlight_settings (id, highlight_price, highlight_duration_days, cancel_fee, banner_ready_price, banner_design_price, banner_duration_days, banner_enabled, highlight_enabled)
+VALUES ('1', 99.00, 30, 0.00, 150.00, 250.00, 30, TRUE, TRUE)
+ON CONFLICT (id) DO NOTHING;
+
+-- Super Lojista Plan Expansion (09/02/2026)
+DO $$
+BEGIN
+    -- user_profiles
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'super_store_plan_type') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN super_store_plan_type TEXT CHECK (super_store_plan_type IN ('MENSALIDADE', 'COMISSAO')) DEFAULT 'MENSALIDADE';
+    END IF;
+
+    -- partner_fee_settings
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'super_store_monthly_enabled') THEN
+        ALTER TABLE public.partner_fee_settings ADD COLUMN super_store_monthly_enabled BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'super_store_commission_enabled') THEN
+        ALTER TABLE public.partner_fee_settings ADD COLUMN super_store_commission_enabled BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'super_store_commission_percent') THEN
+        ALTER TABLE public.partner_fee_settings ADD COLUMN super_store_commission_percent NUMERIC(5, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'super_store_commission_fixed') THEN
+        ALTER TABLE public.partner_fee_settings ADD COLUMN super_store_commission_fixed NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+END $$;
+
+-- Tabela de Comissões da Plataforma
+CREATE TABLE IF NOT EXISTS public.platform_commissions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES public.orders(id),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    amount NUMERIC(15, 2) NOT NULL,
+    base_value NUMERIC(15, 2) NOT NULL,
+    commission_percent NUMERIC(5, 2),
+    commission_fixed NUMERIC(10, 2),
+    plan_type TEXT NOT NULL,
+    status TEXT DEFAULT 'PENDING', -- PENDING, COMPLETED, CANCELLED
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_commissions_store_id ON public.platform_commissions(store_id);
+CREATE INDEX IF NOT EXISTS idx_platform_commissions_order_id ON public.platform_commissions(order_id);
+
+ALTER TABLE public.platform_commissions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view all commissions" ON public.platform_commissions;
+CREATE POLICY "Admins can view all commissions" ON public.platform_commissions FOR SELECT USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can view own commissions" ON public.platform_commissions;
+CREATE POLICY "Users can view own commissions" ON public.platform_commissions FOR SELECT USING (auth.uid()::text = store_id::text);
+
+GRANT ALL ON public.platform_commissions TO authenticated;
+GRANT ALL ON public.platform_commissions TO service_role;
+
+-- ==================================================================
+-- TRIGGER: Cobrança de Comissão Super Lojista
+-- Objetivo: Debitar a comissão da carteira da loja quando o pedido for concluído, se a loja estiver no plano 'COMISSAO'.
+-- ==================================================================
+
+CREATE OR REPLACE FUNCTION public.handle_super_store_commission()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_store_plan_type TEXT;
+    v_is_super_store BOOLEAN;
+    v_commission_enabled BOOLEAN;
+    v_commission_percent NUMERIC;
+    v_commission_fixed NUMERIC;
+    v_commission_amount NUMERIC := 0;
+    v_order_total NUMERIC;
+BEGIN
+    -- Verifica se o status mudou para COMPLETED
+    IF NEW.status = 'COMPLETED' AND (OLD.status IS DISTINCT FROM 'COMPLETED') THEN
+        
+        -- Busca configurações da loja e taxas globais
+        SELECT 
+            up.is_super_store,
+            up.super_store_plan_type,
+            pfs.super_store_commission_enabled,
+            pfs.super_store_commission_percent,
+            pfs.super_store_commission_fixed
+        INTO 
+            v_is_super_store,
+            v_store_plan_type,
+            v_commission_enabled,
+            v_commission_percent,
+            v_commission_fixed
+        FROM public.user_profiles up
+        CROSS JOIN public.partner_fee_settings pfs
+        WHERE up.id = NEW.store_id
+        LIMIT 1;
+
+        -- Lógica de Cobrança
+        -- 1. Deve ser Super Lojista
+        -- 2. Deve estar no plano 'COMISSAO'
+        -- 3. Comissão deve estar habilitada nas configurações globais
+        IF v_is_super_store AND v_store_plan_type = 'COMISSAO' AND v_commission_enabled THEN
+            
+            v_order_total := COALESCE(NEW.total_amount, 0);
+            
+            -- Calcular valor da comissão
+            -- Ex: (Total * Percent / 100) + Fixo
+            v_commission_amount := (v_order_total * COALESCE(v_commission_percent, 0) / 100) + COALESCE(v_commission_fixed, 0);
+
+            -- Se houver valor a cobrar
+            IF v_commission_amount > 0 THEN
+                
+                -- Inserir Débito na Transação
+                INSERT INTO public.store_wallet_transactions(
+                    store_id,
+                    amount,
+                    description,
+                    type,
+                    status,
+                    order_id,
+                    created_at
+                ) VALUES (
+                    NEW.store_id,
+                    -ABS(v_commission_amount), -- Sempre negativo
+                    'Comissão Super Lojista (Pedido #' || SUBSTRING(NEW.id::text, 1, 8) || ')',
+                    'DEBIT',
+                    'COMPLETED',
+                    NEW.id,
+                    NOW()
+                );
+
+                -- Atualizar Saldo da Carteira (Permitindo ficar negativo)
+                UPDATE public.store_wallets
+                SET balance_decimal = balance_decimal - ABS(v_commission_amount),
+                    updated_at = NOW()
+                WHERE store_id = NEW.store_id;
+
+            END IF;
+        END IF;
+
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Remover trigger se já existir para evitar duplicidade durante desenvolvimento
+DROP TRIGGER IF EXISTS trg_charge_commission_on_complete ON public.orders;
+
+-- Criar a trigger
+CREATE TRIGGER trg_charge_commission_on_complete
+    AFTER UPDATE OF status ON public.orders
+    FOR EACH ROW
+    WHEN (NEW.status = 'COMPLETED')
+    EXECUTE FUNCTION public.handle_super_store_commission();
+
+
+-- ==================================================================
+-- SISTEMA DE FIDELIDADE (PONTOS) - ADICIONADO 2026-02-09
+-- ==================================================================
+
+-- 1. Novas colunas na tabela orders
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'points_earned') THEN
+        ALTER TABLE public.orders ADD COLUMN points_earned INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'points_redeemed') THEN
+        ALTER TABLE public.orders ADD COLUMN points_redeemed INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'loyalty_discount_value') THEN
+        ALTER TABLE public.orders ADD COLUMN loyalty_discount_value NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+END $$;
+
+-- 2. Tabela de Configurações de Fidelidade por Loja
+CREATE TABLE IF NOT EXISTS public.loyalty_settings (
+    store_id UUID PRIMARY KEY REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT FALSE,
+    conversion_factor NUMERIC DEFAULT 1.0, -- Pontos por Real
+    calculation_base TEXT DEFAULT 'SUBTOTAL', -- 'SUBTOTAL' | 'PAID'
+    rounding_rule TEXT DEFAULT 'TRUNC', -- 'TRUNC' | 'ROUND'
+    points_expiry_days INTEGER,
+    min_points_redemption INTEGER DEFAULT 0,
+    max_discount_percentage INTEGER DEFAULT 100,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 3. Tabela de Saldo de Pontos por Cliente/Loja
+CREATE TABLE IF NOT EXISTS public.loyalty_points (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    balance INTEGER DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, user_id)
+);
+
+-- 4. Tabela de Histórico de Pontos
+CREATE TABLE IF NOT EXISTS public.loyalty_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    order_id UUID REFERENCES public.orders(id) ON DELETE SET NULL,
+    points INTEGER NOT NULL,
+    type TEXT NOT NULL, -- 'CREDIT', 'DEBIT', 'REVERSAL', 'ADJUSTMENT'
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 5. Índices para Performance
+CREATE INDEX IF NOT EXISTS idx_loyalty_points_user ON public.loyalty_points(user_id);
+CREATE INDEX IF NOT EXISTS idx_loyalty_points_store ON public.loyalty_points(store_id);
+CREATE INDEX IF NOT EXISTS idx_loyalty_history_user_store ON public.loyalty_history(user_id, store_id);
+
+-- 6. RLS para as novas tabelas
+ALTER TABLE public.loyalty_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loyalty_points ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loyalty_history ENABLE ROW LEVEL SECURITY;
+
+-- Policies para loyalty_settings
+DROP POLICY IF EXISTS "Lojistas gerenciam suas configs de fidelidade" ON public.loyalty_settings;
+CREATE POLICY "Lojistas gerenciam suas configs de fidelidade" ON public.loyalty_settings 
+    FOR ALL USING (auth.uid()::text = store_id::text OR public.is_admin());
+
+DROP POLICY IF EXISTS "Public can read loyalty_settings" ON public.loyalty_settings;
+CREATE POLICY "Public can read loyalty_settings" ON public.loyalty_settings FOR SELECT USING (true);
+
+-- Policies para loyalty_points
+DROP POLICY IF EXISTS "Users can view their own loyalty points" ON public.loyalty_points;
+CREATE POLICY "Users can view their own loyalty points" ON public.loyalty_points 
+    FOR SELECT USING (auth.uid()::text = user_id::text OR auth.uid()::text = store_id::text OR public.is_admin());
+
+-- Policies para loyalty_history
+DROP POLICY IF EXISTS "Users can view their own loyalty history" ON public.loyalty_history;
+CREATE POLICY "Users can view their own loyalty history" ON public.loyalty_history 
+    FOR SELECT USING (auth.uid()::text = user_id::text OR auth.uid()::text = store_id::text OR public.is_admin());
+
+-- 7. Função para Calcular e Processar Pontos (Trigger)
+CREATE OR REPLACE FUNCTION public.handle_loyalty_on_order_update()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_settings RECORD;
+    v_points INTEGER;
+    v_base_value NUMERIC;
+BEGIN
+    -- Obter configurações da loja
+    SELECT * INTO v_settings FROM public.loyalty_settings WHERE store_id = NEW.store_id;
+    
+    -- Se fidelidade não estiver ativa, ignorar
+    IF v_settings IS NULL OR v_settings.is_active = FALSE THEN
+        RETURN NEW;
+    END IF;
+
+    -- CRÉDITO DE PONTOS
+    -- Quando status muda para 'DELIVERED' e origem é 'MENU_DIGITAL'
+    IF NEW.status = 'DELIVERED' AND OLD.status != 'DELIVERED' AND NEW.origin = 'MENU_DIGITAL' AND NEW.user_id IS NOT NULL THEN
+        
+        -- Definir base de cálculo
+        IF v_settings.calculation_base = 'PAID' THEN
+            v_base_value := NEW.total_price;
+        ELSE
+            -- SUBTOTAL
+            v_base_value := NEW.total_price - COALESCE(NEW.shipping_cost, 0);
+        END IF;
+
+        -- Cálculo de pontos
+        v_points := v_base_value * v_settings.conversion_factor;
+        
+        IF v_settings.rounding_rule = 'ROUND' THEN
+            v_points := ROUND(v_points);
+        ELSE
+            v_points := TRUNC(v_points);
+        END IF;
+
+        IF v_points > 0 THEN
+            -- Registrar no histórico
+            INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
+            VALUES (NEW.store_id, NEW.user_id, NEW.id, v_points, 'CREDIT', 'Pontos ganhos no pedido #' || SUBSTRING(NEW.id::text, 1, 8));
+
+            -- Atualizar saldo
+            INSERT INTO public.loyalty_points (store_id, user_id, balance)
+            VALUES (NEW.store_id, NEW.user_id, v_points)
+            ON CONFLICT (store_id, user_id) 
+            DO UPDATE SET balance = public.loyalty_points.balance + EXCLUDED.balance, updated_at = now();
+            
+            NEW.points_earned := v_points;
+        END IF;
+    END IF;
+
+    -- ESTORNO DE PONTOS
+    -- Quando pedido é CANCELADO e já tinha gerado pontos
+    IF NEW.status = 'CANCELLED' AND OLD.status = 'DELIVERED' AND OLD.points_earned > 0 AND NEW.user_id IS NOT NULL THEN
+        -- Registrar no histórico
+        INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
+        VALUES (NEW.store_id, NEW.user_id, NEW.id, -OLD.points_earned, 'REVERSAL', 'Estorno de pontos do pedido cancelado #' || SUBSTRING(NEW.id::text, 1, 8));
+
+        -- Atualizar saldo
+        UPDATE public.loyalty_points 
+        SET balance = balance - OLD.points_earned, updated_at = now()
+        WHERE store_id = NEW.store_id AND user_id = NEW.user_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 8. Criar o Trigger
+DROP TRIGGER IF EXISTS tr_handle_loyalty_order ON public.orders;
+CREATE TRIGGER tr_handle_loyalty_order
+AFTER UPDATE ON public.orders
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_loyalty_on_order_update();
+
+-- 9. Função para Resgate de Pontos (Chamada via RPC/Frontend)
+CREATE OR REPLACE FUNCTION public.redeem_loyalty_points(
+    p_store_id UUID,
+    p_points_to_redeem INTEGER,
+    p_discount_value NUMERIC
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_balance INTEGER;
+    v_user_id UUID;
+BEGIN
+    v_user_id := auth.uid();
+    IF v_user_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Usuário não autenticado.');
+    END IF;
+
+    -- Verificar saldo
+    SELECT balance INTO v_balance FROM public.loyalty_points 
+    WHERE store_id = p_store_id AND user_id = v_user_id;
+
+    IF v_balance IS NULL OR v_balance < p_points_to_redeem THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Saldo de pontos insuficiente.');
+    END IF;
+
+    -- Registrar débito no histórico
+    INSERT INTO public.loyalty_history (store_id, user_id, points, type, description)
+    VALUES (p_store_id, v_user_id, -p_points_to_redeem, 'DEBIT', 'Resgate de pontos por desconto no valor de R$ ' || p_discount_value);
+
+    -- Atualizar saldo
+    UPDATE public.loyalty_points 
+    SET balance = balance - p_points_to_redeem, updated_at = now()
+    WHERE store_id = p_store_id AND user_id = v_user_id;
+
+    RETURN jsonb_build_object('success', true, 'new_balance', v_balance - p_points_to_redeem);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.redeem_loyalty_points(UUID, INTEGER, NUMERIC) TO authenticated;
 

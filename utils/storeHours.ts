@@ -75,7 +75,9 @@ const parseDaysPart = (daysPart: string) => {
     }
 
     const tokens = normalized.split(',').map(part => part.trim()).filter(Boolean);
-    const days = tokens.map(dayTokenToIndex).filter((value): value is number => value !== null);
+    const days = tokens
+        .map(dayTokenToIndex)
+        .filter((day) => day !== null) as number[];
     return days;
 };
 

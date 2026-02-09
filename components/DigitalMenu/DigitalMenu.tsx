@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Phone, Clock, Bike, Store as StoreIcon, MapPin, Search, ShoppingBag, ArrowRight, Loader2, AlertCircle, Trash2, ShoppingCart, Star, QrCode, CreditCard, Banknote, ShieldCheck, Instagram, Facebook, Globe, MessageSquare, ChevronRight, Play, ExternalLink, Calendar, Map, ClipboardList, TrendingUp, DollarSign, Wallet, RefreshCw, X, ChevronUp, Copy, Check, Minus, Plus, ChevronLeft, MessageCircle, Zap, ChefHat } from 'lucide-react';
+import { Phone, Clock, Bike, Store as StoreIcon, MapPin, Search, ShoppingBag, ArrowRight, Loader2, AlertCircle, Trash2, ShoppingCart, Star, QrCode, CreditCard, Banknote, ShieldCheck, Instagram, Facebook, Globe, MessageSquare, ChevronRight, Play, ExternalLink, Calendar, Map, ClipboardList, TrendingUp, DollarSign, Wallet, RefreshCw, X, ChevronUp, Copy, Check, Minus, Plus, ChevronLeft, MessageCircle, Zap, ChefHat, Award, Info } from 'lucide-react';
 import * as cloud from '../../services/cloud';
-import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee, StoreShippingRule, StoreAddonGroup, StoreAddonOption } from '../../types';
+import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee, StoreShippingRule, StoreAddonGroup, StoreAddonOption, LoyaltySettings } from '../../types';
 import { ProductAddonSelector } from '../ProductAddonSelector';
 import { Logo } from '../Logo';
 import { Button } from '../Button';
@@ -173,6 +173,13 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+    // Loyalty State
+    const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
+    const [loyaltyBalance, setLoyaltyBalance] = useState<number>(0);
+    const [pointsRedeemed, setPointsRedeemed] = useState<number>(0);
+    const [loyaltyDiscountValue, setLoyaltyDiscountValue] = useState<number>(0);
+    const [isApplyingLoyalty, setIsApplyingLoyalty] = useState(false);
+
     const { alert, confirm } = useDialog();
 
     useEffect(() => {
@@ -216,6 +223,14 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             setFees(feesData);
             setShippingRules(rulesData);
 
+            // Fetch Loyalty Settings
+            try {
+                const lSettings = await cloud.getLoyaltySettings(storeData.id);
+                setLoyaltySettings(lSettings);
+            } catch (lErr) {
+                console.error("Error loading loyalty settings:", lErr);
+            }
+
             // Initialize selectedCity with store city
             if (storeData.store_address_city || storeData.city) {
                 setSelectedCity({
@@ -249,7 +264,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     // --- AUTH CHECK ---
     useEffect(() => {
-        const checkAuth = async () => {
+        const checkAuth = async (storeId: string) => {
             const { user } = await cloud.getUserWithCache();
             if (user) {
                 setIsLoggedIn(true);
@@ -265,10 +280,21 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         if (profile.phone_number) setCustomerPhone(profile.phone_number);
                     }
                 }
+
+                // Fetch Loyalty Balance
+                try {
+                    const balance = await cloud.getLoyaltyBalance(storeId);
+                    setLoyaltyBalance(balance);
+                } catch (bErr) {
+                    console.error("Error loading loyalty balance:", bErr);
+                }
             }
         };
-        checkAuth();
-    }, []);
+
+        if (store?.id) {
+            checkAuth(store.id);
+        }
+    }, [store?.id]);
 
     // --- CART PERSISTENCE ---
     // Restore cart on store load
@@ -443,7 +469,76 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         return 0; // Fallback
     }, [deliveryType, deliverySettings, fees, selectedNeighborhoodId]);
 
-    const cartTotal = cartSubtotal + deliveryFee;
+    const cartTotal = cartSubtotal + deliveryFee - loyaltyDiscountValue;
+
+    const pointsToEarn = useMemo(() => {
+        if (!loyaltySettings || !loyaltySettings.is_active) return 0;
+
+        let baseValue = cartSubtotal;
+        if (loyaltySettings.calculation_base === 'PAID') {
+            baseValue = cartTotal;
+        }
+
+        let points = baseValue * loyaltySettings.conversion_factor;
+
+        if (loyaltySettings.rounding_rule === 'ROUND') {
+            return Math.round(points);
+        } else {
+            return Math.floor(points);
+        }
+    }, [cartSubtotal, cartTotal, loyaltySettings]);
+
+    const handleRedeemPoints = async () => {
+        if (!loyaltySettings || !isLoggedIn || loyaltyBalance <= 0) return;
+
+        // Validar limites
+        if (loyaltyBalance < loyaltySettings.min_points_redemption) {
+            alert({
+                title: 'Pontos Insuficientes',
+                message: `O resgate mínimo é de ${loyaltySettings.min_points_redemption} pontos.`
+            });
+            return;
+        }
+
+        // Calcular desconto máximo permitido
+        const maxDiscount = (cartSubtotal * loyaltySettings.max_discount_percentage) / 100;
+
+        // Simular resgate (1 ponto = 1 real? Preciso confirmar a regra de conversão de resgate. 
+        // No checkout do admin não defini a taxa de resgate, assumi 1:1 para simplificar no SQL se não houver campo específico.
+        // Na verdade, no redeem_loyalty_points do SQL o discount_value é passado.
+        // Vou assumir 1 ponto = 1 real (ou usar uma constante se o lojista configurar - mas não adicionei esse campo).
+        // Vou considerar 1 ponto = 1 Real por padrão.
+
+        let redeemed = loyaltyBalance;
+        let discount = redeemed; // 1:1
+
+        if (discount > maxDiscount) {
+            discount = maxDiscount;
+            redeemed = Math.ceil(discount); // Se 1:1
+        }
+
+        if (discount > cartSubtotal) {
+            discount = cartSubtotal;
+            redeemed = Math.ceil(discount);
+        }
+
+        const confirmed = await confirm({
+            title: 'Resgatar Pontos',
+            message: `Deseja usar ${redeemed} pontos para ganhar R$ ${discount.toFixed(2)} de desconto?`,
+            confirmButtonText: 'Resgatar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (confirmed) {
+            setPointsRedeemed(redeemed);
+            setLoyaltyDiscountValue(discount);
+        }
+    };
+
+    const handleRemoveLoyalty = () => {
+        setPointsRedeemed(0);
+        setLoyaltyDiscountValue(0);
+    };
 
     const handleCepChange = async (val: string) => {
         let v = val.replace(/\D/g, '').substring(0, 8);
@@ -505,7 +600,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         // O usuário relatou conflito quando ambas as opções estão ativas.
 
         const isPixPayment = paymentMethod === 'PIX';
-        const isPlatformEnabled = store?.receive_orders_via_platform;
+        const isCommissionPlan = store?.super_store_plan_type === 'COMISSAO';
+        const isPlatformEnabled = store?.receive_orders_via_platform || isCommissionPlan;
 
         // Se a plataforma estiver ativa, o fluxo é SEMPRE plataforma.
         // O PIX Automático define apenas se abre o modal ou não (tratado no sucesso do pedido).
@@ -574,13 +670,17 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     customerName,
                     customerPhone,
                     isPixActive, // Sempre true se for PIX e tiver chave
-                    orderObservation
+                    orderObservation,
+                    pointsRedeemed,
+                    loyaltyDiscountValue
                 );
 
                 if (success && orderId) {
                     // Success!
                     setCheckoutTotal(cartTotal);
                     setCart([]);
+                    setPointsRedeemed(0);
+                    setLoyaltyDiscountValue(0);
                     setIsCartOpen(false);
 
                     // Salvar nos pedidos recentes
@@ -1133,8 +1233,8 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                         if (price !== undefined) setCurrentPrice(price);
                                                     }}
                                                     className={`px-4 py-2 rounded-xl border-2 transition-all text-sm font-bold flex items-center gap-2 ${isSelected
-                                                            ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
-                                                            : 'border-gray-200/70 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300'
+                                                        ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
+                                                        : 'border-gray-200/70 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300'
                                                         }`}
                                                 >
                                                     {size}
@@ -1456,7 +1556,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         <span className="text-xs font-semibold">PIX {(store?.receive_orders_via_platform && store?.config?.pixdata?.enabled) ? '(Auto)' : ''}</span>
                                     </button>
 
-                                    {/* CARTÃO */}
+                                    {/* CARTÃO E DINHEIRO - Permitido para todos (Comissão é debitada do saldo) */}
                                     <button
                                         onClick={() => setPaymentMethod('CREDIT_CARD')}
                                         className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'CREDIT_CARD' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
@@ -1465,7 +1565,6 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         <span className="text-xs font-semibold">Cartão</span>
                                     </button>
 
-                                    {/* DINHEIRO */}
                                     <button
                                         onClick={() => {
                                             setPaymentMethod('CASH');
@@ -1497,6 +1596,77 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 )}
                             </section>
 
+                            {/* Loyalty Points */}
+                            {loyaltySettings?.is_active && (
+                                <section className="animate-in fade-in slide-in-from-bottom-2">
+                                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <Award className="w-3 h-3" /> Programa de Fidelidade
+                                    </h3>
+
+                                    {!isLoggedIn ? (
+                                        <div className="bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-900/30 p-4 rounded-xl text-center">
+                                            <p className="text-xs text-brand-800 dark:text-brand-300 mb-2">Faça login para acumular e resgatar pontos!</p>
+                                            <button
+                                                onClick={() => setIsAuthModalOpen(true)}
+                                                className="text-[10px] font-black uppercase text-brand-600 hover:underline"
+                                            >
+                                                Entrar ou Cadastrar
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white dark:bg-gray-800 border border-gray-200/70 dark:border-gray-700 rounded-2xl p-4 shadow-sm space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center">
+                                                        <Zap className="w-5 h-5 fill-current" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Seu Saldo</p>
+                                                        <p className="text-lg font-black text-gray-900 dark:text-white leading-tight">{loyaltyBalance} pontos</p>
+                                                    </div>
+                                                </div>
+
+                                                {pointsRedeemed > 0 ? (
+                                                    <button
+                                                        onClick={handleRemoveLoyalty}
+                                                        className="text-[10px] font-bold text-red-500 hover:text-red-600 uppercase tracking-wider flex items-center gap-1"
+                                                    >
+                                                        <X className="w-3 h-3" /> Remover
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={handleRedeemPoints}
+                                                        disabled={loyaltyBalance < (loyaltySettings?.min_points_redemption || 0)}
+                                                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${loyaltyBalance >= (loyaltySettings?.min_points_redemption || 0)
+                                                            ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700'
+                                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                            }`}
+                                                    >
+                                                        Resgatar
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {pointsRedeemed > 0 && (
+                                                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/30 rounded-xl flex items-center gap-3 animate-in zoom-in-95">
+                                                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                                    <p className="text-xs text-green-700 dark:text-green-300 font-medium">
+                                                        <strong>- R$ {loyaltyDiscountValue.toFixed(2).replace('.', ',')}</strong> aplicado com sucesso!
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="pt-2 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                                <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                                                    <Info className="w-3 h-3" />
+                                                    Nesse pedido você ganhará <strong>{pointsToEarn} pontos</strong>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </section>
+                            )}
+
                         </div>
 
                         {/* Sticky Checkout Footer */}
@@ -1526,7 +1696,14 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 )}
                                 <div className="flex justify-between items-center pt-2 border-t border-gray-200/70 dark:border-gray-800">
                                     <span className="font-medium text-gray-900 dark:text-white">Total</span>
-                                    <span className="font-semibold text-2xl text-gray-900 dark:text-white">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
+                                    <div className="text-right">
+                                        {loyaltyDiscountValue > 0 && (
+                                            <div className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-1 animate-in slide-in-from-right-2">
+                                                - R$ {loyaltyDiscountValue.toFixed(2).replace('.', ',')} (PONTOS)
+                                            </div>
+                                        )}
+                                        <span className="font-semibold text-2xl text-gray-900 dark:text-white">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
+                                    </div>
                                 </div>
                             </div>
                             <Button

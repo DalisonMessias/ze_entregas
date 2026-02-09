@@ -22,6 +22,7 @@
     | 'store_integrations'
     | 'store_ratings'
     | 'store_settings'
+    | 'store_plans'
     | 'store_product_import'
     | 'store_status'
     | 'store_receiving_payment'

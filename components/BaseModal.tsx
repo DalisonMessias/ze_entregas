@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface BaseModalProps {
@@ -8,10 +9,23 @@ interface BaseModalProps {
     title?: string;
     icon?: React.ReactNode;
     maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
+    disableScroll?: boolean;
 }
 
-export const BaseModal: React.FC<BaseModalProps> = ({ isOpen, onClose, children, title, icon, maxWidth = 'lg' }) => {
-    if (!isOpen) return null;
+export const BaseModal: React.FC<BaseModalProps> = ({ isOpen, onClose, children, title, icon, maxWidth = 'lg', disableScroll = false }) => {
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [isOpen]);
+
+    if (!isOpen || !mounted) return null;
 
     const maxWidthClasses = {
         sm: 'max-w-sm',
@@ -25,8 +39,8 @@ export const BaseModal: React.FC<BaseModalProps> = ({ isOpen, onClose, children,
         full: 'max-w-full'
     };
 
-    return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
+    return createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
             <div
                 className={`bg-white dark:bg-gray-800 w-full ${maxWidthClasses[maxWidth]} rounded-2xl shadow-2xl p-6 sm:p-8 animate-in zoom-in-95 relative flex flex-col max-h-[90vh]`}
                 onClick={e => e.stopPropagation()}
@@ -49,10 +63,11 @@ export const BaseModal: React.FC<BaseModalProps> = ({ isOpen, onClose, children,
                     </div>
                 )}
 
-                <div className="overflow-y-auto pr-2 custom-scrollbar">
+                <div className={`${disableScroll ? '' : 'overflow-y-auto pr-2 custom-scrollbar'}`}>
                     {children}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };

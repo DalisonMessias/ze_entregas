@@ -1,15 +1,18 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, MapPin, Star, Image as ImageIcon, MessageCircle, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, MapPin, Star, Image as ImageIcon, MessageCircle, ChevronDown, HelpCircle, Info, CreditCard, Wallet, ExternalLink, FileCheck, Loader2 } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { CityStoreHighlightOrder, CityStoreHighlightSettings, PartnerProfile, CityStoreBannerAssets, CityStoreBannerRequest, CityStoreBannerRequestMessage } from '../types';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 import { ImageUpload } from './ImageUpload';
 import { BaseModal } from './BaseModal';
+import { ChatExclusivoModal } from './ChatExclusivoModal';
+import { MobileBannerPreview } from './MobileBannerPreview';
+import { useNotification } from '../contexts/NotificationContext';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 const formatPercent = (val?: number) => `${Number(val || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
-const formatDateTime = (iso?: string) => iso ? new Date(iso).toLocaleString('pt-BR') : '-';
+import { formatDateTime } from '../utils/formatMinutes';
 const formatHighlightStatus = (status?: string) => {
     const normalized = (status || '').toUpperCase();
     switch (normalized) {
@@ -100,10 +103,12 @@ const CustomSelect: React.FC<{
 
 export const StoreHighlight: React.FC = () => {
     const { alert } = useDialog();
+    const { showNotification } = useNotification();
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [settings, setSettings] = useState<CityStoreHighlightSettings | null>(null);
     const [orders, setOrders] = useState<CityStoreHighlightOrder[]>([]);
+    const [allCityOrders, setAllCityOrders] = useState<CityStoreHighlightOrder[]>([]);
     const [purchasing, setPurchasing] = useState(false);
     const [walletBalance, setWalletBalance] = useState(0);
     const [days, setDays] = useState(30);
@@ -115,12 +120,17 @@ export const StoreHighlight: React.FC = () => {
     const [bannerUrl, setBannerUrl] = useState('');
     const [bannerNotes, setBannerNotes] = useState('');
     const [requestBrief, setRequestBrief] = useState('');
-    const [requestTopic, setRequestTopic] = useState<'BANNER' | 'HIGHLIGHT'>('BANNER');
+    const [readyRequestTopic, setReadyRequestTopic] = useState<'BANNER' | 'HIGHLIGHT'>('BANNER');
+    const [designRequestTopic, setDesignRequestTopic] = useState<'BANNER' | 'HIGHLIGHT'>('BANNER');
     const [loadingBannerChat, setLoadingBannerChat] = useState(false);
     const [showActivateModal, setShowActivateModal] = useState(false);
     const [showNoBalanceModal, setShowNoBalanceModal] = useState(false);
     const [cancelTarget, setCancelTarget] = useState<CityStoreHighlightOrder | null>(null);
     const [cancelling, setCancelling] = useState(false);
+    const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+    const [showBannerPaymentModal, setShowBannerPaymentModal] = useState(false);
+    const [bannerPaymentType, setBannerPaymentType] = useState<'READY' | 'DESIGN_REQUEST' | null>(null);
+    const [processingBannerPayment, setProcessingBannerPayment] = useState(false);
 
     const citySlug = profile?.city_slug || '';
     const topicOptions: SelectOption[] = [
@@ -131,27 +141,42 @@ export const StoreHighlight: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
+            console.log('[StoreHighlight] Iniciando carregamento de dados...');
             const [profileData, settingsData, assetsData, walletData] = await Promise.all([
-                cloud.getMyPartnerProfile(),
-                cloud.getCityStoreHighlightSettings(),
-                cloud.getCityStoreBannerAssets(),
-                cloud.getMyWallet().catch(() => null)
+                cloud.getMyPartnerProfile().then(d => { console.log('[StoreHighlight] Profile carregado'); return d; }),
+                cloud.getCityStoreHighlightSettings().then(d => { console.log('[StoreHighlight] Settings carregadas'); return d; }),
+                cloud.getCityStoreBannerAssets().then(d => { console.log('[StoreHighlight] Assets carregados'); return d; }),
+                cloud.getMyWallet().catch(err => { console.error('[StoreHighlight] Erro carteira:', err); return null; })
             ]);
+
             setProfile(profileData || null);
             setSettings(settingsData || null);
             setBannerAssets(assetsData || null);
             setWalletBalance(Number(walletData?.balance_decimal || walletData?.balance || 0));
 
+            console.log('[StoreHighlight] Buscando pedidos...');
             if (profileData?.city_slug) {
                 const ordersData = await cloud.getMyCityStoreHighlightOrders(profileData.city_slug);
                 setOrders(ordersData || []);
+
+                // Filtrar apenas pedidos ativos ou agendados para a cidade
+                setAllCityOrders((ordersData || []).filter(o => {
+                    const status = (o.status || '').toUpperCase();
+                    return status === 'ACTIVE' || status === 'SCHEDULED';
+                }));
             } else {
                 const ordersData = await cloud.getMyCityStoreHighlightOrders();
                 setOrders(ordersData || []);
             }
 
-            const requestData = await cloud.getMyCityStoreBannerRequests();
-            setBannerRequests(requestData || []);
+            console.log('[StoreHighlight] Buscando solicitações de banner...');
+            const requests = await cloud.getMyCityStoreBannerRequests();
+            setBannerRequests(requests);
+
+            console.log('[StoreHighlight] Carregamento concluído com sucesso.');
+        } catch (error) {
+            console.error('[StoreHighlight] Erro crítico no carregamento:', error);
+            showNotification('Erro ao carregar configurações. Tente atualizar a página.', 'error');
         } finally {
             setLoading(false);
         }
@@ -159,6 +184,30 @@ export const StoreHighlight: React.FC = () => {
 
     useEffect(() => {
         loadData();
+
+        const supabase = cloud.getClient();
+        if (!supabase) return;
+
+        // Subscrição para atualizações de métricas em tempo real
+        const channel = supabase
+            .channel('highlight_metrics')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'city_store_highlight_orders'
+                },
+                (payload) => {
+                    const updatedOrder = payload.new as CityStoreHighlightOrder;
+                    setOrders(prev => prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
 
     const activeOrder = useMemo(() => {
@@ -217,10 +266,11 @@ export const StoreHighlight: React.FC = () => {
             } else {
                 await alert({ title: 'Destaque ativado', message: 'Seu destaque foi ativado para a cidade selecionada.' });
                 setShowActivateModal(false);
-                await loadData();
             }
         } finally {
             setPurchasing(false);
+            showNotification('Destaque ativado com sucesso! Sua loja já está no topo.', 'success');
+            loadData();
         }
     };
 
@@ -248,61 +298,99 @@ export const StoreHighlight: React.FC = () => {
     };
 
     const loadBannerMessages = async (request: CityStoreBannerRequest) => {
-        setLoadingBannerChat(true);
-        try {
-            const data = await cloud.getCityStoreBannerRequestMessages(request.id);
-            setRequestMessages(data || []);
-            setSelectedRequest(request);
-        } finally {
-            setLoadingBannerChat(false);
-        }
+        setSelectedRequest(request);
+        setIsChatModalOpen(true);
     };
 
     const handleCreateBannerRequest = async (type: 'READY' | 'DESIGN_REQUEST') => {
         if (!citySlug) {
-            await alert({ title: 'Cidade nao configurada', message: 'Defina a cidade da sua loja primeiro.' });
+            await alert({ title: 'Cidade não configurada', message: 'Defina a cidade da sua loja primeiro.' });
             return;
         }
-        if (type === 'READY' && requestTopic === 'BANNER' && !bannerUrl) {
-            await alert({ title: 'Banner obrigatorio', message: 'Envie o banner antes de solicitar.' });
+        if (type === 'READY' && readyRequestTopic === 'BANNER' && !bannerUrl) {
+            await alert({ title: 'Banner obrigatório', message: 'Envie o banner antes de solicitar.' });
             return;
         }
 
-        const notesPayload = type === 'DESIGN_REQUEST' ? requestBrief : bannerNotes;
-        const result = await cloud.createCityStoreBannerRequest({
-            store_id: profile?.id || '',
-            city_slug: citySlug,
-            request_type: type,
-            topic: requestTopic,
-            status: 'OPEN',
-            banner_url: bannerUrl || null,
-            notes: notesPayload || null
-        });
-
-        if (!result.success) {
-            await alert({ title: 'Erro', message: 'Nao foi possivel enviar a solicitacao.' });
-            return;
-        }
-        if (type === 'DESIGN_REQUEST') {
-            setRequestBrief('');
-        } else {
-            setBannerNotes('');
-            setBannerUrl('');
-        }
-        await loadData();
-        await alert({ title: 'Solicitacao enviada', message: 'Sua solicitacao foi registrada.' });
+        setBannerPaymentType(type);
+        setShowBannerPaymentModal(true);
     };
 
-    const handleSendBannerMessage = async () => {
-        if (!selectedRequest || !requestMessage.trim()) return;
-        const result = await cloud.sendCityStoreBannerRequestMessage(selectedRequest.id, 'store', requestMessage.trim());
-        if (!result.success) {
-            await alert({ title: 'Erro', message: 'Nao foi possivel enviar a mensagem.' });
+    const handleConfirmBannerPurchase = async (paymentMethod: 'WALLET' | 'PIX' | 'CREDIT_CARD') => {
+        if (!bannerPaymentType) return;
+
+        const price = bannerPaymentType === 'READY'
+            ? Number(settings?.banner_ready_price || 150)
+            : Number(settings?.banner_design_price || 250);
+
+        if (paymentMethod === 'WALLET' && walletBalance < price) {
+            await alert({ title: 'Saldo insuficiente', message: 'Você não possui saldo suficiente na carteira.' });
             return;
         }
-        setRequestMessage('');
-        await loadBannerMessages(selectedRequest);
+
+        setProcessingBannerPayment(true);
+        try {
+            const notesPayload = bannerPaymentType === 'DESIGN_REQUEST' ? requestBrief : bannerNotes;
+
+            // Pegar o tópico correto baseado no tipo de pagamento
+            const currentTopic = bannerPaymentType === 'READY' ? readyRequestTopic : designRequestTopic;
+
+            // 1. Criar a solicitação
+            const requestResult = await cloud.createCityStoreBannerRequest({
+                store_id: profile?.id || '',
+                city_slug: citySlug,
+                request_type: bannerPaymentType,
+                topic: currentTopic,
+                status: 'OPEN',
+                banner_url: bannerUrl || null,
+                notes: notesPayload || null
+            });
+
+            if (!requestResult.success || !requestResult.data) {
+                await alert({ title: 'Erro', message: 'Não foi possível registrar a solicitação.' });
+                return;
+            }
+
+            const requestId = requestResult.data.id;
+
+            // 2. Processar o pagamento
+            const paymentResult = await cloud.purchaseCityStoreBanner(
+                citySlug,
+                bannerPaymentType,
+                paymentMethod,
+                requestId
+            );
+
+            if (!paymentResult.success) {
+                await alert({ title: 'Erro no pagamento', message: (paymentResult as any)?.error?.message || 'Falha ao processar pagamento.' });
+                return;
+            }
+
+            if (bannerPaymentType === 'DESIGN_REQUEST') {
+                setRequestBrief('');
+            } else {
+                setBannerNotes('');
+                setBannerUrl('');
+            }
+            showNotification('Solicitação de banner enviada! Acompanhe pelo chat.', 'success');
+
+            setShowBannerPaymentModal(false);
+            await loadData();
+            await alert({ title: 'Solicitação realizada', message: 'Seu pedido foi registrado e o pagamento processado com sucesso.' });
+
+            // Abrir o chat para a nova solicitação
+            const newRequest = (await cloud.getMyCityStoreBannerRequests()).find(r => r.id === requestId);
+            if (newRequest) setSelectedRequest(newRequest);
+            setIsChatModalOpen(true);
+
+        } catch (error) {
+            console.error('Erro ao processar compra de banner:', error);
+            await alert({ title: 'Erro', message: 'Ocorreu um erro inesperado.' });
+        } finally {
+            setProcessingBannerPayment(false);
+        }
     };
+
 
     const pricePreview = useMemo(() => {
         const basePrice = Number(settings?.highlight_price || 0);
@@ -319,10 +407,155 @@ export const StoreHighlight: React.FC = () => {
                         <Star className="w-6 h-6 text-brand-600" /> Destaque por Cidade
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Ative seu destaque para aparecer antes das lojas comuns na pagina da sua cidade.
+                        Ative seu destaque para aparecer antes das lojas comuns na página da sua cidade.
                     </p>
                 </div>
-                <div />
+                {selectedRequest && (
+                    <Button
+                        variant="outline"
+                        onClick={() => setIsChatModalOpen(true)}
+                        icon={<MessageCircle className="w-4 h-4" />}
+                    >
+                        Abrir Chat Exclusivo
+                    </Button>
+                )}
+            </div>
+
+            {/* Nova Seção: Performance e Métricas */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-700">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm transition-all hover:shadow-md group">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600">
+                            <ImageIcon className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-lg">Alcance</span>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-gray-500">Visualiza&ccedil;&otilde;es</p>
+                        <div className="flex items-end gap-2">
+                            <h3 className="text-3xl font-black text-gray-900 dark:text-white">
+                                {activeOrder?.views_count || 0}
+                            </h3>
+                            <span className="text-xs text-emerald-600 font-bold mb-1 opacity-0 group-hover:opacity-100 transition-opacity">Real-time</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm transition-all hover:shadow-md group">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-600">
+                            <ExternalLink className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded-lg">Intera&ccedil;&atilde;o</span>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-gray-500">Cliques no Perfil</p>
+                        <div className="flex items-end gap-2">
+                            <h3 className="text-3xl font-black text-gray-900 dark:text-white">
+                                {activeOrder?.clicks_count || 0}
+                            </h3>
+                            <span className="text-xs text-emerald-600 font-bold mb-1 opacity-0 group-hover:opacity-100 transition-opacity">Live</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm transition-all hover:shadow-md group">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-600">
+                            <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg">Efici&ecirc;ncia</span>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-gray-500">Taxa de Convers&atilde;o (CTR)</p>
+                        <div className="flex items-end gap-2">
+                            <h3 className="text-3xl font-black text-gray-900 dark:text-white">
+                                {activeOrder?.views_count ? ((activeOrder.clicks_count || 0) / activeOrder.views_count * 100).toFixed(1) : '0.0'}%
+                            </h3>
+                            <span className="text-xs text-gray-400 font-bold mb-1">Impacto Real</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Nova Seção: Disponibilidade na Cidade (Calendário) */}
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm animate-in fade-in zoom-in duration-500">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                    <div>
+                        <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                            <Calendar className="w-6 h-6 text-brand-600" />
+                            Disponibilidade em {profile?.city || 'sua cidade'}
+                        </h3>
+                        <p className="text-sm text-gray-500 font-bold">Confira os períodos já reservados por outros parceiros</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {allCityOrders.length === 0 ? (
+                        <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 dark:bg-gray-900/10 rounded-3xl border-2 border-dashed border-gray-100 dark:border-gray-800">
+                            <Calendar className="w-12 h-12 mb-3 opacity-20" />
+                            <p className="font-black uppercase tracking-widest text-xs text-center">Nenhuma reserva para os próximos dias</p>
+                        </div>
+                    ) : (
+                        allCityOrders.map((order, idx) => (
+                            <div key={order.id || idx} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-brand-200 transition-colors">
+                                <p className="text-sm font-black text-gray-900 dark:text-white mb-1">Destaque Ativo</p>
+                                <p className="text-[11px] font-bold text-gray-500">
+                                    {new Date(order.starts_at).toLocaleDateString()} &mdash; {new Date(order.ends_at).toLocaleDateString()}
+                                </p>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+
+            {/* Seção Informativa: Como Funciona */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-top-4 duration-500">
+                <div className="bg-gradient-to-br from-brand-50 to-white dark:from-brand-900/10 dark:to-gray-800 p-6 rounded-3xl border border-brand-100 dark:border-brand-900/20 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
+                        <Star className="w-32 h-32 text-brand-600" />
+                    </div>
+                    <div className="relative space-y-3">
+                        <div className="flex items-center gap-2 text-brand-700 dark:text-brand-400 font-black uppercase text-xs tracking-widest">
+                            <Info className="w-4 h-4" /> Destaque por Cidade
+                        </div>
+                        <h4 className="text-lg font-black text-gray-900 dark:text-white">Apareça no topo das buscas</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                            Ao ativar o destaque, sua loja será exibida prioritariamente no topo da lista de estabelecimentos da sua cidade, garantindo máxima visibilidade e aumento nas vendas.
+                        </p>
+                        <div className="flex flex-wrap gap-4 pt-2">
+                            <div className="flex items-center gap-2 text-xs font-bold text-brand-600 bg-brand-50 dark:bg-brand-900/20 px-3 py-1.5 rounded-full">
+                                <CheckCircle2 className="w-3 h-3" /> Ativação Imediata
+                            </div>
+                            <div className="flex items-center gap-2 text-xs font-bold text-brand-600 bg-brand-50 dark:bg-brand-900/20 px-3 py-1.5 rounded-full">
+                                <CheckCircle2 className="w-3 h-3" /> Topo da Lista
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800/10 dark:to-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
+                        <ImageIcon className="w-32 h-32 text-gray-900 dark:text-white" />
+                    </div>
+                    <div className="relative space-y-3">
+                        <div className="flex items-center gap-2 text-gray-500 font-black uppercase text-xs tracking-widest">
+                            <HelpCircle className="w-4 h-4" /> Banner da sua Cidade
+                        </div>
+                        <h4 className="text-lg font-black text-gray-900 dark:text-white">Sua marca em destaque principal</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                            O banner ocupa o espaço mais premium do aplicativo e site em sua cidade. Ideal para promoções especiais, lançamento de cardápio ou reforço de marca exclusivo.
+                        </p>
+                        <div className="flex flex-wrap gap-4 pt-2">
+                            <div className="flex items-center gap-2 text-xs font-bold text-gray-600 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
+                                <CheckCircle2 className="w-3 h-3" /> Máxima Exposição
+                            </div>
+                            <div className="flex items-center gap-2 text-xs font-bold text-gray-600 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
+                                <CheckCircle2 className="w-3 h-3" /> Sucesso Garantido
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {loading ? (
@@ -483,33 +716,42 @@ export const StoreHighlight: React.FC = () => {
                                 <p className="text-sm font-black text-gray-900 dark:text-white">Enviar banner pronto</p>
                                 <span className="text-[11px] uppercase tracking-wider text-gray-400">Envio rapido</span>
                             </div>
-                            <label className="block text-xs font-bold text-gray-500">Arquivo do banner</label>
-                            <ImageUpload
-                                label="Banner (1600x400 recomendado)"
-                                currentImageUrl={bannerUrl}
-                                onImageUploaded={(url) => setBannerUrl(url)}
-                                folderPath="city_banners_store"
-                            />
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Observacoes</label>
-                    <textarea
-                        className="w-full min-h-[90px] max-h-[160px] p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none overflow-y-auto"
-                        value={bannerNotes}
-                        onChange={e => setBannerNotes(e.target.value)}
-                        placeholder="Detalhes sobre o banner ou a campanha."
-                    />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">Assunto</label>
-                        <div className="relative">
-                        <CustomSelect value={requestTopic} options={topicOptions} onChange={setRequestTopic} />
-                        </div>
-                    </div>
-                                <div className="flex md:justify-end">
-                                    <Button onClick={() => handleCreateBannerRequest("READY")} icon={<ImageIcon className="w-4 h-4" />}>
-                                        Enviar banner
-                                    </Button>
+
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <label className="block text-xs font-bold text-gray-500">Arquivo do banner</label>
+                                    <ImageUpload
+                                        label="Banner (1600x400 recomendado)"
+                                        currentImageUrl={bannerUrl}
+                                        onImageUploaded={(url) => setBannerUrl(url)}
+                                        folderPath="city_banners_store"
+                                    />
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Observacoes</label>
+                                        <textarea
+                                            className="w-full min-h-[90px] max-h-[160px] p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none overflow-y-auto"
+                                            value={bannerNotes}
+                                            onChange={e => setBannerNotes(e.target.value)}
+                                            placeholder="Detalhes sobre o banner ou a campanha."
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">Assunto</label>
+                                            <div className="relative">
+                                                <CustomSelect value={readyRequestTopic} options={topicOptions} onChange={(val) => setReadyRequestTopic(val as any)} />
+                                            </div>
+                                        </div>
+                                        <div className="flex md:justify-end">
+                                            <Button onClick={() => handleCreateBannerRequest("READY")} icon={<ImageIcon className="w-4 h-4" />}>
+                                                Enviar banner
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="hidden xl:flex items-center justify-center bg-gray-100/50 dark:bg-gray-900/20 rounded-2xl p-4">
+                                    <MobileBannerPreview imageUrl={bannerUrl} storeName={profile?.store_name} />
                                 </div>
                             </div>
                         </div>
@@ -520,19 +762,19 @@ export const StoreHighlight: React.FC = () => {
                                 <span className="text-[11px] uppercase tracking-wider text-gray-400">Briefing</span>
                             </div>
                             <label className="block text-xs font-bold text-gray-500">Como voce quer o banner</label>
-                <textarea
-                    className="w-full min-h-[110px] max-h-[200px] p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none overflow-y-auto"
-                    value={requestBrief}
-                    onChange={e => setRequestBrief(e.target.value)}
-                    placeholder="Explique cores, texto, oferta, periodo e qualquer referencia visual."
-                />
+                            <textarea
+                                className="w-full min-h-[110px] max-h-[200px] p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white resize-none overflow-y-auto"
+                                value={requestBrief}
+                                onChange={e => setRequestBrief(e.target.value)}
+                                placeholder="Explique cores, texto, oferta, periodo e qualquer referencia visual."
+                            />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">Assunto</label>
-                        <div className="relative">
-                        <CustomSelect value={requestTopic} options={topicOptions} onChange={setRequestTopic} />
-                        </div>
-                    </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Assunto</label>
+                                    <div className="relative">
+                                        <CustomSelect value={designRequestTopic} options={topicOptions} onChange={(val) => setDesignRequestTopic(val as any)} />
+                                    </div>
+                                </div>
                                 <div className="flex md:justify-end">
                                     <Button variant="outline" onClick={() => handleCreateBannerRequest("DESIGN_REQUEST")} icon={<MessageCircle className="w-4 h-4" />}>
                                         Pedir criacao
@@ -583,40 +825,6 @@ export const StoreHighlight: React.FC = () => {
                             )}
                         </div>
                     </div>
-                </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-7 space-y-4">
-                <div className="flex items-center gap-2">
-                    <MessageCircle className="w-5 h-5 text-brand-600" />
-                    <h3 className="text-lg font-black text-gray-900 dark:text-white">Chat exclusivo</h3>
-                </div>
-                <div className="border border-gray-100 dark:border-gray-700 rounded-2xl p-4 bg-gray-50 dark:bg-gray-900 max-h-[280px] overflow-y-auto space-y-3">
-                    {loadingBannerChat ? (
-                        <div className="flex justify-center py-6">
-                            <div className="w-5 h-5 rounded-full border-2 border-brand-600 border-t-transparent animate-spin" />
-                        </div>
-                    ) : requestMessages.length === 0 ? (
-                        <p className="text-xs text-gray-500">Nenhuma mensagem ainda.</p>
-                    ) : (
-                        requestMessages.map(msg => (
-                            <div key={msg.id} className={`p-3 rounded-xl ${msg.sender_role === 'store' ? 'bg-brand-600 text-white ml-auto' : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100'} max-w-[80%]`}>
-                                <p className="text-xs font-bold mb-1">{msg.sender_role === 'store' ? 'Voce' : 'Admin'} - {formatDateTime(msg.created_at)}</p>
-                                <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
-                            </div>
-                        ))
-                    )}
-                </div>
-                <div className="flex flex-col md:flex-row gap-2">
-                    <input
-                        type="text"
-                        className="flex-1 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
-                        placeholder="Digite sua mensagem..."
-                        value={requestMessage}
-                        onChange={e => setRequestMessage(e.target.value)}
-                    />
-                    <Button onClick={handleSendBannerMessage} icon={<MessageCircle className="w-4 h-4" />}>
-                        Enviar
-                    </Button>
                 </div>
             </div>
             <BaseModal
@@ -697,6 +905,98 @@ export const StoreHighlight: React.FC = () => {
                     </div>
                 </div>
             </BaseModal>
+            <BaseModal
+                isOpen={showBannerPaymentModal}
+                onClose={() => setShowBannerPaymentModal(false)}
+                title="Pagamento do Banner"
+                icon={<CreditCard className="w-6 h-6 text-brand-600" />}
+            >
+                <div className="space-y-6">
+                    <div className="p-5 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-sm text-gray-500">Valor do serviço:</span>
+                            <span className="text-xl font-black text-gray-900 dark:text-white">
+                                {formatCurrency(bannerPaymentType === 'READY'
+                                    ? Number(settings?.banner_ready_price || 150)
+                                    : Number(settings?.banner_design_price || 250))}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-gray-400 uppercase tracking-widest font-black">
+                            <Clock className="w-3 h-3" /> Duração: {settings?.banner_duration_days || 30} dias
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <p className="text-xs font-bold text-gray-500 uppercase">Escolha a forma de pagamento</p>
+
+                        <button
+                            onClick={() => handleConfirmBannerPurchase('WALLET')}
+                            disabled={processingBannerPayment}
+                            className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:border-brand-500 bg-white dark:bg-gray-800 transition-all group active:scale-[0.98]"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-brand-50 dark:bg-brand-900/20 rounded-xl text-brand-600">
+                                    <Wallet className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                    <p className="text-sm font-bold text-gray-900 dark:text-white">Saldo da Carteira</p>
+                                    <p className="text-xs text-gray-500">Seu saldo: {formatCurrency(walletBalance)}</p>
+                                </div>
+                            </div>
+                            <ChevronDown className="w-4 h-4 text-gray-300 -rotate-90" />
+                        </button>
+
+                        <button
+                            onClick={() => handleConfirmBannerPurchase('PIX')}
+                            disabled={processingBannerPayment}
+                            className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:border-brand-500 bg-white dark:bg-gray-800 transition-all group active:scale-[0.98]"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-600">
+                                    <FileCheck className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                    <p className="text-sm font-bold text-gray-900 dark:text-white">PIX Dinâmico</p>
+                                    <p className="text-xs text-gray-500">Liberação automática após pagamento</p>
+                                </div>
+                            </div>
+                            <ExternalLink className="w-4 h-4 text-gray-300" />
+                        </button>
+
+                        <button
+                            onClick={() => handleConfirmBannerPurchase('CREDIT_CARD')}
+                            disabled={processingBannerPayment}
+                            className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:border-brand-500 bg-white dark:bg-gray-800 transition-all group active:scale-[0.98]"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600">
+                                    <CreditCard className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                    <p className="text-sm font-bold text-gray-900 dark:text-white">Cartão de Crédito</p>
+                                    <p className="text-xs text-gray-500">Parcele sua publicidade</p>
+                                </div>
+                            </div>
+                            <ExternalLink className="w-4 h-4 text-gray-300" />
+                        </button>
+                    </div>
+
+                    {processingBannerPayment && (
+                        <div className="flex items-center justify-center gap-3 p-4 bg-brand-50 dark:bg-brand-900/20 rounded-2xl text-brand-600 font-bold text-sm animate-pulse">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Processando seu pedido...
+                        </div>
+                    )}
+                </div>
+            </BaseModal>
+
+            <ChatExclusivoModal
+                isOpen={isChatModalOpen}
+                onClose={() => setIsChatModalOpen(false)}
+                requestId={selectedRequest?.id || ''}
+            />
+
+            {/* Espaçamento extra no rodapé para garantir que os selects não sejam cortados */}
+            <div className="pb-32" />
         </div>
     );
 };

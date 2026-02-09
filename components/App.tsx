@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown } from 'lucide-react';
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
@@ -50,6 +50,7 @@ const AdminStoreRatings = React.lazy(() => import('./AdminStoreRatings').then(mo
 const StoreIntegrations = React.lazy(() => import('./StoreIntegrations').then(module => ({ default: module.StoreIntegrations })));
 const PrintCatalogGenerator = React.lazy(() => import('./PrintCatalogGenerator').then(module => ({ default: module.PrintCatalogGenerator })));
 const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => ({ default: module.StoreSettings })));
+const StorePlans = React.lazy(() => import('./StorePlans').then(module => ({ default: module.StorePlans })));
 const StoreProductImport = React.lazy(() => import('./ProductImportExport').then(module => ({ default: module.ProductImportExport })));
 const ZePayStore = React.lazy(() => import('./ZePayStoreModule').then(module => ({ default: module.ZePayStore })));
 const StoreApiDocs = React.lazy(() => import('./StoreApiDocs').then(module => ({ default: module.StoreApiDocs })));
@@ -408,6 +409,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         store_marketing: 'Marketing',
         store_integrations: 'Integrações',
         store_settings: 'Configurações',
+        store_plans: 'Planos',
         store_receiving_payment: 'Recebimento PIX',
         store_finance_panel: 'Financeiro',
         zepay_store: 'ZéPay',
@@ -1023,6 +1025,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         </DesktopOnlyGate>
                     );
                 case 'store_settings': return <StoreSettings />;
+                case 'store_plans': return <StorePlans />;
                 case 'store_receiving_payment': return <StoreReceivingPayment />;
                 case 'store_product_import':
                     return (
@@ -1192,7 +1195,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 { label: 'Relatórios', tab: 'store_reports', icon: BarChart3 },
                 { label: 'Desempenho', tab: 'store_performance', icon: TrendingUp },
                 { label: 'Avaliações', tab: 'store_ratings', icon: Star },
-                { label: 'Configurações', tab: 'store_settings', icon: Settings }
+                { label: 'Configurações', tab: 'store_settings', icon: Settings },
+                { label: 'Planos', tab: 'store_plans', icon: Crown }
             ]
         },
         {
@@ -1765,6 +1769,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
                                     <MenuButton icon={Star} label="Avaliações" tab="store_ratings" />
                                     <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
+                                    <MenuButton icon={Crown} label="Planos" tab="store_plans" />
                                     <MenuButton icon={Smartphone} label="Recebimento PIX" tab="store_receiving_payment" />
                                     <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
                                     <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />

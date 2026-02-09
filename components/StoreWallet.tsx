@@ -299,7 +299,8 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
             items: [
                 { id: 'zepay', label: 'ZéPay', icon: CreditCard, tab: 'zepay_store', color: 'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400' },
                 { id: 'zebank', label: 'ZéBank', icon: Landmark, tab: 'zebank', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
-                { id: 'painel_financeiro', label: 'Painel Financeiro', icon: Banknote, tab: 'store_finance_panel', color: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' }
+                { id: 'painel_financeiro', label: 'Painel Financeiro', icon: Banknote, tab: 'store_finance_panel', color: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' },
+                { id: 'planos', label: 'Planos', icon: Crown, tab: 'store_plans', color: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' }
             ]
         },
         {

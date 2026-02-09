@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useUserCity } from '../hooks/useUserCity';
 import { Copy, Download, MapPin, Route, RefreshCw, AlertCircle, Edit3, List, Navigation } from 'lucide-react';
 import { CitySearchSelect } from '../../components/CitySearchSelect';
@@ -116,7 +117,7 @@ export default function StreetsList() {
                 east: parseFloat(cityInfo.boundingbox[1])
             };
 
-            const overpassQuery = `[out:json][timeout:90];(way["highway"]["name"](${cityInfo.boundingbox[0]},${cityInfo.boundingbox[2]},${cityInfo.boundingbox[1]},${cityInfo.boundingbox[3]}););out tags;`;
+            const overpassQuery = `[out:json][timeout:60];(way["highway"]["name"](${cityInfo.boundingbox[0]},${cityInfo.boundingbox[2]},${cityInfo.boundingbox[1]},${cityInfo.boundingbox[3]}););out tags;`;
 
             const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
                 method: 'POST',
@@ -200,21 +201,45 @@ export default function StreetsList() {
         const src = data.ruas;
         const q = debouncedQuery.trim().toLowerCase();
 
-        const scored = src.map(r => {
-            const rl = r.toLowerCase();
-            let score = 0;
-            if (rl.startsWith(q)) score = 3;
-            else if (rl.includes(q)) score = 2 - rl.indexOf(q) * 0.001;
-            else score = 0;
-            return { r, score };
-        })
-            .filter(x => x.score > 0)
-            .sort((x, y) => y.score - x.score)
-            .slice(0, 12)
-            .map(x => x.r);
-
-        setSuggestions(scored);
+        // Tarefa 4: Otimizar filtro de busca (limitar a 5000)
+        let filtered = src;
+        if (q) {
+            const scored = src.map(r => {
+                const rl = r.toLowerCase();
+                let score = 0;
+                if (rl.startsWith(q)) score = 3;
+                else if (rl.includes(q)) score = 2 - rl.indexOf(q) * 0.001;
+                else score = 0;
+                return { r, score };
+            })
+                .filter(x => x.score > 0)
+                .sort((x, y) => y.score - x.score)
+                .slice(0, 12)
+                .map(x => x.r);
+            setSuggestions(scored);
+        } else {
+            setSuggestions([]);
+        }
     }, [debouncedQuery, data]);
+
+    const filteredRuas = useMemo(() => {
+        if (!data?.ruas) return [];
+        if (!debouncedQuery.trim()) return data.ruas;
+        const q = debouncedQuery.trim().toLowerCase();
+        // Limite de 5000 para evitar processamento pesado
+        return data.ruas
+            .filter(r => r.toLowerCase().includes(q))
+            .slice(0, 5000);
+    }, [data?.ruas, debouncedQuery]);
+
+    const parentRef = useRef<HTMLDivElement>(null);
+
+    const rowVirtualizer = useVirtualizer({
+        count: filteredRuas.length,
+        getScrollElement: () => parentRef.current,
+        estimateSize: () => 76, // Altura aproximada de cada item (48px height + 28px gap + padding)
+        overscan: 5,
+    });
 
     const copyToClipboard = async (text: string, itemId?: string) => {
         try {
@@ -432,28 +457,59 @@ export default function StreetsList() {
                         <span className="px-4 py-1.5 bg-brand-50 dark:bg-brand-900/30 text-brand-600 text-xs font-black rounded-full border border-brand-100 dark:border-brand-800">{data.ruas.length} Ruas</span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                        {data.ruas.map((rua, index) => (
-                            <div key={index} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-transparent hover:border-brand-100 dark:hover:border-brand-900 hover:bg-white dark:hover:bg-gray-800 transition-all group">
-                                <span className="text-gray-700 dark:text-gray-300 font-bold text-sm truncate mr-4">{rua}</span>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                        onClick={() => handleOpenMap(rua)}
-                                        disabled={openingMap === rua}
-                                        title="Abrir no Mapa"
-                                        className="p-3 bg-white dark:bg-gray-700 text-brand-600 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 hover:bg-brand-600 hover:text-white active:scale-95 transition-all"
+                    <div
+                        ref={parentRef}
+                        className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar"
+                    >
+                        <div
+                            style={{
+                                height: `${rowVirtualizer.getTotalSize()}px`,
+                                width: '100%',
+                                position: 'relative',
+                            }}
+                        >
+                            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                const index = virtualRow.index;
+                                const rua = filteredRuas[index];
+                                if (!rua) return null;
+
+                                return (
+                                    <div
+                                        key={virtualRow.key}
+                                        data-index={virtualRow.index}
+                                        ref={rowVirtualizer.measureElement}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                        }}
+                                        className="p-1 pb-3"
                                     >
-                                        {openingMap === rua ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-                                    </button>
-                                    <button
-                                        onClick={() => copyToClipboard(rua, `rua-${index}`)}
-                                        className="p-3 bg-brand-600 text-white rounded-xl shadow-lg shadow-brand-600/20 active:scale-95 transition-all opacity-0 group-hover:opacity-100 md:opacity-100"
-                                    >
-                                        {copyingItem === `rua-${index}` ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-transparent hover:border-brand-100 dark:hover:border-brand-900 hover:bg-white dark:hover:bg-gray-800 transition-all group">
+                                            <span className="text-gray-700 dark:text-gray-300 font-bold text-sm truncate mr-4">{rua}</span>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <button
+                                                    onClick={() => handleOpenMap(rua)}
+                                                    disabled={openingMap === rua}
+                                                    title="Abrir no Mapa"
+                                                    className="p-3 bg-white dark:bg-gray-700 text-brand-600 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 hover:bg-brand-600 hover:text-white active:scale-95 transition-all"
+                                                >
+                                                    {openingMap === rua ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+                                                </button>
+                                                <button
+                                                    onClick={() => copyToClipboard(rua, `rua-${index}`)}
+                                                    className="p-3 bg-brand-600 text-white rounded-xl shadow-lg shadow-brand-600/20 active:scale-95 transition-all opacity-0 group-hover:opacity-100 md:opacity-100"
+                                                >
+                                                    {copyingItem === `rua-${index}` ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>

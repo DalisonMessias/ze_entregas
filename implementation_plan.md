@@ -19,7 +19,16 @@ As abas "Entrega" e "Retirada" no carrinho são renderizadas incondicionalmente,
 - **Rodapé Fixo (Cor Total)**: O logo do Zé Entregas será movido para o rodapé e exibido com **opacidade 100% (cor total)**, deixando de ser semitransparente.
 
 ### 2. Identidade da Loja e Uploads
-- **Upload de Logo**: Adicionar um botão de upload para que# Implementação de Categorias de Loja com Imagem e Carrossel
+- **Upload de Logo**: Adicionar um botão de upload para que## Proximas Etapas (Ajustes de Feedback)
+
+### Preview Mobile
+- [MODIFY] [MobileBannerPreview.tsx](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/MobileBannerPreview.tsx): Refatorar layout para corresponder exatamente à página de listagem de lojas (banner de fundo, logo redondo sobreposto).
+
+### Chat Exclusivo
+- [MODIFY] [ChatExclusivoModal.tsx](file:///c:/Users/Dalison%20Messias/Documents/GitHub/ze_entregas/components/ChatExclusivoModal.tsx): Integrar lógica de horário de expediente do suporte administrativo (`shop_settings`). Exibir aviso quando fora de horário.
+
+## Plano de Verificação Final
+# Implementação de Categorias de Loja com Imagem e Carrossel
 
 Este plano detalha as alterações para permitir que categorias de lojas tenham imagens, sejam selecionáveis no cadastro e exibidas em um carrossel na página da cidade.
 

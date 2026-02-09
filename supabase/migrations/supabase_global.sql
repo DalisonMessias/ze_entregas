@@ -1101,3 +1101,418 @@ CREATE TRIGGER on_user_profile_created_reward
     AFTER INSERT ON public.user_profiles
     FOR EACH ROW EXECUTE FUNCTION public.process_referral_reward_on_signup();
 
+-- ==================================================================
+-- MELHORIAS PÁGINA DE DESTAQUES (METRICAS E REALTIME) - 2026-02-09
+-- ==================================================================
+
+-- 1. Habilitar Realtime para mensagens de banner
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'city_store_banner_request_messages'
+    ) THEN
+        BEGIN
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.city_store_banner_request_messages;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Não foi possível adicionar à publicação supabase_realtime automaticamente.';
+        END;
+    END IF;
+END $$;
+
+ALTER TABLE public.city_store_banner_request_messages REPLICA IDENTITY FULL;
+
+-- 2. Métricas para Destaques
+ALTER TABLE public.city_store_highlight_orders ADD COLUMN IF NOT EXISTS views_count INTEGER DEFAULT 0;
+ALTER TABLE public.city_store_highlight_orders ADD COLUMN IF NOT EXISTS clicks_count INTEGER DEFAULT 0;
+
+-- 3. Métricas para Banners (Solicitações)
+ALTER TABLE public.city_promotion_orders ADD COLUMN IF NOT EXISTS views_count INTEGER DEFAULT 0;
+ALTER TABLE public.city_promotion_orders ADD COLUMN IF NOT EXISTS clicks_count INTEGER DEFAULT 0;
+
+-- 4. RPC para incrementar métricas de forma atômica
+CREATE OR REPLACE FUNCTION public.increment_promotion_metric(
+    p_promo_id UUID,
+    p_promo_type TEXT, -- 'HIGHLIGHT' ou 'BANNER'
+    p_metric_type TEXT -- 'VIEW' ou 'CLICK'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    IF p_promo_type = 'HIGHLIGHT' THEN
+        IF p_metric_type = 'VIEW' THEN
+            UPDATE public.city_store_highlight_orders SET views_count = views_count + 1 WHERE id = p_promo_id;
+        ELSIF p_metric_type = 'CLICK' THEN
+            UPDATE public.city_store_highlight_orders SET clicks_count = clicks_count + 1 WHERE id = p_promo_id;
+        END IF;
+    ELSIF p_promo_type = 'BANNER' THEN
+        IF p_metric_type = 'VIEW' THEN
+            UPDATE public.city_promotion_orders SET views_count = views_count + 1 WHERE id = p_promo_id;
+        ELSIF p_metric_type = 'CLICK' THEN
+            UPDATE public.city_promotion_orders SET clicks_count = clicks_count + 1 WHERE id = p_promo_id;
+        END IF;
+    END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.increment_promotion_metric(UUID, TEXT, TEXT) TO anon, authenticated;
+
+-- Comentários para documentação
+COMMENT ON COLUMN public.city_store_highlight_orders.views_count IS 'Número total de visualizações do destaque da loja';
+COMMENT ON COLUMN public.city_store_highlight_orders.clicks_count IS 'Número total de cliques no destaque da loja';
+COMMENT ON COLUMN public.city_promotion_orders.views_count IS 'Número total de visualizações do banner da cidade';
+COMMENT ON COLUMN public.city_promotion_orders.clicks_count IS 'Número total de cliques no banner da cidade';
+
+-- Super Lojista Plan Expansion (09/02/2026)
+DO $$
+BEGIN
+    -- user_profiles
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'super_store_plan_type') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN super_store_plan_type TEXT CHECK (super_store_plan_type IN ('MENSALIDADE', 'COMISSAO')) DEFAULT 'MENSALIDADE';
+    END IF;
+
+    -- partner_fee_settings
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'super_store_monthly_enabled') THEN
+        ALTER TABLE public.partner_fee_settings ADD COLUMN super_store_monthly_enabled BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'super_store_commission_enabled') THEN
+        ALTER TABLE public.partner_fee_settings ADD COLUMN super_store_commission_enabled BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'super_store_commission_percent') THEN
+        ALTER TABLE public.partner_fee_settings ADD COLUMN super_store_commission_percent NUMERIC(5, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_fee_settings' AND column_name = 'super_store_commission_fixed') THEN
+        ALTER TABLE public.partner_fee_settings ADD COLUMN super_store_commission_fixed NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+END $$;
+
+-- Tabela de Comissões da Plataforma
+CREATE TABLE IF NOT EXISTS public.platform_commissions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES public.orders(id),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id),
+    amount NUMERIC(15, 2) NOT NULL,
+    base_value NUMERIC(15, 2) NOT NULL,
+    commission_percent NUMERIC(5, 2),
+    commission_fixed NUMERIC(10, 2),
+    plan_type TEXT NOT NULL,
+    status TEXT DEFAULT 'PENDING', -- PENDING, COMPLETED, CANCELLED
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_commissions_store_id ON public.platform_commissions(store_id);
+CREATE INDEX IF NOT EXISTS idx_platform_commissions_order_id ON public.platform_commissions(order_id);
+
+ALTER TABLE public.platform_commissions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view all commissions" ON public.platform_commissions;
+CREATE POLICY "Admins can view all commissions" ON public.platform_commissions FOR SELECT USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Users can view own commissions" ON public.platform_commissions;
+CREATE POLICY "Users can view own commissions" ON public.platform_commissions FOR SELECT USING (auth.uid()::text = store_id::text);
+
+GRANT ALL ON public.platform_commissions TO authenticated;
+GRANT ALL ON public.platform_commissions TO service_role;
+
+
+-- ==================================================================
+-- SISTEMA DE FIDELIDADE (PONTOS) - ADICIONADO 2026-02-09
+-- ==================================================================
+
+-- 1. Novas colunas na tabela orders
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'points_earned') THEN
+        ALTER TABLE public.orders ADD COLUMN points_earned INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'points_redeemed') THEN
+        ALTER TABLE public.orders ADD COLUMN points_redeemed INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'loyalty_discount_value') THEN
+        ALTER TABLE public.orders ADD COLUMN loyalty_discount_value NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+END $$;
+
+-- 2. Tabela de Configurações de Fidelidade por Loja
+CREATE TABLE IF NOT EXISTS public.loyalty_settings (
+    store_id UUID PRIMARY KEY REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT FALSE,
+    conversion_factor NUMERIC DEFAULT 1.0, -- Pontos por Real
+    calculation_base TEXT DEFAULT 'SUBTOTAL', -- 'SUBTOTAL' | 'PAID'
+    rounding_rule TEXT DEFAULT 'TRUNC', -- 'TRUNC' | 'ROUND'
+    points_expiry_days INTEGER,
+    min_points_redemption INTEGER DEFAULT 0,
+    max_discount_percentage INTEGER DEFAULT 100,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 3. Tabela de Saldo de Pontos por Cliente/Loja
+CREATE TABLE IF NOT EXISTS public.loyalty_points (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    balance INTEGER DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(store_id, user_id)
+);
+
+-- 4. Tabela de Histórico de Pontos
+CREATE TABLE IF NOT EXISTS public.loyalty_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    order_id UUID REFERENCES public.orders(id) ON DELETE SET NULL,
+    points INTEGER NOT NULL,
+    type TEXT NOT NULL, -- 'CREDIT', 'DEBIT', 'REVERSAL', 'ADJUSTMENT'
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 5. Índices para Performance
+CREATE INDEX IF NOT EXISTS idx_loyalty_points_user ON public.loyalty_points(user_id);
+CREATE INDEX IF NOT EXISTS idx_loyalty_points_store ON public.loyalty_points(store_id);
+CREATE INDEX IF NOT EXISTS idx_loyalty_history_user_store ON public.loyalty_history(user_id, store_id);
+
+-- 6. RLS para as novas tabelas
+ALTER TABLE public.loyalty_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loyalty_points ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loyalty_history ENABLE ROW LEVEL SECURITY;
+
+-- Policies para loyalty_settings
+DROP POLICY IF EXISTS "Lojistas gerenciam suas configs de fidelidade" ON public.loyalty_settings;
+CREATE POLICY "Lojistas gerenciam suas configs de fidelidade" ON public.loyalty_settings 
+    FOR ALL USING (auth.uid()::text = store_id::text OR public.is_admin());
+
+DROP POLICY IF EXISTS "Public can read loyalty_settings" ON public.loyalty_settings;
+CREATE POLICY "Public can read loyalty_settings" ON public.loyalty_settings FOR SELECT USING (true);
+
+-- Policies para loyalty_points
+DROP POLICY IF EXISTS "Users can view their own loyalty points" ON public.loyalty_points;
+CREATE POLICY "Users can view their own loyalty points" ON public.loyalty_points 
+    FOR SELECT USING (auth.uid()::text = user_id::text OR auth.uid()::text = store_id::text OR public.is_admin());
+
+-- Policies para loyalty_history
+DROP POLICY IF EXISTS "Users can view their own loyalty history" ON public.loyalty_history;
+CREATE POLICY "Users can view their own loyalty history" ON public.loyalty_history 
+    FOR SELECT USING (auth.uid()::text = user_id::text OR auth.uid()::text = store_id::text OR public.is_admin());
+
+GRANT ALL ON public.loyalty_settings TO authenticated, anon;
+GRANT ALL ON public.loyalty_points TO authenticated, anon;
+GRANT ALL ON public.loyalty_history TO authenticated, anon;
+GRANT ALL ON public.loyalty_settings TO service_role;
+GRANT ALL ON public.loyalty_points TO service_role;
+GRANT ALL ON public.loyalty_history TO service_role;
+
+-- 7. Função para Calcular e Processar Pontos (Trigger)
+CREATE OR REPLACE FUNCTION public.handle_loyalty_on_order_update()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_settings RECORD;
+    v_points INTEGER;
+    v_base_value NUMERIC;
+BEGIN
+    -- Obter configurações da loja
+    SELECT * INTO v_settings FROM public.loyalty_settings WHERE store_id = NEW.store_id;
+    
+    -- Se fidelidade não estiver ativa, ignorar
+    IF v_settings IS NULL OR v_settings.is_active = FALSE THEN
+        RETURN NEW;
+    END IF;
+
+    -- CRÉDITO DE PONTOS
+    -- Quando status muda para 'DELIVERED' e origem é 'MENU_DIGITAL'
+    IF NEW.status = 'DELIVERED' AND OLD.status != 'DELIVERED' AND NEW.origin = 'MENU_DIGITAL' AND NEW.user_id IS NOT NULL THEN
+        
+        -- Definir base de cálculo
+        IF v_settings.calculation_base = 'PAID' THEN
+            v_base_value := NEW.total_price;
+        ELSE
+            -- SUBTOTAL
+            v_base_value := NEW.total_price - COALESCE(NEW.shipping_cost, 0);
+        END IF;
+
+        -- Cálculo de pontos
+        v_points := v_base_value * v_settings.conversion_factor;
+        
+        IF v_settings.rounding_rule = 'ROUND' THEN
+            v_points := ROUND(v_points);
+        ELSE
+            v_points := TRUNC(v_points);
+        END IF;
+
+        IF v_points > 0 THEN
+            -- Registrar no histórico
+            INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
+            VALUES (NEW.store_id, NEW.user_id, NEW.id, v_points, 'CREDIT', 'Pontos ganhos no pedido #' || SUBSTRING(NEW.id::text, 1, 8));
+
+            -- Atualizar saldo
+            INSERT INTO public.loyalty_points (store_id, user_id, balance)
+            VALUES (NEW.store_id, NEW.user_id, v_points)
+            ON CONFLICT (store_id, user_id) 
+            DO UPDATE SET balance = public.loyalty_points.balance + EXCLUDED.balance, updated_at = now();
+            
+            NEW.points_earned := v_points;
+        END IF;
+    END IF;
+
+    -- ESTORNO DE PONTOS
+    -- Quando pedido é CANCELADO e já tinha gerado pontos
+    IF NEW.status = 'CANCELLED' AND OLD.status = 'DELIVERED' AND OLD.points_earned > 0 AND NEW.user_id IS NOT NULL THEN
+        -- Registrar no histórico
+        INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
+        VALUES (NEW.store_id, NEW.user_id, NEW.id, -OLD.points_earned, 'REVERSAL', 'Estorno de pontos do pedido cancelado #' || SUBSTRING(NEW.id::text, 1, 8));
+
+        -- Atualizar saldo
+        UPDATE public.loyalty_points 
+        SET balance = balance - OLD.points_earned, updated_at = now()
+        WHERE store_id = NEW.store_id AND user_id = NEW.user_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 8. Criar o Trigger
+DROP TRIGGER IF EXISTS tr_handle_loyalty_order ON public.orders;
+CREATE TRIGGER tr_handle_loyalty_order
+AFTER UPDATE ON public.orders
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_loyalty_on_order_update();
+
+-- 9. Função para Resgate de Pontos (Chamada via RPC/Frontend)
+CREATE OR REPLACE FUNCTION public.redeem_loyalty_points(
+    p_store_id UUID,
+    p_points_to_redeem INTEGER,
+    p_discount_value NUMERIC
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_balance INTEGER;
+    v_user_id UUID;
+BEGIN
+    v_user_id := auth.uid();
+    IF v_user_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Usuário não autenticado.');
+    END IF;
+
+    -- Verificar saldo
+    SELECT balance INTO v_balance FROM public.loyalty_points 
+    WHERE store_id = p_store_id AND user_id = v_user_id;
+
+    IF v_balance IS NULL OR v_balance < p_points_to_redeem THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Saldo de pontos insuficiente.');
+    END IF;
+
+    -- Registrar débito no histórico
+    INSERT INTO public.loyalty_history (store_id, user_id, points, type, description)
+    VALUES (p_store_id, v_user_id, -p_points_to_redeem, 'DEBIT', 'Resgate de pontos por desconto no valor de R$ ' || p_discount_value);
+
+    -- Atualizar saldo
+    UPDATE public.loyalty_points 
+    SET balance = balance - p_points_to_redeem, updated_at = now()
+    WHERE store_id = p_store_id AND user_id = v_user_id;
+
+    RETURN jsonb_build_object('success', true, 'new_balance', v_balance - p_points_to_redeem);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.redeem_loyalty_points(UUID, INTEGER, NUMERIC) TO authenticated;
+
+-- 10. Atualizar create_public_order para suportar Resgate de Pontos
+CREATE OR REPLACE FUNCTION public.create_public_order(
+    p_store_id UUID,
+    p_items JSONB,
+    p_total_price NUMERIC,
+    p_payment_method TEXT,
+    p_shipping_address JSONB,
+    p_delivery_mode TEXT,
+    p_customer_name TEXT,
+    p_customer_phone TEXT,
+    p_pix_active BOOLEAN DEFAULT FALSE,
+    p_observation TEXT DEFAULT NULL,
+    p_is_location_delivery BOOLEAN DEFAULT FALSE,
+    p_shipping_cost NUMERIC DEFAULT 0,
+    p_points_redeemed INTEGER DEFAULT 0,
+    p_loyalty_discount_value NUMERIC DEFAULT 0
+)
+RETURNS UUID
+AS $$
+DECLARE
+    v_order_id UUID;
+    v_status public.order_status := 'pending';
+BEGIN
+    -- Definir status baseado na ativação do PIX
+    IF p_payment_method = 'PIX' THEN
+        IF p_pix_active THEN
+            v_status := 'Aguardando pagamento (PIX)';
+        ELSE
+            v_status := 'Pagamento a combinar com a loja';
+        END IF;
+    END IF;
+
+    INSERT INTO public.orders (
+        store_id, 
+        user_id, 
+        status, 
+        items, 
+        total_price, 
+        payment_method, 
+        shipping_address, 
+        order_type,
+        customer_name, 
+        customer_phone,
+        observation,
+        is_location_delivery,
+        shipping_cost,
+        points_redeemed,
+        loyalty_discount_value,
+        origin
+    )
+    VALUES (
+        p_store_id, 
+        auth.uid(),
+        v_status, 
+        p_items, 
+        p_total_price, 
+        p_payment_method::public.payment_method, 
+        p_shipping_address, 
+        p_delivery_mode, 
+        p_customer_name, 
+        p_customer_phone,
+        p_observation,
+        p_is_location_delivery,
+        p_shipping_cost,
+        p_points_redeemed,
+        p_loyalty_discount_value,
+        'DIGITAL_MENU'
+    )
+    RETURNING id INTO v_order_id;
+
+    -- DEDUZIR PONTOS (Se houver resgate)
+    IF p_points_redeemed > 0 THEN
+        -- Registrar no histórico
+        INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
+        VALUES (p_store_id, auth.uid(), v_order_id, -p_points_redeemed, 'DEBIT', 'Uso de pontos no pedido #' || SUBSTRING(v_order_id::text, 1, 8));
+
+        -- Atualizar saldo
+        UPDATE public.loyalty_points 
+        SET balance = balance - p_points_redeemed, updated_at = now()
+        WHERE store_id = p_store_id AND user_id = auth.uid();
+    END IF;
+
+    RETURN v_order_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC) TO anon, authenticated;
+

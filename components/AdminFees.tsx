@@ -380,6 +380,75 @@ export const AdminFees: React.FC = () => {
                                 </div>
                             </div>
 
+                            <div className="col-span-1 md:col-span-2">
+                                <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2 mt-2">Planos Super Lojista</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Plano Mensalidade */}
+                                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-2 bg-white rounded-lg shadow-sm text-brand-600">
+                                                    <CreditCard className="w-5 h-5" />
+                                                </div>
+                                                <span className="font-bold text-gray-900">Plano Mensalidade</span>
+                                            </div>
+                                            <Switch
+                                                checked={!!editGlobal.super_store_monthly_enabled}
+                                                onChange={(checked) => handleGlobalToggle('super_store_monthly_enabled', checked)}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-gray-500 uppercase">Valor da Mensalidade</label>
+                                            <CurrencyInput
+                                                value={editGlobal.super_store_monthly_fee as number}
+                                                onChange={(v) => handleGlobalChange('super_store_monthly_fee', v.toString())}
+                                                disabled={!editGlobal.super_store_monthly_enabled}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Plano Comissão */}
+                                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-2 bg-white rounded-lg shadow-sm text-brand-600">
+                                                    <Percent className="w-5 h-5" />
+                                                </div>
+                                                <span className="font-bold text-gray-900">Plano Comissão</span>
+                                            </div>
+                                            <Switch
+                                                checked={!!editGlobal.super_store_commission_enabled}
+                                                onChange={(checked) => handleGlobalToggle('super_store_commission_enabled', checked)}
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-gray-500 uppercase">Comissão (%)</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">%</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.1"
+                                                        value={editGlobal.super_store_commission_percent ?? 0}
+                                                        onChange={(e) => handleGlobalChange('super_store_commission_percent', e.target.value)}
+                                                        disabled={!editGlobal.super_store_commission_enabled}
+                                                        className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-right font-medium text-gray-900 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all disabled:bg-gray-100"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-gray-500 uppercase">Valor Fixo (R$)</label>
+                                                <CurrencyInput
+                                                    value={editGlobal.super_store_commission_fixed as number}
+                                                    onChange={(v) => handleGlobalChange('super_store_commission_fixed', v.toString())}
+                                                    disabled={!editGlobal.super_store_commission_enabled}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
                     )}
                 </div>

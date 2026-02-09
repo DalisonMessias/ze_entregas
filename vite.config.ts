@@ -48,6 +48,11 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       },
       dedupe: ['react', 'react-dom']
+    },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      minify: 'esbuild',
+      reportCompressedSize: false
     }
   };
 });

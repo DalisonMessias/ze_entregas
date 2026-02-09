@@ -272,6 +272,7 @@ export interface ManagedUser {
     show_comments_on_menu?: boolean;
     ratings_count?: number;
     ratings_sum?: number;
+    super_store_plan_type?: 'MENSALIDADE' | 'COMISSAO';
 }
 
 // CompanyInfo consolidated at line 916
@@ -466,6 +467,9 @@ export interface Order {
     store?: any;
     partner?: any;
     collaborator_name?: string;
+    points_earned?: number;
+    points_redeemed?: number;
+    loyalty_discount_value?: number;
     created_at: string;
 }
 
@@ -546,6 +550,10 @@ export interface PartnerFeeSettings {
     pos_max_value?: number;
     combo_discount_percent?: number;
     combo_discount_enabled?: boolean;
+    super_store_monthly_enabled?: boolean;
+    super_store_commission_enabled?: boolean;
+    super_store_commission_percent?: number;
+    super_store_commission_fixed?: number;
 }
 
 export interface PWASettings {
@@ -747,6 +755,40 @@ export interface PartnerProfile {
     ratings_count?: number;
     ratings_sum?: number;
     average_rating?: number;
+    super_store_plan_type?: 'MENSALIDADE' | 'COMISSAO';
+    loyalty_settings?: LoyaltySettings;
+}
+
+export interface LoyaltySettings {
+    store_id: string;
+    is_active: boolean;
+    conversion_factor: number;
+    calculation_base: 'SUBTOTAL' | 'PAID';
+    rounding_rule: 'TRUNC' | 'ROUND';
+    points_expiry_days?: number;
+    min_points_redemption: number;
+    max_discount_percentage: number;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface LoyaltyPoints {
+    id: string;
+    store_id: string;
+    user_id: string;
+    balance: number;
+    updated_at?: string;
+}
+
+export interface LoyaltyHistory {
+    id: string;
+    store_id: string;
+    user_id: string;
+    order_id?: string;
+    points: number;
+    type: 'CREDIT' | 'DEBIT' | 'REVERSAL' | 'ADJUSTMENT';
+    description: string;
+    created_at: string;
 }
 
 export interface StoreDailyReport {
@@ -1502,17 +1544,29 @@ export interface CityStoreBannerRequestMessage {
     sender_id?: string;
     sender_role: 'store' | 'admin';
     message: string;
+    message_type?: 'text' | 'file';
+    file_url?: string;
+    file_name?: string;
+    file_mime_type?: string;
+    file_size?: number;
     created_at: string;
 }
+
 
 export interface CityStoreHighlightSettings {
     id: string;
     highlight_price: number;
     highlight_duration_days: number;
     cancel_fee?: number;
+    banner_ready_price?: number;
+    banner_design_price?: number;
+    banner_duration_days?: number;
+    banner_enabled?: boolean;
+    highlight_enabled?: boolean;
     created_at: string;
     updated_at?: string;
 }
+
 
 export interface CityStoreHighlightOrder {
     id: string;
@@ -1525,6 +1579,8 @@ export interface CityStoreHighlightOrder {
     status: string;
     created_at: string;
     updated_at?: string;
+    views_count?: number;
+    clicks_count?: number;
     store?: {
         id: string;
         name?: string;
@@ -1533,6 +1589,24 @@ export interface CityStoreHighlightOrder {
         city_slug?: string;
     };
 }
+
+export interface CityPromotionOrder {
+    id: string;
+    store_id: string;
+    city_slug: string;
+    order_type: 'BANNER' | 'HIGHLIGHT';
+    amount_paid: number;
+    duration_days?: number;
+    payment_method: 'WALLET' | 'PIX' | 'CREDIT_CARD';
+    payment_status: 'PENDING' | 'PAID' | 'CANCELLED';
+    external_payment_id?: string;
+    banner_request_id?: string;
+    highlight_order_id?: string;
+    metadata?: any;
+    created_at: string;
+    updated_at?: string;
+}
+
 
 export interface MarketingTemplate {
     id: string;

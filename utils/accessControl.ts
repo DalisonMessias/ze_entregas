@@ -41,13 +41,13 @@ export const allowedTabsByRole: Record<UserRole, Set<ActiveTab>> = {
     'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
     'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_city_banners', 'admin_tips', 'admin_loan_config',
     'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation', 'zepoint',
-    'store_drivers_chat'
+    'store_drivers_chat', 'store_plans'
   ]),
   store_partner: new Set<ActiveTab>([
     'store_status', 'wallet', 'new_request', 'history', 'store_team', 'store_reports', 'store_marketing',
     'store_integrations', 'store_settings', 'store_ratings', 'store_receiving_payment', 'store_product_import', 'store_finance_panel',
     'zepay_store', 'zebank', 'internal_orders', 'internal_orders_new', 'store_catalog', 'store_print_catalog',
-    'store_api_docs', 'store_loans', 'store_promotions', 'store_highlight', 'internal_chat', 'store_drivers_chat', 'zepoint', 'store_performance'
+    'store_api_docs', 'store_loans', 'store_promotions', 'store_highlight', 'internal_chat', 'store_drivers_chat', 'zepoint', 'store_performance', 'store_plans'
   ]),
   delivery_partner: new Set<ActiveTab>([
     'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history',

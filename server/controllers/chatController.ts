@@ -130,7 +130,8 @@ export const getConversations = async (req: Request, res: Response) => {
       .from('chat_conversations')
       .select('*')
       .eq('store_id', storeId)
-      .order('last_message_timestamp', { ascending: false });
+      .order('last_message_timestamp', { ascending: false })
+      .limit(100);
 
     if (error) throw error;
     res.status(200).json(data || []);
@@ -219,7 +220,8 @@ export const getMessages = async (req: Request, res: Response) => {
       .select('*')
       .eq('store_id', storeId)
       .eq('conversation_id', conversationId)
-      .order('message_timestamp', { ascending: true });
+      .order('message_timestamp', { ascending: true })
+      .limit(200);
 
     if (error) throw error;
     res.status(200).json(data || []);

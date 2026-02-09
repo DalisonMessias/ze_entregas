@@ -121,6 +121,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/pedidos-entregas': 'associate_orders',
     '/loja/historico': 'history',
     '/loja/zepoint': 'zepoint',
+    '/loja/planos': 'store_plans',
 
     // Delivery Partner/Person Routes
     '/entregador/inicio': 'daily_panel',

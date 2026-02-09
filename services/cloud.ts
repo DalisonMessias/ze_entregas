@@ -11,14 +11,15 @@ import {
     StoreDeliveryPartner, DailySummary, FinancialStatementItem,
     ReferralData, ReferralHistoryItem, StoreReportData, StoreShippingRule,
     AdminWalletUser, AdminDashboardStats, PWASettings, MaintenanceData,
-    AppNotification, PayoutSummary, AppSlide, CityStoreBanner, CityStoreHighlightSettings, CityStoreHighlightOrder, CityStoreBannerAssets, CityStoreBannerRequest, CityStoreBannerRequestMessage, StoreProduct,
+    AppNotification, PayoutSummary, AppSlide, CityStoreBanner, CityStoreHighlightSettings, CityStoreHighlightOrder, CityStoreBannerAssets, CityStoreBannerRequest, CityStoreBannerRequestMessage, StoreProduct, CityPromotionOrder,
     UserTerminal, UserTerminalHistoryItem, SalesSimulation, AssociatedStore, Collaborator, StoreAddonOption, StoreAddonGroup,
     StoreDeliverySettings, StoreNeighborhoodFee, PaymentGatewayConfig, PaymentGatewayLog,
     FinancialTransaction, BlacklistEntry, PartnerRating, Claim,
     CatalogBaseProduct, QuickReply, StreetRequest, ApprovedStreet,
     Promotion, Coupon, InsurancePlan, InsurancePartner, InsuranceSubscription,
     BaseAddonGroup, BaseAddonOption,
-    ReferralConfig, ReferralReward, ReferralPointTransaction, ClaimedReward, ReferralDashboardData, ValidateReferralCodeResponse, AdminReferralHistoryEntry
+    ReferralConfig, ReferralReward, ReferralPointTransaction, ClaimedReward, ReferralDashboardData, ValidateReferralCodeResponse, AdminReferralHistoryEntry,
+    LoyaltySettings, LoyaltyPoints, LoyaltyHistory
 } from '../types';
 
 const SUPABASE_URL = 'https://pjnxrqemjozlpnvoxpmn.supabase.co';
@@ -64,6 +65,20 @@ export const getUserWithCache = async () => {
         lastUserFetch = now;
     }
     return { user, error };
+};
+
+export const cancelSuperStoreSubscription = async (): Promise<{ success: boolean; error?: any }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not initialized' };
+
+    const { error } = await sb.rpc('cancel_super_store_subscription');
+
+    if (error) {
+        console.error('Error canceling subscription:', error);
+        return { success: false, error };
+    }
+
+    return { success: true };
 };
 
 // --- OFFLINE SYNC LOGIC ---
@@ -788,7 +803,9 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         average_rating: userData.average_rating,
         ratings_count: userData.ratings_count,
         ratings_sum: userData.ratings_sum,
-        show_comments_on_menu: userData.show_comments_on_menu
+        show_comments_on_menu: userData.show_comments_on_menu,
+        super_store_plan_type: userData.super_store_plan_type,
+        super_store_expiration: userData.super_store_expiration
     };
 
     return profile;
@@ -1501,6 +1518,7 @@ export const getStoreProducts = async (targetStoreId?: string, signal?: AbortSig
         return [];
     }
 };
+
 
 // ============================================================================
 // SISTEMA DE INDIQUE E GANHE (PONTOS)
@@ -3952,9 +3970,9 @@ export const adminGetCityStoreBannerRequests = async (): Promise<CityStoreBanner
 export const createCityStoreBannerRequest = async (payload: Partial<CityStoreBannerRequest>) => {
     const sb = getClient();
     if (!sb) return { success: false };
-    const { error } = await sb.from('city_store_banner_requests').insert(payload);
+    const { data, error } = await sb.from('city_store_banner_requests').insert(payload).select().single();
     if (error) return { success: false, error };
-    return { success: true };
+    return { success: true, data };
 };
 
 export const adminUpdateCityStoreBannerRequest = async (id: string, updates: Partial<CityStoreBannerRequest>) => {
@@ -3977,17 +3995,68 @@ export const getCityStoreBannerRequestMessages = async (requestId: string): Prom
     return data || [];
 };
 
-export const sendCityStoreBannerRequestMessage = async (requestId: string, senderRole: 'store' | 'admin', message: string) => {
+export const sendCityStoreBannerRequestMessage = async (
+    requestId: string,
+    senderRole: 'store' | 'admin',
+    message: string,
+    file?: File
+) => {
     const sb = getClient();
     if (!sb) return { success: false };
     const { data: userData } = await sb.auth.getUser();
     const senderId = userData?.user?.id || null;
 
+    let fileUrl: string | null = null;
+    let fileName: string | null = null;
+    let fileMimeType: string | null = null;
+    let fileSize: number | null = null;
+    let messageType: 'text' | 'file' = 'text';
+
+    // Se houver arquivo, fazer upload para o Supabase Storage
+    if (file) {
+        try {
+            const fileExt = file.name.split('.').pop();
+            const randomName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `chat_files/${requestId}/${randomName}`;
+
+            const { data: uploadData, error: uploadError } = await sb.storage
+                .from('chat_files')
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (uploadError) {
+                console.error('Erro ao fazer upload do arquivo:', uploadError);
+                return { success: false, error: uploadError };
+            }
+
+            // Obter URL pública do arquivo
+            const { data: urlData } = sb.storage
+                .from('chat_files')
+                .getPublicUrl(filePath);
+
+            fileUrl = urlData.publicUrl;
+            fileName = file.name;
+            fileMimeType = file.type;
+            fileSize = file.size;
+            messageType = 'file';
+        } catch (error) {
+            console.error('Erro ao processar arquivo:', error);
+            return { success: false, error };
+        }
+    }
+
     const { error } = await sb.from('city_store_banner_request_messages').insert({
         request_id: requestId,
         sender_id: senderId,
         sender_role: senderRole,
-        message
+        message: message || (fileName ? `Enviou o arquivo: ${fileName}` : ''),
+        message_type: messageType,
+        file_url: fileUrl,
+        file_name: fileName,
+        file_mime_type: fileMimeType,
+        file_size: fileSize
     });
     if (error) return { success: false, error };
     return { success: true };
@@ -4074,13 +4143,66 @@ export const cancelCityStoreHighlight = async (orderId: string) => {
     return { success: true, data };
 };
 
-export const subscribeToSuperStore = async (fee: number) => {
+// --- FUNÇÕES DE COMPRA DE BANNER ---
+
+export const purchaseCityStoreBanner = async (
+    citySlug: string,
+    bannerType: 'READY' | 'DESIGN_REQUEST',
+    paymentMethod: 'WALLET' | 'PIX' | 'CREDIT_CARD',
+    bannerRequestId?: string
+) => {
     const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    const { data, error } = await sb.rpc('purchase_city_store_banner', {
+        p_city_slug: citySlug,
+        p_banner_type: bannerType,
+        p_payment_method: paymentMethod,
+        p_banner_request_id: bannerRequestId || null
+    });
+
+    if (error) return { success: false, error };
+    return { success: true, data };
+};
+
+export const getCityPromotionOrders = async (): Promise<CityPromotionOrder[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('city_promotion_orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching city promotion orders:', error);
+        return [];
+    }
+
+    return data || [];
+};
+
+export const incrementPromotionMetric = async (promoId: string, promoType: 'HIGHLIGHT' | 'BANNER', metricType: 'VIEW' | 'CLICK') => {
+    const sb = getClient();
+    if (!sb) return;
+
+    const { error } = await sb.rpc('increment_promotion_metric', {
+        p_promo_id: promoId,
+        p_promo_type: promoType,
+        p_metric_type: metricType
+    });
+
+    if (error) console.error('Error incrementing promotion metric:', error);
+};
+
+export const subscribeToSuperStore = async (fee: number, planType: 'MENSALIDADE' | 'COMISSAO' = 'MENSALIDADE') => {
+    const sb = getClient();
+
     if (!sb) return;
     const { data: { user } } = await sb.auth.getUser();
     if (!user) throw new Error("Not logged in");
 
-    const { error } = await sb.rpc('subscribe_to_super_store', { fee });
+    const { error } = await sb.rpc('subscribe_to_super_store', { fee, p_plan_type: planType });
     if (error) throw new Error(error.message);
 };
 
@@ -6795,7 +6917,9 @@ export const createPublicOrder = async (
     customerName: string,
     customerPhone: string,
     pixActive: boolean = false,
-    observation: string = ''
+    observation: string = '',
+    pointsRedeemed: number = 0,
+    loyaltyDiscountValue: number = 0
 ): Promise<{ success: boolean; orderId?: string; error?: any }> => {
     const sb = getClient();
     if (!sb) return { success: false, error: 'Client not initialized' };
@@ -6812,8 +6936,11 @@ export const createPublicOrder = async (
         p_pix_active: pixActive,
         p_observation: observation,
         p_is_location_delivery: shippingAddress?.is_location_delivery || false,
-        p_shipping_cost: shippingAddress?.fee || 0
+        p_shipping_cost: shippingAddress?.fee || 0,
+        p_points_redeemed: pointsRedeemed,
+        p_loyalty_discount_value: loyaltyDiscountValue
     });
+
 
     if (error) {
         console.error('Error creating public order:', error);
@@ -6822,6 +6949,125 @@ export const createPublicOrder = async (
 
     return { success: true, orderId: data };
 };
+
+// ========================================
+// SISTEMA DE FIDELIDADE (PONTOS)
+// ========================================
+
+/**
+ * Busca as configurações de fidelidade de uma loja.
+ */
+export const getLoyaltySettings = async (storeId: string): Promise<LoyaltySettings | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb
+        .from('loyalty_settings')
+        .select('*')
+        .eq('store_id', storeId)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error fetching loyalty settings:', error);
+        return null;
+    }
+
+    return data;
+};
+
+/**
+ * Atualiza ou cria as configurações de fidelidade de uma loja.
+ */
+export const updateLoyaltySettings = async (settings: LoyaltySettings): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    const { error } = await sb
+        .from('loyalty_settings')
+        .upsert({
+            ...settings,
+            updated_at: new Date().toISOString()
+        });
+
+    if (error) {
+        console.error('Error updating loyalty settings:', error);
+        return false;
+    }
+
+    return true;
+};
+
+/**
+ * Busca o saldo de pontos de fidelidade de um usuário em uma loja.
+ */
+export const getLoyaltyBalance = async (storeId: string): Promise<number> => {
+    const sb = getClient();
+    if (!sb) return 0;
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return 0;
+
+    const { data, error } = await sb
+        .from('loyalty_points')
+        .select('balance')
+        .eq('store_id', storeId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error fetching loyalty balance:', error);
+        return 0;
+    }
+
+    return data?.balance || 0;
+};
+
+/**
+ * Busca o histórico de pontos de fidelidade de um usuário em uma loja.
+ */
+export const getLoyaltyHistory = async (storeId: string): Promise<LoyaltyHistory[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await sb
+        .from('loyalty_history')
+        .select('*')
+        .eq('store_id', storeId)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching loyalty history:', error);
+        return [];
+    }
+
+    return data || [];
+};
+
+/**
+ * Executa o resgate de pontos de fidelidade (chamada RPC).
+ */
+export const redeemLoyaltyPoints = async (storeId: string, points: number, discountValue: number): Promise<{ success: boolean; message?: string; newBalance?: number }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, message: 'Cliente não inicializado' };
+
+    const { data, error } = await sb.rpc('redeem_loyalty_points', {
+        p_store_id: storeId,
+        p_points_to_redeem: points,
+        p_discount_value: discountValue
+    });
+
+    if (error) {
+        console.error('Error redeeming points:', error);
+        return { success: false, message: error.message };
+    }
+
+    return data; // { success: boolean, message?: string, new_balance?: number }
+};
+
 
 export const getPublicOrderChat = async (orderId: string): Promise<{ chatId: string, messages: any[] } | null> => {
     const sb = getClient();

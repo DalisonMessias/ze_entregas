@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Save, Store, MapPin, Phone, Mail, Clock, Zap, Info, User, Camera, Printer, Share2, Copy, Power } from 'lucide-react';
+import { Truck, Save, Store, MapPin, Phone, Mail, Clock, Zap, Info, User, Camera, Printer, Share2, Copy, Power, Award } from 'lucide-react';
 import { Loading } from './Loading';
 import { StreetAutocomplete } from './StreetAutocomplete';
 import { Button } from './Button';
@@ -8,6 +8,7 @@ import { CustomSelect } from './CustomSelect';
 import { MobileTabsSelect } from './MobileTabsSelect';
 import { StoreShippingRules } from './StoreShippingRules';
 import { StoreDeliverySettings } from './StoreDeliverySettings';
+import { StoreLoyaltySettings } from './StoreLoyaltySettings';
 import { ExclusiveLock } from './ExclusiveLock';
 import { CitySearchSelect } from './CitySearchSelect';
 import { OpeningHoursModal } from './OpeningHoursModal';
@@ -16,10 +17,11 @@ import { PartnerProfile } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { formatMinutes } from '../utils/formatMinutes';
 
-type TabKey = 'profile' | 'operation' | 'branding' | 'shipping' | 'printer';
+type TabKey = 'profile' | 'operation' | 'branding' | 'shipping' | 'printer' | 'loyalty';
 
 export const StoreSettings: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TabKey>('profile');
+    // ... resto do arquivo até a definição de tabs
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [loadingProfile, setLoadingProfile] = useState(true);
     const [loadingPrinter, setLoadingPrinter] = useState(false);
@@ -28,6 +30,7 @@ export const StoreSettings: React.FC = () => {
     const [shippingMounted, setShippingMounted] = useState(false);
     const [isSuperStore, setIsSuperStore] = useState(false);
     const [expirationDate, setExpirationDate] = useState<string | null>(null);
+    const [planType, setPlanType] = useState<'MENSALIDADE' | 'COMISSAO' | null>(null);
     const [loadingSuperStore, setLoadingSuperStore] = useState(false);
     const { alert, confirm } = useDialog();
     const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
@@ -82,7 +85,8 @@ export const StoreSettings: React.FC = () => {
         { id: 'operation', label: 'Operação', icon: Power },
         { id: 'branding', label: 'Aparência', icon: Camera },
         { id: 'shipping', label: 'Entrega/Retirada', icon: Truck },
-        { id: 'printer', label: 'Impressora', icon: Printer }
+        { id: 'printer', label: 'Impressora', icon: Printer },
+        { id: 'loyalty', label: 'Fidelidade', icon: Award }
     ];
 
     const loadSuperStoreStatus = async () => {
@@ -90,10 +94,11 @@ export const StoreSettings: React.FC = () => {
         try {
             const user = await cloud.getClient()?.auth.getUser();
             if (user?.data.user) {
-                const data = await cloud.getClient()?.from('user_profiles').select('is_super_store, super_store_expiration').eq('id', user.data.user.id).single();
+                const data = await cloud.getClient()?.from('user_profiles').select('is_super_store, super_store_expiration, super_store_plan_type').eq('id', user.data.user.id).single();
                 if (data?.data) {
                     setIsSuperStore(!!data.data.is_super_store);
                     setExpirationDate(data.data.super_store_expiration || null);
+                    setPlanType(data.data.super_store_plan_type as any || null);
                 }
             }
         } catch (e) {
@@ -147,14 +152,17 @@ export const StoreSettings: React.FC = () => {
                 if (p.is_super_store !== undefined && p.is_super_store !== null) {
                     setIsSuperStore(!!p.is_super_store);
                     setExpirationDate(p.super_store_expiration || null);
+                    setPlanType(p.super_store_plan_type || null);
                 } else {
                     setIsSuperStore(false);
                     setExpirationDate(null);
+                    setPlanType(null);
                     loadSuperStoreStatus();
                 }
             } else {
                 setIsSuperStore(false);
                 setExpirationDate(null);
+                setPlanType(null);
                 loadSuperStoreStatus();
             }
         } catch (e) {
@@ -413,9 +421,14 @@ export const StoreSettings: React.FC = () => {
                             <Zap className="w-5 h-5" />
                         </div>
                         <div>
-                            <h4 className="font-bold text-amber-800 dark:text-amber-300 text-sm">Super Lojista Ativo</h4>
+                            <h4 className="font-bold text-amber-800 dark:text-amber-300 text-sm">
+                                Super Lojista Ativo <span className="text-xs font-normal opacity-75">({planType === 'COMISSAO' ? 'Plano por Comissão' : 'Plano Mensal'})</span>
+                            </h4>
                             <p className="text-xs text-amber-600 dark:text-amber-400">
-                                Seu plano vence em: <strong>{new Date(expirationDate).toLocaleDateString('pt-BR')}</strong>
+                                {planType === 'COMISSAO'
+                                    ? `Ciclo atual encerra em: ${new Date(expirationDate).toLocaleDateString('pt-BR')}`
+                                    : `Seu plano vence em: ${new Date(expirationDate).toLocaleDateString('pt-BR')}`
+                                }
                             </p>
                         </div>
                     </div>
@@ -658,6 +671,10 @@ export const StoreSettings: React.FC = () => {
                         </>
                     )}
                 </div>
+            )}
+
+            {activeTab === 'loyalty' && profile?.id && (
+                <StoreLoyaltySettings storeId={profile.id} />
             )}
         </div>
     );

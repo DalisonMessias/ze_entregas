@@ -26,3 +26,11 @@ export const formatMinuteRange = (
 
     return formatMinutes(minNum > 0 ? minNum : maxNum);
 };
+export const formatDateTime = (iso?: string | null): string => {
+    if (!iso) return '-';
+    try {
+        return new Date(iso).toLocaleString('pt-BR');
+    } catch (e) {
+        return '-';
+    }
+};

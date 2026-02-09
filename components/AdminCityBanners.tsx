@@ -5,6 +5,8 @@ import { CityStoreBanner, CityStoreHighlightOrder, CityStoreHighlightSettings, C
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 import { ImageUpload } from './ImageUpload';
+import { Switch } from './Switch';
+import { MobileTabsSelect } from './MobileTabsSelect';
 
 const toLocalInputValue = (value?: string) => {
     if (!value) return '';
@@ -26,7 +28,16 @@ export const AdminCityBanners: React.FC = () => {
     const [editingBanner, setEditingBanner] = useState<CityStoreBanner | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [highlightSettings, setHighlightSettings] = useState<CityStoreHighlightSettings | null>(null);
-    const [highlightForm, setHighlightForm] = useState({ highlight_price: '', highlight_duration_days: '', cancel_fee: '' });
+    const [highlightForm, setHighlightForm] = useState({
+        highlight_price: '',
+        highlight_duration_days: '30',
+        cancel_fee: '',
+        banner_ready_price: '',
+        banner_design_price: '',
+        banner_duration_days: '30',
+        banner_enabled: true,
+        highlight_enabled: true
+    });
     const [highlightOrders, setHighlightOrders] = useState<CityStoreHighlightOrder[]>([]);
     const [loadingHighlights, setLoadingHighlights] = useState(false);
     const [savingHighlights, setSavingHighlights] = useState(false);
@@ -85,7 +96,12 @@ export const AdminCityBanners: React.FC = () => {
             setHighlightForm({
                 highlight_price: settingsData?.highlight_price?.toString() || '',
                 highlight_duration_days: settingsData?.highlight_duration_days?.toString() || '30',
-                cancel_fee: settingsData?.cancel_fee?.toString() || '0'
+                cancel_fee: settingsData?.cancel_fee?.toString() || '0',
+                banner_ready_price: settingsData?.banner_ready_price?.toString() || '150',
+                banner_design_price: settingsData?.banner_design_price?.toString() || '250',
+                banner_duration_days: settingsData?.banner_duration_days?.toString() || '30',
+                banner_enabled: settingsData?.banner_enabled ?? true,
+                highlight_enabled: settingsData?.highlight_enabled ?? true
             });
             setBannerAssets(assetsData || null);
             setAssetsForm({
@@ -202,14 +218,19 @@ export const AdminCityBanners: React.FC = () => {
         try {
             const result = await cloud.adminUpdateCityStoreHighlightSettings({
                 highlight_price: price,
-                highlight_duration_days: 30,
-                cancel_fee: cancelFee
+                highlight_duration_days: Number(highlightForm.highlight_duration_days),
+                cancel_fee: cancelFee,
+                banner_ready_price: Number(highlightForm.banner_ready_price),
+                banner_design_price: Number(highlightForm.banner_design_price),
+                banner_duration_days: Number(highlightForm.banner_duration_days),
+                banner_enabled: highlightForm.banner_enabled,
+                highlight_enabled: highlightForm.highlight_enabled
             });
             if (!result.success) {
                 await alert({ title: 'Erro ao salvar', message: 'Nao foi possivel atualizar as configuracoes.' });
                 return;
             }
-            await alert({ title: 'Configuracoes salvas', message: 'Valores atualizados com sucesso.' });
+            await alert({ title: 'Configuracoes salvas', message: 'Configurações atualizadas com sucesso.' });
             await loadHighlightData();
         } finally {
             setSavingHighlights(false);
@@ -441,37 +462,99 @@ export const AdminCityBanners: React.FC = () => {
                                 <h3 className="text-lg font-black">Configuracao do destaque pago</h3>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Valor base (30 dias)</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
-                                        value={highlightForm.highlight_price}
-                                        onChange={e => setHighlightForm(prev => ({ ...prev, highlight_price: e.target.value }))}
-                                    />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-4">
+                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 pb-2 flex items-center gap-2">
+                                        <Star className="w-4 h-4 text-amber-500" /> Destaque da Loja
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1">Preço (Base)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white text-sm"
+                                                value={highlightForm.highlight_price}
+                                                onChange={e => setHighlightForm(prev => ({ ...prev, highlight_price: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1">Duração (Dias)</label>
+                                            <input
+                                                type="number"
+                                                className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white text-sm"
+                                                value={highlightForm.highlight_duration_days}
+                                                onChange={e => setHighlightForm(prev => ({ ...prev, highlight_duration_days: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1">Taxa Cancel. (%)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white text-sm"
+                                                value={highlightForm.cancel_fee}
+                                                onChange={e => setHighlightForm(prev => ({ ...prev, cancel_fee: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div className="flex items-end pb-1">
+                                            <Switch
+                                                label="Habilitar Destaque"
+                                                checked={highlightForm.highlight_enabled}
+                                                onChange={val => setHighlightForm(prev => ({ ...prev, highlight_enabled: val }))}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Base de dias</label>
-                                    <input
-                                        type="number"
-                                        disabled
-                                        className="w-full p-3 bg-gray-100 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-400 dark:text-gray-400"
-                                        value={30}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Taxa de cancelamento (%)</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
-                                        value={highlightForm.cancel_fee}
-                                        onChange={e => setHighlightForm(prev => ({ ...prev, cancel_fee: e.target.value }))}
-                                    />
+
+                                <div className="space-y-4">
+                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 pb-2 flex items-center gap-2">
+                                        <ImageIcon className="w-4 h-4 text-blue-500" /> Banners da Cidade
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1">Preço Pronto</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white text-sm"
+                                                value={highlightForm.banner_ready_price}
+                                                onChange={e => setHighlightForm(prev => ({ ...prev, banner_ready_price: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1">Preço Design</label>
+                                            <input
+                                                type="number"
+                                                className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white text-sm"
+                                                value={highlightForm.banner_design_price}
+                                                onChange={e => setHighlightForm(prev => ({ ...prev, banner_design_price: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1">Duração (Dias)</label>
+                                            <input
+                                                type="number"
+                                                className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 dark:text-white text-sm"
+                                                value={highlightForm.banner_duration_days}
+                                                onChange={e => setHighlightForm(prev => ({ ...prev, banner_duration_days: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div className="flex items-end pb-1">
+                                            <Switch
+                                                label="Habilitar Banners"
+                                                checked={highlightForm.banner_enabled}
+                                                onChange={val => setHighlightForm(prev => ({ ...prev, banner_enabled: val }))}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -782,14 +865,11 @@ export const AdminCityBanners: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center gap-3 pt-6">
-                                    <input
-                                        type="checkbox"
-                                        id="is_active_city_banner"
+                                    <Switch
+                                        label="Banner ativo"
                                         checked={formData.is_active ?? true}
-                                        onChange={e => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
-                                        className="w-5 h-5 rounded-lg border-gray-300 text-brand-600 focus:ring-brand-500"
+                                        onChange={val => setFormData(prev => ({ ...prev, is_active: val }))}
                                     />
-                                    <label htmlFor="is_active_city_banner" className="text-sm font-bold text-gray-700 dark:text-gray-300">Banner ativo</label>
                                 </div>
                             </div>
                         </div>

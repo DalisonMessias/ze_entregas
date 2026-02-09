@@ -27,7 +27,29 @@ export interface WebSocketMessage {
 export const initializeWebSocket = (server: HttpServer) => {
   wss = new WebSocketServer({ server });
 
-  wss.on('connection', (ws: WebSocket, req) => {
+  // Sistema de Heartbeat (Ping/Pong) para detectar conexões inativas
+  const interval = setInterval(() => {
+    wss.clients.forEach((ws: any) => {
+      if (ws.isAlive === false) {
+        console.log(`Fechando conexão inativa (storeId: ${ws.storeId}, visitorId: ${ws.visitorId})`);
+        return ws.terminate();
+      }
+
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
+
+  wss.on('close', () => {
+    clearInterval(interval);
+  });
+
+  wss.on('connection', (ws: any, req) => {
+    ws.isAlive = true;
+    ws.on('pong', () => {
+      ws.isAlive = true;
+    });
+
     // Extract storeId and visitorId from the WebSocket connection URL
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
     const storeId = url.searchParams.get('storeId');
@@ -69,7 +91,7 @@ export const initializeWebSocket = (server: HttpServer) => {
       console.log(`Cliente WebSocket ${clientType} (${identifier}) desconectado.`);
     });
 
-    ws.on('error', (error) => {
+    ws.on('error', (error: Error) => {
       const identifier = visitorId || storeId;
       console.error(`Erro no WebSocket para ${clientType} (${identifier}):`, error);
     });

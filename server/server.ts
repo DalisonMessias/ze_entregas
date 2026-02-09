@@ -2,6 +2,7 @@ import './config.js'; // DEVE SER O PRIMEIRO IMPORT
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import compression from 'compression';
 import { fileURLToPath } from 'url';
 import http from 'http';
 
@@ -26,6 +27,14 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
 // Middleware
+app.use(compression({
+  level: 6,
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  }
+}));
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
