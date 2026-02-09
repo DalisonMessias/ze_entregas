@@ -3078,10 +3078,17 @@ export const adminSendIndividualNotification = async (userId: string, title: str
     if (error) throw error;
 };
 
-export const storeCancelPartnerRequest = async (requestId: string) => {
+export const storeCancelPartnerRequest = async (requestId: string, isOrderId: boolean = false) => {
     const sb = getClient();
     if (!sb) return;
-    await sb.from('partner_requests').update({ status: 'CANCELLED' }).eq('id', requestId);
+
+    if (isOrderId) {
+        // Cancelar na tabela orders (usado quando o ID vem do histórico unificado)
+        await sb.from('orders').update({ status: 'CANCELLED' }).eq('id', requestId);
+    } else {
+        // Cancelar na tabela partner_requests (comportamento original)
+        await sb.from('partner_requests').update({ status: 'CANCELLED' }).eq('id', requestId);
+    }
 };
 
 export const autoCancelUnacceptedRequest = async (requestId: string) => {

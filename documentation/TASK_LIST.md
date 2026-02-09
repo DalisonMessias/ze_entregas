@@ -1,8 +1,13 @@
-# Plano de Tarefas - Correção de Persistência de Cancelamento
+# Plano de# Tarefas - Correção de Cancelamento de Pedidos
 
-- [ ] Analisar a função `storeCancelPartnerRequest` em `services/cloud.ts`
-- [ ] Verificar a tabela de pedidos no banco de dados (`partner_requests` ou similar)
-- [ ] Verificar se há algum gatilho (RPC) ou se a atualização é direta via Supabase
-- [ ] Corrigir a lógica de cancelamento para garantir a persistência
-- [ ] Validar a correção
-- [ ] Atualizar `checklist.txt`
+## Problema Identificado
+
+✅ **CAUSA RAIZ**: O `OrderHistory.tsx` mapeia `Order[]` da tabela `orders` para `PartnerRequest[]` (compatibilidade de UI), mas usa `order.id` como ID. A função `storeCancelPartnerRequest` espera um `partner_request.id` e tenta atualizar a tabela `partner_requests`, resultando em falha silenciosa.
+
+## Tarefas de Implementação
+
+- [ ] Modificar `services/cloud.ts::storeCancelPartnerRequest` para aceitar parâmetro `isOrderId`
+- [ ] Atualizar `components/OrderHistory.tsx` para passar `isOrderId: true` no cancelamento
+- [ ] Verificar e atualizar `components/InternalOrders.tsx` se necessário
+- [ ] Testar cancelamento de pedido e verificar persistência após refresh
+- [ ] Atualizar `checklist.txt` com a correção implementada

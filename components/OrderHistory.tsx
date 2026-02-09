@@ -564,7 +564,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ userRole }) => {
                                             if (!ok) return;
                                             try {
                                                 setCancelLoading(true);
-                                                await cloud.storeCancelPartnerRequest(selectedOrder.id);
+                                                await cloud.storeCancelPartnerRequest(selectedOrder.id, true);
                                                 setActionMessage('Pedido cancelado com sucesso.');
                                                 setActionError(null);
                                                 setSelectedOrder(prev => prev ? { ...prev, status: 'CANCELLED' } as PartnerRequest : prev);
