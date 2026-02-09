@@ -417,7 +417,7 @@ export const StoreCatalog: React.FC = () => {
                 </div>
 
                 {/* Main Content Area - Full Height Scrollable */}
-                <div className="flex-1 bg-white dark:bg-gray-900/40 rounded-[2rem] p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-800 overflow-y-auto">
+                <div className="flex-1 bg-white dark:bg-gray-900/40 rounded-[2rem] p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-800 overflow-y-auto no-scrollbar">
                     {activeTab === 'products' && (
                         <div className="animate-in fade-in duration-300 flex flex-col">
                             <div className="flex flex-col md:flex-row gap-4 items-center mb-8">
