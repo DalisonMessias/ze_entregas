@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Wallet, Plus, AlertTriangle, MapPin, Star, MessageCircle, Crown, ChevronRight, Truck, Send, Users, BarChart3, History, Settings, CreditCard, Headphones, ShoppingBag, Search, FileText, Landmark, UploadCloud, Banknote, TrendingUp } from 'lucide-react';
+import { Wallet, Plus, AlertTriangle, MapPin, Star, MessageCircle, Crown, ChevronRight, Check, Truck, Send, Users, BarChart3, History, Settings, CreditCard, Headphones, ShoppingBag, Search, FileText, Landmark, UploadCloud, Banknote, TrendingUp } from 'lucide-react';
 import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
@@ -385,28 +385,47 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                             {!isSuperStore && fees && (
                                 <div
                                     onClick={() => setShowUpgradeModal(true)}
-                                    className="relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500 p-6 rounded-[2rem] shadow-lg cursor-pointer transform hover:scale-[1.01] transition-all duration-300 border border-yellow-300/30 flex flex-col justify-center items-center text-center group h-full"
+                                    className="relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500 p-6 rounded-[2rem] shadow-lg cursor-pointer transform hover:scale-[1.01] transition-all duration-300 border border-yellow-300/30 flex flex-col justify-between group h-full min-h-[160px] md:min-h-[auto]"
                                 >
+                                    {/* Arte de fundo */}
                                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                                         <Crown className="w-32 h-32 text-white rotate-12" />
                                     </div>
+
                                     <div className="relative z-10 space-y-4">
-                                        <div className="flex items-center justify-center gap-2">
+                                        <div className="flex items-center gap-2">
                                             <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2">
                                                 <Crown className="w-3 h-3 text-white fill-current" />
                                                 <span className="text-[10px] font-black uppercase text-white tracking-widest">Super Lojista</span>
                                             </div>
                                         </div>
-                                        <div className="space-y-1">
-                                            <h3 className="font-black text-xl text-white leading-tight">Seja Super Lojista</h3>
-                                            <p className="text-xs text-yellow-50 font-medium">
-                                                Acesse recursos exclusivos e taxas reduzidas
-                                            </p>
-                                        </div>
-                                        <div className="flex justify-center">
-                                            <div className="bg-white text-orange-600 w-10 h-10 rounded-full shadow-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                <ChevronRight className="w-6 h-6" />
+
+                                        <div className="space-y-3">
+                                            <h3 className="font-black text-xl text-white leading-tight">Potencialize sua Loja</h3>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                {[
+                                                    "Assistente I.A.",
+                                                    "Relatórios Avançados",
+                                                    "Taxa Zero em Retiradas"
+                                                ].map((benefit, idx) => (
+                                                    <div key={idx} className="flex items-center gap-2">
+                                                        <div className="bg-white/20 p-0.5 rounded-full">
+                                                            <Check className="w-2.5 h-2.5 text-white" />
+                                                        </div>
+                                                        <span className="text-[11px] font-bold text-white/90">{benefit}</span>
+                                                    </div>
+                                                ))}
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="relative z-10 flex items-center justify-between mt-2">
+                                        <div className="bg-white/10 backdrop-blur-sm px-3 py-2 rounded-xl border border-white/20">
+                                            <p className="text-[10px] text-yellow-100 font-bold uppercase tracking-wider">A partir de</p>
+                                            <p className="text-sm font-black text-white">{formatCurrency(fees.super_store_monthly_fee || 0)}/mês</p>
+                                        </div>
+                                        <div className="bg-white text-orange-600 w-10 h-10 rounded-full shadow-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <ChevronRight className="w-6 h-6" />
                                         </div>
                                     </div>
                                 </div>

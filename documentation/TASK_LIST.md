@@ -1,8 +1,9 @@
-# Plano de Tarefas - Correção Layout Dashboard
+# Plano de Tarefas - Ajuste Simetria Dashboard
 
-- [x] Restaurar o `PromoSlider` para o grid principal.
-- [x] Alinhar o Banner Super Lojista lado a lado com o Slider.
-- [x] Garantir expansão do Slider quando o Banner sumir.
-- [x] Manter a `TipOfTheDay` em posição estável abaixo do grid.
-- [x] Simplificar o código para evitar mudanças intrusivas.
-- [x] Validar visualização final.
+- [x] Analisar benefícios no `SuperStoreModal.tsx`.
+- [x] Ajustar grid do `StoreWallet.tsx` para `lg:grid-cols-2` (50/50).
+- [x] Sincronizar altura entre `PromoSlider` e SuperStore Banner.
+- [x] Adicionar benefícios (Check) ao banner do Super Lojista.
+- [x] Incluir preço inicial no banner.
+- [x] Validar simetria com o `DashboardSkeleton`.
+- [x] Atualizar documentação final.
