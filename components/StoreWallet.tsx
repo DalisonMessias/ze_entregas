@@ -379,13 +379,13 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
             <div className="space-y-8">
                 <div className="flex justify-center">
                     <div className="w-full max-w-6xl xl:max-w-7xl space-y-4">
-                        <div className={`grid gap-4 ${!isSuperStore && fees ? 'lg:grid-cols-[1.8fr,1fr]' : 'grid-cols-1'} items-stretch`}>
+                        <div className={`grid gap-4 ${!isSuperStore && fees ? 'lg:grid-cols-[2fr,1fr]' : 'grid-cols-1'} items-stretch`}>
                             <PromoSlider audience="merchants" />
 
                             {!isSuperStore && fees && (
                                 <div
                                     onClick={() => setShowUpgradeModal(true)}
-                                    className="relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500 p-6 rounded-[2rem] shadow-lg cursor-pointer transform hover:scale-[1.01] transition-all duration-300 border border-yellow-300/30 flex flex-col justify-center items-center text-center group"
+                                    className="relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500 p-6 rounded-[2rem] shadow-lg cursor-pointer transform hover:scale-[1.01] transition-all duration-300 border border-yellow-300/30 flex flex-col justify-center items-center text-center group min-h-[160px]"
                                 >
                                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                                         <Crown className="w-32 h-32 text-white rotate-12" />
@@ -394,11 +394,11 @@ const StoreWalletModule = ({ onNavigate }: { onNavigate?: (tab: any) => void }) 
                                         <div className="flex items-center justify-center gap-2">
                                             <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2">
                                                 <Crown className="w-3 h-3 text-white fill-current" />
-                                                <span className="text-[10px] font-black uppercase text-white tracking-widest">Premium</span>
+                                                <span className="text-[10px] font-black uppercase text-white tracking-widest">Super Lojista</span>
                                             </div>
                                         </div>
                                         <div className="space-y-1">
-                                            <h3 className="font-black text-xl text-white leading-tight">Seja Super Lojista</h3>
+                                            <h3 className="font-black text-xl text-white leading-tight">Potencialize sua Loja</h3>
                                             <p className="text-xs text-yellow-50 font-medium">
                                                 Apenas {formatCurrency(fees.super_store_monthly_fee || 0)}/mês
                                             </p>

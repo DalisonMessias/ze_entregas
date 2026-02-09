@@ -4,4 +4,5 @@
 - [x] Ajustar responsividade da grade (em telas menores continuam empilhados).
 - [x] Implementar expansão automática do slider quando o banner for ocultado.
 - [x] Mover `TipOfTheDay` para nova posição estratégica.
+- [x] Refinar proporção do grid (2fr, 1fr) para melhor visualização.
 - [x] Validar o layout final.
