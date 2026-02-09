@@ -8,7 +8,7 @@ import { Promotion, Coupon, StoreProduct } from '../types';
 import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
-import CustomDateInput from './CustomDateInput';
+import { CustomDateInput } from './CustomDateInput';
 import { Switch } from './Switch';
 import { useDialog } from '../utils/dialogService';
 

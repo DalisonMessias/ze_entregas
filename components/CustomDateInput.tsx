@@ -34,7 +34,7 @@ interface CustomDateInputProps {
   allowClear?: boolean;
 }
 
-const CustomDateInput = forwardRef<HTMLInputElement, CustomDateInputProps>(
+export const CustomDateInput = forwardRef<HTMLInputElement, CustomDateInputProps>(
   (
     {
       value,
@@ -363,4 +363,4 @@ const CustomDateInput = forwardRef<HTMLInputElement, CustomDateInputProps>(
 
 CustomDateInput.displayName = 'CustomDateInput';
 
-export default CustomDateInput;
+

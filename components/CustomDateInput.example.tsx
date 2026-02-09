@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import CustomDateInput from './CustomDateInput';
+import { CustomDateInput } from './CustomDateInput';
 
 const CustomDateInputExample = () => {
   const [date, setDate] = useState<string | null>('2024-01-15');
@@ -67,7 +67,7 @@ const CustomDateInputExample = () => {
           min="2023-01-01" // Formato ISO
           max={new Date('2025-12-31')} // Objeto Date
         />
-         <div className="mt-4 p-2 bg-gray-100 rounded">
+        <div className="mt-4 p-2 bg-gray-100 rounded">
           <p className="text-xs text-gray-500">Valor no estado (ISO): <code className="font-mono bg-gray-200 p-1 rounded">{validatedDate || 'null'}</code></p>
         </div>
       </div>
@@ -100,7 +100,7 @@ const CustomDateInputExample = () => {
           name="disabled-date"
           label="Data de Início (Fixa)"
           value="2020-05-20"
-          onChange={() => {}}
+          onChange={() => { }}
           disabled={true}
         />
       </div>

@@ -1,9 +1,8 @@
-# Plano de Tarefas - Ajuste Simetria Dashboard
+# Plano de Tarefas - Correção de Persistência de Cancelamento
 
-- [x] Analisar benefícios no `SuperStoreModal.tsx`.
-- [x] Ajustar grid do `StoreWallet.tsx` para `lg:grid-cols-2` (50/50).
-- [x] Sincronizar altura entre `PromoSlider` e SuperStore Banner.
-- [x] Adicionar benefícios (Check) ao banner do Super Lojista.
-- [x] Incluir preço inicial no banner.
-- [x] Validar simetria com o `DashboardSkeleton`.
-- [x] Atualizar documentação final.
+- [ ] Analisar a função `storeCancelPartnerRequest` em `services/cloud.ts`
+- [ ] Verificar a tabela de pedidos no banco de dados (`partner_requests` ou similar)
+- [ ] Verificar se há algum gatilho (RPC) ou se a atualização é direta via Supabase
+- [ ] Corrigir a lógica de cancelamento para garantir a persistência
+- [ ] Validar a correção
+- [ ] Atualizar `checklist.txt`
