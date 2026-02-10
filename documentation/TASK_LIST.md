@@ -1,11 +1,9 @@
-# Plano de Tarefas - Correções Menu Digital
-
-- [x] Analisar lógica de cálculo do valor total no Menu Digital
-- [x] Corrigir soma do valor dos produtos com o valor da entrega
-- [x] Investigar atribuição do tipo de pedido (Balcão vs Entrega)
-- [x] Corrigir tipo de pedido para "Entrega" quando apropriado
-- [x] Analisar integração de pagamento (Mercado Pago / InfinitePay)
-- [x] Corrigir abertura do checkout para pagamentos via plataforma e PIX manual
-- [x] Remover redimensionamento de textareas (resize: none)
-- [ ] Validar todas as correções no ambiente de desenvolvimento
-- [ ] Atualizar `checklist.txt` com as alterações realizadas
+- [x] Analisar feedback em áudio sobre recebimento via plataforma
+- [x] Planejar ativação forçada e exclusividade (Plano v2)
+- [x] Implementar ativação de Online/MP ao ligar Plataforma em `StoreReceivingPayment.tsx`
+- [x] Garantir que Plataforma e WhatsApp sejam mutuamente exclusivos
+- [x] Garantir que pelo menos um método de recebimento esteja sempre ativo
+- [x] Implementar restrição de desativação de pagamentos online no modo Plataforma
+- [x] Ajustar `DigitalMenu.tsx` para respeitar novas regras de padrão
+- [x] Testar persistência de dados e comportamento após F5
+- [x] Atualizar documentação e walkthrough

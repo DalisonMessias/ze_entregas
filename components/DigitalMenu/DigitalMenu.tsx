@@ -148,6 +148,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     // Address Fields
     const [cep, setCep] = useState('');
     const [isLoadingCep, setIsLoadingCep] = useState(false);
+    const [isLoadingAddress, setIsLoadingAddress] = useState(false);
     const [addressStreet, setAddressStreet] = useState('');
     const [addressNumber, setAddressNumber] = useState('');
     const [addressComplement, setAddressComplement] = useState('');
@@ -272,13 +273,29 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 // Get name and phone from profile to populate checkout
                 const sb = cloud.getClient();
                 if (sb) {
-                    const { data: profile } = await sb.from('user_profiles')
-                        .select('name, phone_number')
-                        .eq('id', user.id)
-                        .single();
-                    if (profile) {
-                        if (profile.name) setCustomerName(profile.name);
-                        if (profile.phone_number) setCustomerPhone(profile.phone_number);
+                    setIsLoadingAddress(true);
+                    try {
+                        const { data: profile } = await sb.from('user_profiles')
+                            .select('name, phone_number, address_zip, address_street, address_number, address_district, address_complement, address_reference')
+                            .eq('id', user.id)
+                            .single();
+
+                        if (profile) {
+                            if (profile.name) setCustomerName(profile.name);
+                            if (profile.phone_number) setCustomerPhone(profile.phone_number);
+
+                            // Auto-fill address if not already interacting
+                            if (profile.address_zip) setCep(profile.address_zip);
+                            if (profile.address_street) setAddressStreet(profile.address_street);
+                            if (profile.address_number) setAddressNumber(profile.address_number);
+                            if (profile.address_district) setAddressNeighborhood(profile.address_district);
+                            if (profile.address_complement) setAddressComplement(profile.address_complement);
+                            if (profile.address_reference) setAddressReference(profile.address_reference);
+                        }
+                    } catch (err) {
+                        console.error("Erro ao carregar endereço do perfil:", err);
+                    } finally {
+                        setIsLoadingAddress(false);
                     }
                 }
 
@@ -403,7 +420,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         const obs = observation || productObservation || '';
 
         if (!hasAddons) {
-            addToCart(product, qty, [], obs, selectedSize, currentPrice);
+            const initialSize = product.has_sizes && product.default_size ? product.default_size : '';
+            const initialPrice = product.has_sizes && product.default_size
+                ? (product.price_by_size?.[product.default_size] || product.price)
+                : product.price;
+
+            addToCart(product, qty, [], obs, initialSize, initialPrice);
             return;
         }
 
@@ -1527,7 +1549,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 )}
 
                                 {canDeliver && deliveryType === 'DELIVERY' && (
-                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 relative">
+                                        {isLoadingAddress && (
+                                            <div className="flex items-center gap-2 text-brand-600 dark:text-brand-400 bg-brand-50/50 dark:bg-brand-900/20 p-2 rounded-lg animate-pulse mb-2">
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">Buscando seu endereço salvo...</span>
+                                            </div>
+                                        )}
+                                        {!isLoadingAddress && isLoggedIn && !addressStreet && (
+                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 italic mb-2">
+                                                Campos podem ser preenchidos manualmente se necessário.
+                                            </div>
+                                        )}
 
                                         {/* Rua - StreetSearchSelect */}
                                         <div className="col-span-2">
@@ -1574,66 +1607,71 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                             <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
-                            {/* Payment */}
-                            <section className="space-y-4">
-                                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Pagamento</h3>
+                            {/* Payment Section (Hidden if Online Checkout via Platform is active) */}
+                            {!(store?.receive_orders_via_platform && store?.config?.online_payments?.enabled) ? (
+                                <section className="space-y-4">
+                                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Pagamento</h3>
 
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                    {/* PIX: Show if Store has PIX enabled (Auto or Manual) */}
-                                    {/* User Request Correction: "independe se ativo ou nao vai motra o pix... se ativo abreo o modal... se noa tivo ainda mostar o botao... e vindo como forma de pagamento sem abrir o modal" */}
-
-                                    {/* PIX: Show if (Platform ON + Online Payments ON) OR (Platform OFF + PIX Manual ON) */}
-                                    {((store?.receive_orders_via_platform && store?.config?.online_payments?.enabled) ||
-                                        (!store?.receive_orders_via_platform && store?.config?.pixdata?.enabled)) && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {/* PIX logic updated for coexistence */}
+                                        {(store?.config?.pixdata?.enabled || (store?.receive_orders_via_platform && store?.config?.online_payments?.enabled)) && (
                                             <button
                                                 onClick={() => setPaymentMethod('PIX')}
                                                 className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'PIX' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                             >
                                                 <QrCode className="w-6 h-6" />
-                                                {/* Show (Auto) tag only if it WILL open the modal */}
-                                                <span className="text-xs font-semibold">PIX {(store?.receive_orders_via_platform && store?.config?.pixdata?.enabled) ? '(Auto)' : ''}</span>
+                                                <span className="text-xs font-semibold">PIX {(store?.receive_orders_via_platform && store?.config?.online_payments?.enabled) ? '(Auto)' : ''}</span>
                                             </button>
                                         )}
 
-                                    {/* CARTÃO E DINHEIRO - Permitido para todos (Comissão é debitada do saldo) */}
-                                    <button
-                                        onClick={() => setPaymentMethod('CREDIT_CARD')}
-                                        className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'CREDIT_CARD' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                                    >
-                                        <CreditCard className="w-6 h-6" />
-                                        <span className="text-xs font-semibold">Cartão</span>
-                                    </button>
+                                        <button
+                                            onClick={() => setPaymentMethod('CREDIT_CARD')}
+                                            className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'CREDIT_CARD' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        >
+                                            <CreditCard className="w-6 h-6" />
+                                            <span className="text-xs font-semibold">Cartão</span>
+                                        </button>
 
-                                    <button
-                                        onClick={() => {
-                                            setPaymentMethod('CASH');
-                                            setTimeout(() => {
-                                                const changeInput = document.getElementById('change-input-container');
-                                                if (changeInput) {
-                                                    changeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                }
-                                            }, 100);
-                                        }}
-                                        className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'CASH' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                                    >
-                                        <Banknote className="w-6 h-6" />
-                                        <span className="text-xs font-semibold">Dinheiro</span>
-                                    </button>
-                                </div>
-
-                                {paymentMethod === 'CASH' && (
-                                    <div id="change-input-container" className="animate-in fade-in pt-2">
-                                        <CustomInput
-                                            label="Troco para quanto?"
-                                            value={changeFor}
-                                            onChange={e => setChangeFor(e.target.value)}
-                                            placeholder="R$ 50,00"
-                                            mask="currency"
-                                            autoFocus
-                                        />
+                                        <button
+                                            onClick={() => {
+                                                setPaymentMethod('CASH');
+                                                setTimeout(() => {
+                                                    const changeInput = document.getElementById('change-input-container');
+                                                    if (changeInput) {
+                                                        changeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                    }
+                                                }, 100);
+                                            }}
+                                            className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'CASH' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        >
+                                            <Banknote className="w-6 h-6" />
+                                            <span className="text-xs font-semibold">Dinheiro</span>
+                                        </button>
                                     </div>
-                                )}
-                            </section>
+
+                                    {paymentMethod === 'CASH' && (
+                                        <div id="change-input-container" className="animate-in fade-in pt-2">
+                                            <CustomInput
+                                                label="Troco para quanto?"
+                                                value={changeFor}
+                                                onChange={e => setChangeFor(e.target.value)}
+                                                placeholder="R$ 50,00"
+                                                mask="currency"
+                                                autoFocus
+                                            />
+                                        </div>
+                                    )}
+                                </section>
+                            ) : (
+                                <section className="p-4 bg-brand-50/50 dark:bg-brand-900/10 rounded-2xl border border-brand-100/50 dark:border-brand-900/30">
+                                    <h3 className="text-[11px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+                                        <ShieldCheck className="w-3 h-3" /> Pagamento Seguro Online
+                                    </h3>
+                                    <p className="text-[10px] text-brand-700 dark:text-brand-300 leading-relaxed italic">
+                                        O pagamento será processado de forma segura através da nossa plataforma após clicar em "Finalizar Pedido".
+                                    </p>
+                                </section>
+                            )}
 
                             {/* Loyalty Points */}
                             {loyaltySettings?.is_active && (
