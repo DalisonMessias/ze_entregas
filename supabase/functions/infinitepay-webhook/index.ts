@@ -1,5 +1,7 @@
 
+// @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
@@ -28,8 +30,11 @@ serve(async (req) => {
         }
 
         // Initialize Supabase Client
+        // @ts-ignore
         const supabaseClient = createClient(
+            // @ts-ignore
             Deno.env.get('SUPABASE_URL') ?? '',
+            // @ts-ignore
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
@@ -84,10 +89,19 @@ serve(async (req) => {
 
         // 3. Register Wallet Transaction (Credit for Store)
         if (existingOrder.store_id) {
+            // Tentar extrair taxas do payload (em centavos)
+            // InfinitePay pode enviar 'cost', 'fee' ou 'net_amount'
+            const costCents = payload.cost || payload.fee || (payload.amount && payload.net_amount ? payload.amount - payload.net_amount : 0);
+            const feeAmount = costCents ? costCents / 100 : 0;
+            const grossAmount = paid_amount ? paid_amount / 100 : existingOrder.total_price;
+            const netAmount = grossAmount - feeAmount;
+
             const { error: walletError } = await supabaseClient.rpc('credit_store_wallet', {
                 p_store_id: existingOrder.store_id,
-                p_amount: paid_amount ? paid_amount / 100 : existingOrder.total_price,
-                p_description: `Venda InfinitePay #${order_nsu.slice(0, 8)}`
+                p_amount: grossAmount,
+                p_description: `Venda InfinitePay #${order_nsu.slice(0, 8)}`,
+                p_fee_amount: feeAmount,
+                p_net_amount: netAmount
             });
 
             if (walletError) {

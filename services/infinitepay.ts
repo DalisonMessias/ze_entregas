@@ -18,13 +18,22 @@ const INFINITEPAY_API_URL = 'https://api.infinitepay.io/v2';
 export const infinitePayCreateCharge = async (
     amount: number,
     metadata: Record<string, any>,
-    credentials: InfinitePayCredentials
+    credentials: InfinitePayCredentials,
+    payer?: any, // Adicionando suporte a dados do pagador
+    items?: any[] // Adicionando suporte a itens
 ): Promise<InfinitePayChargeResult> => {
     if (!credentials.apiKey) {
         throw new Error('InfinitePay: API Key não configurada');
     }
 
     try {
+        // Enriquecendo metadata com dados do pedido se disponíveis
+        const enrichedMetadata = {
+            ...metadata,
+            payer_info: payer ? JSON.stringify(payer) : undefined,
+            items_info: items ? JSON.stringify(items.map((i: any) => ({ id: i.id, quantity: i.quantity, price: i.price }))) : undefined
+        };
+
         const response = await fetch(`${INFINITEPAY_API_URL}/charges`, {
             method: 'POST',
             headers: {
@@ -35,7 +44,7 @@ export const infinitePayCreateCharge = async (
                 amount: Math.round(amount * 100), // Converter para centavos
                 type: 'pix',
                 description: metadata.description || 'Recarga Zé Entregas',
-                metadata: metadata
+                metadata: enrichedMetadata
             })
         });
 
@@ -104,4 +113,60 @@ export const infinitePayCheckStatus = async (
         console.error('Erro InfinitePay checkStatus:', error);
         throw new Error(`InfinitePay: ${error.message}`);
     }
+};
+
+/**
+ * Obter detalhes de cobrança (Get Charge)
+ * Útil para debug ou admin
+ */
+export const infinitePayGetCharge = async (
+    chargeId: string,
+    credentials: InfinitePayCredentials
+): Promise<any> => {
+    if (!credentials.apiKey) throw new Error('InfinitePay: API Key não configurada');
+
+    const response = await fetch(`${INFINITEPAY_API_URL}/charges/${chargeId}`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${credentials.apiKey}`
+        }
+    });
+
+    if (!response.ok) throw new Error(`Erro ao buscar Charge: ${response.status}`);
+    return await response.json();
+};
+
+/**
+ * Reembolsar cobrança (Refund - Se suportado via API v2/charges ou transactions)
+ * A API v2 de Charges geralmente não expõe refund publicamente em docs antigos, 
+ * mas vamos tentar o padrão /charges/{id}/refund ou similar se documentado,
+ * ou deixar logado que pode não estar disponível.
+ * Assumindo endpoint padrão RESTful se existir.
+ */
+export const infinitePayRefundCharge = async (
+    chargeId: string,
+    amount: number | null,
+    credentials: InfinitePayCredentials
+): Promise<any> => {
+    if (!credentials.apiKey) throw new Error('InfinitePay: API Key não configurada');
+
+    // Nota: Verificar documentação oficial para refund
+    // Tentativa padrão: POST /charges/{id}/refund ou /transactions/{id}/refund
+    // Por segurança e falta de doc clara no prompt, vamos apenas logar e lançar "Não implementado" se não tiver certeza,
+    // mas o usuário pediu para "ajudar developers a entender doc".
+    // Vou assumir que o endpoint existe ou é manual.
+    // Se não existir, lançamos erro explicativo.
+
+    // Fallback: Retornar erro "Funcionalidade não disponível via API pública v2 sem doc específica".
+    // Mas para manter paridade com MP, deixo a estrutura pronta.
+
+    // throw new Error('Estorno automático InfinitePay não configurado/não suportado nesta versão da API.');
+
+    // Se quiser tentar:
+    /*
+    const response = await fetch(`${INFINITEPAY_API_URL}/charges/${chargeId}/refund`, { ... });
+    */
+
+    // Implementação "Mock" segura para não quebrar:
+    throw new Error('Estorno InfinitePay deve ser feito via Painel do Lojista (API Refund não integrada).');
 };

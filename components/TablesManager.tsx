@@ -152,7 +152,7 @@ export const TablesManager: React.FC<{ storeId: string }> = ({ storeId }) => {
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, canvas.width, 240);
 
-        const topImageUrl = customHeaderImage || storeProfile?.store_logo_url || storeProfile?.avatar_url;
+        const topImageUrl = customHeaderImage || storeProfile?.store_logo_url || null;
 
         // Imagens
         const topImg = new Image();
@@ -333,8 +333,6 @@ export const TablesManager: React.FC<{ storeId: string }> = ({ storeId }) => {
                             <img src={customHeaderImage} alt="Custom Header" className="w-full h-full object-contain" />
                         ) : storeProfile?.store_logo_url ? (
                             <img src={storeProfile.store_logo_url} alt="Logo Loja" className="w-full h-full object-cover" />
-                        ) : storeProfile?.avatar_url ? (
-                            <img src={storeProfile.avatar_url} alt="Avatar Loja" className="w-full h-full object-cover" />
                         ) : (
                             <ImageIcon className="w-12 h-12 text-gray-300" />
                         )}

@@ -1003,6 +1003,8 @@ export interface PaymentGatewayConfig {
         credit_card: number;
         credit_card_installments: number;
     };
+    tax_percentage?: number;
+    tax_fixed?: number;
     created_at?: string;
     updated_at?: string;
 }

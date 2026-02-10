@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, MapPin, ChevronDown, Check, X, AlertCircle, Navigation, Target } from 'lucide-react';
 import { Loading } from './Loading';
-import { CustomInput } from './CustomInput';
 import { useGeocoding } from '../hooks/useGeocoding';
 import { useDebounce } from '../hooks/useDebounce';
 
@@ -16,6 +15,7 @@ interface StreetSearchSelectProps {
     label?: string;
     placeholder?: string;
     className?: string;
+    enableCurrentLocation?: boolean;
 }
 
 export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
@@ -24,7 +24,8 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
     onSelect,
     label,
     placeholder = "Busque sua rua...",
-    className = ""
+    className = "",
+    enableCurrentLocation = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -163,11 +164,6 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
         onSelect(street);
         setIsOpen(false);
         setSearchTerm(''); // Reset search term or keep it? existing logic in CitySearchSelect clears it.
-    };
-
-    const handleManualInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        onSelect(val); // Update parent value directly allowing custom input
     };
 
     // === FUNÇÕES PARA MODAL DE LOCALIZAÇÃO GPS ===
@@ -409,6 +405,20 @@ export const StreetSearchSelect: React.FC<StreetSearchSelectProps> = ({
                 <div className="absolute z-[60] mt-2 left-0 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden">
                     {/* Search Field */}
                     <div className="p-3 border-b border-gray-50 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                        {enableCurrentLocation && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    openLocationModal();
+                                }}
+                                className="w-full mb-2 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-lg text-sm font-bold hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                            >
+                                <Navigation className="w-4 h-4" />
+                                Usar localizacao atual
+                            </button>
+                        )}
+
                         <div className="relative">
                             <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                             <input

@@ -109,11 +109,24 @@ serve(async (req) => {
                         return new Response(JSON.stringify({ received: true, status: 'already_processed' }), { headers: corsHeaders, status: 200 });
                     }
 
+                    // CALCULAR TAXAS (FEES)
+                    let totalFee = 0;
+                    if (paymentData.fee_details && Array.isArray(paymentData.fee_details)) {
+                        totalFee = paymentData.fee_details.reduce((acc: number, item: any) => acc + (item.amount || 0), 0);
+                    }
+
+                    const grossAmount = paymentData.transaction_amount;
+                    const netAmount = grossAmount - totalFee;
+
+                    console.log(`Processing payment ${paymentId}: Gross=${grossAmount}, Fee=${totalFee}, Net=${netAmount}`);
+
                     // EXECUTE CREDIT
                     const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('credit_store_wallet', {
                         p_store_id: userId,
-                        p_amount: paymentData.transaction_amount,
-                        p_description: `Recarga Pix (MP: ${paymentId})`
+                        p_amount: grossAmount,
+                        p_description: `Recarga Pix (MP: ${paymentId})`,
+                        p_fee_amount: totalFee,
+                        p_net_amount: netAmount
                     });
 
                     if (rpcError) {

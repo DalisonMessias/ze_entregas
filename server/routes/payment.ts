@@ -1,7 +1,18 @@
 
 import { Router } from 'express';
 import { supabaseAdmin } from '../services/supabaseClient.js';
-import { generatePaymentQRCode, checkPaymentStatus, logTransaction } from '../../services/paymentGateway';
+import {
+    generatePaymentQRCode,
+    checkPaymentStatus,
+    logTransaction,
+    getActiveGateways
+} from '../../services/paymentGateway';
+import {
+    mercadoPagoGetMerchantOrder,
+    mercadoPagoRefundPayment,
+    mercadoPagoCapturePayment
+} from '../../services/mercadopago';
+import { infinitePayGetCharge, infinitePayRefundCharge } from '../../services/infinitepay';
 
 const router = Router();
 
@@ -11,7 +22,7 @@ const router = Router();
  */
 router.post('/generate-qr', async (req, res) => {
     try {
-        const { amount, userId, type, metadata } = req.body;
+        const { amount, userId, type, metadata, processing_mode } = req.body;
 
         if (!amount || !userId) {
             return res.status(400).json({ error: 'Campos obrigatórios: amount, userId' });
@@ -25,6 +36,7 @@ router.post('/generate-qr', async (req, res) => {
             description: type === 'zepay_recharge' ? 'Recarga ZéPay' : 'Pagamento',
             userId,
             type,
+            processing_mode, // Passando para o gateway (usado no MP Orders)
             ...metadata
         });
 
@@ -70,6 +82,94 @@ router.get('/status/:txId', async (req, res) => {
 });
 
 /**
+ * GET /api/payment/infinitepay/charge/:chargeId
+ * Busca detalhes de uma cobrança InfinitePay
+ */
+router.get('/infinitepay/charge/:chargeId', async (req, res) => {
+    try {
+        const { chargeId } = req.params;
+        const gateways = await getActiveGateways();
+        const ipGateway = gateways.find(g => g.gateway_name === 'infinitepay');
+
+        if (!ipGateway) return res.status(404).json({ error: 'Gateway InfinitePay não configurado' });
+
+        const charge = await infinitePayGetCharge(chargeId, ipGateway.credentials as any);
+        res.json(charge);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /api/payment/order/:orderId
+ * Busca detalhes de uma Merchant Order (Mercado Pago)
+ */
+router.get('/order/:orderId', async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        // Precisamos das credenciais. Vamos pegar do gateway ativo (MP).
+        // Simplificação: Assume que só tem 1 MP ativo.
+        const gateways = await getActiveGateways();
+        const mpGateway = gateways.find(g => g.gateway_name === 'mercadopago');
+
+        if (!mpGateway) return res.status(404).json({ error: 'Gateway Mercado Pago não configurado' });
+
+        const order = await mercadoPagoGetMerchantOrder(orderId, mpGateway.credentials as any);
+        res.json(order);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/payment/refund
+ * Realiza reembolso parcial ou total
+ */
+router.post('/refund', async (req, res) => {
+    try {
+        const { paymentId, amount } = req.body; // amount opcional
+
+        const gateways = await getActiveGateways();
+        const mpGateway = gateways.find(g => g.gateway_name === 'mercadopago');
+
+        if (!mpGateway) return res.status(404).json({ error: 'Gateway Mercado Pago não configurado' });
+
+        const result = await mercadoPagoRefundPayment(paymentId, amount || null, mpGateway.credentials as any);
+
+        // Log
+        await logTransaction('mercadopago', 'refund', true, req.body, result);
+
+        res.json(result);
+    } catch (error: any) {
+        await logTransaction('mercadopago', 'refund', false, req.body, {}, error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/payment/capture
+ * Captura um pagamento autorizado
+ */
+router.post('/capture', async (req, res) => {
+    try {
+        const { paymentId, amount } = req.body;
+
+        const gateways = await getActiveGateways();
+        const mpGateway = gateways.find(g => g.gateway_name === 'mercadopago');
+
+        if (!mpGateway) return res.status(404).json({ error: 'Gateway Mercado Pago não configurado' });
+
+        const result = await mercadoPagoCapturePayment(paymentId, amount || null, mpGateway.credentials as any);
+
+        await logTransaction('mercadopago', 'capture', true, req.body, result);
+        res.json(result);
+    } catch (error: any) {
+        await logTransaction('mercadopago', 'capture', false, req.body, {}, error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * POST /api/payment/webhook/infinitepay
  * Webhook para receber confirmações do InfinitePay
  */
@@ -110,6 +210,10 @@ router.post('/webhook/mercadopago', async (req, res) => {
         if (type === 'payment' && action === 'payment.updated') {
             const paymentId = data.id;
             await processPaymentConfirmation(paymentId, 'mercadopago');
+        } else if (type === 'merchant_order' || req.body.topic === 'merchant_order') {
+            // Tratamento para Merchant Order
+            const orderId = data.id || req.body.resource;
+            await processMerchantOrderConfirmation(orderId);
         }
 
         res.status(200).send('OK');
@@ -118,6 +222,49 @@ router.post('/webhook/mercadopago', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+/**
+ * Processa notificação de Merchant Order
+ */
+async function processMerchantOrderConfirmation(orderId: string) {
+    try {
+        console.log(`[Webhook] Verificando Merchant Order ${orderId}`);
+
+        const gateways = await getActiveGateways();
+        const mpGateway = gateways.find(g => g.gateway_name === 'mercadopago');
+
+        if (!mpGateway) {
+            console.error('[Webhook] Gateway MP não ativo');
+            return;
+        }
+
+        // Buscar dados da Order no MP
+        const order = await mercadoPagoGetMerchantOrder(orderId, mpGateway.credentials as any);
+
+        // Verificar se está paga
+        // Merchant Order status: opened, closed, expired, active, cancelled
+        // Pagamentos ficam em 'payments'
+        // Se a user_terminal_transactions salvou txId como o ID do Payment, talvez não ache pelo Order ID direto na metadata.
+        // Mas se usarmos Order, o ID salvo deveria ser o da Merchant Order?
+        // No nosso createOrder (que na vdd chama createPayment), o ID retornado é do Payment.
+
+        // Se a notificação for de Merchant Order, ela contém os pagamentos.
+        // Podemos iterar sobre eles e validar.
+
+        if (order.status === 'closed' || order.order_status === 'paid' || (order.payments && order.payments.some((p: any) => p.status === 'approved'))) {
+            // Encontrar o pagamento aprovado
+            const approvedPayment = order.payments.find((p: any) => p.status === 'approved');
+
+            if (approvedPayment) {
+                // Processar usando o ID do pagamento, que é o que salvamos no banco geralmente
+                console.log(`[Webhook] Order ${orderId} tem pagamento aprovado ${approvedPayment.id}`);
+                await processPaymentConfirmation(approvedPayment.id.toString(), 'mercadopago');
+            }
+        }
+    } catch (e: any) {
+        console.error('[Webhook] Erro ao processar Merchant Order:', e);
+    }
+}
 
 /**
  * Processa confirmação de pagamento recebida via webhook

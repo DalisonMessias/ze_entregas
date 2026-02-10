@@ -1,9 +1,0 @@
-- [x] Analisar feedback em áudio sobre recebimento via plataforma
-- [x] Planejar ativação forçada e exclusividade (Plano v2)
-- [x] Implementar ativação de Online/MP ao ligar Plataforma em `StoreReceivingPayment.tsx`
-- [x] Garantir que Plataforma e WhatsApp sejam mutuamente exclusivos
-- [x] Garantir que pelo menos um método de recebimento esteja sempre ativo
-- [x] Implementar restrição de desativação de pagamentos online no modo Plataforma
-- [x] Ajustar `DigitalMenu.tsx` para respeitar novas regras de padrão
-- [x] Testar persistência de dados e comportamento após F5
-- [x] Atualizar documentação e walkthrough

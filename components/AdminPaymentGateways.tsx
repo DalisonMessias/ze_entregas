@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet, Settings, Check, X, TestTube, Activity } from 'lucide-react';
+import { Wallet, Settings, Check, X, TestTube, Activity, Percent, DollarSign } from 'lucide-react';
+import { CustomInput } from './CustomInput';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
@@ -13,6 +14,10 @@ export const AdminPaymentGateways = () => {
 
     const [editingGateway, setEditingGateway] = useState<string | null>(null);
     const [credentials, setCredentials] = useState<Record<string, string>>({});
+
+    // State for Rates Editing
+    const [editingRates, setEditingRates] = useState<string | null>(null);
+    const [ratesValues, setRatesValues] = useState({ percentage: '', fixed: '' });
 
     useEffect(() => {
         loadData();
@@ -92,6 +97,24 @@ export const AdminPaymentGateways = () => {
         }
     };
 
+    const handleSaveRates = async (gatewayName: string) => {
+        try {
+            const percentage = parseFloat(ratesValues.percentage.replace(',', '.')) || 0;
+            const fixed = parseFloat(ratesValues.fixed.replace(',', '.')) || 0;
+
+            await cloud.updatePaymentGateway(gatewayName, {
+                tax_percentage: percentage,
+                tax_fixed: fixed
+            });
+
+            await alert({ title: 'Sucesso', message: 'Taxas atualizadas com sucesso!' });
+            setEditingRates(null);
+            loadData();
+        } catch (error: any) {
+            await alert({ title: 'Erro', message: error.message });
+        }
+    };
+
     const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
     const getSourceLabel = (source: string) => {
@@ -155,6 +178,12 @@ export const AdminPaymentGateways = () => {
                                     {gateway.is_active ? 'Ativo' : 'Inativo'}
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Taxas Automáticas */}
+                        <div className="flex items-center gap-2 mb-4 p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded text-xs">
+                            <Percent className="w-3 h-3" />
+                            <span>Taxas calculadas automaticamente pela API</span>
                         </div>
 
                         {/* Ações de Configuração */}

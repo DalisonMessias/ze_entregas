@@ -806,7 +806,13 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         ratings_sum: userData.ratings_sum,
         show_comments_on_menu: userData.show_comments_on_menu,
         super_store_plan_type: userData.super_store_plan_type,
-        super_store_expiration: userData.super_store_expiration
+        super_store_expiration: userData.super_store_expiration,
+
+        // Novos campos de configuração de pedidos
+        receive_orders_via_platform: userData.receive_orders_via_platform,
+        receive_orders_via_chat: userData.receive_orders_via_chat,
+        chat_number: userData.chat_number,
+        config: userData.config
     };
 
     return profile;
@@ -4509,7 +4515,8 @@ export const getOrdersTickets = async (storeId: string) => {
                 payment_status,
                 shipping_cost,
                 is_location_delivery,
-                created_at
+                created_at,
+                metadata
             ),
             orders_collaborators (
                 id,
@@ -6958,6 +6965,71 @@ export const createPublicOrder = async (
     return { success: true, orderId: data };
 };
 
+/**
+ * Cria uma sessão de checkout via Edge Function (Mercado Pago ou InfinitePay)
+ */
+export const createPaymentCheckout = async (
+    gatewayName: 'mercadopago' | 'infinitepay',
+    data: {
+        amount: number;
+        orderId: string;
+        items?: any[];
+        payer?: {
+            name: string;
+            email?: string;
+            phone?: string;
+            document?: string;
+        };
+        back_urls?: {
+            success: string;
+            failure: string;
+            pending: string;
+        };
+        auto_return?: string;
+    }
+): Promise<{ success: boolean; url?: string; qrCode?: string; txId?: string; error?: string }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not initialized' };
+
+    const functionName = gatewayName === 'mercadopago' ? 'mercadopago-checkout' : 'infinitepay-checkout';
+
+    // Construir payload correto para a function
+    const payload = {
+        ...data,
+        gateway: gatewayName
+    };
+
+    const { data: result, error } = await sb.functions.invoke(functionName, {
+        body: payload
+    });
+
+    if (error) {
+        console.error(`Error invoking ${functionName}:`, error);
+        return { success: false, error: error.message };
+    }
+
+    // InfinitePay returns 'url' or similar, Mercado Pago returns 'init_point'
+    // Let's inspect the response structure based on function implementation
+    const checkoutUrl = result?.url || result?.init_point || result?.sandbox_init_point;
+    const qrCode = result?.qrCode || result?.point_of_interaction?.transaction_data?.qr_code;
+    const txId = result?.id || result?.txId;
+
+    if (!checkoutUrl && !qrCode) {
+        return { success: false, error: 'No checkout URL or QR Code returned from gateway' };
+    }
+
+    return { success: true, url: checkoutUrl, qrCode, txId };
+};
+
+/**
+ * Cria um checkout de pedido (Order) via Mercado Pago ou InfinitePay.
+ * Wrapper para createPaymentCheckout com adaptação de payload se necessário.
+ */
+export const createOrderCheckout = async (gateway: 'mercadopago' | 'infinitepay', data: any): Promise<{ success: boolean; url?: string; qrCode?: string; txId?: string; error?: string }> => {
+    // Reutiliza a mesma lógica de createPaymentCheckout pois o payload é similar
+    return createPaymentCheckout(gateway, data);
+};
+
 // ========================================
 // SISTEMA DE FIDELIDADE (PONTOS)
 // ========================================
@@ -7133,6 +7205,53 @@ export const sendPublicMessage = async (orderId: string, message: string): Promi
     }
 
     return !!data;
+};
+
+export const cancelPublicOrder = async (orderId: string): Promise<{
+    success: boolean;
+    cancelled: boolean;
+    can_cancel: boolean;
+    code?: string;
+    message: string;
+    current_status?: string;
+    is_platform_payment?: boolean;
+    payment_confirmed?: boolean;
+    requires_support_refund?: boolean;
+}> => {
+    const sb = getClient();
+    if (!sb) {
+        return {
+            success: false,
+            cancelled: false,
+            can_cancel: false,
+            message: 'Cliente nao inicializado.'
+        };
+    }
+
+    const { data, error } = await sb.rpc('cancel_public_order', { p_order_id: orderId });
+
+    if (error) {
+        console.error('Error cancelling public order:', error);
+        return {
+            success: false,
+            cancelled: false,
+            can_cancel: false,
+            message: error.message || 'Nao foi possivel cancelar o pedido.'
+        };
+    }
+
+    const result = (data || {}) as any;
+    return {
+        success: !!result.success,
+        cancelled: !!result.cancelled,
+        can_cancel: !!result.can_cancel,
+        code: result.code,
+        message: result.message || 'Nao foi possivel processar o cancelamento.',
+        current_status: result.current_status,
+        is_platform_payment: !!result.is_platform_payment,
+        payment_confirmed: !!result.payment_confirmed,
+        requires_support_refund: !!result.requires_support_refund
+    };
 };
 
 
@@ -7324,7 +7443,13 @@ export const getStoreById = async (storeId: string): Promise<PartnerProfile | nu
         is_currently_open: userData.is_currently_open,
         pix_key: userData.pix_key,
         city_slug: userData.city_slug,
-        store_slug: userData.store_slug
+        store_slug: userData.store_slug,
+
+        // Configurações de recebimento
+        receive_orders_via_platform: userData.receive_orders_via_platform,
+        receive_orders_via_chat: userData.receive_orders_via_chat,
+        config: userData.config,
+        super_store_plan_type: userData.super_store_plan_type
     };
 
     return profile;
@@ -8575,6 +8700,27 @@ export const adminUpdateApiKey = async (provider: string, key: string, voiceId?:
         return { success: false, error: e.message };
     }
 };
+
+// ===================================
+// CHECKOUT ORDERS (Novo fluxo MP)
+// ===================================
+
+export interface OrderCheckoutPayload {
+    amount: number;
+    items: any[];
+    payer: {
+        name: string;
+        phone: string;
+        email?: string;
+    };
+    processing_mode?: 'automatic' | 'manual';
+    metadata?: any;
+}
+
+// Função antiga removida para evitar conflito com a nova implementação baseada em Edge Functions
+// export const createOrderCheckout = ...
+
+
 
 
 

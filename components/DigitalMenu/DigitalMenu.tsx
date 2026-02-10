@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Phone, Clock, Bike, Store as StoreIcon, MapPin, Search, ShoppingBag, ArrowRight, Loader2, AlertCircle, Trash2, ShoppingCart, Star, QrCode, CreditCard, Banknote, ShieldCheck, Instagram, Facebook, Globe, MessageSquare, ChevronRight, Play, ExternalLink, Calendar, Map, ClipboardList, TrendingUp, DollarSign, Wallet, RefreshCw, X, ChevronUp, Copy, Check, Minus, Plus, ChevronLeft, MessageCircle, Zap, ChefHat, Award, Info } from 'lucide-react';
 import * as cloud from '../../services/cloud';
-import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee, StoreShippingRule, StoreAddonGroup, StoreAddonOption, LoyaltySettings } from '../../types';
+import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee, StoreShippingRule, StoreAddonGroup, StoreAddonOption, LoyaltySettings, PaymentGatewayConfig } from '../../types';
 import { ProductAddonSelector } from '../ProductAddonSelector';
 import { Logo } from '../Logo';
 import { Button } from '../Button';
@@ -120,6 +120,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [fees, setFees] = useState<StoreNeighborhoodFee[]>([]);
     const [shippingRules, setShippingRules] = useState<StoreShippingRule[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [paymentGateways, setPaymentGateways] = useState<PaymentGatewayConfig[]>([]);
 
     // Cart State
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -231,6 +232,14 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 setLoyaltySettings(lSettings);
             } catch (lErr) {
                 console.error("Error loading loyalty settings:", lErr);
+            }
+
+            // Fetch Payment Gateways (Admin Configuration)
+            try {
+                const gateways = await cloud.getPaymentGateways();
+                setPaymentGateways(gateways || []);
+            } catch (gErr) {
+                console.error("Error loading payment gateways:", gErr);
             }
 
             // Initialize selectedCity with store city
@@ -709,8 +718,10 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     };
                 });
 
-                // Validar PIX se selecionado
-                if (paymentMethod === 'PIX') {
+                // Validar PIX se selecionado (Apenas se NÃO for checkout online automatizado)
+                const isOnlineCheckout = store?.config?.online_payments?.enabled;
+
+                if (paymentMethod === 'PIX' && !isOnlineCheckout) {
                     // Check pix_key OR legacy config
                     // UNIFIED LOGIC: Check key existence in either new config or legacy field
                     const hasPixKey = !!store?.pix_key || !!store?.config?.pixdata?.enabled || (!!store?.config?.pixdata?.key);
@@ -755,7 +766,113 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     setRecentOrders(updatedRecent);
                     localStorage.setItem(`ze_recent_orders_${store!.id}`, JSON.stringify(updatedRecent));
 
-                    // Lógica de PIX (Automático vs Manual)
+                    // AUTOMATED CHECKOUT LOGIC (Mercado Pago / InfinitePay)
+                    // Prioriza o gateway marcado como "Principal" no Admin da Plataforma
+                    if (store?.config?.online_payments?.enabled) {
+                        try {
+                            const onlineConfig = store.config.online_payments;
+
+                            // Buscar gateway principal (configurado no admin)
+                            const primaryGateway = paymentGateways.find(g => g.is_primary && g.is_active);
+
+                            // Determinar qual gateway usar:
+                            // 1. Se há gateway principal configurado no admin E está habilitado na loja, usa ele
+                            // 2. Caso contrário, fallback para a lógica antiga (Mercado Pago > InfinitePay)
+                            let gateway: string | null = null;
+
+                            if (primaryGateway) {
+                                // Verificar se o gateway principal está habilitado na loja
+                                if (primaryGateway.gateway_name === 'mercadopago' && onlineConfig.accept_mercadopago) {
+                                    gateway = 'mercadopago';
+                                } else if (primaryGateway.gateway_name === 'infinitepay' && onlineConfig.accept_infinitepay) {
+                                    gateway = 'infinitepay';
+                                }
+                            }
+
+                            // Fallback se o gateway principal não estiver ativo na loja
+                            if (!gateway) {
+                                gateway = onlineConfig.accept_mercadopago ? 'mercadopago' : (onlineConfig.accept_infinitepay ? 'infinitepay' : null);
+                            }
+
+                            if (gateway) {
+                                if (gateway === 'mercadopago') {
+                                    // Novo fluxo via Orders API (MP)
+                                    await alert({
+                                        title: 'Processando...',
+                                        message: 'Gerando pagamento via Mercado Pago. Aguarde.',
+                                    });
+
+                                    const checkoutRes = await cloud.createOrderCheckout(gateway, {
+                                        amount: cartTotal,
+                                        items: orderItems,
+                                        payer: {
+                                            name: customerName,
+                                            phone: customerPhone,
+                                            email: 'cliente@zeentregas.com'
+                                        },
+                                        processing_mode: 'automatic',
+                                        metadata: { orderId }
+                                    });
+
+                                    if (checkoutRes.success && checkoutRes.qrCode) {
+                                        await alert({
+                                            title: 'Pagamento Gerado',
+                                            message: 'O código PIX foi gerado com sucesso. Você pode pagar agora na tela de acompanhamento.'
+                                        });
+                                        window.location.href = `/track/${orderId}`;
+                                        return;
+                                    } else {
+                                        throw new Error(checkoutRes.error || 'Erro ao gerar pagamento MP');
+                                    }
+                                } else if (gateway === 'infinitepay') {
+                                    // Fluxo InfinitePay
+                                    await alert({
+                                        title: 'Processando...',
+                                        message: 'Gerando pagamento via InfinitePay. Aguarde.',
+                                    });
+
+                                    const checkoutRes = await cloud.createOrderCheckout(gateway, {
+                                        orderId,
+                                        amount: cartTotal,
+                                        items: orderItems,
+                                        payer: {
+                                            name: customerName,
+                                            phone: customerPhone,
+                                            email: 'cliente@zeentregas.com'
+                                        },
+                                        back_urls: {
+                                            success: `${window.location.origin}/track/${orderId}`,
+                                            failure: `${window.location.origin}/track/${orderId}`,
+                                            pending: `${window.location.origin}/track/${orderId}`
+                                        },
+                                        auto_return: 'approved'
+                                    });
+
+                                    if (checkoutRes.success && checkoutRes.qrCode) {
+                                        await alert({
+                                            title: 'Pagamento Gerado',
+                                            message: 'O código PIX da InfinitePay foi gerado com sucesso.'
+                                        });
+                                        window.location.href = `/track/${orderId}`;
+                                        return;
+                                    } else if (checkoutRes.success && checkoutRes.url) {
+                                        window.location.href = checkoutRes.url;
+                                        return;
+                                    } else {
+                                        throw new Error(checkoutRes.error || 'Erro ao gerar checkout InfinitePay');
+                                    }
+                                }
+                            }
+                        } catch (e: any) {
+                            console.error('Auto checkout error:', e);
+                            await alert({
+                                title: 'Erro no Pagamento',
+                                message: e.message || 'Ocorreu um erro ao processar o pagamento.'
+                            });
+                        }
+                    }
+
+                    // FALLBACK: Lógica de PIX (Automático vs Manual) ou redirecionamento padrão
                     if (paymentMethod === 'PIX') {
                         if (store?.config?.pixdata?.enabled) {
                             setCreatedOrderId(orderId);
@@ -772,7 +889,6 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             title: 'Pedido Recebido com Sucesso! 🎉',
                             message: `Seu pedido #${orderId.slice(0, 8).toUpperCase()} foi enviado para a loja.\n\nVocê será redirecionado para a tela de rastreamento.`
                         });
-                        // Redirect to Tracking
                         window.location.href = `/track/${orderId}`;
                     }
                 } else {
@@ -799,14 +915,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
             msg += `*RESUMO DO PEDIDO:*\n`;
             cart.forEach(item => {
-                const addonsPriceValue = (item.selectedAddons || []).reduce((s, a) => s + (a.optionPrice * a.quantity), 0);
+                const addonsPriceValue = (item.selectedAddons || []).reduce((s, a) => Number(s) + (Number(a.optionPrice) * Number(a.quantity)), 0);
+                const basePrice = item.sizePrice !== undefined ? Number(item.sizePrice) : Number(item.product.price);
                 msg += `• ${item.quantity}x ${item.product.name}\n`;
                 if (item.selectedAddons && item.selectedAddons.length > 0) {
                     item.selectedAddons.forEach(addon => {
                         msg += `  + ${addon.quantity}x ${addon.optionName}\n`;
                     });
                 }
-                msg += `  Subtotal: R$ ${((item.product.price + addonsPriceValue) * item.quantity).toFixed(2).replace('.', ',')}\n`;
+                msg += `  Subtotal: R$ ${((basePrice + addonsPriceValue) * item.quantity).toFixed(2).replace('.', ',')}\n`;
                 if (item.observation) msg += `  Obs: ${item.observation}\n`;
             });
 
@@ -825,7 +942,6 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 msg += `*Ender:* ${addressStreet}, ${addressNumber}\n`;
                 if (addressComplement) msg += `*Comp:* ${addressComplement}\n`;
 
-                // Neighborhood Logic
                 let finalNeighborhood = addressNeighborhood;
                 if (deliverySettings?.own_delivery_mode === 'NEIGHBORHOOD' && selectedNeighborhoodId) {
                     const nName = fees.find(f => f.id === selectedNeighborhoodId)?.neighborhood_name;
@@ -870,26 +986,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         }
     };
 
-    const isStoreOpen = useMemo(() => {
-        if (!store) return false;
-
-        // Use the status directly from the database (updated by automation or manual toggle)
-        // casting to any to ensure we access the property if generic types are active
-        const s = store as any;
-
-        if (typeof s.is_open === 'boolean') {
-            return s.is_open;
-        }
-
-        // Fallback for legacy support
-        if (typeof s.is_currently_open === 'boolean') {
-            return s.is_currently_open;
-        }
-
-        return true;
-    }, [store]);
 
     // --- COMPUTED DATA ---
+
+    const isStoreOpen = useMemo(() => {
+        if (!store) return false;
+        const s = store as any;
+        if (typeof s.is_open === 'boolean') return s.is_open;
+        if (typeof s.is_currently_open === 'boolean') return s.is_currently_open;
+        return true;
+    }, [store]);
 
     // 1. All Categories
     const categories = useMemo(() => {
@@ -967,15 +1073,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <Logo className="h-8 w-auto" onClick={() => window.location.href = '/'} />
-                        {recentOrders.length > 0 && (
-                            <button
-                                onClick={() => setIsRecentOrdersModalOpen(true)}
-                                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300 border border-gray-200/70 dark:border-gray-800 hover:border-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-                            >
-                                <ClipboardList className="w-4 h-4" />
-                                Acompanhar Pedido
-                            </button>
-                        )}
+
                     </div>
                     <div className="flex-1 max-w-lg mx-auto hidden md:block">
                         <div className="relative">
@@ -987,10 +1085,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         {recentOrders.length > 0 && (
                             <button
                                 onClick={() => setIsRecentOrdersModalOpen(true)}
-                                className="p-2.5 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-300 transition-colors"
+                                className="flex items-center gap-2 p-2.5 sm:px-4 sm:py-2 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-300 transition-colors"
                                 title="Acompanhar Meus Pedidos"
                             >
-                                <ClipboardList className="w-5 h-5" />
+                                <ClipboardList className="w-5 h-5 sm:w-4 sm:h-4" />
+                                <span className="hidden sm:inline text-xs font-semibold">Acompanhar Pedido</span>
                             </button>
                         )}
                         <button onClick={() => setIsCartOpen(true)} className="relative flex-shrink-0 bg-gray-900 text-white hover:bg-gray-800 p-2.5 rounded-full transition-colors">
@@ -1356,7 +1455,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             <button onClick={() => setIsCartOpen(false)} className="p-2 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 transition-colors"><X className="w-5 h-5" /></button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                        <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
                             {/* Review Items */}
                             <section>
@@ -1413,7 +1512,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         </div>
                                     ))}
                                     {cart.length > 0 && (
-                                        <button onClick={clearCart} className="w-full py-2 text-xs font-semibold text-gray-500 hover:text-red-500 border border-dashed border-gray-300/80 rounded-full hover:border-red-300 hover:bg-red-50 transition-all">
+                                        <button onClick={clearCart} className="w-full py-3 text-xs font-semibold text-white bg-brand-600 hover:text-white rounded-xl hover:bg-brand-700 transition-all ">
                                             Limpar Carrinho
                                         </button>
                                     )}
@@ -1421,7 +1520,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             </section>
 
                             {/* Order Observation */}
-                            <section>
+                            <section className='bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200/70 dark:border-gray-800 shadow-sm'>
                                 <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2 block">Observação do Pedido</label>
                                 <textarea
                                     value={orderObservation}
@@ -1435,7 +1534,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
                             {/* Identification */}
-                            <section className="space-y-4">
+                            <section className="space-y-4 bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200/70 dark:border-gray-800 shadow-sm">
                                 <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Identificação</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <CustomInput label="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Seu nome" />
@@ -1444,7 +1543,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             </section>
 
                             {/* Delivery Options - CONDITIONAL RENDERING */}
-                            <section className="space-y-4">
+                            <section className="space-y-4  bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200/70 dark:border-gray-800 shadow-sm">
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Entrega ou Retirada</h3>
                                 </div>
@@ -1609,7 +1708,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                             {/* Payment Section (Hidden if Online Checkout via Platform is active) */}
                             {!(store?.receive_orders_via_platform && store?.config?.online_payments?.enabled) ? (
-                                <section className="space-y-4">
+                                <section className="space-y-4 bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200/70 dark:border-gray-800 shadow-sm">
                                     <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Pagamento</h3>
 
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

@@ -20,10 +20,9 @@ export const StoreReceivingPayment: React.FC = () => {
     });
 
     // Configuração de Pagamento Online (JSONB config.online_payments)
+    // Nota: O gateway específico (Mercado Pago/InfinitePay) é configurado pelo admin
     const [onlinePaymentConfig, setOnlinePaymentConfig] = useState({
-        enabled: false,
-        accept_infinitepay: false,
-        accept_mercadopago: false
+        enabled: false
     });
 
     // Configuração de PIX (Raiz + JSONB)
@@ -55,13 +54,15 @@ export const StoreReceivingPayment: React.FC = () => {
             // 2. Carregar Online Payment Config (do campo config JSONB)
             const currentConfig = profile.config || {};
             const onlineConfig = currentConfig.online_payments || {};
+
+            // Regra: Se Plataforma estiver ON, Online Payments DEVE estar ON
+            const platformOn = profile.receive_orders_via_platform ?? true;
+
             setOnlinePaymentConfig({
-                enabled: onlineConfig.enabled || false,
-                accept_infinitepay: onlineConfig.accept_infinitepay || false,
-                accept_mercadopago: onlineConfig.accept_mercadopago || false
+                enabled: platformOn
             });
 
-            // 3. Carregar PIX Config
+            // 3. Carregar PIX Config (Manual)
             if (profile.config?.pixdata) {
                 const data = profile.config.pixdata;
                 const key = data.keyPix || data.key || '';
@@ -124,8 +125,9 @@ export const StoreReceivingPayment: React.FC = () => {
                 receive_orders_via_platform: orderConfig.receive_orders_via_platform,
                 receive_orders_via_chat: orderConfig.receive_orders_via_chat,
                 chat_number: rawChatNumber,
+                pix_key: pixConfig.keyPix, // Sync com campo legado se necessário
 
-                // Atualiza JSONB config
+                // Atualiza JSONB config preservando outros dados
                 config: {
                     ...currentConfig,
                     pixdata: pixConfig,
@@ -192,36 +194,21 @@ export const StoreReceivingPayment: React.FC = () => {
                             onChange={() => {
                                 const newValue = !orderConfig.receive_orders_via_platform;
 
-                                // Regra: Se está tentando desligar o único ativo, não permite (ou alterna)
-                                // Mas aqui vamos fazer alternar: desligar um liga o outro.
-                                if (!newValue && !orderConfig.receive_orders_via_chat) {
-                                    // Se está desligando plataforma e chat está off, liga chat.
-                                    setOrderConfig(prev => ({
-                                        ...prev,
-                                        receive_orders_via_platform: false,
-                                        receive_orders_via_chat: true
-                                    }));
-                                    return;
-                                }
-
                                 if (newValue) {
-                                    // Ligando Plataforma: Desliga Chat + Ativa Online/MP
-                                    setOrderConfig(prev => ({
-                                        ...prev,
+                                    // Ativando Plataforma: Force desativar WhatsApp e ativa Online
+                                    setOrderConfig({
                                         receive_orders_via_platform: true,
-                                        receive_orders_via_chat: false
-                                    }));
-                                    setOnlinePaymentConfig(curr => ({
-                                        ...curr,
-                                        enabled: true,
-                                        accept_mercadopago: true
-                                    }));
+                                        receive_orders_via_chat: false,
+                                        chat_number: orderConfig.chat_number
+                                    });
+                                    setOnlinePaymentConfig({ enabled: true });
                                 } else {
-                                    // Desligando Plataforma (quando Chat está on por ex)
-                                    setOrderConfig(prev => ({
-                                        ...prev,
-                                        receive_orders_via_platform: false
-                                    }));
+                                    // Desativando Plataforma: Force ativar WhatsApp (um deve estar ativo)
+                                    setOrderConfig({
+                                        receive_orders_via_platform: false,
+                                        receive_orders_via_chat: true,
+                                        chat_number: orderConfig.chat_number
+                                    });
                                 }
                             }}
                         />
@@ -244,34 +231,22 @@ export const StoreReceivingPayment: React.FC = () => {
                             onChange={() => {
                                 const newValue = !orderConfig.receive_orders_via_chat;
 
-                                if (!newValue && !orderConfig.receive_orders_via_platform) {
-                                    // Se está desligando chat e plataforma está off, liga plataforma + Online/MP
-                                    setOrderConfig(prev => ({
-                                        ...prev,
-                                        receive_orders_via_chat: false,
-                                        receive_orders_via_platform: true
-                                    }));
-                                    setOnlinePaymentConfig(curr => ({
-                                        ...curr,
-                                        enabled: true,
-                                        accept_mercadopago: true
-                                    }));
-                                    return;
-                                }
-
                                 if (newValue) {
-                                    // Ligando Chat: Desliga Plataforma
-                                    setOrderConfig(prev => ({
-                                        ...prev,
+                                    // Ativando WhatsApp: Force desativar Plataforma E Pagamentos Online
+                                    setOrderConfig({
+                                        receive_orders_via_platform: false,
                                         receive_orders_via_chat: true,
-                                        receive_orders_via_platform: false
-                                    }));
+                                        chat_number: orderConfig.chat_number
+                                    });
+                                    setOnlinePaymentConfig({ enabled: false });
                                 } else {
-                                    // Desligando Chat
-                                    setOrderConfig(prev => ({
-                                        ...prev,
-                                        receive_orders_via_chat: false
-                                    }));
+                                    // Desativando WhatsApp: Force ativar Plataforma + Online
+                                    setOrderConfig({
+                                        receive_orders_via_platform: true,
+                                        receive_orders_via_chat: false,
+                                        chat_number: orderConfig.chat_number
+                                    });
+                                    setOnlinePaymentConfig({ enabled: true });
                                 }
                             }}
                         />
@@ -294,186 +269,136 @@ export const StoreReceivingPayment: React.FC = () => {
                 </div>
             </div>
 
-            {/* SEÇÃO 2: PAGAMENTOS ONLINE */}
-            <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-6">
-                <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                        <Globe className="w-5 h-5 text-blue-600" /> Pagamentos Online
-                    </h3>
-                    <Switch
-                        checked={onlinePaymentConfig.enabled}
-                        onChange={() => {
-                            const newValue = !onlinePaymentConfig.enabled;
-                            if (!newValue && orderConfig.receive_orders_via_platform) {
-                                // Se plataforma está ativa, pagamento online é obrigatório
-                                return;
-                            }
-                            setOnlinePaymentConfig(prev => ({ ...prev, enabled: newValue }));
-                        }}
-                    />
-                </div>
-
-                {onlinePaymentConfig.enabled ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in">
-                        {/* InfinitePay */}
-                        <div className={`p-5 rounded-2xl border transition-all ${onlinePaymentConfig.accept_infinitepay ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-700/30'}`}>
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    <CreditCard className="w-5 h-5 text-gray-700 dark:text-white" />
-                                    <span className="font-bold text-gray-800 dark:text-white">InfinitePay</span>
-                                </div>
-                                <Switch
-                                    checked={onlinePaymentConfig.accept_infinitepay}
-                                    onChange={() => setOnlinePaymentConfig(prev => ({ ...prev, accept_infinitepay: !prev.accept_infinitepay }))}
-                                />
-                            </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                Receba pagamentos via Link de Pagamento da InfinitePay. Requer configuração das credenciais no painel administrativo.
-                            </p>
-                        </div>
-
-                        {/* Mercado Pago */}
-                        <div className={`p-5 rounded-2xl border transition-all ${onlinePaymentConfig.accept_mercadopago ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-700/30'}`}>
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    <CreditCard className="w-5 h-5 text-gray-700 dark:text-white" />
-                                    <span className="font-bold text-gray-800 dark:text-white">Mercado Pago</span>
-                                </div>
-                                <Switch
-                                    checked={onlinePaymentConfig.accept_mercadopago}
-                                    onChange={() => {
-                                        const newValue = !onlinePaymentConfig.accept_mercadopago;
-                                        if (!newValue && orderConfig.receive_orders_via_platform && !onlinePaymentConfig.accept_infinitepay) {
-                                            // Se plataforma está ativa e MP é o único, não permite desligar
-                                            return;
-                                        }
-                                        setOnlinePaymentConfig(prev => ({ ...prev, accept_mercadopago: newValue }));
-                                    }}
-                                />
-                            </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                Integração nativa com Mercado Pago para PIX automático e Cartões.
-                            </p>
-                        </div>
+            {/* SEÇÃO 2: INFORMAÇÃO SOBRE PAGAMENTOS ONLINE (Via Plataforma) */}
+            {orderConfig.receive_orders_via_platform && (
+                <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-6">
+                    <div className="flex items-center gap-3">
+                        <Globe className="w-5 h-5 text-blue-600" />
+                        <h3 className="font-bold text-lg dark:text-white">Pagamentos Online</h3>
                     </div>
-                ) : (
-                    <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl text-center">
-                        <p className="text-sm text-gray-500">Ative os pagamentos online para oferecer mais opções aos seus clientes.</p>
-                    </div>
-                )}
-            </div>
 
-            {/* SEÇÃO 3: PIX AUTOMÁTICO */}
-            <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-8">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                        <QrCode className="w-5 h-5 text-teal-600" /> Pagamento via PIX (Copia e Cola)
-                    </h3>
-                    <div className={`flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 px-4 py-2 rounded-full border border-gray-100 dark:border-gray-700`}>
-                        <span className={`text-xs font-bold ${pixConfig.enabled ? 'text-green-600' : 'text-gray-400'}`}>
-                            {pixConfig.enabled ? 'ATIVO' : 'INATIVO'}
-                        </span>
-                        <Switch
-                            checked={pixConfig.enabled}
-                            onChange={() => {
-                                setPixConfig(prev => ({ ...prev, enabled: !prev.enabled }));
-                            }}
-                        />
+                    <div className="p-5 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800">
+                        <div className="flex items-start gap-3">
+                            <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                                <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2">
+                                    Pagamento Online Automático Ativado
+                                </h4>
+                                <p className="text-sm text-blue-700 dark:text-blue-400 leading-relaxed">
+                                    Ao receber pedidos via plataforma, o sistema utiliza automaticamente o <strong>gateway de pagamento principal</strong> configurado pelo administrador.
+                                    Seus clientes poderão pagar via PIX ou Cartão de forma automática e segura.
+                                </p>
+                                <p className="text-xs text-blue-600 dark:text-blue-500 mt-2">
+                                    💡 <em>O gateway específico (Mercado Pago ou InfinitePay) é gerenciado centralmente pelo admin da plataforma.</em>
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
+            )}
 
-                {orderConfig.receive_orders_via_platform && pixConfig.enabled && (
-                    <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-100 dark:border-amber-800 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                        <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                            <p className="text-sm font-bold text-amber-800 dark:text-amber-300">PIX Manual Ativo com Plataforma</p>
-                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
-                                Você está usando o PIX Manual junto com a Plataforma. Lembre-se que o sistema <strong>não confirmará</strong> o pagamento automaticamente neste modo.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                        <div className="relative">
-                            <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Tipo de Chave</label>
-                            <div className="flex gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
-                                {[
-                                    { id: 'cpf', label: 'CPF' },
-                                    { id: 'cnpj', label: 'CNPJ' },
-                                    { id: 'email', label: 'E-mail' },
-                                    { id: 'phone', label: 'Celular' },
-                                    { id: 'random', label: 'Aleatória' }
-                                ].map((type) => (
-                                    <button
-                                        key={type.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setPixKeyType(type.id as any);
-                                            setPixConfig(prev => ({ ...prev, keyPix: '' }));
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border ${pixKeyType === type.id
-                                            ? 'bg-brand-600 border-brand-600 text-white shadow-sm'
-                                            : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        {type.label}
-                                    </button>
-                                ))}
-                            </div>
-                            <CustomInput
-                                label="Chave PIX"
-                                value={pixConfig.keyPix}
-                                mask={pixKeyType === 'cpf' ? 'cpf' : pixKeyType === 'cnpj' ? 'cnpj' : pixKeyType === 'phone' ? 'phone' : undefined}
-                                onChange={e => setPixConfig(prev => ({ ...prev, keyPix: e.target.value }))}
-                                placeholder={
-                                    pixKeyType === 'cpf' ? '000.000.000-00' :
-                                        pixKeyType === 'cnpj' ? '00.000.000/0000-00' :
-                                            pixKeyType === 'phone' ? '(00) 00000-0000' :
-                                                pixKeyType === 'email' ? 'exemplo@email.com' :
-                                                    'Chave aleatória'
-                                }
-                                icon={QrCode}
+            {/* SEÇÃO 3: PIX AUTOMÁTICO (Apenas WhatsApp/Manual) */}
+            {orderConfig.receive_orders_via_chat && (
+                <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                            <QrCode className="w-5 h-5 text-teal-600" /> Pagamento via PIX (Copia e Cola)
+                        </h3>
+                        <div className={`flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 px-4 py-2 rounded-full border border-gray-100 dark:border-gray-700`}>
+                            <span className={`text-xs font-bold ${pixConfig.enabled ? 'text-green-600' : 'text-gray-400'}`}>
+                                {pixConfig.enabled ? 'ATIVO' : 'INATIVO'}
+                            </span>
+                            <Switch
+                                checked={pixConfig.enabled}
+                                onChange={() => {
+                                    setPixConfig(prev => ({ ...prev, enabled: !prev.enabled }));
+                                }}
                             />
                         </div>
-                        <CustomInput
-                            label="Nome do Recebedor (Titular)"
-                            value={pixConfig.name}
-                            onChange={e => setPixConfig(prev => ({ ...prev, name: e.target.value }))}
-                            placeholder="Ex: Minha Loja Ltda"
-                            icon={Info}
-                        />
-                        <CustomInput
-                            label="Cidade do Recebedor"
-                            value={pixConfig.city}
-                            onChange={e => setPixConfig(prev => ({ ...prev, city: e.target.value }))}
-                            placeholder="Ex: São Paulo"
-                            icon={Info}
-                        />
                     </div>
 
-                    <div className="space-y-4">
-                        <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-2xl border border-teal-100 dark:border-teal-800/30">
-                            <h4 className="font-bold text-teal-800 dark:text-teal-300 mb-2 flex items-center gap-2">
-                                <CheckCircle className="w-4 h-4" /> Vantagens do PIX
-                            </h4>
-                            <ul className="text-xs text-teal-700 dark:text-teal-400 space-y-2 list-disc list-inside">
-                                <li>Recebimento instantâneo na sua conta.</li>
-                                <li>Sem taxas de intermediadores (dependendo do seu banco).</li>
-                                <li>Cliente paga escaneando o QR Code ou colando o código.</li>
-                            </ul>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                            <div className="relative">
+                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Tipo de Chave</label>
+                                <div className="flex gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
+                                    {[
+                                        { id: 'cpf', label: 'CPF' },
+                                        { id: 'cnpj', label: 'CNPJ' },
+                                        { id: 'email', label: 'E-mail' },
+                                        { id: 'phone', label: 'Celular' },
+                                        { id: 'random', label: 'Aleatória' }
+                                    ].map((type) => (
+                                        <button
+                                            key={type.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setPixKeyType(type.id as any);
+                                                setPixConfig(prev => ({ ...prev, keyPix: '' }));
+                                            }}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border ${pixKeyType === type.id
+                                                ? 'bg-brand-600 border-brand-600 text-white shadow-sm'
+                                                : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            {type.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <CustomInput
+                                    label="Chave PIX"
+                                    value={pixConfig.keyPix}
+                                    mask={pixKeyType === 'cpf' ? 'cpf' : pixKeyType === 'cnpj' ? 'cnpj' : pixKeyType === 'phone' ? 'phone' : undefined}
+                                    onChange={e => setPixConfig(prev => ({ ...prev, keyPix: e.target.value }))}
+                                    placeholder={
+                                        pixKeyType === 'cpf' ? '000.000.000-00' :
+                                            pixKeyType === 'cnpj' ? '00.000.000/0000-00' :
+                                                pixKeyType === 'phone' ? '(00) 00000-0000' :
+                                                    pixKeyType === 'email' ? 'exemplo@email.com' :
+                                                        'Chave aleatória'
+                                    }
+                                    icon={QrCode}
+                                />
+                            </div>
+                            <CustomInput
+                                label="Nome do Recebedor (Titular)"
+                                value={pixConfig.name}
+                                onChange={e => setPixConfig(prev => ({ ...prev, name: e.target.value }))}
+                                placeholder="Ex: Minha Loja Ltda"
+                                icon={Info}
+                            />
+                            <CustomInput
+                                label="Cidade do Recebedor"
+                                value={pixConfig.city}
+                                onChange={e => setPixConfig(prev => ({ ...prev, city: e.target.value }))}
+                                placeholder="Ex: São Paulo"
+                                icon={Info}
+                            />
                         </div>
 
-                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-800/30 flex items-start gap-3">
-                            <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                                <strong>Importante:</strong> Ao ativar o PIX, você é responsável por conferir se o valor caiu na sua conta bancária antes de enviar o pedido. O sistema apenas facilita a geração do código para o cliente.
-                            </p>
+                        <div className="space-y-4">
+                            <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-2xl border border-teal-100 dark:border-teal-800/30">
+                                <h4 className="font-bold text-teal-800 dark:text-teal-300 mb-2 flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4" /> Vantagens do PIX
+                                </h4>
+                                <ul className="text-xs text-teal-700 dark:text-teal-400 space-y-2 list-disc list-inside">
+                                    <li>Recebimento instantâneo na sua conta.</li>
+                                    <li>Sem taxas de intermediadores (dependendo do seu banco).</li>
+                                    <li>Cliente paga escaneando o QR Code ou colando o código.</li>
+                                </ul>
+                            </div>
+
+                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-800/30 flex items-start gap-3">
+                                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                                <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                                    <strong>Importante:</strong> Ao ativar o PIX, você é responsável por conferir se o valor caiu na sua conta bancária antes de enviar o pedido. O sistema apenas facilita a geração do código para o cliente.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* BARRA FIXA DE SALVAR (Mobile friendly) */}
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 z-50 md:static md:bg-transparent md:border-none md:p-0">

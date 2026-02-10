@@ -1,6 +1,6 @@
 import { getClient } from './cloud';
-import { infinitePayCreateCharge, infinitePayCheckStatus } from './infinitepay';
-import { mercadoPagoCreatePayment, mercadoPagoCheckStatus } from './mercadopago';
+import { infinitePayCreateCharge, infinitePayCheckStatus, infinitePayGetCharge, infinitePayRefundCharge } from './infinitepay';
+import { mercadoPagoCreatePayment, mercadoPagoCheckStatus, mercadoPagoCreateOrder } from './mercadopago';
 import { generatePixPayload } from '../utils/pixPayloadGenerator';
 import type { PaymentGatewayConfig } from '../types';
 
@@ -44,7 +44,7 @@ export const getActiveGateways = async (): Promise<PaymentGatewayConfig[]> => {
  */
 export const logTransaction = async (
     gatewayName: string,
-    operationType: 'charge' | 'refund' | 'check_status',
+    operationType: 'charge' | 'refund' | 'check_status' | 'capture',
     success: boolean,
     requestData: any,
     responseData: any,
@@ -72,7 +72,7 @@ export const logTransaction = async (
  */
 const attemptWithGateway = async <T>(
     operation: (gateway: PaymentGatewayConfig) => Promise<T>,
-    operationType: 'charge' | 'refund' | 'check_status',
+    operationType: 'charge' | 'refund' | 'check_status' | 'capture',
     preferredGateway?: string
 ): Promise<T> => {
     const gateways = await getActiveGateways();
@@ -139,11 +139,14 @@ export const generatePaymentQRCode = async (
         const finalAmount = Number(total.toFixed(2));
 
         if (gateway.gateway_name === 'infinitepay') {
-            const result = await infinitePayCreateCharge(finalAmount, metadata, gateway.credentials as any);
+            const payer = metadata.payer;
+            const items = metadata.items;
+            const result = await infinitePayCreateCharge(finalAmount, metadata, gateway.credentials as any, payer, items);
             qrCode = result.qrCode;
             txId = result.txId;
         } else if (gateway.gateway_name === 'mercadopago') {
-            const result = await mercadoPagoCreatePayment(finalAmount, metadata, gateway.credentials as any);
+            const processingMode = metadata.processing_mode || 'automatic';
+            const result = await mercadoPagoCreateOrder(finalAmount, metadata, gateway.credentials as any, processingMode);
             qrCode = result.qrCode;
             txId = result.txId;
         } else if (gateway.gateway_name === 'pix') {
