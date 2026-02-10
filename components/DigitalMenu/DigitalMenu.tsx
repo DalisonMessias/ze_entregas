@@ -143,6 +143,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [customerName, setCustomerName] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
     const [deliveryType, setDeliveryType] = useState<'DELIVERY' | 'PICKUP'>('DELIVERY');
+    const [hasInitialDeliveryTypeSet, setHasInitialDeliveryTypeSet] = useState(false);
 
     // Address Fields
     const [cep, setCep] = useState('');
@@ -356,7 +357,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     // --- SYNC DELIVERY TYPE ---
     useEffect(() => {
-        if (deliverySettings) {
+        if (deliverySettings && !hasInitialDeliveryTypeSet) {
             const canDeliverAvailable = deliverySettings.is_own_delivery_enabled || deliverySettings.is_partner_delivery_enabled;
             const canPickupAvailable = deliverySettings.is_pickup_enabled;
 
@@ -365,8 +366,9 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             } else if (!canDeliverAvailable && canPickupAvailable && deliveryType !== 'PICKUP') {
                 setDeliveryType('PICKUP');
             }
+            setHasInitialDeliveryTypeSet(true);
         }
-    }, [deliverySettings, deliveryType]);
+    }, [deliverySettings, deliveryType, hasInitialDeliveryTypeSet]);
 
     // Save cart on change
     useEffect(() => {
@@ -479,9 +481,9 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     };
 
     const cartSubtotal = cart.reduce((sum, item) => {
-        const addonsPrice = (item.selectedAddons || []).reduce((s, a) => s + (a.optionPrice * a.quantity), 0);
-        const basePrice = item.sizePrice !== undefined ? item.sizePrice : item.product.price;
-        return sum + ((basePrice + addonsPrice) * item.quantity);
+        const addonsPrice = (item.selectedAddons || []).reduce((s, a) => Number(s) + (Number(a.optionPrice) * Number(a.quantity)), 0);
+        const basePrice = item.sizePrice !== undefined ? Number(item.sizePrice) : Number(item.product.price);
+        return Number(sum) + ((basePrice + addonsPrice) * Number(item.quantity));
     }, 0);
 
     const deliveryFee = useMemo(() => {
@@ -507,7 +509,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         return 0; // Fallback
     }, [deliveryType, deliverySettings, fees, selectedNeighborhoodId]);
 
-    const cartTotal = cartSubtotal + deliveryFee - loyaltyDiscountValue;
+    const cartTotal = Number(cartSubtotal) + Number(deliveryFee) - Number(loyaltyDiscountValue);
 
     const pointsToEarn = useMemo(() => {
         if (!loyaltySettings || !loyaltySettings.is_active) return 0;
@@ -669,16 +671,21 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 };
 
                 // Prepare Items
-                const orderItems = cart.map(item => ({
-                    product_id: item.product.id,
-                    name: item.product.name + (item.selectedSize ? ` (${item.selectedSize})` : ''),
-                    quantity: item.quantity,
-                    price: item.sizePrice !== undefined ? item.sizePrice : item.product.price,
-                    total_price: ((item.sizePrice !== undefined ? item.sizePrice : item.product.price) + (item.selectedAddons || []).reduce((s, a) => s + (a.optionPrice * a.quantity), 0)) * item.quantity,
-                    observation: item.observation,
-                    image_url: item.product.image_url,
-                    selected_addons: item.selectedAddons
-                }));
+                const orderItems = cart.map(item => {
+                    const addonsPriceValue = (item.selectedAddons || []).reduce((s, a) => Number(s) + (Number(a.optionPrice) * Number(a.quantity)), 0);
+                    const basePrice = item.sizePrice !== undefined ? Number(item.sizePrice) : Number(item.product.price);
+
+                    return {
+                        product_id: item.product.id,
+                        name: item.product.name + (item.selectedSize ? ` (${item.selectedSize})` : ''),
+                        quantity: Number(item.quantity),
+                        unit_price: basePrice,
+                        total_price: (basePrice + addonsPriceValue) * Number(item.quantity),
+                        observation: item.observation,
+                        image_url: item.product.image_url,
+                        selected_addons: item.selectedAddons
+                    };
+                });
 
                 // Validar PIX se selecionado
                 if (paymentMethod === 'PIX') {
@@ -726,10 +733,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     setRecentOrders(updatedRecent);
                     localStorage.setItem(`ze_recent_orders_${store!.id}`, JSON.stringify(updatedRecent));
 
-                    // Lógica de PIX Ativo (Unified)
+                    // Lógica de PIX (Automático vs Manual)
                     if (paymentMethod === 'PIX') {
-                        setCreatedOrderId(orderId);
-                        setIsPixModalOpen(true);
+                        if (store?.config?.pixdata?.enabled) {
+                            setCreatedOrderId(orderId);
+                            setIsPixModalOpen(true);
+                        } else {
+                            await alert({
+                                title: 'Pedido Recebido com Sucesso! 🎉',
+                                message: `Seu pedido #${orderId.slice(0, 8).toUpperCase()} foi registrado.\n\nComo o pagamento selecionado foi PIX (Manual), por favor, combine o pagamento diretamente com a loja.\n\nVocê será redirecionado para o rastreamento.`
+                            });
+                            window.location.href = `/track/${orderId}`;
+                        }
                     } else {
                         await alert({
                             title: 'Pedido Recebido com Sucesso! 🎉',

@@ -336,9 +336,6 @@ export const StoreStatus: React.FC = () => {
               onClick={async () => {
                 setIsLoading(true);
                 try {
-                  const { error } = await supabase.from('user_profiles').update({ manual_override: false }).eq('id', profile.id);
-                  if (error) throw error;
-
                   // Recalculate state based on schedule immediately
                   const newState = getStoreOpenState({
                     openingHours: profile.opening_hours,
@@ -347,11 +344,30 @@ export const StoreStatus: React.FC = () => {
                     now: new Date()
                   });
 
+                  console.log('[StoreStatus] Resume Automation - newState:', newState);
+
+                  // CRITICAL: Update BOTH manual_override AND is_open in database
+                  const { error } = await supabase
+                    .from('user_profiles')
+                    .update({
+                      manual_override: false,
+                      is_open: newState.isOpen
+                    })
+                    .eq('id', profile.id);
+
+                  if (error) {
+                    console.error('[StoreStatus] Resume Automation error:', error);
+                    throw error;
+                  }
+
+                  console.log('[StoreStatus] Database updated - is_open:', newState.isOpen, 'manual_override: false');
+
                   // Update profile state
                   setProfile(prev => (prev ? { ...prev, manual_override: false, is_open: newState.isOpen } : null));
 
                   showSuccess('Horário automático retomado!');
                 } catch (e) {
+                  console.error('[StoreStatus] Resume Automation exception:', e);
                   showError('Erro ao retomar automação.');
                 } finally {
                   setIsLoading(false);

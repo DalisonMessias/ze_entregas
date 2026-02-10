@@ -96,3 +96,7 @@ main .grid>* {
   scrollbar-width: none;
   /* Firefox */
 }
+
+textarea {
+  resize: none !important;
+}
