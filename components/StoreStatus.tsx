@@ -95,12 +95,14 @@ export const StoreStatus: React.FC = () => {
   };
 
   const handleToggleStore = async () => {
+    console.log('[StoreStatus] handleToggleStore called');
     if (!profile?.id) {
       showError('Erro: Perfil não carregado. Recarregue a página.');
       return;
     }
 
     const currentEffectiveState = openState?.isOpen ?? false;
+    console.log('[StoreStatus] currentEffectiveState:', currentEffectiveState);
 
     // If closing, confirm and generate a report.
     if (currentEffectiveState) {
@@ -110,12 +112,22 @@ export const StoreStatus: React.FC = () => {
         confirmButtonText: 'Sim, encerrar',
         cancelButtonText: 'Não, continuar aberto'
       });
-      if (!confirmed) return;
+      if (!confirmed) {
+        console.log('[StoreStatus] User cancelled closing');
+        return;
+      }
     }
 
     setIsLoading(true);
+    console.log('[StoreStatus] Loading started');
+
+    let success = false;
+    let newManualState = false;
+
     try {
-      const newManualState = !currentEffectiveState;
+      newManualState = !currentEffectiveState;
+      console.log('[StoreStatus] newManualState:', newManualState);
+
       // When toggling, we enforce the new state AND set manual_override to TRUE
       // to prevent the cron job from reverting it immediately if within schedule.
       const { error: profileError } = await supabase
@@ -126,7 +138,12 @@ export const StoreStatus: React.FC = () => {
         })
         .eq('id', profile.id);
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('[StoreStatus] Supabase error:', profileError);
+        throw profileError;
+      }
+
+      console.log('[StoreStatus] Database updated successfully');
 
       // We manually calc effective state, but now we know manual override is ON.
       // So the effective state IS the manual state.
@@ -134,19 +151,30 @@ export const StoreStatus: React.FC = () => {
 
       // Only generate report if the shop is effectively closing
       if (!newEffectiveState) {
+        console.log('[StoreStatus] Generating daily report...');
         await generateDailyReport();
-        showSuccess('Loja encerrada manualmente. A automação foi pausada.');
-      } else {
-        showSuccess('Loja aberta manualmente. A automação foi pausada.');
       }
 
+      console.log('[StoreStatus] Updating profile state...');
       setProfile(prev => (prev ? { ...prev, is_open: newManualState, manual_override: true } : null));
+      console.log('[StoreStatus] Profile state updated');
+
+      success = true;
 
     } catch (e) {
-      console.error(e)
+      console.error('[StoreStatus] Error in handleToggleStore:', e);
       showError('Erro ao alterar status. Tente novamente.');
     } finally {
+      console.log('[StoreStatus] Finally block - setting loading to false');
       setIsLoading(false);
+
+      if (success) {
+        const message = newManualState
+          ? 'Loja aberta manualmente. A automação foi pausada.'
+          : 'Loja encerrada manualmente. A automação foi pausada.';
+        console.log('[StoreStatus] Success message:', message);
+        showSuccess(message);
+      }
     }
   };
 
