@@ -795,6 +795,7 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         is_super_store: userData.is_super_store,
         store_name: userData.store_name,
         is_open: userData.is_open,
+        manual_override: userData.manual_override,
         is_currently_open: userData.is_currently_open,
         store_category_id: userData.store_category_id,
         pix_key: userData.pix_key,

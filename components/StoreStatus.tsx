@@ -321,10 +321,9 @@ export const StoreStatus: React.FC = () => {
                     now: new Date()
                   });
 
-                  await loadProfile(); // Reload to get fresh state including is_open updated by trigger? 
-                  // Actually trigger might not run immediately on update of manual_override?
-                  // The automation usually runs every minute. 
-                  // We should probably just reload.
+                  // Update states manually instead of reloading
+                  setIsManuallyOpen(newState.isManualOpen);
+                  setProfile(prev => (prev ? { ...prev, manual_override: false, is_open: newState.isOpen } : null));
 
                   showSuccess('Horário automático retomado!');
                 } catch (e) {
