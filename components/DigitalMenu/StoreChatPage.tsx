@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Send, MessageCircle, Bot, Shield, Loader2, User, Check, CheckCheck, X, RefreshCw, AlertCircle, Trash2, MoreVertical, Edit2, Copy, Mic, Square } from 'lucide-react';
+import { ArrowLeft, Send, MessageCircle, Bot, Shield, Loader2, User, Check, CheckCheck, X, RefreshCw, AlertCircle, Trash2, MoreVertical, Edit2, Copy, Mic, Square, Store } from 'lucide-react';
 import * as cloud from '../../services/cloud';
 import { getWebSocketUrl, getApiBaseUrl } from '../../utils/apiConfig';
 import { PartnerProfile } from '../../types';
@@ -9,6 +9,8 @@ import { Button } from '../Button';
 import { PollMessage } from '../InternalChat/Messages/PollMessage';
 import { ContactMessage } from '../InternalChat/Messages/ContactMessage';
 import { AudioPlayer } from '../AudioPlayer';
+import { getStoreOpenState } from '../../utils/storeHours';
+import { getUserWithCache } from '../../services/cloud';
 
 interface StoreChatPageProps {
     citySlug: string;
@@ -45,6 +47,9 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
     const [showNameModal, setShowNameModal] = useState(false);
     const [tempName, setTempName] = useState('');
 
+    // Store Status State
+    const [isStoreOpen, setIsStoreOpen] = useState(true);
+
     // Typing Indicator State
     const [isTyping, setIsTyping] = useState(false);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -62,10 +67,22 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
         const handleClickOutside = () => setShowOptionsObj({});
         document.addEventListener('click', handleClickOutside);
 
-        // Se o nome não estiver salvo, mostrar modal após carregar loja
-        if (!localStorage.getItem('ze_customer_name')) {
-            setShowNameModal(true);
-        }
+        // Check for logged user
+        const checkUser = async () => {
+            const { user } = await getUserWithCache();
+            if (user && user.user_metadata?.name) {
+                setCustomerName(user.user_metadata.name);
+                localStorage.setItem('ze_customer_name', user.user_metadata.name);
+                // If we have a user, we don't show the name modal
+                setShowNameModal(false);
+            } else {
+                // Se o nome não estiver salvo, mostrar modal após carregar loja
+                if (!localStorage.getItem('ze_customer_name')) {
+                    setShowNameModal(true);
+                }
+            }
+        };
+        checkUser();
 
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
@@ -104,6 +121,20 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
             console.log("StoreChatPage: store loaded", data);
             if (data) {
                 setStore(data);
+
+                // Calculate Store Open State
+                try {
+                    const openState = getStoreOpenState({
+                        openingHours: data.opening_hours,
+                        manualStatus: data.is_open,
+                        manualOverride: data.manual_override,
+                        now: new Date()
+                    });
+                    setIsStoreOpen(openState.isOpen);
+                } catch (err) {
+                    console.error("Error calculating store open state", err);
+                }
+
             } else {
                 console.error("StoreChatPage: Store not found via slug");
             }
@@ -265,6 +296,7 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
     };
 
     const handleSendMessage = async () => {
+        if (!isStoreOpen) return;
         if (!inputText.trim()) return;
 
         const tempId = Date.now().toString();
@@ -616,43 +648,58 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
             </div>
 
             {/* Input Area */}
-            <div className="bg-white border-t border-gray-100 p-4 flex items-end gap-3">
-                <div className="flex-1 bg-[#F0F2F5] rounded-3xl px-4 py-2 min-h-[44px] flex items-center focus-within:bg-white focus-within:shadow-sm transition-all">
-                    <textarea
-                        className="bg-transparent border-none outline-none w-full text-[#111B21] placeholder:text-gray-500 text-[15px] resize-none max-h-[150px] overflow-hidden custom-scrollbar leading-relaxed"
-                        placeholder="Escreva sua mensagem..."
-                        rows={1}
-                        value={inputText}
-                        onChange={e => {
-                            setInputText(e.target.value);
-                            // Auto-resize
-                            e.target.style.height = 'auto';
-                            const newHeight = Math.min(e.target.scrollHeight, 150);
-                            e.target.style.height = newHeight + 'px';
-                        }}
-                        onKeyDown={e => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleSendMessage();
-                                // Reset height
-                                setTimeout(() => {
-                                    (e.target as HTMLTextAreaElement).style.height = 'auto';
-                                }, 0);
-                            }
-                        }}
-                        style={{ minHeight: '24px' }}
-                    />
+            {!isStoreOpen ? (
+                <div className="bg-gray-100 border-t border-gray-200 p-6 flex flex-col items-center justify-center text-center gap-2">
+                    <div className="bg-gray-200 p-3 rounded-full mb-1">
+                        <Store size={24} className="text-gray-500" />
+                    </div>
+                    <h3 className="font-bold text-gray-700 uppercase tracking-widest text-sm">Loja Fechada</h3>
+                    <p className="text-xs text-gray-500 max-w-xs">
+                        A loja não está recebendo mensagens no momento. Tente novamente durante o horário de funcionamento.
+                    </p>
+                    {store?.opening_hours && (
+                        <p className="text-[10px] text-gray-400 mt-1 font-mono">{store.opening_hours}</p>
+                    )}
                 </div>
-                <button
-                    onClick={handleSendMessage}
-                    disabled={!inputText.trim()}
-                    className="p-3 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-md"
-                    title="Enviar mensagem"
-                >
-                    <Send className="w-5 h-5" />
-                </button>
-            </div>
+            ) : (
+                <div className="bg-white border-t border-gray-100 p-4 flex items-end gap-3">
+                    <div className="flex-1 bg-[#F0F2F5] rounded-3xl px-4 py-2 min-h-[44px] flex items-center focus-within:bg-white focus-within:shadow-sm transition-all">
+                        <textarea
+                            className="bg-transparent border-none outline-none w-full text-[#111B21] placeholder:text-gray-500 text-[15px] resize-none max-h-[150px] overflow-hidden custom-scrollbar leading-relaxed"
+                            placeholder="Escreva sua mensagem..."
+                            rows={1}
+                            value={inputText}
+                            onChange={e => {
+                                setInputText(e.target.value);
+                                // Auto-resize
+                                e.target.style.height = 'auto';
+                                const newHeight = Math.min(e.target.scrollHeight, 150);
+                                e.target.style.height = newHeight + 'px';
+                            }}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleSendMessage();
+                                    // Reset height
+                                    setTimeout(() => {
+                                        (e.target as HTMLTextAreaElement).style.height = 'auto';
+                                    }, 0);
+                                }
+                            }}
+                            style={{ minHeight: '24px' }}
+                        />
+                    </div>
+                    <button
+                        onClick={handleSendMessage}
+                        disabled={!inputText.trim()}
+                        className="p-3 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-md"
+                        title="Enviar mensagem"
+                    >
+                        <Send className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
 
             {/* Modal de Confirmação de Limpeza */}
             <BaseModal isOpen={showClearModal} onClose={() => setShowClearModal(false)} title="Limpar Conversa" icon={<Trash2 className="w-6 h-6 text-red-500" />}>
