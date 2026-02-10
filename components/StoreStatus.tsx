@@ -115,7 +115,7 @@ export const StoreStatus: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const newManualState = !isManuallyOpen;
+      const newManualState = !currentEffectiveState;
       // When toggling, we enforce the new state AND set manual_override to TRUE
       // to prevent the cron job from reverting it immediately if within schedule.
       const { error: profileError } = await supabase
@@ -140,7 +140,6 @@ export const StoreStatus: React.FC = () => {
         showSuccess('Loja aberta manualmente. A automação foi pausada.');
       }
 
-      setIsManuallyOpen(newManualState);
       setProfile(prev => (prev ? { ...prev, is_open: newManualState, manual_override: true } : null));
 
     } catch (e) {
@@ -153,14 +152,13 @@ export const StoreStatus: React.FC = () => {
 
   const openState = useMemo(() => {
     if (!profile) return null;
-    // The component's `isManuallyOpen` is the source of truth for the manual toggle
     return getStoreOpenState({
       openingHours: profile.opening_hours,
-      manualStatus: isManuallyOpen,
+      manualStatus: profile.is_open,
       manualOverride: profile.manual_override,
       now,
     });
-  }, [profile, isManuallyOpen, now]);
+  }, [profile, now]);
 
   const statusTitle = openState?.isOpen ? 'Loja Aberta' : 'Loja Fechada';
   const statusBadge = openState?.isOpen ? 'ABERTA' : 'FECHADA';
@@ -321,8 +319,7 @@ export const StoreStatus: React.FC = () => {
                     now: new Date()
                   });
 
-                  // Update states manually instead of reloading
-                  setIsManuallyOpen(newState.isManualOpen);
+                  // Update profile state
                   setProfile(prev => (prev ? { ...prev, manual_override: false, is_open: newState.isOpen } : null));
 
                   showSuccess('Horário automático retomado!');
