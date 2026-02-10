@@ -1517,3 +1517,62 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC) TO anon, authenticated;
 
+-- ==================================================================
+-- CORREÇÃO getStoreBySlug (2026-02-09)
+-- ==================================================================
+
+DROP FUNCTION IF EXISTS public.public_get_store_by_slug(text, text);
+
+CREATE OR REPLACE FUNCTION public.public_get_store_by_slug(p_city_slug text, p_store_slug text)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_result JSONB;
+BEGIN
+    SELECT jsonb_build_object(
+        'id', id,
+        'name', name,
+        'store_name', store_name,
+        'store_logo_url', store_logo_url,
+        'cover_url', cover_url,
+        'is_open', is_open,
+        'is_currently_open', is_currently_open,
+        'phone_number', phone_number,
+        'chat_number', chat_number,
+        'description', description,
+        'pix_key', pix_key,
+        'opening_hours', opening_hours,
+        'preparation_time_min', preparation_time_min,
+        'preparation_time_max', preparation_time_max,
+        'store_address_street', store_address_street,
+        'store_address_number', store_address_number,
+        'store_address_district', store_address_district,
+        'store_address_city', store_address_city,
+        'store_address_state', store_address_state,
+        'receive_orders_via_chat', receive_orders_via_chat,
+        'receive_orders_via_platform', receive_orders_via_platform,
+        'city', city,
+        'state', store_address_state,
+        'store_address_zip', store_address_zip,
+        'store_slug', store_slug,
+        'city_slug', city_slug,
+        'show_comments_on_menu', show_comments_on_menu,
+        'ratings_count', ratings_count,
+        'average_rating', average_rating,
+        'super_store_plan_type', super_store_plan_type
+    )
+    INTO v_result
+    FROM public.user_profiles
+    WHERE city_slug = p_city_slug 
+      AND store_slug = p_store_slug
+      AND role = 'store_partner'
+    LIMIT 1;
+
+    RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.public_get_store_by_slug(text, text) TO anon, authenticated, service_role;
+

@@ -6,7 +6,7 @@ import { Button } from './Button';
 interface OpeningHoursModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (formattedHours: string) => void;
+    onConfirm: (formattedHours: string, structured?: any) => void;
     initialValue?: string;
 }
 
@@ -162,7 +162,39 @@ export const OpeningHoursModal: React.FC<OpeningHoursModalProps> = ({
         }
 
         const result = `${formattedDays} ${startTime} às ${endTime}`;
-        onConfirm(result);
+
+        // Generate Structured Data for Cron Job
+        const dayMap: Record<string, string> = {
+            'seg': 'segunda',
+            'ter': 'terca',
+            'qua': 'quarta',
+            'qui': 'quinta',
+            'sex': 'sexta',
+            'sab': 'sabado',
+            'dom': 'domingo'
+        };
+
+        const structured: any = {};
+
+        // Initialize all days as disabled
+        Object.values(dayMap).forEach(day => {
+            structured[day] = { enabled: false, times: [] };
+        });
+
+        // Enable selected days
+        selectedDays.forEach(dayId => {
+            const dbKey = dayMap[dayId];
+            if (dbKey) {
+                structured[dbKey] = {
+                    enabled: true,
+                    times: [{ start: startTime, end: endTime }]
+                };
+            }
+        });
+
+        // @ts-ignore - Ignore TS error if parent component isn't updated yet
+        // Pass both formatted string and structured object
+        onConfirm(result, structured);
         onClose();
     };
 
@@ -170,6 +202,7 @@ export const OpeningHoursModal: React.FC<OpeningHoursModalProps> = ({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                 {/* Header */}
+
                 <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
                     <div className="flex items-center gap-2">
                         <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-xl text-brand-600 dark:text-brand-400">
@@ -232,7 +265,7 @@ export const OpeningHoursModal: React.FC<OpeningHoursModalProps> = ({
                         </Button>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };

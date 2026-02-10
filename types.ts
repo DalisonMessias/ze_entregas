@@ -714,6 +714,7 @@ export interface PartnerProfile {
     // Contact & Address
     contact_email?: string;
     opening_hours?: string;
+    opening_hours_structured?: any; // JSON Object for automation
     address_zip?: string;
     address_street?: string;
     address_number?: string;
@@ -735,6 +736,7 @@ export interface PartnerProfile {
     store_category_id?: string;
     store_name?: string;
     is_open?: boolean;
+    manual_override?: boolean;
     preparation_time?: number;
     preparation_time_min?: number;
     preparation_time_max?: number;

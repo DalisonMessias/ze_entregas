@@ -153,16 +153,25 @@ export const isWithinOpeningHours = (openingHours: string, now: Date = new Date(
 
 export const getStoreOpenState = ({
     openingHours,
-    isOpen,
-    isCurrentlyOpen,
+    manualStatus,
+    manualOverride,
     now = new Date()
-}: StoreHoursInput): StoreHoursState => {
-    const manualFlag = isCurrentlyOpen ?? isOpen;
-    const isManualOpen = manualFlag !== false;
+}: {
+    openingHours?: string | null;
+    manualStatus?: boolean | null;
+    manualOverride?: boolean | null;
+    now?: Date;
+}): StoreHoursState => {
+    const isManualInput = manualStatus ?? false;
     const isAutoOpen = openingHours ? isWithinOpeningHours(openingHours, now) : true;
+
+    // If override is active, strictly follow manual status.
+    // Otherwise, use additive logic (Auto OR Manual extension).
+    const finalOpen = manualOverride ? isManualInput : (isManualInput || isAutoOpen);
+
     return {
-        isManualOpen,
+        isManualOpen: isManualInput,
         isAutoOpen,
-        isOpen: isManualOpen && isAutoOpen
+        isOpen: finalOpen
     };
 };

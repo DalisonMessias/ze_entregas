@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, ChevronUp, DollarSign, FileText, History, Lock, Package, Store } from 'lucide-react';
+import { Calendar, ChevronUp, DollarSign, FileText, History, Lock, Package, Store, Clock } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { supabase } from '../services/cloud';
 import { Button } from './Button';
@@ -16,10 +16,11 @@ export const StoreStatus: React.FC = () => {
   const dialog = useDialog();
 
   const [profile, setProfile] = useState<PartnerProfile | null>(null);
-  // Manual flag (used by getStoreOpenState and for the action button).
-  const [isOpen, setIsOpen] = useState(false);
+  // This state now reflects the manual toggle's intention.
+  const [isManuallyOpen, setIsManuallyOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [now, setNow] = useState(new Date());
 
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<StoreDailyReport[]>([]);
@@ -34,7 +35,8 @@ export const StoreStatus: React.FC = () => {
       const p = await cloud.getMyPartnerProfile();
       if (p) {
         setProfile(p);
-        setIsOpen(p.is_currently_open ?? p.is_open ?? false);
+        // Initialize manual state from the database
+        setIsManuallyOpen(p.is_open ?? false);
       }
     } finally {
       setInitialLoading(false);
@@ -43,6 +45,15 @@ export const StoreStatus: React.FC = () => {
 
   useEffect(() => {
     loadProfile();
+  }, []);
+
+  // Timer to update the current time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 60000); // Runs every minute
+
+    return () => clearInterval(timer);
   }, []);
 
   const fetchHistory = async () => {
@@ -89,8 +100,10 @@ export const StoreStatus: React.FC = () => {
       return;
     }
 
+    const currentEffectiveState = openState?.isOpen ?? false;
+
     // If closing, confirm and generate a report.
-    if (isOpen) {
+    if (currentEffectiveState) {
       const confirmed = await dialog.confirm({
         title: 'Encerrar Expediente',
         message: 'Deseja realmente encerrar o expediente? Um relatório diário será gerado.',
@@ -102,25 +115,36 @@ export const StoreStatus: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const newState = !isOpen;
-
+      const newManualState = !isManuallyOpen;
+      // When toggling, we enforce the new state AND set manual_override to TRUE
+      // to prevent the cron job from reverting it immediately if within schedule.
       const { error: profileError } = await supabase
         .from('user_profiles')
-        .update({ is_open: newState, is_currently_open: newState })
+        .update({
+          is_open: newManualState,
+          manual_override: true
+        })
         .eq('id', profile.id);
 
       if (profileError) throw profileError;
 
-      if (!newState) {
+      // We manually calc effective state, but now we know manual override is ON.
+      // So the effective state IS the manual state.
+      const newEffectiveState = newManualState;
+
+      // Only generate report if the shop is effectively closing
+      if (!newEffectiveState) {
         await generateDailyReport();
-        showSuccess('Loja encerrada e relatório gerado com sucesso!');
+        showSuccess('Loja encerrada manualmente. A automação foi pausada.');
       } else {
-        showSuccess('Loja aberta com sucesso!');
+        showSuccess('Loja aberta manualmente. A automação foi pausada.');
       }
 
-      setIsOpen(newState);
-      setProfile(prev => (prev ? { ...prev, is_open: newState, is_currently_open: newState } : null));
-    } catch {
+      setIsManuallyOpen(newManualState);
+      setProfile(prev => (prev ? { ...prev, is_open: newManualState, manual_override: true } : null));
+
+    } catch (e) {
+      console.error(e)
       showError('Erro ao alterar status. Tente novamente.');
     } finally {
       setIsLoading(false);
@@ -129,20 +153,28 @@ export const StoreStatus: React.FC = () => {
 
   const openState = useMemo(() => {
     if (!profile) return null;
+    // The component's `isManuallyOpen` is the source of truth for the manual toggle
     return getStoreOpenState({
       openingHours: profile.opening_hours,
-      isOpen: profile.is_open,
-      isCurrentlyOpen: isOpen
+      manualStatus: isManuallyOpen,
+      manualOverride: profile.manual_override,
+      now,
     });
-  }, [profile, isOpen]);
+  }, [profile, isManuallyOpen, now]);
 
   const statusTitle = openState?.isOpen ? 'Loja Aberta' : 'Loja Fechada';
   const statusBadge = openState?.isOpen ? 'ABERTA' : 'FECHADA';
 
   const statusDescription = useMemo(() => {
     if (!openState) return '';
-    if (openState.isOpen) return 'Sua loja está visível para clientes.';
-    if (openState.isManualOpen && !openState.isAutoOpen) return 'Fora do horário automático.';
+    if (openState.isOpen) {
+      if (openState.isManualOpen && !openState.isAutoOpen) return 'Aberta manualmente fora do horário.';
+      return 'Sua loja está visível para clientes.';
+    }
+    // if closed
+    if (!openState.isManualOpen && !openState.isAutoOpen) return 'Fechada (automático e manual).';
+    if (!openState.isManualOpen) return 'Fechada (seguindo horário automático).';
+    // This case should not happen with the new logic, but as a fallback:
     return 'Loja fechada manualmente.';
   }, [openState]);
 
@@ -190,11 +222,10 @@ export const StoreStatus: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
           <div className="flex items-start gap-4">
             <div
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
-                openState.isOpen
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-900/40'
-                  : 'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/40'
-              }`}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${openState.isOpen
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-900/40'
+                : 'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/40'
+                }`}
             >
               {openState.isOpen ? <Store className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
             </div>
@@ -202,21 +233,19 @@ export const StoreStatus: React.FC = () => {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <span
-                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
-                    openState.isOpen
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                      : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                  }`}
+                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${openState.isOpen
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                    }`}
                 >
                   {statusBadge}
                 </span>
 
                 <span
-                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
-                    openState.isAutoOpen
-                      ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200'
-                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                  }`}
+                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${openState.isAutoOpen
+                    ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200'
+                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                    }`}
                 >
                   {openState.isAutoOpen ? 'DENTRO DO HORÁRIO' : 'FORA DO HORÁRIO'}
                 </span>
@@ -239,10 +268,10 @@ export const StoreStatus: React.FC = () => {
             <Button
               onClick={handleToggleStore}
               loading={isLoading}
-              variant={isOpen ? 'danger' : 'success'}
+              variant={openState.isOpen ? 'danger' : 'success'}
               className="w-full sm:w-auto min-w-[200px]"
             >
-              {isOpen ? 'Fechar Loja' : 'Abrir Loja'}
+              {openState.isOpen ? 'Fechar Loja' : 'Abrir Loja'}
             </Button>
 
             <Button
@@ -262,6 +291,57 @@ export const StoreStatus: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {/* Resume Automation Button */}
+        {profile?.manual_override && (
+          <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 dark:bg-amber-800 rounded-full text-amber-700 dark:text-amber-300">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-amber-800 dark:text-amber-200 text-sm">Controle Manual Ativo</h3>
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  A automação está pausada. A loja permanecerá {openState.isOpen ? 'aberta' : 'fechada'} até que você retome o horário automático.
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={async () => {
+                setIsLoading(true);
+                try {
+                  const { error } = await supabase.from('user_profiles').update({ manual_override: false }).eq('id', profile.id);
+                  if (error) throw error;
+
+                  // Recalculate state based on schedule immediately
+                  const newState = getStoreOpenState({
+                    openingHours: profile.opening_hours,
+                    manualStatus: null, // Resetting manual overrides means we rely on schedule
+                    manualOverride: false,
+                    now: new Date()
+                  });
+
+                  await loadProfile(); // Reload to get fresh state including is_open updated by trigger? 
+                  // Actually trigger might not run immediately on update of manual_override?
+                  // The automation usually runs every minute. 
+                  // We should probably just reload.
+
+                  showSuccess('Horário automático retomado!');
+                } catch (e) {
+                  showError('Erro ao retomar automação.');
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              variant="ghost"
+              size="sm"
+              className="whitespace-nowrap text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-800"
+            >
+              Retomar Automático
+            </Button>
+          </div>
+        )}
+
       </div>
 
       {showHistory && (
@@ -322,4 +402,3 @@ export const StoreStatus: React.FC = () => {
     </div>
   );
 };
-

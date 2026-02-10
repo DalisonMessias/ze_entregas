@@ -190,12 +190,31 @@ export const StoreReceivingPayment: React.FC = () => {
                         <Switch
                             checked={orderConfig.receive_orders_via_platform}
                             onChange={() => {
+                                const newValue = !orderConfig.receive_orders_via_platform;
+
                                 setOrderConfig(prev => ({
                                     ...prev,
-                                    receive_orders_via_platform: !prev.receive_orders_via_platform,
-                                    // Se ativar plataforma, desativa WhatsApp
-                                    receive_orders_via_chat: !prev.receive_orders_via_platform ? false : prev.receive_orders_via_chat
+                                    receive_orders_via_platform: newValue,
+                                    receive_orders_via_chat: newValue ? false : prev.receive_orders_via_chat
                                 }));
+
+                                if (newValue) {
+                                    // Ativa Plataforma:
+                                    // 1. Desativa PIX Manual
+                                    setPixConfig(curr => ({ ...curr, enabled: false }));
+                                    // 2. Ativa Pagamentos Online e Mercado Pago
+                                    setOnlinePaymentConfig(curr => ({ ...curr, enabled: true, accept_mercadopago: true }));
+                                } else {
+                                    // Desativa Plataforma:
+                                    setOnlinePaymentConfig(curr => ({
+                                        ...curr,
+                                        enabled: false,
+                                        accept_mercadopago: false,
+                                        accept_infinitepay: false
+                                    }));
+                                    // Desativa PIX manual também (opcional do usuário)
+                                    setPixConfig(curr => ({ ...curr, enabled: false }));
+                                }
                             }}
                         />
                     </div>
@@ -215,12 +234,24 @@ export const StoreReceivingPayment: React.FC = () => {
                         <Switch
                             checked={orderConfig.receive_orders_via_chat}
                             onChange={() => {
+                                const newValue = !orderConfig.receive_orders_via_chat;
+
                                 setOrderConfig(prev => ({
                                     ...prev,
-                                    receive_orders_via_chat: !prev.receive_orders_via_chat,
-                                    // Se ativar WhatsApp, desativa plataforma
-                                    receive_orders_via_platform: !prev.receive_orders_via_chat ? false : prev.receive_orders_via_platform
+                                    receive_orders_via_chat: newValue,
+                                    receive_orders_via_platform: newValue ? false : prev.receive_orders_via_platform
                                 }));
+
+                                if (newValue) {
+                                    // Ativa WhatsApp:
+                                    setOnlinePaymentConfig(curr => ({
+                                        ...curr,
+                                        enabled: false,
+                                        accept_mercadopago: false,
+                                        accept_infinitepay: false
+                                    }));
+                                    setPixConfig(curr => ({ ...curr, enabled: false }));
+                                }
                             }}
                         />
                     </div>
@@ -303,16 +334,33 @@ export const StoreReceivingPayment: React.FC = () => {
                     <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
                         <QrCode className="w-5 h-5 text-teal-600" /> Pagamento via PIX (Copia e Cola)
                     </h3>
-                    <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 px-4 py-2 rounded-full border border-gray-100 dark:border-gray-700">
+                    <div className={`flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 px-4 py-2 rounded-full border border-gray-100 dark:border-gray-700 ${orderConfig.receive_orders_via_platform ? 'opacity-50 cursor-not-allowed' : ''}`}>
                         <span className={`text-xs font-bold ${pixConfig.enabled ? 'text-green-600' : 'text-gray-400'}`}>
                             {pixConfig.enabled ? 'ATIVO' : 'INATIVO'}
                         </span>
                         <Switch
                             checked={pixConfig.enabled}
-                            onChange={() => setPixConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
+                            onChange={() => {
+                                if (orderConfig.receive_orders_via_platform) return;
+                                setPixConfig(prev => ({ ...prev, enabled: !prev.enabled }));
+                            }}
+                            disabled={orderConfig.receive_orders_via_platform}
                         />
                     </div>
                 </div>
+
+                {orderConfig.receive_orders_via_platform && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm font-bold text-blue-800 dark:text-blue-300">Modo Plataforma Ativo</p>
+                            <p className="text-xs text-blue-700 dark:text-blue-400 mt-1 leading-relaxed">
+                                O PIX Manual (Copia e Cola) é desativado automaticamente quando você usa o recebimento via Plataforma.
+                                Utilize os <strong>Pagamentos Online</strong> para oferecer PIX automático integrado.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-4">

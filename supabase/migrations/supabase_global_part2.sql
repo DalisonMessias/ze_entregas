@@ -4258,30 +4258,55 @@ BEGIN
 END $$;
 
 -- 2. Função RPC: Buscar Loja por Slug (Versão Definitiva)
+DROP FUNCTION IF EXISTS public.public_get_store_by_slug(text, text);
 CREATE OR REPLACE FUNCTION public.public_get_store_by_slug(p_city_slug text, p_store_slug text)
-RETURNS json
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    v_store record;
+    v_result JSONB;
 BEGIN
-    SELECT 
-        id, name, store_name, store_logo_url, cover_url, is_open, is_currently_open,
-        phone_number, chat_number, description, pix_key,
-        opening_hours, preparation_time_min, preparation_time_max, preparation_time,
-        store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,
-        receive_orders_via_chat, receive_orders_via_platform,
-        city, store_address_state AS state, store_address_zip,
-        store_slug, city_slug
-    INTO v_store
-    FROM user_profiles
+    SELECT jsonb_build_object(
+        'id', id,
+        'name', name,
+        'store_name', store_name,
+        'store_logo_url', store_logo_url,
+        'cover_url', cover_url,
+        'is_open', is_open,
+        'is_currently_open', is_currently_open,
+        'phone_number', phone_number,
+        'chat_number', chat_number,
+        'description', description,
+        'pix_key', pix_key,
+        'opening_hours', opening_hours,
+        'preparation_time_min', preparation_time_min,
+        'preparation_time_max', preparation_time_max,
+        'store_address_street', store_address_street,
+        'store_address_number', store_address_number,
+        'store_address_district', store_address_district,
+        'store_address_city', store_address_city,
+        'store_address_state', store_address_state,
+        'receive_orders_via_chat', receive_orders_via_chat,
+        'receive_orders_via_platform', receive_orders_via_platform,
+        'city', city,
+        'state', store_address_state,
+        'store_address_zip', store_address_zip,
+        'store_slug', store_slug,
+        'city_slug', city_slug,
+        'show_comments_on_menu', show_comments_on_menu,
+        'ratings_count', ratings_count,
+        'average_rating', average_rating,
+        'super_store_plan_type', super_store_plan_type
+    )
+    INTO v_result
+    FROM public.user_profiles
     WHERE city_slug = p_city_slug 
       AND store_slug = p_store_slug
       AND role = 'store_partner'
     LIMIT 1;
 
-    RETURN row_to_json(v_store);
+    RETURN v_result;
 END;
 $$;
 
@@ -12979,30 +13004,55 @@ BEGIN
 END $$;
 
 -- 2. Função RPC: Buscar Loja por Slug (Versão Definitiva)
+DROP FUNCTION IF EXISTS public.public_get_store_by_slug(text, text);
 CREATE OR REPLACE FUNCTION public.public_get_store_by_slug(p_city_slug text, p_store_slug text)
-RETURNS json
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    v_store record;
+    v_result JSONB;
 BEGIN
-    SELECT 
-        id, name, store_name, store_logo_url, cover_url, is_open, is_currently_open,
-        phone_number, chat_number, description, pix_key,
-        opening_hours, preparation_time_min, preparation_time_max, preparation_time,
-        store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,
-        receive_orders_via_chat, receive_orders_via_platform,
-        city, store_address_state AS state, store_address_zip,
-        store_slug, city_slug
-    INTO v_store
-    FROM user_profiles
+    SELECT jsonb_build_object(
+        'id', id,
+        'name', name,
+        'store_name', store_name,
+        'store_logo_url', store_logo_url,
+        'cover_url', cover_url,
+        'is_open', is_open,
+        'is_currently_open', is_currently_open,
+        'phone_number', phone_number,
+        'chat_number', chat_number,
+        'description', description,
+        'pix_key', pix_key,
+        'opening_hours', opening_hours,
+        'preparation_time_min', preparation_time_min,
+        'preparation_time_max', preparation_time_max,
+        'store_address_street', store_address_street,
+        'store_address_number', store_address_number,
+        'store_address_district', store_address_district,
+        'store_address_city', store_address_city,
+        'store_address_state', store_address_state,
+        'receive_orders_via_chat', receive_orders_via_chat,
+        'receive_orders_via_platform', receive_orders_via_platform,
+        'city', city,
+        'state', store_address_state,
+        'store_address_zip', store_address_zip,
+        'store_slug', store_slug,
+        'city_slug', city_slug,
+        'show_comments_on_menu', show_comments_on_menu,
+        'ratings_count', ratings_count,
+        'average_rating', average_rating,
+        'super_store_plan_type', super_store_plan_type
+    )
+    INTO v_result
+    FROM public.user_profiles
     WHERE city_slug = p_city_slug 
       AND store_slug = p_store_slug
       AND role = 'store_partner'
     LIMIT 1;
 
-    RETURN row_to_json(v_store);
+    RETURN v_result;
 END;
 $$;
 
@@ -15240,29 +15290,55 @@ BEGIN
 END $$;
 
 -- RPC Segura para buscar loja por slug (Acesso Público Controlado) - CRÍTICO PARA O CHAT DO VISITANTE
+DROP FUNCTION IF EXISTS public_get_store_by_slug(text, text);
 CREATE OR REPLACE FUNCTION public_get_store_by_slug(p_city_slug text, p_store_slug text)
-RETURNS json
+RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY DEFINER -- Permite executar como owner, ignorando RLS da tabela user_profiles para quem chama
+SECURITY DEFINER
 AS $$
 DECLARE
-    v_store record;
+    v_result JSONB;
 BEGIN
-    SELECT 
-        id, store_name, store_logo_url, cover_url, is_open, 
-        phone_number, whatsapp_number, description,
-        store_address_street, store_address_number, store_address_district, store_address_city, store_address_state,
-        receive_orders_via_whatsapp, receive_orders_via_platform,
-        city, state, store_address_zip,
-        payment_methods, delivery_settings, store_slug, city_slug
-    INTO v_store
-    FROM user_profiles
+    SELECT jsonb_build_object(
+        'id', id,
+        'name', name,
+        'store_name', store_name,
+        'store_logo_url', store_logo_url,
+        'cover_url', cover_url,
+        'is_open', is_open,
+        'is_currently_open', is_currently_open,
+        'phone_number', phone_number,
+        'chat_number', chat_number,
+        'description', description,
+        'pix_key', pix_key,
+        'opening_hours', opening_hours,
+        'preparation_time_min', preparation_time_min,
+        'preparation_time_max', preparation_time_max,
+        'store_address_street', store_address_street,
+        'store_address_number', store_address_number,
+        'store_address_district', store_address_district,
+        'store_address_city', store_address_city,
+        'store_address_state', store_address_state,
+        'receive_orders_via_chat', receive_orders_via_chat,
+        'receive_orders_via_platform', receive_orders_via_platform,
+        'city', city,
+        'state', store_address_state,
+        'store_address_zip', store_address_zip,
+        'store_slug', store_slug,
+        'city_slug', city_slug,
+        'show_comments_on_menu', show_comments_on_menu,
+        'ratings_count', ratings_count,
+        'average_rating', average_rating,
+        'super_store_plan_type', super_store_plan_type
+    )
+    INTO v_result
+    FROM public.user_profiles
     WHERE city_slug = p_city_slug 
       AND store_slug = p_store_slug
       AND role = 'store_partner'
     LIMIT 1;
 
-    RETURN row_to_json(v_store);
+    RETURN v_result;
 END;
 $$;
 
@@ -16404,4 +16480,118 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.redeem_loyalty_points(UUID, INTEGER, NUMERIC) TO authenticated;
+
+-- ==================================================================
+-- 20.x AUTOMAÇÃO DE STATUS DA LOJA (CRON JOB) - (2026-02-09)
+-- ==================================================================
+
+-- Adicionar coluna de controle manual (manual_override) em user_profiles se não existir
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS manual_override BOOLEAN DEFAULT FALSE;
+
+-- Adicionar coluna para dados estruturados de horário (JSONB) para automação
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS opening_hours_structured JSONB DEFAULT '{}'::jsonb;
+
+-- Documentação da coluna
+COMMENT ON COLUMN public.user_profiles.manual_override IS 'Se verdadeiro, o status da loja (is_open) não será alterado automaticamente pelo cron job.';
+COMMENT ON COLUMN public.user_profiles.opening_hours_structured IS 'Estrutura JSON para automação de horários: { "segunda": { "enabled": true, "times": [{"start": "08:00", "end": "18:00"}] } }';
+
+-- Habilitar a extensão pg_cron se ainda não estiver habilitada
+-- Habilitar a extensão pg_cron de forma segura
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+        CREATE EXTENSION pg_cron;
+    END IF;
+END $$;
+
+-- Garantir permissões (apenas se não der erro)
+DO $$
+BEGIN
+    GRANT USAGE ON SCHEMA cron TO postgres;
+    GRANT ALL ON ALL TABLES IN SCHEMA cron TO postgres;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Não foi possível conceder permissões ao schema cron (provavelmente já definidas ou restritas).';
+END $$;
+
+-- Função para atualizar o status de abertura da loja com base no horário
+CREATE OR REPLACE FUNCTION public.update_shop_status_based_on_schedule()
+RETURNS void AS $$
+DECLARE
+    store_record RECORD;
+    day_index INT;
+    day_of_week_pt TEXT;
+    opening_hours_today JSONB;
+    time_range JSONB;
+    is_currently_open BOOLEAN;
+    current_time_local TIME;
+BEGIN
+    -- Pega o dia da semana como um número (0 = Domingo, 1 = Segunda, ..., 6 = Sábado)
+    day_index := EXTRACT(DOW FROM NOW() AT TIME ZONE 'America/Sao_Paulo');
+    day_of_week_pt := CASE day_index
+        WHEN 0 THEN 'domingo'
+        WHEN 1 THEN 'segunda'
+        WHEN 2 THEN 'terca'
+        WHEN 3 THEN 'quarta'
+        WHEN 4 THEN 'quinta'
+        WHEN 5 THEN 'sexta'
+        WHEN 6 THEN 'sabado'
+    END;
+
+    -- Pega a hora atual no fuso horário da loja
+    current_time_local := (NOW() AT TIME ZONE 'America/Sao_Paulo')::TIME;
+
+    -- Itera sobre todas as lojas que não estão em modo manual
+    FOR store_record IN
+        SELECT
+            id AS store_id,
+            opening_hours_structured,
+            is_open AS current_status
+        FROM public.user_profiles
+        WHERE role = 'store_partner'
+          AND manual_override = FALSE
+    LOOP
+        is_currently_open := FALSE;
+        -- Use structured data column
+        opening_hours_today := store_record.opening_hours_structured -> day_of_week_pt;
+
+        -- Verifica se há horários definidos para o dia de hoje e se está habilitado
+        IF opening_hours_today IS NOT NULL AND (opening_hours_today ->> 'enabled')::BOOLEAN = TRUE AND jsonb_typeof(opening_hours_today -> 'times') = 'array' AND jsonb_array_length(opening_hours_today -> 'times') > 0 THEN
+            -- Itera sobre os intervalos de tempo para o dia
+            FOR time_range IN SELECT * FROM jsonb_array_elements(opening_hours_today -> 'times')
+            LOOP
+                -- Verifica se a hora atual está dentro do intervalo
+                IF current_time_local >= (time_range ->> 'start')::TIME AND current_time_local < (time_range ->> 'end')::TIME THEN
+                    is_currently_open := TRUE;
+                    EXIT; -- Sai do loop de horários se encontrar um que corresponda
+                END IF;
+            END LOOP;
+        END IF;
+
+        -- Atualiza o status na tabela user_profiles APENAS se ele mudou
+        IF store_record.current_status IS DISTINCT FROM is_currently_open THEN
+            UPDATE public.user_profiles
+            SET is_open = is_currently_open
+            WHERE id = store_record.store_id;
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Agendar a função para rodar a cada minuto de forma segura
+DO $$
+BEGIN
+    -- Tenta remover o job apenas se ele existir, para evitar erro na primeira execução
+    PERFORM cron.unschedule('shop-status-update');
+EXCEPTION 
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Job "shop-status-update" não existia, será criado.';
+END;
+$$;
+SELECT cron.schedule('shop-status-update', '* * * * *', 'SELECT public.update_shop_status_based_on_schedule()');
+
+
+-- Garantir permissões de execução
+GRANT EXECUTE ON FUNCTION public.update_shop_status_based_on_schedule() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_shop_status_based_on_schedule() TO service_role;
 

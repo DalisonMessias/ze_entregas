@@ -296,6 +296,44 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         }
     }, [store?.id]);
 
+    // --- REALTIME UPDATES ---
+    useEffect(() => {
+        if (!store?.id) return;
+
+        const client = cloud.getClient();
+        if (!client) return;
+
+        console.log("Subscribing to store updates:", store.id);
+
+        const subscription = client
+            .channel(`store_status_${store.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'user_profiles',
+                    filter: `id=eq.${store.id}`
+                },
+                (payload) => {
+                    console.log("Store update received:", payload);
+                    const newStore = payload.new as PartnerProfile;
+                    if (newStore) {
+                        setStore(prev => {
+                            if (!prev) return null;
+                            return { ...prev, ...newStore };
+                        });
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            console.log("Unsubscribing from store updates");
+            subscription.unsubscribe();
+        };
+    }, [store?.id]);
+
     // --- CART PERSISTENCE ---
     // Restore cart on store load
     useEffect(() => {
@@ -796,40 +834,22 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     };
 
     const isStoreOpen = useMemo(() => {
-        if (!store) return true;
-        // Check Manual Override (is_currently_open)
-        // Se is_currently_open for false, a loja tá fechada manualmente.
-        // Se for true (ou null), respeita o horário.
-        if (store.is_currently_open === false) return false;
+        if (!store) return false;
 
-        // Check Schedule
-        if (!store.opening_hours) return true;
+        // Use the status directly from the database (updated by automation or manual toggle)
+        // casting to any to ensure we access the property if generic types are active
+        const s = store as any;
 
-        try {
-            const now = new Date();
-            const days = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-            const currentDay = days[now.getDay()];
-            const currentTime = now.getHours() * 100 + now.getMinutes();
-
-            const dayConfigs = store.opening_hours.toLowerCase().split(',').map(s => s.trim());
-            const todayConfig = dayConfigs.find(c => c.startsWith(currentDay));
-
-            if (!todayConfig) return true; // Sem config pro dia = Aberto? (Ou fechado? Backend assume aberto se não tem config especifica mas tem string)
-
-            const timeRange = todayConfig.split(':')[1]?.trim();
-            if (!timeRange || timeRange === 'fechado') return false;
-            if (timeRange === '24h') return true;
-
-            const [start, end] = timeRange.split('-').map(t => {
-                const [h, m] = t.trim().split(':').map(Number);
-                return h * 100 + m;
-            });
-
-            return currentTime >= start && currentTime <= end;
-        } catch (e) {
-            console.error("Error parsing opening hours", e);
-            return true;
+        if (typeof s.is_open === 'boolean') {
+            return s.is_open;
         }
+
+        // Fallback for legacy support
+        if (typeof s.is_currently_open === 'boolean') {
+            return s.is_currently_open;
+        }
+
+        return true;
     }, [store]);
 
     // --- COMPUTED DATA ---
@@ -1547,14 +1567,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     {/* PIX: Show if Store has PIX enabled (Auto or Manual) */}
                                     {/* User Request Correction: "independe se ativo ou nao vai motra o pix... se ativo abreo o modal... se noa tivo ainda mostar o botao... e vindo como forma de pagamento sem abrir o modal" */}
 
-                                    <button
-                                        onClick={() => setPaymentMethod('PIX')}
-                                        className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'PIX' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                                    >
-                                        <QrCode className="w-6 h-6" />
-                                        {/* Show (Auto) tag only if it WILL open the modal */}
-                                        <span className="text-xs font-semibold">PIX {(store?.receive_orders_via_platform && store?.config?.pixdata?.enabled) ? '(Auto)' : ''}</span>
-                                    </button>
+                                    {/* PIX: Show if (Platform ON + Online Payments ON) OR (Platform OFF + PIX Manual ON) */}
+                                    {((store?.receive_orders_via_platform && store?.config?.online_payments?.enabled) ||
+                                        (!store?.receive_orders_via_platform && store?.config?.pixdata?.enabled)) && (
+                                            <button
+                                                onClick={() => setPaymentMethod('PIX')}
+                                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'PIX' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                            >
+                                                <QrCode className="w-6 h-6" />
+                                                {/* Show (Auto) tag only if it WILL open the modal */}
+                                                <span className="text-xs font-semibold">PIX {(store?.receive_orders_via_platform && store?.config?.pixdata?.enabled) ? '(Auto)' : ''}</span>
+                                            </button>
+                                        )}
 
                                     {/* CARTÃO E DINHEIRO - Permitido para todos (Comissão é debitada do saldo) */}
                                     <button

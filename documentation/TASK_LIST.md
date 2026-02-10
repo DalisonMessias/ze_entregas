@@ -1,12 +1,16 @@
-# Tarefas - Correção de Erro no Rastreamento
-
-## Problema
-
-- [x] Corrigir erro de renderização no componente `OrderTracking`
-
-## Lista de Tarefas
-
-- [x] Analisar `OrderTracking.tsx` e o mapeamento de itens do pedido
-- [x] Implementar fallbacks robustos para campos de preço (unitário e total)
-- [x] Validar a renderização do total do pedido
-- [x] Atualizar o histórico de alterações (`checklist.txt`)
+# Lista de Tarefas - [x] Corrigir erro de RPC Object em getStoreBySlug
+- [x] Investigar falha na automação de lojas
+- [x] Criar coluna `opening_hours_structured` e corrigir função SQL
+- [x] Atualizar frontend para salvar horários estruturados
+- [x] Corrigir erro de tipagem no `OpeningHoursModal` (props signature)
+- [x] Verificar e validar solução
+- [x] Corrigir status "Loja Fechada" no Menu Digitalintaxe nos triggers/funções.
+- [x] Corrigir lógica de abertura/fechamento: Substituir uso da tabela inexistente `store_operation` pela tabela `user_profiles`.
+- [x] Implementar atualização em tempo real no Menu Digital (`Supabase Realtime`).
+- [x] Adicionar coluna `manual_override` em `user_profiles` para controlar automação.
+- [x] Investigar erro `42P13: cannot change return type of existing function`.
+- [x] Localizar todas as definições de `public_get_store_by_slug` em `supabase_global_part2.sql`.
+- [x] Adicionar `DROP FUNCTION IF EXISTS` antes de cada definição.
+- [x] Corrigir erro `2BP01: dependent privileges exist` na extensão `pg_cron` com blocos `DO`.
+- [x] **Unificar** todas as definições de `public_get_store_by_slug` em `supabase_global_part2.sql` para usar a versão robusta com `jsonb_build_object` e retorno `JSONB`.
+- [x] Registrar alterações no `checklist.txt`.

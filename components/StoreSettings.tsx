@@ -74,7 +74,8 @@ export const StoreSettings: React.FC = () => {
         address_complement: '',
         description: '',
         delivery_status: true,
-        store_category_id: ''
+        store_category_id: '',
+        opening_hours_structured: {} as any
     });
 
     const [citySlug, setCitySlug] = useState('');
@@ -143,7 +144,8 @@ export const StoreSettings: React.FC = () => {
                     address_complement: useStoreAddr ? (p.store_address_complement || '') : (p.address_complement || ''),
                     description: p.description || '',
                     delivery_status: p.is_available ?? true,
-                    store_category_id: p.store_category_id || ''
+                    store_category_id: p.store_category_id || '',
+                    opening_hours_structured: p.opening_hours_structured || {}
                 });
 
                 setCitySlug(p.city_slug || '');
@@ -268,7 +270,8 @@ export const StoreSettings: React.FC = () => {
                 store_address_complement: form.address_complement,
                 description: form.description,
                 is_available: form.delivery_status,
-                store_category_id: form.store_category_id ? String(form.store_category_id) : null
+                store_category_id: form.store_category_id ? String(form.store_category_id) : null,
+                opening_hours_structured: form.opening_hours_structured
             });
             if (error) throw error;
 
@@ -387,7 +390,9 @@ export const StoreSettings: React.FC = () => {
             <OpeningHoursModal
                 isOpen={isHoursModalOpen}
                 onClose={() => setIsHoursModalOpen(false)}
-                onConfirm={(val) => handleChange('opening_hours', val)}
+                onConfirm={(val, structured) => {
+                    setForm(prev => ({ ...prev, opening_hours: val, opening_hours_structured: structured }));
+                }}
                 initialValue={form.opening_hours}
             />
 

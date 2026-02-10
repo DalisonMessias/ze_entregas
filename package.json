@@ -11,7 +11,8 @@
     "dev:api": "tsx watch server/server.ts",
     "build:api": "tsc -p api/tsconfig.json",
     "lint": "eslint -c eslint.config.cjs . --ext .ts,.tsx,.js",
-    "lint:urls": "node scripts/lint-local-urls.cjs"
+    "lint:urls": "node scripts/lint-local-urls.cjs",
+    "supabase:push": "npx supabase db push"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
