@@ -429,6 +429,152 @@ export const adminGetStores = async (signal?: AbortSignal): Promise<ManagedUser[
     return data || [];
 };
 
+export interface AdminOrdersByStoreSummaryItem {
+    store_id: string;
+    store_name: string;
+    orders_count: number;
+    store_logo_url?: string | null;
+    cover_url?: string | null;
+    city?: string | null;
+    state?: string | null;
+    phone_number?: string | null;
+}
+
+export interface AdminStoreOrderItem {
+    id: string;
+    created_at: string;
+    status: string;
+    total_price: number;
+    customer_name?: string | null;
+    payment_method?: string | null;
+    payment_status?: string | null;
+    store_id?: string | null;
+}
+
+export const adminGetOrdersByStoreSummary = async (): Promise<AdminOrdersByStoreSummaryItem[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data: orders, error: ordersError } = await sb
+        .from('orders')
+        .select('store_id')
+        .not('store_id', 'is', null);
+
+    if (ordersError) {
+        console.error('Error fetching orders summary by store:', ordersError);
+        return [];
+    }
+
+    const counts = new Map<string, number>();
+    for (const order of orders || []) {
+        const storeId = order.store_id as string | null;
+        if (!storeId) continue;
+        counts.set(storeId, (counts.get(storeId) || 0) + 1);
+    }
+
+    const storeIds = Array.from(counts.keys());
+    if (storeIds.length === 0) return [];
+
+    const { data: stores, error: storesError } = await sb
+        .from('user_profiles')
+        .select('id, name, store_name, store_logo_url, cover_url, store_address_city, store_address_state, city, phone_number')
+        .in('id', storeIds);
+
+    if (storesError) {
+        console.error('Error fetching stores for orders summary:', storesError);
+    }
+
+    const storeMap = new Map<string, {
+        name?: string | null;
+        store_name?: string | null;
+        store_logo_url?: string | null;
+        cover_url?: string | null;
+        city?: string | null;
+        state?: string | null;
+        phone_number?: string | null;
+    }>();
+    for (const store of stores || []) {
+        const profile = store as any;
+        storeMap.set(store.id, {
+            name: store.name,
+            store_name: profile.store_name,
+            store_logo_url: profile.store_logo_url,
+            cover_url: profile.cover_url,
+            city: profile.store_address_city || profile.city || null,
+            state: profile.store_address_state || null,
+            phone_number: profile.phone_number || null
+        });
+    }
+
+    return storeIds
+        .map((storeId) => {
+            const profile = storeMap.get(storeId);
+            return {
+                store_id: storeId,
+                store_name: profile?.store_name || profile?.name || 'Loja sem nome',
+                orders_count: counts.get(storeId) || 0,
+                store_logo_url: profile?.store_logo_url || null,
+                cover_url: profile?.cover_url || null,
+                city: profile?.city || null,
+                state: profile?.state || null,
+                phone_number: profile?.phone_number || null
+            };
+        })
+        .sort((a, b) => b.orders_count - a.orders_count);
+};
+
+export const adminGetOrdersByStore = async (storeId: string): Promise<AdminStoreOrderItem[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('orders')
+        .select('id, created_at, status, total_price, customer_name, payment_method, payment_status, store_id')
+        .eq('store_id', storeId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching store orders:', error);
+        return [];
+    }
+
+    return (data || []) as AdminStoreOrderItem[];
+};
+
+export const adminEditOrder = async (orderId: string, updates: { status?: string; total_price?: number; payment_method?: string; payment_status?: string }) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Supabase client not initialized');
+
+    const payload: Record<string, any> = {};
+    if (typeof updates.status === 'string' && updates.status.trim()) payload.status = updates.status.trim();
+    if (typeof updates.total_price === 'number' && Number.isFinite(updates.total_price)) payload.total_price = updates.total_price;
+    if (typeof updates.payment_method === 'string' && updates.payment_method.trim()) payload.payment_method = updates.payment_method.trim();
+    if (typeof updates.payment_status === 'string' && updates.payment_status.trim()) payload.payment_status = updates.payment_status.trim();
+
+    if (Object.keys(payload).length === 0) return;
+
+    const { error } = await sb.from('orders').update(payload).eq('id', orderId);
+    if (error) {
+        console.error('Error editing order:', error);
+        throw error;
+    }
+};
+
+export const adminUpdateOrderStatus = async (orderId: string, status: string) => {
+    await adminEditOrder(orderId, { status });
+};
+
+export const adminDeleteOrder = async (orderId: string) => {
+    const sb = getClient();
+    if (!sb) throw new Error('Supabase client not initialized');
+
+    const { error } = await sb.from('orders').delete().eq('id', orderId);
+    if (error) {
+        console.error('Error deleting order:', error);
+        throw error;
+    }
+};
+
 /**
  * Atualiza o status de uma loja e registra o log de alteração.
  */
@@ -7149,6 +7295,53 @@ export const redeemLoyaltyPoints = async (storeId: string, points: number, disco
 };
 
 
+const PUBLIC_CHAT_ATTACHMENT_PREFIX = '__ZE_CHAT_ATTACHMENT__';
+
+const parsePublicChatMessage = (message: any) => {
+    const raw = typeof message?.message === 'string' ? message.message : '';
+    if (!raw.startsWith(PUBLIC_CHAT_ATTACHMENT_PREFIX)) {
+        return message;
+    }
+
+    try {
+        const jsonPart = raw.slice(PUBLIC_CHAT_ATTACHMENT_PREFIX.length);
+        const parsed = JSON.parse(jsonPart);
+        return {
+            ...message,
+            message: String(parsed?.text || ''),
+            attachment: parsed?.attachment || null
+        };
+    } catch {
+        return message;
+    }
+};
+
+const uploadPublicChatAttachment = async (orderId: string, file: File) => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const safeExt = (file.name.split('.').pop() || 'bin').toLowerCase();
+    const safeName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${safeExt}`;
+    const filePath = `public_order_chat/${orderId}/${safeName}`;
+
+    const { error: uploadError } = await sb.storage
+        .from('public-files')
+        .upload(filePath, file, { cacheControl: '3600', upsert: false, contentType: file.type || 'application/octet-stream' });
+
+    if (uploadError) {
+        console.error('Error uploading public chat attachment:', uploadError);
+        return null;
+    }
+
+    const { data } = sb.storage.from('public-files').getPublicUrl(filePath);
+    return {
+        url: data?.publicUrl || '',
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size || 0
+    };
+};
+
 export const getPublicOrderChat = async (orderId: string): Promise<{ chatId: string, messages: any[] } | null> => {
     const sb = getClient();
     if (!sb) return null;
@@ -7161,17 +7354,32 @@ export const getPublicOrderChat = async (orderId: string): Promise<{ chatId: str
 
     // RPC returns 0 or 1 row with chatId and messages array
     if (data && data.length > 0) {
-        return { chatId: data[0].chat_id, messages: data[0].messages || [] };
+        const normalizedMessages = ((data[0].messages || []) as any[]).map(parsePublicChatMessage);
+        return { chatId: data[0].chat_id, messages: normalizedMessages };
     }
     return null;
 };
 
-export const sendPublicMessage = async (orderId: string, message: string): Promise<boolean> => {
+export const sendPublicMessage = async (orderId: string, message: string, attachment?: File): Promise<boolean> => {
     const sb = getClient();
     if (!sb) return false;
 
+    let finalMessage = message;
+
+    if (attachment) {
+        const uploaded = await uploadPublicChatAttachment(orderId, attachment);
+        if (!uploaded?.url) return false;
+
+        const payload = {
+            v: 1,
+            text: message || `Enviou o arquivo: ${attachment.name}`,
+            attachment: uploaded
+        };
+        finalMessage = `${PUBLIC_CHAT_ATTACHMENT_PREFIX}${JSON.stringify(payload)}`;
+    }
+
     // 1. Enviar para o Supabase (Source of Truth do Pedido)
-    const { data, error } = await sb.rpc('send_public_message', { p_order_id: orderId, p_message: message });
+    const { data, error } = await sb.rpc('send_public_message', { p_order_id: orderId, p_message: finalMessage });
     if (error) {
         console.error('Error sending public message:', error);
         return false;
@@ -7192,7 +7400,7 @@ export const sendPublicMessage = async (orderId: string, message: string): Promi
             axios.post(getApiBaseUrl() + '/internal/send', {
                 storeId: order.store_id,
                 visitorId: visitorId,
-                content: message,
+                content: attachment?.name ? `${message || ''}${message ? ' ' : ''}[arquivo: ${attachment.name}]` : message,
                 senderId: visitorId,
                 senderName: order.customer_name || 'Cliente (Rastreio)',
                 isFromVisitor: true,
@@ -7640,7 +7848,7 @@ export const adminDeleteApprovedStreet = async (id: string) => {
 export const getStoreSettings = async (storeId: string): Promise<any> => {
     const sb = getClient();
     if (!sb) return null;
-    const { data, error } = await sb.from('shop_settings').select('*').eq('id', storeId).single();
+    const { data, error } = await sb.from('shop_settings').select('*').eq('id', storeId).maybeSingle();
     if (error) {
         console.error('Error fetching store settings:', error);
         return null;
@@ -8107,6 +8315,95 @@ export const getPlatformPixKey = async (): Promise<string> => {
     } catch (e) {
         console.error('Exception fetching platform pix key:', e);
         return '';
+    }
+};
+
+export const getPublicPixConfig = async (): Promise<{
+    pix_key: string;
+    pix_key_type: string;
+    merchant_name: string;
+    merchant_city: string;
+}> => {
+    const sb = getClient();
+    if (!sb) {
+        return { pix_key: '', pix_key_type: 'EMAIL', merchant_name: 'LOJA', merchant_city: 'CIDADE' };
+    }
+
+    const fallbackFromLegacyRpc = async () => {
+        const legacyKey = await getPlatformPixKey();
+        return {
+            pix_key: legacyKey || '',
+            pix_key_type: 'EMAIL',
+            merchant_name: 'LOJA',
+            merchant_city: 'CIDADE'
+        };
+    };
+
+    const fallbackFromGatewayTable = async () => {
+        try {
+            const { data, error } = await sb
+                .from('payment_gateway_settings')
+                .select('credentials')
+                .eq('gateway_name', 'pix')
+                .limit(1)
+                .maybeSingle();
+
+            if (error || !data?.credentials) return null;
+
+            const credentials = data.credentials || {};
+            return {
+                pix_key: credentials?.pixKey || '',
+                pix_key_type: credentials?.pixKeyType || 'EMAIL',
+                merchant_name: credentials?.merchantName || 'LOJA',
+                merchant_city: credentials?.merchantCity || 'CIDADE'
+            };
+        } catch {
+            return null;
+        }
+    };
+
+    try {
+        const { data, error } = await sb.rpc('get_public_pix_config');
+        if (error) {
+            console.error('Error fetching public pix config:', error);
+            const byTable = await fallbackFromGatewayTable();
+            if (byTable?.pix_key) return byTable;
+            return fallbackFromLegacyRpc();
+        }
+
+        const parsed = {
+            pix_key: data?.pix_key || '',
+            pix_key_type: data?.pix_key_type || 'EMAIL',
+            merchant_name: data?.merchant_name || 'LOJA',
+            merchant_city: data?.merchant_city || 'CIDADE'
+        };
+
+        if (!parsed.pix_key) {
+            const byTable = await fallbackFromGatewayTable();
+            if (byTable?.pix_key) {
+                return {
+                    pix_key: byTable.pix_key,
+                    pix_key_type: byTable.pix_key_type || parsed.pix_key_type,
+                    merchant_name: byTable.merchant_name || parsed.merchant_name,
+                    merchant_city: byTable.merchant_city || parsed.merchant_city
+                };
+            }
+
+            const fallback = await fallbackFromLegacyRpc();
+            return {
+                pix_key: fallback.pix_key || parsed.pix_key,
+                pix_key_type: parsed.pix_key_type,
+                merchant_name: parsed.merchant_name,
+                merchant_city: parsed.merchant_city
+            };
+        }
+
+        return parsed;
+    } catch (e) {
+        console.error('Exception fetching public pix config:', e);
+        const byTable = await fallbackFromGatewayTable();
+        if (byTable?.pix_key) return byTable;
+        return fallbackFromLegacyRpc();
     }
 };
 

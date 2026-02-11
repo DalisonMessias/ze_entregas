@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Phone, Clock, Bike, Store as StoreIcon, MapPin, Search, ShoppingBag, ArrowRight, Loader2, AlertCircle, Trash2, ShoppingCart, Star, QrCode, CreditCard, Banknote, ShieldCheck, Instagram, Facebook, Globe, MessageSquare, ChevronRight, Play, ExternalLink, Calendar, Map, ClipboardList, TrendingUp, DollarSign, Wallet, RefreshCw, X, ChevronUp, Copy, Check, Minus, Plus, ChevronLeft, MessageCircle, Zap, ChefHat, Award, Info } from 'lucide-react';
+import { Phone, Clock, Bike, Store as StoreIcon, MapPin, Search, ShoppingBag, ArrowRight, Loader2, AlertCircle, Trash2, ShoppingCart, Star, QrCode, CreditCard, Banknote, ShieldCheck, Instagram, Facebook, Globe, MessageSquare, ChevronRight, Play, ExternalLink, Calendar, Map, ClipboardList, TrendingUp, DollarSign, Wallet, RefreshCw, X, ChevronUp, Copy, Check, Minus, Plus, ChevronLeft, MessageCircle, Zap, ChefHat, Award, Info, Ticket, CheckCircle2 } from 'lucide-react';
 import * as cloud from '../../services/cloud';
 import { PartnerProfile, StoreProduct, StoreDeliverySettings, StoreNeighborhoodFee, StoreShippingRule, StoreAddonGroup, StoreAddonOption, LoyaltySettings, PaymentGatewayConfig } from '../../types';
 import { ProductAddonSelector } from '../ProductAddonSelector';
@@ -183,6 +183,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [loyaltyDiscountValue, setLoyaltyDiscountValue] = useState<number>(0);
     const [isApplyingLoyalty, setIsApplyingLoyalty] = useState(false);
 
+    // Coupon State
+    const [couponCode, setCouponCode] = useState('');
+    const [couponDiscount, setCouponDiscount] = useState(0);
+    const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+    const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+
+    // Personal Balance State (Hybrid Payment)
+    const [personalBalance, setPersonalBalance] = useState<number>(0);
+    const [usePersonalBalance, setUsePersonalBalance] = useState<boolean>(false);
+    const [walletTransactionId, setWalletTransactionId] = useState<string | null>(null);
+    const [isWalletLoading, setIsWalletLoading] = useState(false);
+
     const { alert, confirm } = useDialog();
 
     useEffect(() => {
@@ -238,6 +250,21 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             try {
                 const gateways = await cloud.getPaymentGateways();
                 setPaymentGateways(gateways || []);
+
+                // Set default payment method based on primary gateway
+                if (gateways && gateways.length > 0) {
+                    const primary = gateways.find(g => g.is_primary && g.is_active);
+                    if (primary) {
+                        if (primary.gateway_name === 'mercadopago' || primary.gateway_name === 'infinitepay') {
+                            // Se o modo plataforma estiver ativo e houver gateway on-line, sugerimos cartão/on-line
+                            if (storeData.receive_orders_via_platform) {
+                                setPaymentMethod('CREDIT_CARD');
+                            }
+                        } else {
+                            setPaymentMethod('PIX');
+                        }
+                    }
+                }
             } catch (gErr) {
                 console.error("Error loading payment gateways:", gErr);
             }
@@ -314,6 +341,22 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     setLoyaltyBalance(balance);
                 } catch (bErr) {
                     console.error("Error loading loyalty balance:", bErr);
+                }
+
+                // Fetch Personal Balance (Hybrid Payment)
+                try {
+                    const sb = cloud.getClient();
+                    if (sb) {
+                        const { data: wallet } = await sb.from('driver_wallets')
+                            .select('balance_decimal')
+                            .eq('driver_id', user.id)
+                            .single();
+                        if (wallet) {
+                            setPersonalBalance(Number(wallet.balance_decimal) || 0);
+                        }
+                    }
+                } catch (wErr) {
+                    console.error("Error loading personal balance:", wErr);
                 }
             }
         };
@@ -538,9 +581,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
         }
 
         return 0; // Fallback
-    }, [deliveryType, deliverySettings, fees, selectedNeighborhoodId]);
+    }, [deliveryType, deliverySettings, fees, selectedNeighborhoodId, cartSubtotal, shippingRules]);
 
-    const cartTotal = Number(cartSubtotal) + Number(deliveryFee) - Number(loyaltyDiscountValue);
+    // Total Bruto antes da divisão híbrida
+    const grossTotal = Number(cartSubtotal) + Number(deliveryFee) - Number(loyaltyDiscountValue) - Number(couponDiscount);
+
+    // Calculo Hibrido
+    const walletAmountToUse = useMemo(() => {
+        if (!usePersonalBalance || !isLoggedIn || personalBalance <= 0) return 0;
+        return Math.min(personalBalance, grossTotal);
+    }, [usePersonalBalance, isLoggedIn, personalBalance, grossTotal]);
+
+    const cartTotal = grossTotal - walletAmountToUse;
 
     const pointsToEarn = useMemo(() => {
         if (!loyaltySettings || !loyaltySettings.is_active) return 0;
@@ -609,6 +661,49 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const handleRemoveLoyalty = () => {
         setPointsRedeemed(0);
         setLoyaltyDiscountValue(0);
+    };
+
+    const handleApplyCoupon = async () => {
+        if (!couponCode.trim()) return;
+        if (!isLoggedIn) {
+            setIsAuthModalOpen(true);
+            return;
+        }
+
+        setIsApplyingCoupon(true);
+        try {
+            const res = await (cloud as any).validateCoupon(
+                store!.id,
+                couponCode.trim(),
+                cartSubtotal,
+                customerPhone
+            );
+
+            if (res.success && res.discount_value !== undefined) {
+                setCouponDiscount(res.discount_value);
+                setAppliedCoupon(couponCode.trim());
+                alert({
+                    title: 'Cupom Aplicado! 🎫',
+                    message: res.message || `Desconto de R$ ${res.discount_value.toFixed(2)} aplicado com sucesso.`
+                });
+            } else {
+                alert({
+                    title: 'Cupom Inválido',
+                    message: res.message || 'Este cupom não pôde ser aplicado.'
+                });
+            }
+        } catch (err) {
+            console.error(err);
+            alert({ title: 'Erro', message: 'Erro ao validar cupom.' });
+        } finally {
+            setIsApplyingCoupon(false);
+        }
+    };
+
+    const handleRemoveCoupon = () => {
+        setCouponDiscount(0);
+        setAppliedCoupon(null);
+        setCouponCode('');
     };
 
     const handleCepChange = async (val: string) => {
@@ -738,7 +833,35 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                 const isPixActive = true; // Se passou da validação acima, consideramos ativo para tentar gerar o modal
 
-                const { success, orderId, error } = await cloud.createPublicOrder(
+                let currentWalletTxId = null;
+
+                // --- HYBRID PAYMENT: RESERVA DE SALDO ---
+                if (walletAmountToUse > 0) {
+                    setIsWalletLoading(true);
+                    try {
+                        const { data: res, error: wErr } = await cloud.getClient().rpc('prepare_wallet_payment', {
+                            p_user_id: (await cloud.getUserWithCache()).user?.id,
+                            p_amount: walletAmountToUse,
+                            p_description: `Pedido na loja ${store?.store_name || 'Ze Entregas'}`
+                        });
+
+                        if (wErr || !res?.success) {
+                            throw new Error(res?.message || 'Erro ao reservar saldo na carteira.');
+                        }
+
+                        currentWalletTxId = res.transaction_id;
+                        setWalletTransactionId(currentWalletTxId);
+                    } catch (e: any) {
+                        alert({ title: 'Erro de Saldo', message: e.message });
+                        setIsSubmitting(false);
+                        setIsWalletLoading(false);
+                        return;
+                    } finally {
+                        setIsWalletLoading(false);
+                    }
+                }
+
+                const { success, orderId, error } = await (cloud.createPublicOrder as any)(
                     store!.id,
                     orderItems,
                     cartTotal,
@@ -750,7 +873,9 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                     isPixActive, // Sempre true se for PIX e tiver chave
                     orderObservation,
                     pointsRedeemed,
-                    loyaltyDiscountValue
+                    loyaltyDiscountValue,
+                    appliedCoupon || '',
+                    couponDiscount
                 );
 
                 if (success && orderId) {
@@ -772,27 +897,27 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                         try {
                             const onlineConfig = store.config.online_payments;
 
-                            // Buscar gateway principal (configurado no admin)
+                            // Buscar gateway principal (configurado no admin da plataforma)
                             const primaryGateway = paymentGateways.find(g => g.is_primary && g.is_active);
 
                             // Determinar qual gateway usar:
-                            // 1. Se há gateway principal configurado no admin E está habilitado na loja, usa ele
-                            // 2. Caso contrário, fallback para a lógica antiga (Mercado Pago > InfinitePay)
                             let gateway: string | null = null;
 
                             if (primaryGateway) {
-                                // Verificar se o gateway principal está habilitado na loja
-                                if (primaryGateway.gateway_name === 'mercadopago' && onlineConfig.accept_mercadopago) {
-                                    gateway = 'mercadopago';
-                                } else if (primaryGateway.gateway_name === 'infinitepay' && onlineConfig.accept_infinitepay) {
-                                    gateway = 'infinitepay';
+                                // Se o gateway principal for MP ou InfinitePay, e a loja aceitar pagamentos on-line da plataforma
+                                if (primaryGateway.gateway_name === 'mercadopago' || primaryGateway.gateway_name === 'infinitepay') {
+                                    gateway = primaryGateway.gateway_name;
                                 }
                             }
 
-                            // Fallback se o gateway principal não estiver ativo na loja
+                            // Fallback legado se não houver um principal definido ou ativo
                             if (!gateway) {
                                 gateway = onlineConfig.accept_mercadopago ? 'mercadopago' : (onlineConfig.accept_infinitepay ? 'infinitepay' : null);
                             }
+
+                            // Se o gateway principal for 'pix' (estático), ele NÃO entra no fluxo de redirecionamento,
+                            // mas o handleCheckout deve saber disso para não tentar criar checkout externo.
+                            const isPixGatewayPrimary = primaryGateway?.gateway_name === 'pix';
 
                             if (gateway) {
                                 if (gateway === 'mercadopago') {
@@ -814,16 +939,24 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         metadata: { orderId }
                                     });
 
-                                    if (checkoutRes.success && checkoutRes.qrCode) {
-                                        await alert({
-                                            title: 'Pagamento Gerado',
-                                            message: 'O código PIX foi gerado com sucesso. Você pode pagar agora na tela de acompanhamento.'
-                                        });
-                                        window.location.href = `/track/${orderId}`;
-                                        return;
-                                    } else {
-                                        throw new Error(checkoutRes.error || 'Erro ao gerar pagamento MP');
+                                    // Lógica de Redirecionamento: Sempre prioriza a URL do Checkout do Gateway se retornar
+                                    if (checkoutRes.success) {
+                                        if (checkoutRes.url) {
+                                            window.location.href = checkoutRes.url;
+                                            return;
+                                        }
+
+                                        // Fallback para rastreamento interno se houver apenas QR Code (fluxo legado ou configuração específica)
+                                        if (checkoutRes.qrCode) {
+                                            await alert({
+                                                title: 'Pagamento Gerado',
+                                                message: 'O pagamento on-line foi gerado com sucesso. Finalize o pagamento agora para que a loja receba seu pedido.'
+                                            });
+                                            window.location.href = `/track/${orderId}`;
+                                            return;
+                                        }
                                     }
+                                    throw new Error(checkoutRes.error || 'Erro ao gerar pagamento MP');
                                 } else if (gateway === 'infinitepay') {
                                     // Fluxo InfinitePay
                                     await alert({
@@ -848,19 +981,22 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         auto_return: 'approved'
                                     });
 
-                                    if (checkoutRes.success && checkoutRes.qrCode) {
-                                        await alert({
-                                            title: 'Pagamento Gerado',
-                                            message: 'O código PIX da InfinitePay foi gerado com sucesso.'
-                                        });
-                                        window.location.href = `/track/${orderId}`;
-                                        return;
-                                    } else if (checkoutRes.success && checkoutRes.url) {
-                                        window.location.href = checkoutRes.url;
-                                        return;
-                                    } else {
-                                        throw new Error(checkoutRes.error || 'Erro ao gerar checkout InfinitePay');
+                                    if (checkoutRes.success) {
+                                        if (checkoutRes.url) {
+                                            window.location.href = checkoutRes.url;
+                                            return;
+                                        }
+
+                                        if (checkoutRes.qrCode) {
+                                            await alert({
+                                                title: 'Pagamento Gerado',
+                                                message: 'O pagamento via InfinitePay foi gerado com sucesso.'
+                                            });
+                                            window.location.href = `/track/${orderId}`;
+                                            return;
+                                        }
                                     }
+                                    throw new Error(checkoutRes.error || 'Erro ao gerar checkout InfinitePay');
                                 }
                             }
                         } catch (e: any) {
@@ -874,10 +1010,18 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                     // FALLBACK: Lógica de PIX (Automático vs Manual) ou redirecionamento padrão
                     if (paymentMethod === 'PIX') {
-                        if (store?.config?.pixdata?.enabled) {
+                        // Se o gateway principal for 'pix' (estático da plataforma) OU se a loja tem seu próprio PIX ativo
+                        // e não redirecionamos para MP/InfinitePay acima.
+                        if (store?.config?.pixdata?.enabled || (paymentGateways.find(g => g.gateway_name === 'pix' && g.is_active)?.is_active)) {
                             setCreatedOrderId(orderId);
                             setIsPixModalOpen(true);
                         } else {
+                            // --- CONFIRMAR SALDO SE FOR PIX MANUAL (Sem Webhook) ---
+                            if (currentWalletTxId) {
+                                await cloud.getClient().rpc('confirm_wallet_payment', { p_transaction_id: currentWalletTxId });
+                                setWalletTransactionId(null);
+                            }
+
                             await alert({
                                 title: 'Pedido Recebido com Sucesso! 🎉',
                                 message: `Seu pedido #${orderId.slice(0, 8).toUpperCase()} foi registrado.\n\nComo o pagamento selecionado foi PIX (Manual), por favor, combine o pagamento diretamente com a loja.\n\nVocê será redirecionado para o rastreamento.`
@@ -885,6 +1029,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             window.location.href = `/track/${orderId}`;
                         }
                     } else {
+                        // --- CONFIRMAR SALDO PARA OUTROS MÉTODOS (Dinheiro/Cartão na entrega etc) ---
+                        if (currentWalletTxId) {
+                            await cloud.getClient().rpc('confirm_wallet_payment', { p_transaction_id: currentWalletTxId });
+                            setWalletTransactionId(null);
+                        }
+
                         await alert({
                             title: 'Pedido Recebido com Sucesso! 🎉',
                             message: `Seu pedido #${orderId.slice(0, 8).toUpperCase()} foi enviado para a loja.\n\nVocê será redirecionado para a tela de rastreamento.`
@@ -897,6 +1047,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
             } catch (err: any) {
                 console.error(err);
+
+                // --- ESTORNO DE SALDO EM CASO DE FALHA NO PEDIDO ---
+                if (walletTransactionId || (walletAmountToUse > 0)) {
+                    const txId = walletTransactionId;
+                    if (txId) {
+                        await cloud.getClient().rpc('cancel_wallet_payment', { p_transaction_id: txId });
+                        setWalletTransactionId(null);
+                    }
+                }
+
                 await alert({ title: 'Erro', message: 'Ocorreu um erro ao processar seu pedido pela plataforma. Tente novamente ou use o WhatsApp.' });
             } finally {
                 setIsSubmitting(false);
@@ -930,6 +1090,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             msg += `\n--------------------------------\n`;
             msg += `*FINANCEIRO:*\n`;
             msg += `Subtotal: R$ ${cartSubtotal.toFixed(2).replace('.', ',')}\n`;
+            if (couponDiscount > 0) {
+                msg += `Cupom (${appliedCoupon}): -R$ ${couponDiscount.toFixed(2).replace('.', ',')}\n`;
+            }
+            if (loyaltyDiscountValue > 0) {
+                msg += `Fidelidade: -R$ ${loyaltyDiscountValue.toFixed(2).replace('.', ',')}\n`;
+            }
 
             if (deliveryType === 'DELIVERY') {
                 const fee = typeof deliveryFee === 'number' ? deliveryFee : 0;
@@ -1150,11 +1316,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             </p>
                         )}
 
-                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                        <div className="mt-6 bg-white/90 dark:bg-gray-900/70 border border-gray-200/70 py-2 px-2 rounded-xl flex flex-wrap items-center justify-center md:justify-start gap-2.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
                             {store.average_rating !== undefined && (
                                 <div
                                     onClick={() => {
-                                        if (store.show_comments_on_menu && store.ratings_count && store.ratings_count > 0) {
+                                        if (store.show_comments_on_menu && (store.ratings_count || 0) > 0) {
                                             setIsReviewsModalOpen(true);
                                         } else {
                                             setIsRatingModalOpen(true);
@@ -1164,7 +1330,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 >
                                     <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                                     <span>{store.average_rating ? store.average_rating.toFixed(1).replace('.', ',') : 'Novo'}</span>
-                                    {store.ratings_count && store.ratings_count > 0 && (
+                                    {(store.ratings_count || 0) > 0 && (
                                         <span className="text-gray-400 font-medium">({store.ratings_count})</span>
                                     )}
                                 </div>
@@ -1205,6 +1371,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                 <StoreIcon className="w-4 h-4 text-gray-500 dark:text-gray-300" /> {products.length} itens
                             </div>
 
+
                             {/* Botão de Avaliação Unificado */}
                             <div
                                 onClick={() => setIsRatingModalOpen(true)}
@@ -1215,7 +1382,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             </div>
 
                             {/* Botão Ver Avaliações - Se habilitado pelo lojista */}
-                            {store.show_comments_on_menu && store.ratings_count && store.ratings_count > 0 && (
+                            {store.show_comments_on_menu && (store.ratings_count || 0) > 0 && (
                                 <div
                                     onClick={() => setIsReviewsModalOpen(true)}
                                     className="flex items-center gap-1.5 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-200 border border-brand-200/60 dark:border-brand-800/60 px-3 py-1.5 rounded-full cursor-pointer hover:bg-brand-100 transition-colors shadow-sm"
@@ -1533,6 +1700,53 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
                             <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
+                            {/* Coupon Section */}
+                            <section className="bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200/70 dark:border-gray-800 shadow-sm space-y-3">
+                                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+                                    <Ticket className="w-3 h-3" /> Cupom de Desconto
+                                </h3>
+                                <div className="flex gap-2">
+                                    <div className="flex-1 relative">
+                                        <input
+                                            type="text"
+                                            value={couponCode}
+                                            onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                                            placeholder="Digite seu cupom"
+                                            disabled={!!appliedCoupon || isApplyingCoupon}
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200/70 dark:border-gray-800 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none uppercase font-bold"
+                                        />
+                                        {appliedCoupon && (
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    {appliedCoupon ? (
+                                        <button
+                                            onClick={handleRemoveCoupon}
+                                            className="px-4 py-2 text-red-500 hover:bg-red-50 rounded-xl text-xs font-bold transition-colors border border-red-100"
+                                        >
+                                            Remover
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={handleApplyCoupon}
+                                            disabled={!couponCode.trim() || isApplyingCoupon}
+                                            className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 disabled:bg-gray-200 disabled:text-gray-400 transition-all shadow-sm"
+                                        >
+                                            {isApplyingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
+                                        </button>
+                                    )}
+                                </div>
+                                {appliedCoupon && (
+                                    <p className="text-[10px] text-green-600 font-bold uppercase tracking-wider animate-in fade-in">
+                                        Desconto de R$ {couponDiscount.toFixed(2).replace('.', ',')} aplicado!
+                                    </p>
+                                )}
+                            </section>
+
+                            <div className="h-px bg-gray-100 dark:bg-gray-800" />
+
                             {/* Identification */}
                             <section className="space-y-4 bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200/70 dark:border-gray-800 shadow-sm">
                                 <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Identificação</h3>
@@ -1707,7 +1921,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
                             {/* Payment Section (Hidden if Online Checkout via Platform is active) */}
-                            {!(store?.receive_orders_via_platform && store?.config?.online_payments?.enabled) ? (
+                            {!store?.receive_orders_via_platform ? (
                                 <section className="space-y-4 bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200/70 dark:border-gray-800 shadow-sm">
                                     <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Pagamento</h3>
 
@@ -1719,7 +1933,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                 className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'PIX' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                             >
                                                 <QrCode className="w-6 h-6" />
-                                                <span className="text-xs font-semibold">PIX {(store?.receive_orders_via_platform && store?.config?.online_payments?.enabled) ? '(Auto)' : ''}</span>
+                                                <span className="text-xs font-semibold">PIX</span>
                                             </button>
                                         )}
 
@@ -1762,13 +1976,108 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                     )}
                                 </section>
                             ) : (
-                                <section className="p-4 bg-brand-50/50 dark:bg-brand-900/10 rounded-2xl border border-brand-100/50 dark:border-brand-900/30">
-                                    <h3 className="text-[11px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-                                        <ShieldCheck className="w-3 h-3" /> Pagamento Seguro Online
-                                    </h3>
-                                    <p className="text-[10px] text-brand-700 dark:text-brand-300 leading-relaxed italic">
-                                        O pagamento será processado de forma segura através da nossa plataforma após clicar em "Finalizar Pedido".
+                                <section className="space-y-4 p-4 bg-brand-50/50 dark:bg-brand-900/10 rounded-2xl border border-brand-100/50 dark:border-brand-900/30">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-[11px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest flex items-center gap-2">
+                                            <ShieldCheck className="w-3 h-3" /> Pagamento On-line
+                                        </h3>
+                                        <div className="px-2 py-0.5 bg-brand-100 dark:bg-brand-900/30 rounded-full">
+                                            <span className="text-[9px] font-black text-brand-700 dark:text-brand-300 uppercase">
+                                                {(() => {
+                                                    const primary = paymentGateways.find(g => g.is_primary && g.is_active);
+                                                    if (primary?.gateway_name === 'mercadopago') return 'Mercado Pago';
+                                                    if (primary?.gateway_name === 'infinitepay') return 'InfinitePay';
+                                                    if (primary?.gateway_name === 'pix') return 'PIX Estático';
+                                                    return 'Seguro';
+                                                })()}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {/* PIX On-line - Sempre disponível se houver qualquer gateway da plataforma ativo */}
+                                        {paymentGateways.some(g => g.is_active) && (
+                                            <button
+                                                onClick={() => setPaymentMethod('PIX')}
+                                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'PIX' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-400 dark:text-gray-500 hover:border-brand-200 hover:bg-white dark:hover:bg-gray-800/50'}`}
+                                            >
+                                                <QrCode className="w-5 h-5" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">PIX On-line</span>
+                                            </button>
+                                        )}
+
+                                        {/* Cartão On-line - Só aparece se o gateway principal NÃO for PIX Estático */}
+                                        {(() => {
+                                            const primary = paymentGateways.find(g => g.is_primary && g.is_active);
+                                            const isAutomated = primary?.gateway_name === 'mercadopago' || primary?.gateway_name === 'infinitepay';
+                                            const canShowCard = store?.config?.online_payments?.enabled || store?.receive_orders_via_platform;
+
+                                            if (!isAutomated || !canShowCard) return null;
+
+                                            return (
+                                                <button
+                                                    onClick={() => setPaymentMethod('CREDIT_CARD')}
+                                                    className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-2 ${paymentMethod === 'CREDIT_CARD' ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200' : 'border-gray-200/70 dark:border-gray-800 text-gray-400 dark:text-gray-500 hover:border-brand-200 hover:bg-white dark:hover:bg-gray-800/50'}`}
+                                                >
+                                                    <CreditCard className="w-5 h-5" />
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider">Cartão On-line</span>
+                                                </button>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    <p className="text-[10px] text-brand-700/70 dark:text-brand-300/70 leading-relaxed italic text-center px-2">
+                                        {paymentMethod === 'PIX'
+                                            ? `O pagamento será processado via PIX ${paymentGateways.find(g => g.is_primary && g.is_active)?.gateway_name === 'pix' ? 'Estático' : 'Automático'}.`
+                                            : `A transação será processada com segurança via ${paymentGateways.find(g => g.is_primary)?.gateway_name === 'mercadopago' ? 'Mercado Pago' : (paymentGateways.find(g => g.is_primary)?.gateway_name === 'infinitepay' ? 'InfinitePay' : 'Gateway Seguro')}.`}
                                     </p>
+                                </section>
+                            )}
+
+
+                            {/* Personal Balance (Wallet) - Hybrid Payment UI */}
+                            {isLoggedIn && personalBalance > 0 && (
+                                <section className="animate-in fade-in slide-in-from-bottom-2">
+                                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <Wallet className="w-3 h-3" /> Carteira Pessoal (ZéBank)
+                                    </h3>
+                                    <div className={`p-4 rounded-2xl border transition-all ${usePersonalBalance ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-900/10' : 'bg-white dark:bg-gray-800 border-gray-200/70 dark:border-gray-700'} shadow-sm`}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${usePersonalBalance ? 'bg-brand-100 text-brand-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}`}>
+                                                    <DollarSign className="w-5 h-5" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Saldo Disponível</p>
+                                                    <p className="text-base font-black text-gray-900 dark:text-white leading-tight">R$ {personalBalance.toFixed(2).replace('.', ',')}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase">{usePersonalBalance ? 'Usando' : 'Usar'}</span>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only peer"
+                                                        checked={usePersonalBalance}
+                                                        onChange={(e) => setUsePersonalBalance(e.target.checked)}
+                                                    />
+                                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        {usePersonalBalance && (
+                                            <div className="mt-3 pt-3 border-t border-brand-100 dark:border-brand-900/30 flex items-center justify-between">
+                                                <p className="text-[10px] text-brand-700 dark:text-brand-300 font-medium">
+                                                    Valor a descontar: <strong>- R$ {walletAmountToUse.toFixed(2).replace('.', ',')}</strong>
+                                                </p>
+                                                {walletAmountToUse < grossTotal && (
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
+                                                        Residual: R$ {cartTotal.toFixed(2).replace('.', ',')}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </section>
                             )}
 
@@ -1878,127 +2187,150 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                 - R$ {loyaltyDiscountValue.toFixed(2).replace('.', ',')} (PONTOS)
                                             </div>
                                         )}
-                                        <span className="font-semibold text-2xl text-gray-900 dark:text-white">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
+                                        {couponDiscount > 0 && (
+                                            <div className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-1 animate-in slide-in-from-right-2">
+                                                - R$ {couponDiscount.toFixed(2).replace('.', ',')} (CUPOM: {appliedCoupon})
+                                            </div>
+                                        )}
+                                        {walletAmountToUse > 0 && (
+                                            <div className="text-[10px] font-bold text-brand-600 uppercase tracking-widest mb-1 animate-in slide-in-from-right-2">
+                                                - R$ {walletAmountToUse.toFixed(2).replace('.', ',')} (CARTEIRA)
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col items-end">
+                                            <span className="font-semibold text-2xl text-gray-900 dark:text-white leading-tight">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
+                                            {walletAmountToUse > 0 && cartTotal > 0 && (
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Valor Restante no {paymentMethod === 'PIX' ? 'PIX' : 'Cartão'}</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <Button
-                                fullWidth
-                                size="lg"
-                                onClick={handleCheckout}
-                                className={`rounded-xl py-4 text-base shadow-sm ${!isStoreOpen || isSubmitting ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
-                                disabled={!isStoreOpen || isSubmitting}
-                            >
-                                {isSubmitting ? (
-                                    <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Enviando...</>
-                                ) : isStoreOpen ? (
-                                    <>
-                                        {store?.receive_orders_via_platform ? 'Enviar Pedido' : 'Enviar no WhatsApp'}
-                                        <ArrowRight className="w-5 h-5 ml-2" />
-                                    </>
-                                ) : (
-                                    <>Loja Fechada</>
-                                )}
-                            </Button>
                         </div>
+
+                        <Button
+                            size="lg"
+                            onClick={handleCheckout}
+                            className={`mb-6 w-[calc(100%-32px)] max-w-[300px] mx-auto block rounded-xl py-4 text-base shadow-sm ${!isStoreOpen || isSubmitting ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                            disabled={!isStoreOpen || isSubmitting}
+                        >
+                            {isSubmitting ? (
+                                <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Enviando...</>
+                            ) : isStoreOpen ? (
+                                <>
+                                    {store?.receive_orders_via_platform ? 'Enviar Pedido' : 'Enviar no WhatsApp'}
+                                    <ArrowRight className="w-5 h-5 ml-2" />
+                                </>
+                            ) : (
+                                <>Loja Fechada</>
+                            )}
+                        </Button>
                     </div>
                 </div>
             )}
 
             {/* Pix Payment Modal */}
-            {isPixModalOpen && createdOrderId && (store?.config?.pixdata || store?.pix_key) && (
-                <PixPaymentModal
-                    isOpen={isPixModalOpen}
-                    onClose={() => {
-                        setIsPixModalOpen(false);
-                        // Redirect to Tracking
-                        window.history.pushState({}, '', `/track/${createdOrderId}`);
-                        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
-                    }}
-                    pixData={{
-                        ...(store?.config?.pixdata || {
-                            enabled: true,
-                            key: store?.pix_key,
-                            key_type: store?.pix_key_type || 'CPF',
-                            bank_name: 'Banco'
-                        }),
-                        name: store?.config?.pixdata?.name || store?.name || store?.store_name || 'LOJA',
-                        city: store?.config?.pixdata?.city || store?.store_address_city || store?.city || 'CIDADE'
-                    }}
-                    amount={checkoutTotal}
-                    orderId={createdOrderId}
-                    storePhone={store.chat_number || store.phone_number}
-                />
-            )}
+            {
+                isPixModalOpen && createdOrderId && (store?.config?.pixdata || store?.pix_key) && (
+                    <PixPaymentModal
+                        isOpen={isPixModalOpen}
+                        onClose={() => {
+                            setIsPixModalOpen(false);
+                            // Redirect to Tracking
+                            window.history.pushState({}, '', `/track/${createdOrderId}`);
+                            window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'order_tracking' } }));
+                        }}
+                        pixData={{
+                            ...(store?.config?.pixdata || {
+                                enabled: true,
+                                key: store?.pix_key,
+                                key_type: store?.pix_key_type || 'CPF',
+                                bank_name: 'Banco'
+                            }),
+                            name: store?.config?.pixdata?.name || store?.name || store?.store_name || 'LOJA',
+                            city: store?.config?.pixdata?.city || store?.store_address_city || store?.city || 'CIDADE'
+                        }}
+                        amount={checkoutTotal}
+                        orderId={createdOrderId}
+                        storePhone={store.chat_number || store.phone_number}
+                    />
+                )
+            }
 
 
             {/* Comments Section */}
-            {store.show_comments_on_menu && (
-                <div className="container mx-auto px-4 py-12 border-t border-gray-200/70 dark:border-gray-800">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Avaliações da Loja</h2>
-                            <p className="text-sm text-gray-500">O que nossos clientes estão dizendo</p>
+            {
+                store.show_comments_on_menu && (
+                    <div className="container mx-auto px-4 py-12 border-t border-gray-200/70 dark:border-gray-800">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Avaliações da Loja</h2>
+                                <p className="text-sm text-gray-500">O que nossos clientes estão dizendo</p>
+                            </div>
+                            <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                                <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                                <span className="text-lg font-bold text-amber-700 dark:text-amber-400">
+                                    {store.average_rating ? store.average_rating.toFixed(1).replace('.', ',') : '0,0'}
+                                </span>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-2xl border border-amber-100 dark:border-amber-900/30">
-                            <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                            <span className="text-lg font-bold text-amber-700 dark:text-amber-400">
-                                {store.average_rating ? store.average_rating.toFixed(1).replace('.', ',') : '0,0'}
-                            </span>
+
+                        <CommentsList storeId={store.id} showComments={store.show_comments_on_menu} />
+                    </div>
+                )
+            }
+            {
+                isRatingModalOpen && store && (
+                    <StoreRatingModal
+                        isOpen={isRatingModalOpen}
+                        onClose={() => setIsRatingModalOpen(false)}
+                        storeId={store.id}
+                        storeName={store.store_name || store.name}
+                        onRatingSuccess={() => loadStoreData()}
+                    />
+                )
+            }
+
+            {
+                isRecentOrdersModalOpen && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsRecentOrdersModalOpen(false)} />
+                        <div className="relative bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden animate-in zoom-in-95">
+                            <div className="p-5 border-b border-gray-200/70 dark:border-gray-800 flex items-center justify-between">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meus Pedidos</h3>
+                                <button onClick={() => setIsRecentOrdersModalOpen(false)} className="p-2 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 transition-colors">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-5 space-y-3 max-h-[400px] overflow-y-auto">
+                                {recentOrders.length === 0 ? (
+                                    <p className="text-center text-gray-500 py-8">Nenhum pedido recente encontrado.</p>
+                                ) : (
+                                    recentOrders.map((id, index) => (
+                                        <button
+                                            key={id}
+                                            onClick={() => {
+                                                // Force full navigation to ensure tracking page loads correctly for visitors
+                                                window.location.assign(`/track/${id}`);
+                                            }}
+                                            className="w-full p-4 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl border border-gray-200/70 dark:border-gray-800 flex items-center justify-between transition-all group"
+                                        >
+                                            <div className="text-left">
+                                                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Pedido</p>
+                                                <p className="font-semibold text-gray-900 dark:text-white">#{id.slice(0, 8).toUpperCase()}</p>
+                                            </div>
+                                            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-800/50">
+                                <p className="text-[10px] text-center text-gray-400 font-medium uppercase tracking-widest">Apenas pedidos feitos via plataforma</p>
+                            </div>
                         </div>
                     </div>
-
-                    <CommentsList storeId={store.id} showComments={store.show_comments_on_menu} />
-                </div>
-            )}
-            {isRatingModalOpen && store && (
-                <StoreRatingModal
-                    isOpen={isRatingModalOpen}
-                    onClose={() => setIsRatingModalOpen(false)}
-                    storeId={store.id}
-                    storeName={store.store_name || store.name}
-                    onRatingSuccess={() => loadStoreData()}
-                />
-            )}
-
-            {isRecentOrdersModalOpen && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsRecentOrdersModalOpen(false)} />
-                    <div className="relative bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden animate-in zoom-in-95">
-                        <div className="p-5 border-b border-gray-200/70 dark:border-gray-800 flex items-center justify-between">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meus Pedidos</h3>
-                            <button onClick={() => setIsRecentOrdersModalOpen(false)} className="p-2 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-5 space-y-3 max-h-[400px] overflow-y-auto">
-                            {recentOrders.length === 0 ? (
-                                <p className="text-center text-gray-500 py-8">Nenhum pedido recente encontrado.</p>
-                            ) : (
-                                recentOrders.map((id, index) => (
-                                    <button
-                                        key={id}
-                                        onClick={() => {
-                                            // Force full navigation to ensure tracking page loads correctly for visitors
-                                            window.location.assign(`/track/${id}`);
-                                        }}
-                                        className="w-full p-4 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl border border-gray-200/70 dark:border-gray-800 flex items-center justify-between transition-all group"
-                                    >
-                                        <div className="text-left">
-                                            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Pedido</p>
-                                            <p className="font-semibold text-gray-900 dark:text-white">#{id.slice(0, 8).toUpperCase()}</p>
-                                        </div>
-                                        <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
-                                    </button>
-                                ))
-                            )}
-                        </div>
-                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50">
-                            <p className="text-[10px] text-center text-gray-400 font-medium uppercase tracking-widest">Apenas pedidos feitos via plataforma</p>
-                        </div>
-                    </div>
-                </div>
-            )}
+                )
+            }
 
             <ShippingRulesModal
                 isOpen={isRulesModalOpen}
@@ -2011,56 +2343,60 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 onClose={() => setIsAuthModalOpen(false)}
             />
 
-            {isAddonModalOpen && selectedProduct && (
-                <ProductAddonSelector
-                    isOpen={isAddonModalOpen}
-                    onClose={() => setIsAddonModalOpen(false)}
-                    product={selectedProduct}
-                    addonGroup={selectedProductAddonGroup}
-                    onConfirm={handleConfirmAddons}
-                    initialAddons={currentEditingCartItemId ? cart.find(i => i.id === currentEditingCartItemId)?.selectedAddons : []}
-                />
-            )}
+            {
+                isAddonModalOpen && selectedProduct && (
+                    <ProductAddonSelector
+                        isOpen={isAddonModalOpen}
+                        onClose={() => setIsAddonModalOpen(false)}
+                        product={selectedProduct}
+                        addonGroup={selectedProductAddonGroup}
+                        onConfirm={handleConfirmAddons}
+                        initialAddons={currentEditingCartItemId ? cart.find(i => i.id === currentEditingCartItemId)?.selectedAddons : []}
+                    />
+                )
+            }
 
             {/* Modal de Avaliações Detalhado */}
-            {isReviewsModalOpen && store && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsReviewsModalOpen(false)} />
-                    <div className="relative bg-white dark:bg-gray-900 w-full max-w-2xl rounded-[28px] border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[85vh]">
-                        <div className="p-6 border-b border-gray-200/70 dark:border-gray-800 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Avaliações da Loja</h3>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <div className="flex items-center gap-1 text-amber-500">
-                                        <Star className="w-4 h-4 fill-current" />
-                                        <span className="font-bold text-sm">{store.average_rating ? store.average_rating.toFixed(1) : '0.0'}</span>
+            {
+                isReviewsModalOpen && store && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsReviewsModalOpen(false)} />
+                        <div className="relative bg-white dark:bg-gray-900 w-full max-w-2xl rounded-[28px] border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[85vh]">
+                            <div className="p-6 border-b border-gray-200/70 dark:border-gray-800 flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Avaliações da Loja</h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex items-center gap-1 text-amber-500">
+                                            <Star className="w-4 h-4 fill-current" />
+                                            <span className="font-bold text-sm">{store.average_rating ? store.average_rating.toFixed(1) : '0.0'}</span>
+                                        </div>
+                                        <span className="text-gray-400 text-xs">•</span>
+                                        <span className="text-gray-500 text-xs font-medium">{store.ratings_count || 0} avaliações</span>
                                     </div>
-                                    <span className="text-gray-400 text-xs">•</span>
-                                    <span className="text-gray-500 text-xs font-medium">{store.ratings_count || 0} avaliações</span>
                                 </div>
+                                <button onClick={() => setIsReviewsModalOpen(false)} className="p-2.5 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 transition-colors">
+                                    <X className="w-5 h-5" />
+                                </button>
                             </div>
-                            <button onClick={() => setIsReviewsModalOpen(false)} className="p-2.5 rounded-full border border-gray-200/70 dark:border-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-6">
-                            <CommentsList storeId={store.id} showComments={store.show_comments_on_menu} />
-                        </div>
-                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200/70 dark:border-gray-800 flex justify-center">
-                            <button
-                                onClick={() => {
-                                    setIsReviewsModalOpen(false);
-                                    setIsRatingModalOpen(true);
-                                }}
-                                className="text-sm font-bold text-brand-600 hover:text-brand-700 transition-colors"
-                            >
-                                Deixar minha avaliação
-                            </button>
+                            <div className="flex-1 overflow-y-auto p-6">
+                                <CommentsList storeId={store.id} showComments={store.show_comments_on_menu} />
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200/70 dark:border-gray-800 flex justify-center">
+                                <button
+                                    onClick={() => {
+                                        setIsReviewsModalOpen(false);
+                                        setIsRatingModalOpen(true);
+                                    }}
+                                    className="text-sm font-bold text-brand-600 hover:text-brand-700 transition-colors"
+                                >
+                                    Deixar minha avaliação
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-        </div>
+        </div >
     );
 };

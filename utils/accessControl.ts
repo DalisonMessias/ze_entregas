@@ -39,7 +39,7 @@ export const allowedTabsByRole: Record<UserRole, Set<ActiveTab>> = {
     'admin_dashboard', 'admin_users', 'admin_lojas', 'admin_validation', 'admin_notifications', 'admin_shop', 'admin_support',
     'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
     'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
-    'admin_platform_news', 'admin_store_finance', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_city_banners', 'admin_tips', 'admin_loan_config',
+    'admin_platform_news', 'admin_store_finance', 'admin_store_orders', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_city_banners', 'admin_tips', 'admin_loan_config',
     'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation', 'zepoint',
     'store_drivers_chat', 'store_plans'
   ]),

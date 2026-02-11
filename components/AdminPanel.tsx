@@ -48,6 +48,7 @@ import { AdminBlacklist } from './AdminBlacklist';
 import { AdminInstitutionalContent } from './AdminInstitutionalContent';
 import { AdminPlatformNews } from './AdminPlatformNews';
 import { AdminStoreFinance } from './AdminStoreFinance';
+import { AdminStoreOrders } from './AdminStoreOrders';
 import { AdminMercadoPagoConfig } from './AdminMercadoPagoConfig';
 import { AdminPixConfig } from './AdminPixConfig';
 import { AdminInfinitePayConfig } from './AdminInfinitePayConfig';
@@ -1204,6 +1205,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'institutional': return <AdminInstitutionalContent />;
             case 'platform_news': return <AdminPlatformNews />;
             case 'store_finance': return <AdminStoreFinance />;
+            case 'store_orders': return <AdminStoreOrders />;
             case 'wallet_control': return <AdminWalletControl />;
             case 'maintenance': return <AdminMaintenance />;
             case 'levels': return <AdminPartnerLevels />;

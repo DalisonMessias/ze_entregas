@@ -111,7 +111,7 @@ const NotFound = React.lazy(() => import('../src/pages/NotFound').then(module =>
 // Hooks
 import { StoreStatus } from './StoreStatus';
 import { useDialog } from '../utils/dialogService';
-import { getTabFromUrl, syncUrlWithTab } from '../utils/routeMap';
+import { getTabFromUrl, getUrlFromTab, syncUrlWithTab } from '../utils/routeMap';
 import { canAccessTabForRole, getRolesForTab } from '../utils/accessControl';
 
 
@@ -410,7 +410,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         store_integrations: 'Integrações',
         store_settings: 'Configurações',
         store_plans: 'Planos',
-        store_receiving_payment: 'Recebimento PIX',
+        store_receiving_payment: 'Configurar PIX',
         store_finance_panel: 'Financeiro',
         zepay_store: 'ZéPay',
         zebank: 'ZéBank',
@@ -1126,7 +1126,13 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'settings': return <SettingsPage onBack={() => navigate(effectiveRole === 'user' ? 'profile' : (isDriver ? 'daily_panel' : 'shop'))} userRole={effectiveRole} />;
                 case 'streets_list': return <StreetsList />;
                 case 'delivery_navigation': return <DeliveryNavigation userRole={effectiveRole} />;
-                case 'not_found': return <NotFound />;
+                case 'not_found':
+                    return (
+                        <NotFound
+                            isAuthenticated={Boolean(isAuthenticated)}
+                            panelPath={getUrlFromTab(defaultTabByRole[effectiveRole] || 'home', effectiveRole)}
+                        />
+                    );
 
                 default: return <div className="p-10 text-center text-gray-500">Etapa não implementada: {activeTab}</div>;
             }
@@ -1223,7 +1229,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 { label: 'ZéPay', tab: 'zepay_store', icon: CreditCard },
                 { label: 'Painel Financeiro', tab: 'store_finance_panel', icon: Landmark },
                 { label: 'Empréstimos', tab: 'store_loans', icon: DollarSign },
-                { label: 'Recebimento PIX', tab: 'store_receiving_payment', icon: Smartphone }
+                { label: 'Configurar PIX', tab: 'store_receiving_payment', icon: Smartphone }
             ]
         },
         {
@@ -1539,9 +1545,18 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const showBottomNav = showStoreBottomNav || showDriverBottomNav;
     const hideMobileMenuButton = isMobileViewport && showBottomNav;
     const isAssistantTab = activeTab === 'assistant';
+    const isNotFoundTab = activeTab === 'not_found';
     const mainContentClass = isAssistantTab
         ? 'h-[calc(100dvh-4rem)] overflow-hidden px-0 pb-0 pt-16'
         : `pt-20 ${activeTab === 'zepoint' ? '' : 'px-4 mx-auto'} ${showBottomNav ? 'pb-24 md:pb-6' : 'pb-6'}`;
+
+    if (isNotFoundTab) return (
+        <div className={theme === 'dark' ? 'dark' : ''}>
+            <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0F172A] text-slate-900 dark:text-slate-100 font-sans selection:bg-brand-500/20 selection:text-brand-700 transition-colors duration-300">
+                {renderContent()}
+            </div>
+        </div>
+    );
 
     if (isPublicTab) return (
         <div className={theme === 'dark' ? 'dark' : ''}>
@@ -1721,6 +1736,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
                                     <MenuButton icon={CreditCard} label="Config. Empréstimos" tab="admin_loan_config" />
                                     <MenuButton icon={DollarSign} label="Financeiro das Lojas" tab="admin_store_finance" />
+                                    <MenuButton icon={ClipboardList} label="Pedidos por Loja" tab="admin_store_orders" />
                                     <MenuButton icon={CreditCard} label="Gateways de Pagamento" tab="admin_payment_gateways" />
                                     <MenuButton icon={Link2} label="Mercado Pago" tab="admin_mercadopago" />
                                     <MenuButton icon={Smartphone} label="Configurar PIX" tab="admin_pix_config" />

@@ -312,6 +312,8 @@ GRANT ALL ON public.partner_ratings TO service_role;
 -- ATUALIZAÇÃO DO RPC DE BUSCA DE LOJA (Incluindo Avaliações)
 -- ==================================================================
 
+DROP FUNCTION IF EXISTS public.public_get_store_by_slug(text, text);
+
 CREATE OR REPLACE FUNCTION public.public_get_store_by_slug(p_city_slug text, p_store_slug text)
 RETURNS json
 LANGUAGE plpgsql
@@ -1223,7 +1225,7 @@ GRANT ALL ON public.platform_commissions TO service_role;
 
 
 -- ==================================================================
--- SISTEMA DE FIDELIDADE (PONTOS) - ADICIONADO 2026-02-09
+-- SISTEMA DE FIDELIDADE E CUPONS (ATUALIZADO 10/02/2026)
 -- ==================================================================
 
 -- 1. Novas colunas na tabela orders
@@ -1238,7 +1240,88 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'loyalty_discount_value') THEN
         ALTER TABLE public.orders ADD COLUMN loyalty_discount_value NUMERIC(10, 2) DEFAULT 0;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'coupon_discount_value') THEN
+        ALTER TABLE public.orders ADD COLUMN coupon_discount_value NUMERIC(10, 2) DEFAULT 0;
+    END IF;
 END $$;
+
+-- 2. RPC: Validar Cupom (Global, Loja ou Indicação)
+CREATE OR REPLACE FUNCTION public.validate_coupon(
+    p_code TEXT,
+    p_store_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_coupon JSONB;
+    v_claimed_reward RECORD;
+    v_shop_settings RECORD;
+    v_store_config JSONB;
+    v_code TEXT := upper(trim(p_code));
+BEGIN
+    -- 1. Verificar em shop_settings (Cupons Globais)
+    SELECT coupons INTO v_shop_settings FROM public.shop_settings WHERE id = '1';
+    
+    IF v_shop_settings.coupons IS NOT NULL THEN
+        FOR v_coupon IN SELECT jsonb_array_elements(v_shop_settings.coupons) LOOP
+            IF upper(v_coupon->>'code') = v_code THEN
+                RETURN jsonb_build_object(
+                    'valid', true,
+                    'type', 'GLOBAL',
+                    'discount_type', CASE WHEN (v_coupon->>'discount_percent')::numeric > 0 THEN 'PERCENT' ELSE 'FIXED' END,
+                    'discount_value', CASE WHEN (v_coupon->>'discount_percent')::numeric > 0 THEN (v_coupon->>'discount_percent')::numeric ELSE (v_coupon->>'discount_value')::numeric END,
+                    'min_order_value', COALESCE((v_coupon->>'min_purchase_value')::numeric, 0)
+                );
+            END IF;
+        END LOOP;
+    END IF;
+
+    -- 2. Verificar em claimed_rewards (Cupons de Indicação/Recompensas)
+    SELECT cr.*, rr.reward_type, rr.reward_value, rr.min_order_value 
+    INTO v_claimed_reward
+    FROM public.claimed_rewards cr
+    JOIN public.referral_rewards rr ON rr.id = cr.reward_id
+    WHERE upper(cr.coupon_code) = v_code 
+      AND cr.status = 'ACTIVE' 
+      AND (cr.expires_at IS NULL OR cr.expires_at > NOW())
+    LIMIT 1;
+
+    IF v_claimed_reward.id IS NOT NULL THEN
+        RETURN jsonb_build_object(
+            'valid', true,
+            'type', 'REWARD',
+            'discount_type', CASE WHEN v_claimed_reward.reward_type = 'CUPOM_PERCENT' THEN 'PERCENT' ELSE 'FIXED' END,
+            'discount_value', v_claimed_reward.reward_value,
+            'min_order_value', COALESCE(v_claimed_reward.min_order_value, 0)
+        );
+    END IF;
+
+    -- 3. Verificar em user_profiles (Cupons da Loja no campo config)
+    SELECT config INTO v_store_config FROM public.user_profiles WHERE id = p_store_id;
+    
+    IF v_store_config ? 'coupons' AND jsonb_typeof(v_store_config->'coupons') = 'array' THEN
+        FOR v_coupon IN SELECT jsonb_array_elements(v_store_config->'coupons') LOOP
+            IF upper(v_coupon->>'code') = v_code THEN
+                RETURN jsonb_build_object(
+                    'valid', true,
+                    'type', 'STORE',
+                    'discount_type', CASE WHEN (v_coupon->>'discount_percent')::numeric > 0 THEN 'PERCENT' ELSE 'FIXED' END,
+                    'discount_value', CASE WHEN (v_coupon->>'discount_percent')::numeric > 0 THEN (v_coupon->>'discount_percent')::numeric ELSE (v_coupon->>'discount_value')::numeric END,
+                    'min_order_value', COALESCE((v_coupon->>'min_purchase_value')::numeric, 0)
+                );
+            END IF;
+        END LOOP;
+    END IF;
+
+    RETURN jsonb_build_object('valid', false, 'message', 'Cupom inválido ou expirado');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.validate_coupon(TEXT, UUID) TO anon, authenticated;
+
+-- 3. Tabela de Configurações de Fidelidade por Loja
 
 -- 2. Tabela de Configurações de Fidelidade por Loja
 CREATE TABLE IF NOT EXISTS public.loyalty_settings (
@@ -1429,7 +1512,78 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.redeem_loyalty_points(UUID, INTEGER, NUMERIC) TO authenticated;
 
--- 10. Atualizar create_public_order para suportar Resgate de Pontos
+-- 10. Função para Validar Cupom (Chamada via RPC/Frontend)
+CREATE OR REPLACE FUNCTION public.validate_coupon(
+    p_store_id UUID,
+    p_coupon_code TEXT,
+    p_cart_total NUMERIC,
+    p_customer_phone TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_coupon_record RECORD;
+    v_store_record RECORD;
+    v_usage_count INTEGER;
+    v_discount_value NUMERIC := 0;
+    v_user_id UUID;
+    v_user_phone TEXT;
+BEGIN
+    v_user_id := auth.uid();
+    
+    -- Se logado, pegar o telefone do perfil
+    IF v_user_id IS NOT NULL THEN
+        SELECT phone_number INTO v_user_phone FROM public.user_profiles WHERE id = v_user_id;
+    ELSE
+        v_user_phone := p_customer_phone;
+    END IF;
+
+    -- 1. Buscar nas configurações da loja (Cupons Globais da Loja)
+    SELECT * INTO v_store_record FROM public.shop_settings WHERE id = p_store_id;
+    
+    -- Localizar cupom no JSONB da loja
+    SELECT * INTO v_coupon_record 
+    FROM jsonb_to_recordset(v_store_record.coupons) AS x(code TEXT, discount_percent NUMERIC, discount_value NUMERIC, is_active BOOLEAN, min_purchase NUMERIC)
+    WHERE x.code = UPPER(p_coupon_code) AND (x.is_active IS NULL OR x.is_active = TRUE);
+
+    IF v_coupon_record.code IS NOT NULL THEN
+        -- Validar valor mínimo
+        IF p_cart_total < COALESCE(v_coupon_record.min_purchase, 0) THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Valor mínimo para este cupom é R$ ' || v_coupon_record.min_purchase);
+        END IF;
+
+        IF v_coupon_record.discount_percent > 0 THEN
+            v_discount_value := (p_cart_total * v_coupon_record.discount_percent) / 100;
+        ELSE
+            v_discount_value := v_coupon_record.discount_value;
+        END IF;
+
+        RETURN jsonb_build_object('success', true, 'discount_value', LEAST(v_discount_value, p_cart_total), 'message', 'Cupom aplicado!');
+    END IF;
+
+    -- 2. Buscar nos Recompensas de Indicação (Cupons de Usuário)
+    -- Se o cupom for um código de indicação que virou recompensa (Claimed Rewards)
+    SELECT * INTO v_coupon_record 
+    FROM public.claimed_rewards 
+    WHERE coupon_code = UPPER(p_coupon_code) AND status = 'AVAILABLE' AND (user_id = v_user_id OR v_user_id IS NULL);
+
+    IF v_coupon_record.id IS NOT NULL THEN
+        v_discount_value := v_coupon_record.reward_value;
+        RETURN jsonb_build_object('success', true, 'discount_value', LEAST(v_discount_value, p_cart_total), 'message', 'Cupom de indicação aplicado!');
+    END IF;
+
+    RETURN jsonb_build_object('success', false, 'message', 'Cupom inválido ou expirado.');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.validate_coupon(UUID, TEXT, NUMERIC, TEXT) TO anon, authenticated;
+
+-- 11. Atualizar create_public_order para suportar Resgate de Pontos e Cupons
+DROP FUNCTION IF EXISTS public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC);
+DROP FUNCTION IF EXISTS public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC);
+
 CREATE OR REPLACE FUNCTION public.create_public_order(
     p_store_id UUID,
     p_items JSONB,
@@ -1444,7 +1598,9 @@ CREATE OR REPLACE FUNCTION public.create_public_order(
     p_is_location_delivery BOOLEAN DEFAULT FALSE,
     p_shipping_cost NUMERIC DEFAULT 0,
     p_points_redeemed INTEGER DEFAULT 0,
-    p_loyalty_discount_value NUMERIC DEFAULT 0
+    p_loyalty_discount_value NUMERIC DEFAULT 0,
+    p_coupon_code TEXT DEFAULT NULL,
+    p_coupon_discount_value NUMERIC DEFAULT 0
 )
 RETURNS UUID
 AS $$
@@ -1477,6 +1633,8 @@ BEGIN
         shipping_cost,
         points_redeemed,
         loyalty_discount_value,
+        coupon_code,
+        coupon_discount_value,
         origin
     )
     VALUES (
@@ -1495,6 +1653,8 @@ BEGIN
         p_shipping_cost,
         p_points_redeemed,
         p_loyalty_discount_value,
+        upper(trim(p_coupon_code)),
+        p_coupon_discount_value,
         'DIGITAL_MENU'
     )
     RETURNING id INTO v_order_id;
@@ -1511,11 +1671,20 @@ BEGIN
         WHERE store_id = p_store_id AND user_id = auth.uid();
     END IF;
 
+    -- MARCAR CUPOM COMO USADO (Se for de indicação/recompensa)
+    IF p_coupon_code IS NOT NULL THEN
+        UPDATE public.claimed_rewards 
+        SET status = 'USED' 
+        WHERE upper(coupon_code) = upper(trim(p_coupon_code)) 
+          AND user_id = auth.uid()
+          AND status = 'ACTIVE';
+    END IF;
+
     RETURN v_order_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC) TO anon, authenticated;
 
 -- ==================================================================
 -- CORREÇÃO getStoreBySlug (2026-02-09)

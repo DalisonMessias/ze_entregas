@@ -1,21 +1,38 @@
 import React from 'react';
-import { AlertTriangle, ArrowLeft, Home, LifeBuoy, MapPin, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Home, LayoutDashboard, LifeBuoy, MapPin, Search } from 'lucide-react';
 import { Logo } from '../../components/Logo';
 
-export const NotFound: React.FC = () => {
+interface NotFoundProps {
+    isAuthenticated?: boolean;
+    panelPath?: string | null;
+}
+
+export const NotFound: React.FC<NotFoundProps> = ({ isAuthenticated = false, panelPath = null }) => {
     const goHome = () => {
         window.location.href = '/';
+    };
+
+    const goPanel = () => {
+        window.location.href = panelPath || '/';
     };
 
     const goSupport = () => {
         window.location.href = '/suporte';
     };
 
+    const goPrimary = () => {
+        if (isAuthenticated) {
+            goPanel();
+            return;
+        }
+        goHome();
+    };
+
     const goBack = () => {
         if (window.history.length > 1) {
             window.history.back();
         } else {
-            goHome();
+            goPrimary();
         }
     };
 
@@ -29,13 +46,23 @@ export const NotFound: React.FC = () => {
 
             <div className="relative z-10 max-w-5xl mx-auto px-6 py-12">
                 <header className="flex items-center justify-between bg-brand-600 text-white rounded-2xl px-6 py-4 shadow-sm">
-                    <button onClick={goHome} className="flex items-center gap-3">
-                        <Logo className="h-10 w-auto" mode="icon" variant="full-white" />
-                        <div className="text-left">
-                            <p className="text-xs uppercase tracking-widest text-white/80 font-black">Pagina perdida</p>
-                            <p className="text-sm font-black text-white">Ze Entregas</p>
-                        </div>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={goBack}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-sm font-black text-white hover:bg-brand-700 transition-colors"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Voltar
+                        </button>
+                        <button onClick={goHome} className="flex items-center gap-3">
+                            <Logo className="h-10 w-auto" mode="icon" variant="full-white" />
+                            <div className="text-left">
+                                <p className="text-xs uppercase tracking-widest text-white/80 font-black">Pagina perdida</p>
+                                <p className="text-sm font-black text-white">Ze Entregas</p>
+                            </div>
+                        </button>
+                        
+                    </div>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={goSupport}
@@ -45,11 +72,11 @@ export const NotFound: React.FC = () => {
                             Suporte
                         </button>
                         <button
-                            onClick={goHome}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-white text-sm font-black hover:bg-brand-700 transition-colors"
+                            onClick={goPrimary}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-sm font-black text-white hover:bg-brand-700 transition-colors"
                         >
-                            <Home className="w-4 h-4" />
-                            Home
+                            {isAuthenticated ? <LayoutDashboard className="w-4 h-4" /> : <Home className="w-4 h-4" />}
+                            {isAuthenticated ? 'Ir para meu painel' : 'Ir para a home'}
                         </button>
                     </div>
                 </header>
@@ -68,22 +95,6 @@ export const NotFound: React.FC = () => {
                             ao caminho certo.
                         </p>
 
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <button
-                                onClick={goBack}
-                                className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-black text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95"
-                            >
-                                <ArrowLeft className="w-5 h-5" />
-                                Voltar
-                            </button>
-                            <button
-                                onClick={goHome}
-                                className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-black text-white bg-brand-600 hover:bg-brand-700 shadow-lg shadow-brand-600/20 transition-all active:scale-95"
-                            >
-                                <Home className="w-5 h-5" />
-                                Ir para a home
-                            </button>
-                        </div>
                     </div>
 
                     <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[32px] p-6 md:p-8 shadow-sm space-y-4">
@@ -99,9 +110,10 @@ export const NotFound: React.FC = () => {
 
                         <div className="space-y-3">
                             {[
-                                { label: 'Encontrar lojas', action: goHome },
-                                { label: 'Abrir suporte', action: goSupport },
-                                { label: 'Buscar pedidos', action: goHome }
+                                { label: isAuthenticated ? 'Meu painel' : 'Home', action: goPrimary },
+                                { label: 'Suporte', action: goSupport },
+                                { label: 'FAQ', action: () => window.location.href = '/faq' },
+                                { label: 'Meus pedidos', action: () => window.location.href = '/meus-pedidos' }
                             ].map((item) => (
                                 <button
                                     key={item.label}

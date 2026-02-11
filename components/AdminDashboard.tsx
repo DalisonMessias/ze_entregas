@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { BarChart3, TrendingUp, Users, DollarSign, Download, Store, Bike, Activity, Loader2, ArrowUpRight, ArrowDownRight, Layout, Construction, Award, Star, ShieldOff, Link2, Globe, Newspaper, Banknote, Bot, MapPin, Zap, CreditCard, FileCheck, Wallet, Megaphone, Headphones, ShieldAlert, Smartphone, Key, Package, LayoutGrid, Scale } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, DollarSign, Download, Store, Bike, Activity, Loader2, ArrowUpRight, ArrowDownRight, Layout, Construction, Award, Star, ShieldOff, Link2, Globe, Newspaper, Banknote, Bot, MapPin, Zap, CreditCard, FileCheck, Wallet, Megaphone, Headphones, ShieldAlert, Smartphone, Key, Package, LayoutGrid, Scale, ClipboardList } from 'lucide-react';
 import { Button } from './Button';
 import { DataErrorDisplay } from './DataErrorDisplay';
 import * as cloud from '../services/cloud';
@@ -391,6 +391,13 @@ export const AdminDashboard = () => {
                             <Banknote className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Financeiro Loja</span>
+                    </Button>
+
+                    <Button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 'admin_store_orders' } }))} variant="outline" className="flex-col gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                        <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full text-amber-600 dark:text-amber-400">
+                            <ClipboardList className="w-5 h-5" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 text-center">Pedidos por Loja</span>
                     </Button>
 
 

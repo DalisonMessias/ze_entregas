@@ -129,6 +129,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.credit_store_wallet(UUID, NUMERIC, TEXT, NUMERIC, NUMERIC) TO authenticated, service_role;
 
 -- 5. Correção de Store Slug (Reaplicação)
+DROP FUNCTION IF EXISTS public.public_get_store_by_slug(text, text);
 CREATE OR REPLACE FUNCTION public.public_get_store_by_slug(p_city_slug text, p_store_slug text)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -346,3 +347,402 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.cancel_public_order(UUID) TO anon, authenticated, service_role;
+
+-- 7. PIX da Plataforma (publico para /track)
+CREATE OR REPLACE FUNCTION public.get_public_pix_config()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_credentials JSONB;
+BEGIN
+    SELECT credentials
+    INTO v_credentials
+    FROM public.payment_gateway_settings
+    WHERE gateway_name = 'pix'
+    LIMIT 1;
+
+    RETURN jsonb_build_object(
+        'pix_key', COALESCE(v_credentials ->> 'pixKey', ''),
+        'pix_key_type', COALESCE(v_credentials ->> 'pixKeyType', 'EMAIL'),
+        'merchant_name', COALESCE(v_credentials ->> 'merchantName', 'LOJA'),
+        'merchant_city', COALESCE(v_credentials ->> 'merchantCity', 'CIDADE')
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_public_pix_config() TO anon, authenticated, service_role;
+
+-- 8. Atualização do Trigger handle_new_user (Carteira para TODOS os usuários)
+-- Recriando a função para garantir que usuários com role='user' também tenham carteira pessoal (driver_wallets)
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.user_profiles (id, email, name, avatar_url, role, phone_number, cpf, city, store_name, store_document, address_street, address_number, address_district, address_zip, address_state, association_code)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    NEW.raw_user_meta_data->>'name',
+    NEW.raw_user_meta_data->>'avatar_url',
+    COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person')::public.user_role,
+    NEW.raw_user_meta_data->>'phone_number',
+    NEW.raw_user_meta_data->>'cpf',
+    NEW.raw_user_meta_data->>'city',
+    NEW.raw_user_meta_data->>'store_name',
+    NEW.raw_user_meta_data->>'store_document',
+    NEW.raw_user_meta_data->>'address_street',
+    NEW.raw_user_meta_data->>'address_number',
+    NEW.raw_user_meta_data->>'address_district',
+    NEW.raw_user_meta_data->>'address_zip',
+    NEW.raw_user_meta_data->>'address_state',
+    upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6))
+  );
+
+  -- Logística de Carteiras (Zebank vs ZéPay)
+  -- 1. Carteira Pessoal (Zebank) - Agora para TODOS os usuários (Clientes, Entregadores e Lojistas)
+  INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal)
+  VALUES (NEW.id, 0, 0)
+  ON CONFLICT (driver_id) DO NOTHING;
+
+  -- 2. Carteira de Vendas (ZéPay) - Apenas para Lojistas (Preservado)
+  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('store_partner') THEN
+      INSERT INTO public.store_wallets (store_id, balance_decimal)
+      VALUES (NEW.id, 0)
+      ON CONFLICT (store_id) DO NOTHING;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 9. Migração para Usuários Existentes Sem Carteira
+DO $$
+BEGIN
+    INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal)
+    SELECT id, 0, 0 
+    FROM public.user_profiles
+    ON CONFLICT (driver_id) DO NOTHING;
+END $$;
+
+-- 10. RPC: Preparar Pagamento em Carteira (Reserva de Saldo)
+CREATE OR REPLACE FUNCTION public.prepare_wallet_payment(
+    p_user_id UUID,
+    p_amount NUMERIC,
+    p_description TEXT DEFAULT 'Reserva de saldo para pedido'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_balance NUMERIC;
+    v_transaction_id UUID;
+BEGIN
+    -- Obter saldo atual
+    SELECT balance_decimal INTO v_balance
+    FROM public.driver_wallets
+    WHERE driver_id = p_user_id
+    FOR UPDATE;
+
+    IF v_balance IS NULL THEN
+        -- Criar carteira caso não exista (fallback)
+        INSERT INTO public.driver_wallets (driver_id, balance_decimal)
+        VALUES (p_user_id, 0)
+        RETURNING balance_decimal INTO v_balance;
+    END IF;
+
+    -- Validar saldo
+    IF v_balance < p_amount THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'code', 'INSUFFICIENT_BALANCE',
+            'message', 'Saldo insuficiente na carteira pessoal.',
+            'current_balance', v_balance
+        );
+    END IF;
+
+    -- Registrar Transação de Reserva (PENDENTE)
+    -- Importante: Usamos store_id na tabela wallet_transactions para usuários (consistência com a view)
+    INSERT INTO public.wallet_transactions (
+        store_id,
+        amount,
+        type,
+        status,
+        description,
+        metadata
+    ) VALUES (
+        p_user_id,
+        p_amount,
+        'DEBIT',
+        'PENDING',
+        p_description,
+        jsonb_build_object('is_reservation', true)
+    ) RETURNING id INTO v_transaction_id;
+
+    -- Dedução temporária do saldo (Reserva)
+    UPDATE public.driver_wallets
+    SET balance_decimal = balance_decimal - p_amount,
+        updated_at = NOW()
+    WHERE driver_id = p_user_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'transaction_id', v_transaction_id,
+        'reserved_amount', p_amount,
+        'remaining_balance', v_balance - p_amount
+    );
+END;
+$$;
+
+-- 11. RPC: Confirmar Pagamento em Carteira
+CREATE OR REPLACE FUNCTION public.confirm_wallet_payment(
+    p_transaction_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- Apenas marcar como COMPLETED. O saldo já foi deduzido no prepare.
+    UPDATE public.wallet_transactions
+    SET status = 'COMPLETED',
+        updated_at = NOW()
+    WHERE id = p_transaction_id AND status = 'PENDING';
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Transação não encontrada ou já processada.');
+    END IF;
+
+    RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+-- 12. RPC: Cancelar Pagamento em Carteira (Estorno de Reserva)
+CREATE OR REPLACE FUNCTION public.cancel_wallet_payment(
+    p_transaction_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_amount NUMERIC;
+    v_user_id UUID;
+    v_status TEXT;
+BEGIN
+    SELECT store_id, amount, status INTO v_user_id, v_amount, v_status
+    FROM public.wallet_transactions
+    WHERE id = p_transaction_id
+    FOR UPDATE;
+
+    IF v_status <> 'PENDING' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Transação não está pendente ou já foi processada.');
+    END IF;
+
+    -- Devolver saldo
+    UPDATE public.driver_wallets
+    SET balance_decimal = balance_decimal + v_amount,
+        updated_at = NOW()
+    WHERE driver_id = v_user_id;
+
+    -- Marcar como CANCELLED
+    UPDATE public.wallet_transactions
+    SET status = 'CANCELLED',
+        updated_at = NOW()
+    WHERE id = p_transaction_id;
+
+    RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.prepare_wallet_payment(UUID, NUMERIC, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.confirm_wallet_payment(UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.cancel_wallet_payment(UUID) TO authenticated, service_role;
+
+-- ==================================================================
+-- SISTEMA DE CUPONS E DESCONTOS (10/02/2026)
+-- ==================================================================
+
+-- 1. Adicionar colunas de cupom na tabela orders
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS coupon_discount_value NUMERIC(10, 2) DEFAULT 0;
+
+-- 2. RPC: Validar Cupom (Global, Loja ou Indicação)
+CREATE OR REPLACE FUNCTION public.validate_coupon(
+    p_code TEXT,
+    p_store_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_coupon JSONB;
+    v_claimed_reward RECORD;
+    v_shop_settings RECORD;
+    v_store_config JSONB;
+    v_code TEXT := upper(trim(p_code));
+BEGIN
+    -- 1. Verificar em shop_settings (Cupons Globais)
+    SELECT coupons INTO v_shop_settings FROM public.shop_settings WHERE id = '1';
+    
+    IF v_shop_settings.coupons IS NOT NULL THEN
+        FOR v_coupon IN SELECT jsonb_array_elements(v_shop_settings.coupons) LOOP
+            IF upper(v_coupon->>'code') = v_code THEN
+                RETURN jsonb_build_object(
+                    'valid', true,
+                    'type', 'GLOBAL',
+                    'discount_type', CASE WHEN (v_coupon->>'discount_percent')::numeric > 0 THEN 'PERCENT' ELSE 'FIXED' END,
+                    'discount_value', CASE WHEN (v_coupon->>'discount_percent')::numeric > 0 THEN (v_coupon->>'discount_percent')::numeric ELSE (v_coupon->>'discount_value')::numeric END,
+                    'min_order_value', COALESCE((v_coupon->>'min_purchase_value')::numeric, 0)
+                );
+            END IF;
+        END LOOP;
+    END IF;
+
+    -- 2. Verificar em claimed_rewards (Cupons de Indicação/Recompensas)
+    SELECT cr.*, rr.reward_type, rr.reward_value, rr.min_order_value 
+    INTO v_claimed_reward
+    FROM public.claimed_rewards cr
+    JOIN public.referral_rewards rr ON rr.id = cr.reward_id
+    WHERE upper(cr.coupon_code) = v_code 
+      AND cr.status = 'ACTIVE' 
+      AND (cr.expires_at IS NULL OR cr.expires_at > NOW())
+    LIMIT 1;
+
+    IF v_claimed_reward.id IS NOT NULL THEN
+        RETURN jsonb_build_object(
+            'valid', true,
+            'type', 'REWARD',
+            'discount_type', CASE WHEN v_claimed_reward.reward_type = 'CUPOM_PERCENT' THEN 'PERCENT' ELSE 'FIXED' END,
+            'discount_value', v_claimed_reward.reward_value,
+            'min_order_value', COALESCE(v_claimed_reward.min_order_value, 0)
+        );
+    END IF;
+
+    -- 3. Verificar em user_profiles (Cupons da Loja no campo config)
+    SELECT config INTO v_store_config FROM public.user_profiles WHERE id = p_store_id;
+    
+    IF v_store_config ? 'coupons' AND jsonb_typeof(v_store_config->'coupons') = 'array' THEN
+        FOR v_coupon IN SELECT jsonb_array_elements(v_store_config->'coupons') LOOP
+            IF upper(v_coupon->>'code') = v_code THEN
+                RETURN jsonb_build_object(
+                    'valid', true,
+                    'type', 'STORE',
+                    'discount_type', CASE WHEN (v_coupon->>'discount_percent')::numeric > 0 THEN 'PERCENT' ELSE 'FIXED' END,
+                    'discount_value', CASE WHEN (v_coupon->>'discount_percent')::numeric > 0 THEN (v_coupon->>'discount_percent')::numeric ELSE (v_coupon->>'discount_value')::numeric END,
+                    'min_order_value', COALESCE((v_coupon->>'min_purchase_value')::numeric, 0)
+                );
+            END IF;
+        END LOOP;
+    END IF;
+
+    RETURN jsonb_build_object('valid', false, 'message', 'Cupom inválido ou expirado');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.validate_coupon(TEXT, UUID) TO anon, authenticated;
+
+-- 3. Atualizar create_public_order para suportar cupons
+DROP FUNCTION IF EXISTS public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC);
+DROP FUNCTION IF EXISTS public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC);
+
+CREATE OR REPLACE FUNCTION public.create_public_order(
+    p_store_id UUID,
+    p_items JSONB,
+    p_total_price NUMERIC,
+    p_payment_method TEXT,
+    p_shipping_address JSONB,
+    p_delivery_mode TEXT,
+    p_customer_name TEXT,
+    p_customer_phone TEXT,
+    p_pix_active BOOLEAN DEFAULT FALSE,
+    p_observation TEXT DEFAULT NULL,
+    p_is_location_delivery BOOLEAN DEFAULT FALSE,
+    p_shipping_cost NUMERIC DEFAULT 0,
+    p_points_redeemed INTEGER DEFAULT 0,
+    p_loyalty_discount_value NUMERIC DEFAULT 0,
+    p_coupon_code TEXT DEFAULT NULL,
+    p_coupon_discount_value NUMERIC DEFAULT 0
+)
+RETURNS UUID
+AS $$
+DECLARE
+    v_order_id UUID;
+    v_status public.order_status := 'pending';
+BEGIN
+    -- Definir status baseado na ativação do PIX
+    IF p_payment_method = 'PIX' THEN
+        IF p_pix_active THEN
+            v_status := 'Aguardando pagamento (PIX)';
+        ELSE
+            v_status := 'Pagamento a combinar com a loja';
+        END IF;
+    END IF;
+
+    INSERT INTO public.orders (
+        store_id, 
+        user_id, 
+        status, 
+        items, 
+        total_price, 
+        payment_method, 
+        shipping_address, 
+        order_type,
+        customer_name, 
+        customer_phone,
+        observation,
+        is_location_delivery,
+        shipping_cost,
+        points_redeemed,
+        loyalty_discount_value,
+        coupon_code,
+        coupon_discount_value,
+        origin
+    )
+    VALUES (
+        p_store_id, 
+        auth.uid(),
+        v_status, 
+        p_items, 
+        p_total_price, 
+        p_payment_method::public.payment_method, 
+        p_shipping_address, 
+        p_delivery_mode, 
+        p_customer_name, 
+        p_customer_phone,
+        p_observation,
+        p_is_location_delivery,
+        p_shipping_cost,
+        p_points_redeemed,
+        p_loyalty_discount_value,
+        upper(trim(p_coupon_code)),
+        p_coupon_discount_value,
+        'DIGITAL_MENU'
+    )
+    RETURNING id INTO v_order_id;
+
+    -- DEDUZIR PONTOS (Se houver resgate)
+    IF p_points_redeemed > 0 THEN
+        INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
+        VALUES (p_store_id, auth.uid(), v_order_id, -p_points_redeemed, 'DEBIT', 'Uso de pontos no pedido #' || SUBSTRING(v_order_id::text, 1, 8));
+
+        UPDATE public.loyalty_points 
+        SET balance = balance - p_points_redeemed, updated_at = now()
+        WHERE store_id = p_store_id AND user_id = auth.uid();
+    END IF;
+
+    -- MARCAR CUPOM COMO USADO (Se for de indicação/recompensa)
+    IF p_coupon_code IS NOT NULL THEN
+        UPDATE public.claimed_rewards 
+        SET status = 'USED' 
+        WHERE upper(coupon_code) = upper(trim(p_coupon_code)) 
+          AND user_id = auth.uid()
+          AND status = 'ACTIVE';
+    END IF;
+
+    RETURN v_order_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC) TO anon, authenticated;

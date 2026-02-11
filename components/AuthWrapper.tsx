@@ -222,14 +222,14 @@ export const AuthWrapper: React.FC = () => {
     let authSubscriptionUnsubscribe: (() => void) | null = null;
     let fallbackTimeout: NodeJS.Timeout;
 
-    // Safety Timeout: Força o fim do carregamento após 15 segundos se algo travar
+    // Safety Timeout: Força o fim do carregamento após 45 segundos se algo travar (aumentado para evitar desconexões em redes lentas)
     fallbackTimeout = setTimeout(() => {
       if (mounted && isCheckingSession) {
         logger.warn('AUTH_TIMEOUT_FORCED_UNLOCK', { retryCount });
         setIsCheckingSession(false);
         setAuthMessage({ type: 'warning', text: 'O carregamento demorou mais que o esperado.' });
       }
-    }, 15000);
+    }, 45000);
 
     const initializeAuth = async () => {
       if (retryCount >= MAX_RETRIES) {

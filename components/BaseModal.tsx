@@ -10,9 +10,19 @@ interface BaseModalProps {
     icon?: React.ReactNode;
     maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
     disableScroll?: boolean;
+    fullScreenOnMobile?: boolean;
 }
 
-export const BaseModal: React.FC<BaseModalProps> = ({ isOpen, onClose, children, title, icon, maxWidth = 'lg', disableScroll = false }) => {
+export const BaseModal: React.FC<BaseModalProps> = ({
+    isOpen,
+    onClose,
+    children,
+    title,
+    icon,
+    maxWidth = 'lg',
+    disableScroll = false,
+    fullScreenOnMobile = false
+}) => {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -40,9 +50,18 @@ export const BaseModal: React.FC<BaseModalProps> = ({ isOpen, onClose, children,
     };
 
     return createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
+        <div
+            className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center animate-in fade-in ${
+                fullScreenOnMobile ? 'p-0 sm:p-4' : 'p-4'
+            }`}
+            onClick={onClose}
+        >
             <div
-                className={`bg-white dark:bg-gray-800 w-full ${maxWidthClasses[maxWidth]} rounded-2xl shadow-2xl p-6 sm:p-8 animate-in zoom-in-95 relative flex flex-col max-h-[90vh]`}
+                className={`bg-white dark:bg-gray-800 w-full ${maxWidthClasses[maxWidth]} shadow-2xl animate-in zoom-in-95 relative flex flex-col ${
+                    fullScreenOnMobile
+                        ? 'h-screen max-h-screen rounded-none p-4 sm:p-8 sm:h-auto sm:max-h-[90vh] sm:rounded-2xl'
+                        : 'rounded-2xl p-6 sm:p-8 max-h-[90vh]'
+                }`}
                 onClick={e => e.stopPropagation()}
             >
                 <button
