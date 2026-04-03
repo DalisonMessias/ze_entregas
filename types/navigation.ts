@@ -1,4 +1,4 @@
-﻿export type ActiveTab =
+export type ActiveTab =
     | 'admin_dashboard'
     | 'admin_users'
     | 'admin_lojas'
@@ -119,4 +119,6 @@
     | 'zepoint'
     | 'referral_info'
     | 'referral_public'
+    | 'admin_bonuses'
+    | 'driver_bonuses'
     | 'not_found';

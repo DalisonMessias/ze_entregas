@@ -48,6 +48,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/config-navegacao': 'admin_navigation_config',
     '/admin/zepoint': 'zepoint',
     '/admin/cupons': 'admin_global_coupons',
+    '/admin/bonus': 'admin_bonuses',
 
     // Shared / Core Routes
     '/perfil': 'profile',
@@ -141,6 +142,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/entregador/pontuacao': 'score',
     '/entregador/zepoint': 'zepoint',
     '/entregador/navegacao': 'delivery_navigation',
+    '/entregador/bonus': 'driver_bonuses',
 
     // Public/Misc
     '/instalar': 'install_app',

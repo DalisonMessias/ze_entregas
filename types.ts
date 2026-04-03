@@ -1,4 +1,4 @@
-﻿
+
 export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator' | 'user';
 export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found' | 'blocked' | 'suspended' | 'error';
@@ -13,6 +13,35 @@ export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
 export type VehicleType = 'moto' | 'car' | 'bike' | 'other';
 export type DocumentType = 'CNH' | 'CRLV' | 'VEHICLE_PHOTO' | 'ADDRESS_PROOF' | 'SELFIE' | 'PERSONAL_ID';
 export type RatingDirection = 'STORE_TO_PARTNER' | 'PARTNER_TO_STORE';
+
+export interface BonusTier {
+  deliveries: number;
+  reward: number;
+}
+
+export interface BonusCampaign {
+  id: string;
+  title: string;
+  description?: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  target_city?: string;
+  tiers: BonusTier[];
+  created_at?: string;
+}
+
+export interface BonusDriverProgress {
+  id: string;
+  campaign_id: string;
+  driver_id: string;
+  deliveries_count: number;
+  bonus_earned: number;
+  status: string;
+  last_updated: string;
+  campaign?: BonusCampaign;
+}
+
 import { ActiveTab } from './types/navigation';
 export interface ManualWaypoint {
     id: string;
@@ -1032,7 +1061,7 @@ export interface FinancialTransaction {
     created_at: string;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'store_orders' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation';
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'store_orders' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation' | 'bonuses';
 
 export interface AppNotification {
     id: string;

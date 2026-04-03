@@ -746,3 +746,121 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC) TO anon, authenticated;
+
+-- ==================================================================
+-- SISTEMA DE BÔNUS POR PRODUTIVIDADE (03/04/2026)
+-- ==================================================================
+
+-- 1. Tabela de Campanhas de Bônus
+CREATE TABLE IF NOT EXISTS public.bonus_campaigns (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    start_date TIMESTAMPTZ NOT NULL,
+    end_date TIMESTAMPTZ NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    target_city TEXT, -- Alterado de city_id para target_city para compatibilidade
+    tiers JSONB NOT NULL, -- Ex: [{"deliveries": 25, "reward": 30}, {"deliveries": 33, "reward": 50}]
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS para Campanhas
+ALTER TABLE public.bonus_campaigns ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view active campaigns" ON public.bonus_campaigns;
+CREATE POLICY "Public can view active campaigns" ON public.bonus_campaigns FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Admins can manage campaigns" ON public.bonus_campaigns;
+CREATE POLICY "Admins can manage campaigns" ON public.bonus_campaigns FOR ALL USING (public.is_admin());
+
+-- 2. Tabela de Progresso dos Entregadores
+CREATE TABLE IF NOT EXISTS public.bonus_driver_progress (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    campaign_id UUID REFERENCES public.bonus_campaigns(id) ON DELETE CASCADE,
+    driver_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    deliveries_count INTEGER DEFAULT 0,
+    bonus_earned NUMERIC(15, 2) DEFAULT 0,
+    status TEXT DEFAULT 'ACTIVE', -- 'ACTIVE', 'COMPLETED'
+    last_updated TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (campaign_id, driver_id)
+);
+
+-- RLS para Progresso
+ALTER TABLE public.bonus_driver_progress ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Drivers can view own progress" ON public.bonus_driver_progress;
+CREATE POLICY "Drivers can view own progress" ON public.bonus_driver_progress FOR SELECT USING (auth.uid() = driver_id);
+DROP POLICY IF EXISTS "Admins can view all progress" ON public.bonus_driver_progress;
+CREATE POLICY "Admins can view all progress" ON public.bonus_driver_progress FOR SELECT USING (public.is_admin());
+
+-- 3. Função para atualizar progresso de bônus
+CREATE OR REPLACE FUNCTION public.update_driver_bonus_progress()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_campaign RECORD;
+    v_tier JSONB;
+    v_total_bonus NUMERIC(15, 2) := 0;
+    v_current_count INTEGER;
+BEGIN
+    -- Só processa se a entrega foi COMPLETED
+    IF NEW.status = 'COMPLETED' AND (OLD.status IS DISTINCT FROM 'COMPLETED') THEN
+        -- Procurar campanhas ativas que englobem a data da entrega e (opcionalmente) a cidade
+        FOR v_campaign IN 
+            SELECT id, tiers 
+            FROM public.bonus_campaigns 
+            WHERE is_active = true 
+              AND NOW() BETWEEN start_date AND end_date
+        LOOP
+            -- Upsert no progresso do entregador para esta campanha
+            INSERT INTO public.bonus_driver_progress (campaign_id, driver_id, deliveries_count, last_updated)
+            VALUES (v_campaign.id, NEW.partner_id, 1, NOW())
+            ON CONFLICT (campaign_id, driver_id) 
+            DO UPDATE SET 
+                deliveries_count = public.bonus_driver_progress.deliveries_count + 1,
+                last_updated = NOW()
+            RETURNING deliveries_count INTO v_current_count;
+
+            -- Calcular bônus acumulado baseado nos tiers
+            -- Nota: O bônus é cumulativo baseado em atingir as metas
+            FOR v_tier IN SELECT * FROM jsonb_array_elements(v_campaign.tiers) LOOP
+                IF v_current_count >= (v_tier->>'deliveries')::integer THEN
+                    v_total_bonus := v_total_bonus + (v_tier->>'reward')::numeric;
+                END IF;
+            END LOOP;
+
+            -- Atualizar o valor do bônus ganho
+            UPDATE public.bonus_driver_progress 
+            SET bonus_earned = v_total_bonus
+            WHERE campaign_id = v_campaign.id AND driver_id = NEW.partner_id;
+        END LOOP;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. Trigger na tabela partner_requests
+DROP TRIGGER IF EXISTS tr_update_bonus_progress ON public.partner_requests;
+CREATE TRIGGER tr_update_bonus_progress
+AFTER UPDATE ON public.partner_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.update_driver_bonus_progress();
+
+-- 5. RPC para Admin listar progresso consolidado
+CREATE OR REPLACE FUNCTION public.get_admin_bonus_stats(p_campaign_id UUID)
+RETURNS TABLE (
+    driver_name TEXT,
+    deliveries_count INTEGER,
+    bonus_earned NUMERIC,
+    last_updated TIMESTAMPTZ
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        up.name as driver_name,
+        bdp.deliveries_count,
+        bdp.bonus_earned,
+        bdp.last_updated
+    FROM public.bonus_driver_progress bdp
+    JOIN public.user_profiles up ON up.id = bdp.driver_id
+    WHERE bdp.campaign_id = p_campaign_id
+    ORDER BY bdp.deliveries_count DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
