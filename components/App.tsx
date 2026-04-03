@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award } from 'lucide-react';
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
@@ -1411,7 +1411,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             items: [
                 { label: 'Lojas Vinculadas', tab: 'associate_driver', icon: Store },
                 { label: 'Divulgação', tab: 'driver_marketing', icon: Megaphone },
-                { label: 'Indique e Ganhe', tab: 'referral_info', icon: Gift },
+                                { label: 'Indique e Ganhe', tab: 'referral_info', icon: Gift },
+                { label: 'Bônus e Metas', tab: 'driver_bonuses', icon: Award },
+
                 { label: 'Histórico Local', tab: 'local_history', icon: History },
                 { label: 'ZéPoint (POS)', tab: 'zepoint', icon: Smartphone }
             ]
@@ -1715,7 +1717,9 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
                                     <MenuButton icon={Package} label="Catálogo Base" tab="admin_base_catalog" />
                                     <MenuButton icon={ImageIcon} label="Galeria de Imagens" tab="admin_image_gallery" />
-                                    <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
+                                                                        <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
+                                    <MenuButton icon={Award} label="Gestão de Bônus" tab="admin_bonuses" />
+
 
                                     <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                                     <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />

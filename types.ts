@@ -1061,7 +1061,7 @@ export interface FinancialTransaction {
     created_at: string;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'store_orders' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation' | 'bonuses';
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'store_orders' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation' | 'bonuses' | 'store_ratings';
 
 export interface AppNotification {
     id: string;
