@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, Navigation, CheckCircle, DollarSign, ToggleLeft, ToggleRight, Wallet, AlertTriangle, History, MapPin, Store, Copy, Play, Pause, Square, Clock, MessageCircle, Map, Gift, UserX, UserCheck, Share2, Sparkles, ChevronRight, Fuel, Calculator, Wrench, Zap, Edit2, Smartphone, Bell, Star, Landmark, User, History as HistoryIcon } from 'lucide-react';
+import { Loader2, Navigation, CheckCircle, DollarSign, ToggleLeft, ToggleRight, Wallet, AlertTriangle, History, MapPin, Store, Copy, Play, Pause, Square, Clock, MessageCircle, Map, Gift, UserX, UserCheck, Share2, Sparkles, ChevronRight, Fuel, Calculator, Wrench, Zap, Edit2, Smartphone, Bell, Star, Landmark, User, History as HistoryIcon, Award, Plus } from 'lucide-react';
 import { Button } from './Button';
 import { BaseModal } from './BaseModal';
 import { CustomInput } from './CustomInput';
@@ -298,30 +298,36 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
     }, [activeDelivery?.status, activeDelivery?.id]);
 
 
-    const handleAccept = async (req: PartnerRequest) => { setProcessingAction(true); try { await cloud.acceptPartnerRequest(req.id); setActiveDelivery({ ...req, status: 'ACCEPTED' }); setRequests(prev => prev.filter(r => r.id !== req.id)); } catch (e: any) { await alert({ title: "Erro ao Aceitar", message: "Erro: " + e.message }); loadRequests(); } finally { setProcessingAction(false); } };
-    const handleConfirmPickup = async () => { if (!activeDelivery) return; setProcessingAction(true); try { await cloud.partnerConfirmPickup(activeDelivery.id); setActiveDelivery(prev => prev ? { ...prev, status: 'IN_TRANSIT' } : null); } catch (e: any) { await alert({ title: "Erro ao Confirmar Coleta", message: "Erro: " + e.message }); } finally { setProcessingAction(false); } };
-    const handleConfirmDelivery = async () => { if (!activeDelivery) return; setProcessingAction(true); try { await cloud.partnerConfirmDelivery(activeDelivery.id, deliveryCodeInput); await alert({ title: "Entrega Concluída", message: "Entrega concluída! Valor creditado." }); setRatingRequest(activeDelivery); setActiveDelivery(null); setDeliveryCodeInput(''); loadRequests(); } catch (e: any) { await alert({ title: "Erro ao Finalizar Entrega", message: "Erro: " + e.message }); } finally { setProcessingAction(false); } };
-    const handleReportFailure = async () => { if (!activeDelivery || !failureReason) return; setProcessingAction(true); try { await cloud.partnerReportDeliveryFailure(activeDelivery.id, failureReason); setActiveDelivery(prev => prev ? { ...prev, status: 'AWAITING_STORE_DECISION', failure_reason: failureReason } : null); setShowFailureModal(false); } catch (e: any) { await alert({ title: "Erro ao Relatar Falha", message: "Erro: " + e.message }); } finally { setProcessingAction(false); } };
-    const handleConfirmReturn = async () => { if (!activeDelivery) return; setProcessingAction(true); try { await cloud.partnerConfirmReturn(activeDelivery.id); await alert({ title: "Devolução Confirmada", message: "Devolução confirmada. Corrida finalizada." }); setActiveDelivery(null); loadRequests(); } catch (e: any) { await alert({ title: "Erro ao Confirmar Devolução", message: "Erro: " + e.message }); } finally { setProcessingAction(false); } };
-    const handleCheckDecision = async () => await alert({ title: "Verificar Decisão", message: "Aguarde a notificação ou verifique novamente em instantes." });
+    const handleAccept = async (req: PartnerRequest) => { setProcessingAction(true); try { await cloud.acceptPartnerRequest(req.id); setActiveDelivery({ ...req, status: 'ACCEPTED' }); setRequests(prev => prev.filter(r => r.id !== req.id)); } catch (e: any) { showNotification("Erro ao Aceitar: " + e.message, 'error'); loadRequests(); } finally { setProcessingAction(false); } };
+    const handleConfirmPickup = async () => { if (!activeDelivery) return; setProcessingAction(true); try { await cloud.partnerConfirmPickup(activeDelivery.id); setActiveDelivery(prev => prev ? { ...prev, status: 'IN_TRANSIT' } : null); } catch (e: any) { showNotification("Erro ao Confirmar Coleta: " + e.message, 'error'); } finally { setProcessingAction(false); } };
+    const handleConfirmDelivery = async () => { if (!activeDelivery) return; setProcessingAction(true); try { await cloud.partnerConfirmDelivery(activeDelivery.id, deliveryCodeInput); showNotification("Entrega concluída! Valor creditado.", 'success'); setRatingRequest(activeDelivery); setActiveDelivery(null); setDeliveryCodeInput(''); loadRequests(); } catch (e: any) { showNotification("Erro ao Finalizar Entrega: " + e.message, 'error'); } finally { setProcessingAction(false); } };
+    const handleReportFailure = async () => { if (!activeDelivery || !failureReason) return; setProcessingAction(true); try { await cloud.partnerReportDeliveryFailure(activeDelivery.id, failureReason); setActiveDelivery(prev => prev ? { ...prev, status: 'AWAITING_STORE_DECISION', failure_reason: failureReason } : null); setShowFailureModal(false); } catch (e: any) { showNotification("Erro ao Relatar Falha: " + e.message, 'error'); } finally { setProcessingAction(false); } };
+    const handleConfirmReturn = async () => { if (!activeDelivery) return; setProcessingAction(true); try { await cloud.partnerConfirmReturn(activeDelivery.id); showNotification("Devolução confirmada. Corrida finalizada.", 'success'); setActiveDelivery(null); loadRequests(); } catch (e: any) { showNotification("Erro ao Confirmar Devolução: " + e.message, 'error'); } finally { setProcessingAction(false); } };
+    const handleCheckDecision = async () => showNotification("Aguarde a notificação ou verifique novamente em instantes.", 'info');
 
     const handleRequestEmergency = async () => {
         if (!bankDetails?.pixKey) {
-            await alert({ title: "Erro de PIX", message: "Erro: Chave PIX não encontrada." });
+            showNotification("Erro: Chave PIX não encontrada.", 'error');
             return;
         }
-        await alert({ title: "Indisponível", message: "Saque emergencial indisponível durante migração." });
+        showNotification("Saque emergencial indisponível durante migração.", 'warning');
         setShowWithdrawConfirm(false);
     };
 
     const handleRateStore = async (rating: number, comment: string) => {
         if (!ratingRequest) return;
         try {
-            await cloud.submitRating(ratingRequest.id, rating, comment, 'PARTNER_TO_STORE');
-            await alert({ title: "Avaliação Enviada", message: "Obrigado pela avaliação!" });
+            await cloud.submitRating(
+                profile?.user_id || profile?.id || '', 
+                ratingRequest.store_id, 
+                rating, 
+                comment, 
+                'PARTNER_TO_STORE'
+            );
+            showNotification("Obrigado pela avaliação!", 'success');
             setRatingRequest(null);
         } catch (e: any) {
-            await alert({ title: "Erro ao Avaliar", message: "Erro: " + e.message });
+            showNotification("Erro ao Avaliar: " + e.message, 'error');
         }
     };
 
@@ -597,6 +603,12 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Ganhos</span>
                             </Button>
+                            <Button onClick={() => onNavigate('driver_bonuses')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
+                                <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
+                                    <Award className="w-5 h-5" />
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Metas e Bônus</span>
+                            </Button>
                             <Button onClick={() => setActiveTab('history')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                                     <HistoryIcon className="w-5 h-5" />
@@ -824,7 +836,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             }
             {
                 showFailureModal && (
-                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6"><h3 className="font-bold dark:text-white mb-4">Relatar Problema</h3><textarea className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl h-24 mb-4" placeholder="Motivo..." value={failureReason} onChange={e => setFailureReason(e.target.value)} /><div className="flex gap-2"><Button variant="outline" onClick={() => setShowFailureModal(false)} fullWidth>Cancelar</Button><Button onClick={handleReportFailure} disabled={!failureReason} fullWidth>Enviar</Button></div></div></div>
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6"><h3 className="font-bold dark:text-white mb-4">Relatar Problema</h3><textarea className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl h-24 mb-4 resize-none" placeholder="Motivo..." value={failureReason} onChange={e => setFailureReason(e.target.value)} /><div className="flex gap-2"><Button variant="outline" onClick={() => setShowFailureModal(false)} fullWidth>Cancelar</Button><Button onClick={handleReportFailure} disabled={!failureReason} fullWidth>Enviar</Button></div></div></div>
                 )
             }
 

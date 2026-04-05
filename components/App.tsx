@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award, Plus, Play } from 'lucide-react';
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
@@ -1125,7 +1125,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'install_app': return <InstallApp onBack={() => navigate(isDriver ? 'daily_panel' : 'shop')} />;
                 case 'cloud': return <CloudSync />;
                 case 'privacy': return <PrivacyPolicy onClose={() => navigate(isDriver ? 'daily_panel' : 'shop')} />; // Direct access to privacy policy
-                case 'upgrade_to_partner': return <UpgradeToPartnerPage />;
                 case 'settings': return <SettingsPage onBack={() => navigate(effectiveRole === 'user' ? 'profile' : (isDriver ? 'daily_panel' : 'shop'))} userRole={effectiveRole} />;
                 case 'streets_list': return <StreetsList />;
                 case 'delivery_navigation': return <DeliveryNavigation userRole={effectiveRole} />;
@@ -1414,9 +1413,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             items: [
                 { label: 'Lojas Vinculadas', tab: 'associate_driver', icon: Store },
                 { label: 'Divulgação', tab: 'driver_marketing', icon: Megaphone },
-                                { label: 'Indique e Ganhe', tab: 'referral_info', icon: Gift },
+                { label: 'Indique e Ganhe', tab: 'referral_info', icon: Gift },
                 { label: 'Bônus e Metas', tab: 'driver_bonuses', icon: Award },
-
                 { label: 'Histórico Local', tab: 'local_history', icon: History },
                 { label: 'ZéPoint (POS)', tab: 'zepoint', icon: Smartphone }
             ]
@@ -1722,87 +1720,80 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Package} label="Catálogo Base" tab="admin_base_catalog" />
                                     <MenuButton icon={ImageIcon} label="Galeria de Imagens" tab="admin_image_gallery" />
                                     <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
-
-
                                     <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
                                     <MenuButton icon={Star} label="Níveis de Parceiro" tab="admin_levels" />
                                     <MenuButton icon={MessageCircle} label="Suporte & Tickets" tab="admin_claims" />
                                     <MenuButton icon={MessageSquare} label="Chat Interno" tab="admin_chat" />
 
-                                    <MenuSection title="Conteúdo & App" />
-                                    <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
-                                    {/* <MenuButton icon={Newspaper} label="Notícias" tab="admin_platform_news" /> */}
-                                    <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
-                                    <MenuButton icon={Layout} label="Banners/Slides" tab="admin_slides" />
-                                    <MenuButton icon={MapPin} label="Banners por Cidade" tab="admin_city_banners" />
-                                    <MenuButton icon={Construction} label="Manutenção" tab="admin_maintenance" />
-
                                     <MenuSection title="Financeiro" />
                                     <MenuButton icon={DollarSign} label="Taxas Globais" tab="admin_fees" />
-                                    <MenuButton icon={Banknote} label="Cupons Globais (Plataforma)" tab="admin_global_coupons" />
+                                    <MenuButton icon={Banknote} label="Cupons Globais" tab="admin_global_coupons" />
                                     <MenuButton icon={Wallet} label="Repasses" tab="admin_payouts" />
                                     <MenuButton icon={CreditCard} label="Config. Empréstimos" tab="admin_loan_config" />
                                     <MenuButton icon={DollarSign} label="Financeiro das Lojas" tab="admin_store_finance" />
-                                    <MenuButton icon={ClipboardList} label="Pedidos por Loja" tab="admin_store_orders" />
-                                    <MenuButton icon={CreditCard} label="Gateways de Pagamento" tab="admin_payment_gateways" />
 
-                                    <MenuSection title="Ferramentas" />
-                                    <MenuButton icon={ListPlus} label="Lista de Rotas" tab="route_list" />
-                                    <MenuButton icon={FileCheck} label="Tarefas" tab="tasks" />
-                                    <MenuButton icon={BarChart3} label="Relatórios Pessoais" tab="reports" />
-                                    <MenuButton icon={Flame} label="Mapa de Calor" tab="heatmap" />
-                                    <MenuButton icon={MapPin} label="Meus Endereços" tab="addresses" />
-                                    <MenuButton icon={Zap} label="Ferramentas de Rota" tab="route_tools" />
-                                    <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
+                                    <MenuSection title="Conteúdo & App" />
+                                    <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
+                                    <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
+                                    <MenuButton icon={Layout} label="Banners/Slides" tab="admin_slides" />
                                 </>
                             )}
 
+                            {/* --- STORE MENU --- */}
+                            {isStore && (
+                                <>
+                                    <MenuSection title="Minha Loja" />
+                                    <MenuButton icon={LayoutDashboard} label="Dashboard" tab="wallet" />
+                                    <MenuButton icon={Package} label="Pedidos & Entregas" tab="associate_orders" />
+                                    <MenuButton icon={Plus} label="Nova Entrega" tab="new_request" />
+                                    <MenuButton icon={History} label="Histórico" tab="history" />
+                                    <MenuButton icon={Wallet} label="Financeiro" tab="store_finance_panel" />
+                                    <MenuButton icon={Users} label="Minha Equipe" tab="store_team" />
 
-                            {/* --- GENERAL MENU (ALL USERS) --- */}
+                                    <MenuSection title="Marketing & Vendas" />
+                                    <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
+                                    <MenuButton icon={Star} label="Avaliações" tab="store_ratings" />
+                                    <MenuSection title="Configurações" />
+                                    <MenuButton icon={Settings} label="Ajustes da Loja" tab="store_settings" />
+                                </>
+                            )}
+
+                            {/* --- DRIVER MENU --- */}
+                            {(isDriver || isPartner) && (
+                                <>
+                                    <MenuSection title="Operação" />
+                                    <MenuButton icon={Play} label="Início (Painel Diário)" tab="daily_panel" />
+                                    <MenuButton icon={LayoutDashboard} label="Painel do Parceiro" tab="partner" />
+                                    <MenuButton icon={Award} label="Bônus e Metas" tab="driver_bonuses" />
+                                    <MenuButton icon={Package} label="Meus Pedidos" tab="associate_orders" />
+
+                                    <MenuSection title="Finanças" />
+                                    <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
+                                    <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
+                                    <MenuButton icon={Shield} label="Seguros" tab="insurance" />
+
+                                    <MenuSection title="Crescimento" />
+                                    <MenuButton icon={Star} label="Meu Score" tab="score" />
+                                </>
+                            )}
+
+                            {/* --- GENERAL MENU --- */}
                             <MenuSection title="Geral" />
-                            {/* Exibe Ruas para todos EXCETO colaborador e usuário comum */}
-                            {effectiveRole !== 'collaborator' && effectiveRole !== 'user' && (
-                                <MenuButton icon={Map} label="Ruas" tab="streets_list" />
-                            )}
-
-                            {/* Loja de Peças apenas para Entregadores */}
-                            {(isPartner || isNormalDriver) && (
-                                <MenuButton icon={ShoppingBag} label="Loja de Peças" tab="shop" />
-                            )}
-
                             <MenuButton icon={User} label="Meu Perfil" tab="profile" />
                             <MenuButton icon={Headphones} label="Suporte" tab="support" />
-                            <MenuButton icon={HelpCircle} label="Perguntas Frequentes (FAQ)" tab="faq" />
                             <MenuButton icon={Bell} label="Notificações" tab="notifications" />
-                            <MenuButton icon={Bot} label="Zé" tab="assistant" />
 
-                            {/* Backup Nuvem apenas para quem opera offline (Entregadores/Lojistas) */}
-                            {effectiveRole !== 'user' && (
-                                <MenuButton icon={Cloud} label="Backup Nuvem" tab="cloud" />
-                            )}
-
-                            <MenuButton icon={Info} label="Sobre o App" tab="about" />
-                            {effectiveRole === 'user' && ( // Apenas user vê instalar app aqui, para outros já tem fluxo próprio ou não precisa
-                                <MenuButton icon={Smartphone} label="Instalar App" tab="install_app" />
-                            )}
-
-                            {/* --- FOOTER ACTIONS --- */}
                             <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
-                                {/* Idioma removido: app opera exclusivamente em PT-BR */}
                                 <MenuButton icon={Share2} label="Compartilhar App" onClick={handleShareApp} />
-                                <MenuButton icon={Lock} label="Política de Privacidade" onClick={() => setShowPrivacy(true)} /> {/* DIRECT ACCESS */}
-
+                                <MenuButton icon={Lock} label="Política de Privacidade" onClick={() => setShowPrivacy(true)} />
                                 {effectiveRole !== 'user' && (
                                     <MenuButton icon={UserCheck} label="Verificar Status" onClick={() => navigate('status')} />
                                 )}
                             </div>
                         </div>
 
-                        <div className={`
-                    border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50
-                    p-4
-                    ${isSidebarExpanded ? 'md:space-y-3' : 'md:space-y-2 md:p-2'}
-                `}>
+                        {/* Footer / Theme / Logout */}
+                        <div className={`border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-4 ${isSidebarExpanded ? 'md:space-y-3' : 'md:space-y-2 md:p-2'}`}>
                             <div className={`flex items-center justify-between md:justify-center w-full ${isSidebarExpanded ? 'md:justify-between md:px-2 md:flex-row' : 'md:flex-col md:gap-2'}`}>
                                 <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
                                     {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
@@ -1825,7 +1816,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             )}
                         </div>
                     </div>
-
                 </SectionErrorBoundary>
 
                 {/* Main Content Area */}
@@ -1877,6 +1867,3 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         </div>
     );
 };
-
-
-

@@ -12,7 +12,7 @@ import { FuelCalculator } from './FuelCalculator';
 import { RouteCalculator } from './RouteCalculator';
 import { Maintenance } from './Maintenance';
 import { Switch } from './Switch';
-import { useDialog } from '../utils/dialogService';
+import { useNotification } from '../contexts/NotificationContext';
 import { PromoSlider } from './PromoSlider';
 import { TipOfTheDay } from './TipOfTheDay';
 
@@ -76,7 +76,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
 
     const [isQuickStart, setIsQuickStart] = useState(true);
 
-    const { alert } = useDialog();
+    const { showNotification } = useNotification();
 
     useEffect(() => {
         loadData();
@@ -171,7 +171,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
         const km = parseFloat(extraForm.km.replace(',', '.'));
 
         if (!val) {
-            await alert({ title: 'Valor', message: 'Informe o valor.' });
+            showNotification('Informe o valor.', 'warning');
             return;
         }
 
@@ -191,7 +191,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
     const handleAddExpense = async () => {
         const val = parseCurrency(expenseForm.value);
         if (!val) {
-            await alert({ title: 'Valor', message: 'Informe o valor.' });
+            showNotification('Informe o valor.', 'warning');
             return;
         }
 
@@ -246,8 +246,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             setShowEndConfirm(false);
             setShowShareCard(true);
         } catch (e) {
-            // console.error("Error saving day", e);
-            await alert({ title: 'Salvar', message: 'Erro ao salvar. Tente novamente.' });
+            showNotification('Erro ao salvar o dia. Tente novamente.', 'error');
         } finally {
             setIsSaving(false);
         }
@@ -255,7 +254,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
 
     const handleReportBlitz = () => {
         if (!navigator.geolocation) {
-            void alert({ title: 'Geolocalização', message: 'Geolocalização necessária.' });
+            showNotification('Geolocalização necessária.', 'error');
             return;
         }
         setBlitzLoading(true);
@@ -277,16 +276,16 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                         address: address
                     });
 
-                    await alert({ title: 'Alerta', message: 'Alerta enviado! Obrigado por ajudar a comunidade.' });
+                    showNotification('Alerta enviado! Obrigado por ajudar a comunidade.', 'success');
                     setShowBlitzModal(false);
                 } catch (e) {
-                    await alert({ title: 'Alerta', message: 'Erro ao enviar alerta.' });
+                    showNotification('Erro ao enviar alerta.', 'error');
                 } finally {
                     setBlitzLoading(false);
                 }
             },
             () => {
-                void alert({ title: 'Geolocalização', message: 'Erro ao obter localização.' });
+                showNotification('Erro ao obter localização.', 'error');
                 setBlitzLoading(false);
             }
         );
@@ -504,12 +503,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             <div>
                 <h3 className="font-bold text-gray-800 dark:text-white mb-4 mt-4 text-sm px-2">Acessos Rápidos</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
-                    <button onClick={() => onNavigate('driver_bonuses')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
-                        <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
-                            <Award className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Bônus e Metas</span>
-                    </button>
+
                     <button onClick={() => onNavigate('local_history')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                             <History className="w-5 h-5" />

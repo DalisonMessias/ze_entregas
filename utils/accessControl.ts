@@ -1,4 +1,4 @@
-﻿import { UserRole } from '../types';
+import { UserRole } from '../types';
 import { ActiveTab } from '../types/navigation';
 
 export const generalTabs = new Set<ActiveTab>([
@@ -40,7 +40,7 @@ export const allowedTabsByRole: Record<UserRole, Set<ActiveTab>> = {
     'admin_api_keys', 'admin_ai_config', 'admin_routing', 'admin_fees', 'admin_pwa', 'admin_payouts', 'admin_cities', 'admin_infinitepay',
     'admin_levels', 'admin_ratings', 'admin_security', 'admin_blacklist', 'admin_referrals', 'admin_institutional',
     'admin_platform_news', 'admin_store_finance', 'admin_store_orders', 'admin_wallet_control', 'admin_claims', 'admin_maintenance', 'admin_slides', 'admin_city_banners', 'admin_tips', 'admin_loan_config',
-    'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation', 'zepoint',
+    'admin_investments', 'admin_chat', 'admin_payment_gateways', 'admin_mercadopago', 'admin_pix_config', 'admin_location_map', 'admin_base_catalog', 'admin_store_categories', 'admin_global_coupons', 'admin_insurance', 'admin_street_requests', 'admin_mediation', 'zepoint', 'admin_bonuses',
     'store_drivers_chat', 'store_plans'
   ]),
   store_partner: new Set<ActiveTab>([
@@ -52,12 +52,12 @@ export const allowedTabsByRole: Record<UserRole, Set<ActiveTab>> = {
   delivery_partner: new Set<ActiveTab>([
     'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history',
     'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses',
-    'loans', 'insurance', 'score', 'zepoint'
+    'loans', 'insurance', 'score', 'zepoint', 'driver_bonuses'
   ]),
   delivery_person: new Set<ActiveTab>([
     'daily_panel', 'associate_orders', 'partner', 'zebank', 'driver_marketing', 'local_history',
     'associate_driver', 'route_tools', 'route_list', 'tasks', 'reports', 'heatmap', 'addresses',
-    'insurance', 'score', 'zepoint'
+    'insurance', 'score', 'zepoint', 'driver_bonuses'
   ]),
   collaborator: new Set<ActiveTab>(['collaborator_area', 'shop', 'internal_orders', 'internal_orders_new', 'store_catalog']),
   user: new Set<ActiveTab>(['shop', 'profile', 'support', 'addresses', 'home', 'notifications', 'privacy', 'settings', 'zebank'])

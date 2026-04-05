@@ -1,11 +1,19 @@
-# Plano de Finalização - Sistema de Bônus
+# TASK LIST - Migração de Bônus e Navegação
 
-[x] Restaurar `UserManagement` no `AdminPanel.tsx` com dados reais.
-[x] Restaurar `PartnerVerification` no `AdminPanel.tsx` com dados reais.
-[x] Adicionar atalho de "Gestão de Bônus" no grid do `AdminDashboard.tsx`.
-[x] Adicionar atalho de "Bônus e Metas" no grid do `DailyPanel.tsx`.
-[x] Adicionar link de "Gestão de Bônus" no menu lateral (Admin) do `App.tsx`.
-[x] Adicionar link de "Bônus e Metas" no menu lateral (Entregador) do `App.tsx`.
-[x] Implementar renderização da aba `driver_bonuses` no `App.tsx`.
-[x] Validar roteamento de todas as abas de bônus.
-[x] Corrigir duplicação de imports e erros de tipagem no `App.tsx`.
+## Resumo da Solicitação
+Migrar o sistema de bônus para o painel do entregador, restaurar a navegação lateral e padronizar a UX com Toasts.
+
+## Tarefas
+
+- [x] Corrigir erro de JSX e restauração total do `App.tsx`
+- [x] Adicionar rota `/entregador/bonus` e item no menu lateral
+- [x] Remover atalho de bônus do `DailyPanel.tsx` (Painel Diário)
+- [x] Validar atalho de bônus no `PartnerArea.tsx` (Painel do Parceiro)
+- [x] Substituir alertas modais por Toasts no `PartnerArea.tsx`
+- [x] Substituir alertas modais por Toasts no `DailyPanel.tsx`
+- [x] Corrigir assinatura da função `submitRating` no `PartnerArea.tsx`
+- [x] Impedir redimensionamento manual de textareas (`resize-none`)
+- [x] Atualizar documentação e checklist
+
+## Estado Final
+Sistema estabilizado, navegação restaurada e UX aprimorada conforme as diretrizes do projeto.
