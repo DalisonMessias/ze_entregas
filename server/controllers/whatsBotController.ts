@@ -1,0 +1,52 @@
+import { Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/supabaseAuth.js';
+import { whatsBotService } from '../services/whatsBotService.js';
+
+const getStoreId = (req: AuthenticatedRequest) => {
+    if (!req.user?.id) {
+        throw new Error('Usuário autenticado não encontrado na requisição.');
+    }
+
+    return req.user.id;
+};
+
+export const getStatus = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const status = await whatsBotService.getStatus(getStoreId(req));
+        res.status(200).json(status);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao buscar status:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao buscar status do WhatsBot.' });
+    }
+};
+
+export const updateConfig = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const customMessage = typeof req.body?.customMessage === 'string' ? req.body.customMessage : '';
+        const status = await whatsBotService.updateConfig(getStoreId(req), customMessage);
+        res.status(200).json(status);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao salvar configuração:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao salvar configuração do WhatsBot.' });
+    }
+};
+
+export const start = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const status = await whatsBotService.start(getStoreId(req));
+        res.status(200).json(status);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao ligar bot:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao ligar o WhatsBot.' });
+    }
+};
+
+export const stop = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const status = await whatsBotService.stop(getStoreId(req));
+        res.status(200).json(status);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao desligar bot:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao desligar o WhatsBot.' });
+    }
+};

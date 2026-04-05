@@ -59,6 +59,7 @@ export type ActiveTab =
     | 'store_performance'
     | 'store_marketing'
     | 'store_integrations'
+    | 'store_whatsbot'
     | 'store_ratings'
     | 'store_settings'
     | 'store_plans'

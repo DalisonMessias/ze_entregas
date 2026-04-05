@@ -13,12 +13,14 @@ import zeAssistantRoutes from './routes/zeAssistant.js';
 import pwaRoutes from './routes/pwa.js';
 import paymentRoutes from './routes/payment.js';
 import mediationRoutes from './routes/mediation.js';
+import whatsBotRoutes from './routes/whatsbot.js';
 import { initializeWebSocket } from './websocket.js';
 import './services/internalChatService.js'; // Chat Interno Nativo
 import './services/zeAssistantService.js';
 import { supabaseAdmin } from './services/supabaseClient.js';
+import { whatsBotService } from './services/whatsBotService.js';
 
-console.log('✅ Serviços carregados: Chat Interno, Zé Assistente');
+console.log('Servicos carregados: Chat Interno, Ze Assistente e WhatsBot');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +28,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
-// Middleware
 app.use(compression({
   level: 6,
   threshold: 1024,
@@ -39,83 +40,78 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Middleware de autenticação simulado (para desenvolvimento)
 app.use((req, res, next) => {
-  // Simular usuário autenticado para desenvolvimento
   (req as any).user = {
-    id: '123e4567-e89b-12d3-a456-426614174000', // UUID mockado
+    id: '123e4567-e89b-12d3-a456-426614174000',
     email: 'usuario@example.com'
   };
   next();
 });
 
-// Rotas
 app.use('/api/streets-neighborhoods', streetsNeighborhoodsRoutes);
 app.use('/api/v1', integrationRoutes);
-app.use('/api/chat', chatRoutes); // Usar rotas de Chat Interno
-app.use('/api/ze-assistant', zeAssistantRoutes); // Usar rotas do Zé Assistente
-app.use('/pwa', pwaRoutes); // Rotas para PWA dinâmico
-app.use('/api/payment', paymentRoutes); // Rota para pagamentos
-app.use('/api/mediation', mediationRoutes); // Rotas de Mediação IA
+app.use('/api/chat', chatRoutes);
+app.use('/api/ze-assistant', zeAssistantRoutes);
+app.use('/api/whatsbot', whatsBotRoutes);
+app.use('/pwa', pwaRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/mediation', mediationRoutes);
 
-
-// Rota de health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Rota raiz
 app.get('/', (req, res) => {
   res.json({
-    message: 'Zé Entregas - API Backend',
+    message: 'Ze Entregas - API Backend',
     version: '1.0.0',
     endpoints: {
       health: '/health',
       streetsNeighborhoods: '/api/streets-neighborhoods',
-      chat: '/api/chat/status'
+      chat: '/api/chat/status',
+      whatsbot: '/api/whatsbot/status'
     }
   });
 });
 
-// Tratamento de erros global
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Erro não tratado:', err);
+  console.error('Erro nao tratado:', err);
   res.status(500).json({
     error: 'Erro interno do servidor',
     message: err.message || 'Ocorreu um erro inesperado'
   });
 });
 
-// Criar servidor HTTP e anexar WebSocket
 const server = http.createServer(app);
 initializeWebSocket(server);
 
-// Iniciar servidor
 server.listen(PORT, '0.0.0.0', async () => {
-  console.log(`\n🚀 SERVIDOR WHATSAPP LIGADO`);
-  console.log(`🔌 Porta: ${PORT}`);
+  console.log(`\nServidor backend ligado`);
+  console.log(`Porta: ${PORT}`);
 
-  // Teste de integridade multi-loja no boot
   try {
     const { error } = await supabaseAdmin.from('chat_sessions').select('store_id').limit(1);
     if (error) {
-      console.error('\n❌ ERRO DE CONFIGURAÇÃO DO BANCO DE DADOS:');
+      console.error('\nErro de configuracao do banco de dados:');
       if (error.message.includes('column "store_id" does not exist')) {
-        console.error('👉 A coluna "store_id" está faltando nas tabelas do WhatsApp.');
-        console.error('👉 AÇÃO REQUERIDA: Abra o arquivo "supabase/migrations/supabase_global.sql" e execute o conteúdo das Linhas 7100 até o final no SQL Editor do seu Supabase.');
+        console.error('A coluna "store_id" esta faltando nas tabelas do WhatsApp.');
+        console.error('Execute as migracoes mais recentes do Supabase antes de iniciar o backend.');
       } else {
-        console.error(`👉 Erro: ${error.message}`);
+        console.error(`Erro: ${error.message}`);
       }
     } else {
-      console.log('✅ Conexão com Supabase e colunas Multi-Loja: OK');
+      console.log('Conexao com Supabase e colunas multi-loja: OK');
     }
   } catch (e: any) {
-    console.error('🔥 FALHA AO VALIDAR ESTRUTURA DO BANCO:', e.message);
+    console.error('Falha ao validar estrutura do banco:', e.message);
   }
 
+  await whatsBotService.bootstrapEnabledBots();
+
   const base = `http://localhost:${PORT}`;
-  console.log(`📍 Health check: ${base}/health`);
-  console.log(`💬 Chat Interno API: ${base}/api/chat/status\n`);
+  console.log(`Health check: ${base}/health`);
+  console.log(`Chat API: ${base}/api/chat/status`);
+  console.log(`WhatsBot API: ${base}/api/whatsbot/status\n`);
 });
 
 export default app;

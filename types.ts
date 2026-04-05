@@ -2037,3 +2037,17 @@ export interface AdminReferralHistoryEntry extends ReferralPointTransaction {
     referrer_role?: string;
     referred_name?: string;
 }
+
+export interface WhatsBotStatus {
+    enabled: boolean;
+    connectionStatus: 'CONNECTED' | 'CONNECTING' | 'DISCONNECTED' | 'WAITING_QR';
+    qrCode?: string;
+    connectedPhone?: string | null;
+    customMessage: string;
+    catalogUrl: string;
+    lastError?: string | null;
+}
+
+export interface WhatsBotConfigPayload {
+    customMessage: string;
+}

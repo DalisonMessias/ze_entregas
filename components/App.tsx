@@ -58,6 +58,7 @@ const StoreReceivingPayment = React.lazy(() => import('./StoreReceivingPayment')
 const AdminMercadoPagoConfig = React.lazy(() => import('./AdminMercadoPagoConfig').then(module => ({ default: module.AdminMercadoPagoConfig })));
 const AdminPlatformCoupons = React.lazy(() => import('./AdminPlatformCoupons'));
 const StorePromotions = React.lazy(() => import('./StorePromotions').then(module => ({ default: module.StorePromotions })));
+const WhatsBot = React.lazy(() => import('./WhatsBot').then(module => ({ default: module.WhatsBot })));
 
 const DriverMarketing = React.lazy(() => import('./DriverMarketing').then(module => ({ default: module.DriverMarketing })));
 const Reports = React.lazy(() => import('./Reports').then(module => ({ default: module.Reports })));
@@ -378,6 +379,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [maintenance, setMaintenance] = useState<MaintenanceSettings | null>(null);
     const [effectiveRole, setEffectiveRole] = useState<UserRole>(userRole);
+    const [isSuperStoreUser, setIsSuperStoreUser] = useState(false);
     const [showScrollTop, setShowScrollTop] = useState(false);
 
     const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -394,6 +396,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     };
 
     const storeTabTitles: Partial<Record<ActiveTab, string>> = {
+        store_whatsbot: 'WhatsBot',
         wallet: 'Início',
         history: 'Pedidos',
         new_request: 'Nova Entrega',
@@ -483,6 +486,41 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         (media as any).addListener(handleResize);
         return () => (media as any).removeListener(handleResize);
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadSuperStoreFlag = async () => {
+            if (effectiveRole !== 'store_partner') {
+                setIsSuperStoreUser(false);
+                return;
+            }
+
+            try {
+                const profile = await cloud.getMyPartnerProfile();
+                if (!cancelled) {
+                    setIsSuperStoreUser(!!profile?.is_super_store);
+                }
+            } catch {
+                if (!cancelled) {
+                    setIsSuperStoreUser(false);
+                }
+            }
+        };
+
+        void loadSuperStoreFlag();
+
+        const handleRefresh = () => {
+            void loadSuperStoreFlag();
+        };
+
+        window.addEventListener('refreshUserRole', handleRefresh);
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener('refreshUserRole', handleRefresh);
+        };
+    }, [effectiveRole]);
 
 
     // --- TOUR LOGIC ---
@@ -1027,6 +1065,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         </DesktopOnlyGate>
                     );
                 case 'store_settings': return <StoreSettings />;
+                case 'store_whatsbot': return <WhatsBot />;
                 case 'store_plans': return <StorePlans />;
                 case 'store_receiving_payment': return <StoreReceivingPayment />;
                 case 'store_product_import':
@@ -1240,6 +1279,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             items: [
                 { label: 'Chat com Clientes', tab: 'internal_chat', icon: MessageSquare },
                 { label: 'Chat c/ Entregadores', tab: 'store_drivers_chat', icon: MessageCircle },
+                { label: 'WhatsBot', tab: 'store_whatsbot', icon: Bot },
                 { label: 'ZéPoint (POS)', tab: 'zepoint', icon: Smartphone }
             ]
         },
@@ -1346,7 +1386,13 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 </div>
                 <div className="p-4 space-y-5 pb-[calc(env(safe-area-inset-bottom,0)+4.5rem)]">
                     {storeMoreSections.map(section => {
-                        const visibleItems = section.items.filter(item => !item.tab || canAccessTab(item.tab));
+                        const visibleItems = section.items.filter(item => {
+                            if (item.tab === 'store_whatsbot' && !isSuperStoreUser) {
+                                return false;
+                            }
+
+                            return !item.tab || canAccessTab(item.tab);
+                        });
                         if (visibleItems.length === 0) return null;
                         return (
                             <div key={section.title} className="space-y-3">
@@ -1518,7 +1564,13 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 </div>
                 <div className="p-4 space-y-5 pb-[calc(env(safe-area-inset-bottom,0)+4.5rem)]">
                     {driverMoreSections.map(section => {
-                        const visibleItems = section.items.filter(item => !item.tab || canAccessTab(item.tab));
+                        const visibleItems = section.items.filter(item => {
+                            if (item.tab === 'store_whatsbot' && !isSuperStoreUser) {
+                                return false;
+                            }
+
+                            return !item.tab || canAccessTab(item.tab);
+                        });
                         if (visibleItems.length === 0) return null;
                         return (
                             <div key={section.title} className="space-y-3">
@@ -1771,6 +1823,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuSection title="Comunicação" />
                                     <MenuButton icon={MessageSquare} label="Chat com Clientes" tab="internal_chat" />
                                     <MenuButton icon={MessageCircle} label="Chat c/ Entregadores" tab="store_drivers_chat" />
+                                    {isSuperStoreUser && <MenuButton icon={Bot} label="WhatsBot" tab="store_whatsbot" />}
                                     <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
 
                                     <MenuSection title="Finanças & Integração" />

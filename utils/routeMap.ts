@@ -102,6 +102,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/marketing': 'store_marketing',
     '/loja/destaque': 'store_highlight',
     '/loja/integracoes': 'store_integrations',
+    '/loja/whatsbot': 'store_whatsbot',
     '/loja/configuracoes': 'store_settings',
     '/loja/avaliacoes': 'store_ratings',
     '/loja/promocoes': 'store_promotions',
@@ -227,6 +228,10 @@ export const getTabFromUrl = (pathname: string): ActiveTab | null => {
 export const getUrlFromTab = (tab: ActiveTab, role?: UserRole): string | null => {
     const paths = tabToPaths[tab];
     if (!paths || paths.length === 0) return null;
+
+    if (tab === 'store_whatsbot') {
+        return paths.find(p => p === '/whatsbot') || paths[0];
+    }
 
     // Canonical public path for FAQ (avoid role-specific prefixes)
     if (tab === 'faq') {
