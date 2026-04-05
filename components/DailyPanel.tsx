@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Play, Plus, Calculator, TrendingDown, Target, Trash2, Edit2, Share2, MapPin, Gauge, Package, DollarSign, X, Check, Coffee, Wrench, Fuel, AlertCircle, Sparkles, ChevronRight, Settings, Zap, Siren, Map as MapIcon, Loader2, History, ClipboardList, ListPlus, Megaphone, ShoppingBag, Smartphone, Landmark, User, Route } from 'lucide-react';
+import { Play, Plus, Calculator, TrendingDown, Target, Trash2, Edit2, Share2, MapPin, Gauge, Package, DollarSign, X, Check, Coffee, Wrench, Fuel, AlertCircle, Sparkles, ChevronRight, Settings, Zap, Siren, Map as MapIcon, Loader2, History, ClipboardList, ListPlus, Megaphone, ShoppingBag, Smartphone, Landmark, User, Route, Award } from 'lucide-react';
 import { Button } from './Button';
 import { DailyTransaction, DailySummary, BlitzAlert, PartnerProfile } from '../types';
 import { DataErrorDisplay } from './DataErrorDisplay';
@@ -346,7 +346,7 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
                     Defina o valor da sua entrega padrão e sua meta para hoje.
                 </p>
 
-                <div className="w-full max-w-sm space-y-4">
+                <div className="w-full max-sm:px-4 max-w-sm space-y-4">
                     <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-2xl">
                         <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Início Rápido</span>
                         <Switch checked={isQuickStart} onChange={setIsQuickStart} />
@@ -504,6 +504,12 @@ export const DailyPanel: React.FC<DailyPanelProps> = ({ onNavigate }) => {
             <div>
                 <h3 className="font-bold text-gray-800 dark:text-white mb-4 mt-4 text-sm px-2">Acessos Rápidos</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
+                    <button onClick={() => onNavigate('driver_bonuses')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
+                        <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
+                            <Award className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Bônus e Metas</span>
+                    </button>
                     <button onClick={() => onNavigate('local_history')} className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                             <History className="w-5 h-5" />

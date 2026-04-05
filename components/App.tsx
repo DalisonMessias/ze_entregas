@@ -1706,6 +1706,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                                     <MenuSection title="Gestão de Usuários" />
                                     <MenuButton icon={Users} label="Todos os Usuários" tab="admin_users" />
+                                    <MenuButton icon={Award} label="Gestão de Bônus" tab="admin_bonuses" />
                                     <MenuButton icon={Store} label="Gerenciar Lojas" tab="admin_lojas" />
                                     <MenuButton icon={MapPin} label="Solicitações de Ruas" tab="admin_street_requests" />
                                     <MenuButton icon={FileCheck} label="Validação de Parceiros" tab="admin_validation" />
@@ -1717,8 +1718,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
                                     <MenuButton icon={Package} label="Catálogo Base" tab="admin_base_catalog" />
                                     <MenuButton icon={ImageIcon} label="Galeria de Imagens" tab="admin_image_gallery" />
-                                                                        <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
-                                    <MenuButton icon={Award} label="Gestão de Bônus" tab="admin_bonuses" />
+                                    <MenuButton icon={LayoutGrid} label="Categorias de Loja" tab="admin_store_categories" />
 
 
                                     <MenuButton icon={MapPin} label="Cidades" tab="admin_cities" />
