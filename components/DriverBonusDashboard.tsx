@@ -4,12 +4,16 @@ import { Trophy, Target, Truck, Calendar, ArrowRight, Award, TrendingUp, CheckCi
 import * as cloud from '../services/cloud';
 import { BonusCampaign, BonusDriverProgress, BonusTier } from '../types';
 import { Button } from './Button';
+import { BaseModal } from './BaseModal';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
+import { useDialog } from '../utils/dialogService';
 
 export const DriverBonusDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [activeProgress, setActiveProgress] = useState<BonusDriverProgress[]>([]);
     const [availableCampaigns, setAvailableCampaigns] = useState<BonusCampaign[]>([]);
+    const [selectedOpportunity, setSelectedOpportunity] = useState<BonusCampaign | null>(null);
+    const { confirm, alert } = useDialog();
 
     useEffect(() => {
         loadData();
@@ -70,6 +74,57 @@ export const DriverBonusDashboard: React.FC = () => {
         };
     };
 
+    const handleClaim = async (campaignId: string, amount: number) => {
+        if (!await confirm({ title: 'Resgatar Recompensa!', message: `Deseja transferir o seu bônus de R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} agora para a sua carteira digital?` })) return;
+        
+        try {
+            setLoading(true);
+            const sb = cloud.getClient();
+            if (!sb) return;
+            const { data, error } = await sb.rpc('claim_bonus_campaign_reward', { p_campaign_id: campaignId });
+            
+            if (error) throw error;
+            if (!data.success) {
+                await alert({ title: 'Atenção', message: data.message });
+            } else {
+                await alert({ title: 'Uhu! Transferência Completa!', message: `R$ ${(data.amount_credited || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} foram creditados com sucesso na sua carteira. Obrigado pelo empenho nas entregas!` });
+                await loadData();
+            }
+        } catch (error: any) {
+             console.error(error);
+             await alert({ title: 'Erro de Autenticação', message: 'Houve uma falha ao resgatar seu bônus. Tente novamente ou abra o suporte.' });
+        } finally {
+             setLoading(false);
+        }
+    };
+
+    const handleJoinOpportunity = async (campaignId: string) => {
+        try {
+            setLoading(true);
+            setSelectedOpportunity(null);
+            const sb = cloud.getClient();
+            if (!sb) return;
+            const { data: { user } } = await sb.auth.getUser();
+            if (!user) return;
+            
+            const { error } = await sb.from('bonus_driver_progress').insert({
+                campaign_id: campaignId,
+                driver_id: user.id,
+                deliveries_count: 0
+            });
+            
+            if (error && error.code !== '23505') throw error;
+            
+            await alert({ title: 'Boa sorte!', message: 'Missão iniciada com sucesso. Acompanhe a barrinha de preenchimento após as próximas entregas e resgate seus bônus!' });
+            await loadData();
+        } catch (error: any) {
+            console.error(error);
+            await alert({ title: 'Erro de Autenticação', message: 'Houve uma falha ao participar da campanha. A sua filial pode não ter o habilitado.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin w-8 h-8 text-brand-600" /></div>;
 
     return (
@@ -107,6 +162,8 @@ export const DriverBonusDashboard: React.FC = () => {
                             {activeProgress.map(progress => {
                                 const { percent, nextTier, isMaxed } = calculateProgress(progress.deliveries_count, progress.campaign?.tiers || []);
                                 const currentBonus = progress.bonus_earned || 0;
+                                const claimedBonus = progress.bonus_claimed || 0;
+                                const pendingClaim = currentBonus - claimedBonus;
                                 
                                 return (
                                     <div key={progress.id} className="group bg-white dark:bg-gray-900 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-500">
@@ -120,8 +177,13 @@ export const DriverBonusDashboard: React.FC = () => {
                                                     <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{progress.campaign?.title}</h3>
                                                 </div>
                                                 <div className="text-right">
-                                                    <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Bônus Acumulado</div>
+                                                    <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Bônus Agregado</div>
                                                     <div className="text-3xl font-black text-brand-600">R$ {currentBonus.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                                    {pendingClaim > 0 && (
+                                                        <Button size="sm" onClick={() => handleClaim(progress.campaign_id, pendingClaim)} className="mt-3 w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-black animate-pulse shadow-green-500/30 hover:scale-[1.02] active:scale-95 transition-transform">
+                                                            <Gift className="w-4 h-4 mr-2" /> Resgatar R$ {pendingClaim.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -217,7 +279,7 @@ export const DriverBonusDashboard: React.FC = () => {
                                                     </div>
                                                 ))}
                                             </div>
-                                            <button className="text-brand-600 text-xs font-black uppercase tracking-widest flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                            <button onClick={() => setSelectedOpportunity(campaign)} className="text-brand-600 text-xs font-black uppercase tracking-widest flex items-center gap-1 hover:text-brand-800 group-hover:translate-x-1 transition-transform">
                                                 Ver Detalhes <ChevronRight className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -241,6 +303,34 @@ export const DriverBonusDashboard: React.FC = () => {
                         </p>
                     </div>
                 </div>
+                {/* DETALHES DA CAMPANHA (MODAL) */}
+                <BaseModal isOpen={!!selectedOpportunity} onClose={() => setSelectedOpportunity(null)} title="Destravar Missão Especial" maxWidth="md">
+                    {selectedOpportunity && (
+                        <div className="space-y-6">
+                            <div className="bg-gradient-to-br from-brand-50 to-brand-100 dark:from-brand-600 dark:to-brand-800 p-6 rounded-[32px] text-center shadow-inner">
+                                <Target className="w-16 h-16 mx-auto mb-4 text-brand-600 dark:text-brand-200 animate-pulse" />
+                                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">{selectedOpportunity.title}</h3>
+                                <p className="text-gray-600 dark:text-brand-100 font-medium text-sm leading-relaxed">{selectedOpportunity.description || 'Acumule a quantidade necessária de entregas dentro do período da campanha para bater metas e resgatar bônus generosos direto na sua carteira digital.'}</p>
+                            </div>
+                            
+                            <h4 className="font-black text-sm text-gray-400 uppercase tracking-widest">Recompensas Por Patamar</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                {selectedOpportunity.tiers.sort((a, b) => a.deliveries - b.deliveries).map((tier, i) => (
+                                    <div key={i} className="bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 py-3 rounded-2xl flex flex-col items-center justify-center hover:border-brand-500 transition-colors cursor-default">
+                                        <span className="text-[10px] uppercase font-black tracking-widest text-gray-400 mb-1">{tier.deliveries} ETAPAS</span>
+                                        <span className="text-xl font-black text-green-600">+ R$ {tier.reward}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="flex gap-4 mt-6">
+                                <Button variant="outline" className="flex-1 font-bold border-2 rounded-2xl" onClick={() => setSelectedOpportunity(null)}>Voltar</Button>
+                                <Button className="flex-[2] bg-brand-500 hover:bg-brand-600 text-white shadow-xl shadow-brand-500/20 font-black rounded-2xl" onClick={() => handleJoinOpportunity(selectedOpportunity.id)}>EU QUERO ESSAS METAS</Button>
+                            </div>
+                        </div>
+                    )}
+                </BaseModal>
+
             </div>
         </SectionErrorBoundary>
     );

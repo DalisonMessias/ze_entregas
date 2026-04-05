@@ -37,6 +37,7 @@ export interface BonusDriverProgress {
   driver_id: string;
   deliveries_count: number;
   bonus_earned: number;
+  bonus_claimed?: number;
   status: string;
   last_updated: string;
   campaign?: BonusCampaign;

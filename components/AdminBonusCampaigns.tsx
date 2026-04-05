@@ -8,6 +8,7 @@ import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
 import { useDialog } from '../utils/dialogService';
 import { CustomDateInput } from './CustomDateInput';
+import { CitySearchSelect } from './CitySearchSelect';
 
 const parseCurrency = (value: string | number): number => {
     if (typeof value === 'number') return value;
@@ -338,14 +339,14 @@ export const AdminBonusCampaigns: React.FC = () => {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-black text-gray-400 uppercase tracking-widest pl-1">Data de Início</label>
+                                        <label className="block mt-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest pl-1">Data de Início</label>
                                         <CustomDateInput
                                             value={formData.start_date || ''}
                                             onChange={val => setFormData({ ...formData, start_date: val })}
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-sm font-black text-gray-400 uppercase tracking-widest pl-1">Data de Término</label>
+                                        <label className="block mt-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest pl-1">Data de Término</label>
                                         <CustomDateInput
                                             value={formData.end_date || ''}
                                             onChange={val => setFormData({ ...formData, end_date: val })}
@@ -353,12 +354,23 @@ export const AdminBonusCampaigns: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <CustomInput 
-                                    label="Filtro por Cidade (Opcional)" 
-                                    placeholder="Ex: São Paulo / Todas" 
-                                    value={formData.target_city || ''} 
-                                    onChange={e => setFormData({ ...formData, target_city: e.target.value })} 
-                                />
+                                <div className="bg-gray-50/50 dark:bg-gray-800/30 rounded-2xl p-4 my-2">
+                                    <CitySearchSelect 
+                                        label="Filtro por Cidade (Opcional)" 
+                                        placeholder="Aplicável a todas as cidades por padrão" 
+                                        value={formData.target_city || ''} 
+                                        onSelect={(city) => setFormData({ ...formData, target_city: city.name })} 
+                                    />
+                                    {formData.target_city && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setFormData({...formData, target_city: ''})} 
+                                            className="px-4  pb-4 pt-1 text-xs text-red-500 font-bold hover:text-red-600 transition-colors"
+                                        >
+                                            Remover filtro de cidade (Aplicar a todas as cidades)
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="space-y-6 bg-gray-50 dark:bg-gray-800/50 p-8 rounded-[32px] border border-gray-100 dark:border-gray-800">

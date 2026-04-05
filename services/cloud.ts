@@ -1,4 +1,4 @@
-﻿import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import axios from 'axios';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import {
@@ -408,11 +408,6 @@ export const getPublicStoresByCity = async (citySlug: string): Promise<any[]> =>
     return data || [];
 };
 
-
-
-/**
- * Busca todas as lojas cadastradas no sistema.
- */
 export const adminGetStores = async (signal?: AbortSignal): Promise<ManagedUser[]> => {
     const sb = getClient();
     if (!sb) return [];
@@ -424,6 +419,26 @@ export const adminGetStores = async (signal?: AbortSignal): Promise<ManagedUser[
 
     if (error) {
         console.error('Error fetching all stores:', error);
+        return [];
+    }
+    return data || [];
+};
+
+/**
+ * Busca parceiros (lojas ou entregadores) com verificação pendente.
+ */
+export const getPendingVerifications = async (): Promise<any[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+        .from('user_profiles')
+        .select('id, name, city, verification_status, role, created_at')
+        .eq('verification_status', 'PENDING_REVIEW')
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching pending verifications:', error);
         return [];
     }
     return data || [];

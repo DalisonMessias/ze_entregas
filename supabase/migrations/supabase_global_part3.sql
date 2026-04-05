@@ -790,6 +790,8 @@ DROP POLICY IF EXISTS "Drivers can view own progress" ON public.bonus_driver_pro
 CREATE POLICY "Drivers can view own progress" ON public.bonus_driver_progress FOR SELECT USING (auth.uid() = driver_id);
 DROP POLICY IF EXISTS "Admins can view all progress" ON public.bonus_driver_progress;
 CREATE POLICY "Admins can view all progress" ON public.bonus_driver_progress FOR SELECT USING (public.is_admin());
+DROP POLICY IF EXISTS "Drivers can insert zero progress" ON public.bonus_driver_progress;
+CREATE POLICY "Drivers can insert zero progress" ON public.bonus_driver_progress FOR INSERT WITH CHECK (auth.uid() = driver_id AND deliveries_count = 0);
 
 -- 3. Função para atualizar progresso de bônus
 CREATE OR REPLACE FUNCTION public.update_driver_bonus_progress()
@@ -864,3 +866,73 @@ BEGIN
     ORDER BY bdp.deliveries_count DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grants de Acesso as Tabelas e Funções de Bônus Essenciais 
+GRANT ALL ON TABLE public.bonus_campaigns TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.bonus_driver_progress TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_admin_bonus_stats(UUID) TO anon, authenticated, service_role;
+
+-- Rotinas Inclusas de Resgate Manual do Entregador
+ALTER TABLE public.bonus_driver_progress ADD COLUMN IF NOT EXISTS bonus_claimed NUMERIC(15, 2) DEFAULT 0;
+
+CREATE OR REPLACE FUNCTION public.claim_bonus_campaign_reward(p_campaign_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_progress RECORD;
+    v_balance NUMERIC;
+    v_transaction_id UUID;
+    v_claim_amount NUMERIC;
+    v_driver_id UUID := auth.uid();
+BEGIN
+    SELECT * INTO v_progress 
+    FROM public.bonus_driver_progress
+    WHERE campaign_id = p_campaign_id AND driver_id = v_driver_id
+    FOR UPDATE;
+
+    IF v_progress.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Nenhuma recompensa disponível para resgate nesta campanha.');
+    END IF;
+
+    v_claim_amount := COALESCE(v_progress.bonus_earned, 0) - COALESCE(v_progress.bonus_claimed, 0);
+
+    IF v_claim_amount <= 0 THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Você já resgatou todos os ganhos ou ainda não atingiu novas metas.');
+    END IF;
+
+    -- Depositar na Wallet Oficial do Entregador
+    UPDATE public.driver_wallets
+    SET balance_decimal = balance_decimal + v_claim_amount,
+        updated_at = NOW()
+    WHERE driver_id = v_driver_id
+    RETURNING balance_decimal INTO v_balance;
+
+    -- Registrar Extrato
+    INSERT INTO public.wallet_transactions (
+        store_id, 
+        amount,
+        net_amount,
+        type,
+        status,
+        description
+    ) VALUES (
+        v_driver_id,
+        v_claim_amount,
+        v_claim_amount,
+        'CREDIT',
+        'COMPLETED',
+        'Resgate de Bônus da Campanha: ' || COALESCE((SELECT title FROM public.bonus_campaigns WHERE id = p_campaign_id), 'Meta Bônus')
+    ) RETURNING id INTO v_transaction_id;
+
+    -- Atualizar que isso já foi resgatado
+    UPDATE public.bonus_driver_progress
+    SET bonus_claimed = COALESCE(bonus_claimed, 0) + v_claim_amount,
+        last_updated = NOW()
+    WHERE id = v_progress.id;
+
+    RETURN jsonb_build_object('success', true, 'new_balance', v_balance, 'amount_credited', v_claim_amount);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.claim_bonus_campaign_reward(UUID) TO anon, authenticated, service_role;

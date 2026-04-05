@@ -1,6 +1,11 @@
 import React from 'react';
+import { Users, FileCheck, Edit2, Save } from 'lucide-react';
 import { AdminSubTab } from '../types';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
+import { BaseModal } from './BaseModal';
+import { CustomInput } from './CustomInput';
+import { CustomSelect } from './CustomSelect';
+import { useNotification } from '../contexts/NotificationContext';
 
 // Admin Sub-Components
 import { AdminDashboard } from './AdminDashboard';
@@ -47,14 +52,59 @@ import { StreetRequestsAdmin } from '../src/pages/StreetRequestsAdmin';
 
 // --- REAL MODULES ---
 
+const getRoleLabel = (role: string) => {
+    switch (role?.toLowerCase()) {
+        case 'admin': return 'Administrador';
+        case 'store_partner': return 'Loja / Parceiro';
+        case 'super_store_partner': return 'Franquia / Super Loja';
+        case 'delivery_person': return 'Motoboy';
+        case 'delivery_partner': return 'Entregador de Frota';
+        case 'collaborator': return 'Colaborador';
+        case 'user': return 'Cliente (Comum)';
+        default: return role || '-';
+    }
+};
+
 const UserManagement: React.FC = () => {
     const [users, setUsers] = React.useState<any[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [search, setSearch] = React.useState('');
+    const [editingUser, setEditingUser] = React.useState<any | null>(null);
+    const [saving, setSaving] = React.useState(false);
+    const { showNotification } = useNotification();
 
     React.useEffect(() => {
         loadUsers();
     }, []);
+
+    const handleSaveUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingUser) return;
+        try {
+            setSaving(true);
+            const updates = {
+                name: editingUser.name,
+                email: editingUser.email,
+                phone_number: editingUser.phone_number,
+                cpf: editingUser.cpf,
+                role: editingUser.role,
+                status: editingUser.status
+            };
+            const { adminUpdateUserProfile } = await import('../services/cloud');
+            const res = await adminUpdateUserProfile(editingUser.id, updates);
+            if (res.success) {
+                showNotification('Usuário atualizado com sucesso!', 'success');
+                setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...updates } : u));
+                setEditingUser(null);
+            } else {
+                showNotification('Erro ao atualizar usuário.', 'error');
+            }
+        } catch (err) {
+            showNotification('Erro interno.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const loadUsers = async () => {
         try {
@@ -105,6 +155,7 @@ const UserManagement: React.FC = () => {
                                 <th className="px-6 py-4">Perfil</th>
                                 <th className="px-6 py-4">Status</th>
                                 <th className="px-6 py-4">Cadastro</th>
+                                <th className="px-6 py-4 text-center">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -131,7 +182,7 @@ const UserManagement: React.FC = () => {
                                             user.role === 'store_partner' ? 'bg-blue-100 text-blue-600' :
                                             'bg-green-100 text-green-600'
                                         }`}>
-                                            {user.role}
+                                            {getRoleLabel(user.role)}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
@@ -143,12 +194,112 @@ const UserManagement: React.FC = () => {
                                     <td className="px-6 py-4 text-xs text-gray-400">
                                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
                                     </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <button
+                                            onClick={() => setEditingUser({ ...user })}
+                                            className="p-2 bg-gray-100 dark:bg-gray-700/50 hover:bg-brand-50 dark:hover:bg-brand-900/40 text-gray-500 hover:text-brand-600 rounded-lg transition-colors"
+                                            title="Editar Usuário"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            <BaseModal isOpen={!!editingUser} onClose={() => setEditingUser(null)} title="Editar Usuário" icon={<Edit2 className="w-5 h-5 text-brand-600" />} maxWidth="2xl" disableScroll={true}>
+                {editingUser && (
+                    <form onSubmit={handleSaveUser} className="space-y-4 pb-24">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <CustomInput
+                                label="Nome"
+                                type="text"
+                                value={editingUser.name || ''}
+                                onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
+                                placeholder="Nome completo do usuário"
+                            />
+                            <CustomInput
+                                label="E-mail"
+                                type="email"
+                                value={editingUser.email || ''}
+                                onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
+                                placeholder="E-mail de acesso"
+                            />
+                            <CustomInput
+                                label="Telefone / Contato"
+                                type="text"
+                                mask="phone"
+                                value={editingUser.phone_number || ''}
+                                onChange={e => setEditingUser({ ...editingUser, phone_number: e.target.value })}
+                                placeholder="(00) 00000-0000"
+                            />
+                            <CustomInput
+                                label="CPF"
+                                type="text"
+                                mask="cpf"
+                                value={editingUser.cpf || ''}
+                                onChange={e => setEditingUser({ ...editingUser, cpf: e.target.value })}
+                                placeholder="Insira o CPF"
+                            />
+                            <CustomSelect
+                                label="Função (Perfil)"
+                                value={editingUser.role || 'user'}
+                                onChange={val => setEditingUser({ ...editingUser, role: val })}
+                                options={[
+                                    { value: 'user', label: 'Cliente (Usuário)' },
+                                    { value: 'delivery_person', label: 'Motoboy' },
+                                    { value: 'delivery_partner', label: 'Entregador Externo / Outros' },
+                                    { value: 'store_partner', label: 'Estabelecimento / Loja' },
+                                    { value: 'super_store_partner', label: 'Super Loja / Franquia' },
+                                    { value: 'admin', label: 'Administrador Global' },
+                                    { value: 'collaborator', label: 'Colaborador Local' },
+                                ]}
+                            />
+                            <CustomSelect
+                                label="Situação de Acesso"
+                                value={editingUser.status || 'active'}
+                                onChange={val => setEditingUser({ ...editingUser, status: val })}
+                                options={[
+                                    { value: 'active', label: 'Usuário Ativo (Normal)' },
+                                    { value: 'blocked', label: 'Bloqueado / Excluído' },
+                                    { value: 'pending', label: 'Aguardando Validação' },
+                                    { value: 'suspended', label: 'Suspensão de Uso' },
+                                ]}
+                            />
+                        </div>
+
+                        <div className="pt-6 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 mt-6">
+                            <button
+                                type="button"
+                                onClick={() => setEditingUser(null)}
+                                className="px-6 py-2 rounded-xl text-gray-500 dark:text-gray-300 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                            >
+                                Cancelar e Fechar
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="px-6 py-2 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 flex items-center gap-2 disabled:opacity-50 transition"
+                            >
+                                {saving ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
+                                        <span>Processando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="w-4 h-4" />
+                                        <span>Confirmar Edição</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </BaseModal>
         </div>
     );
 };
