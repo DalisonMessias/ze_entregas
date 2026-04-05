@@ -936,3 +936,30 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION public.claim_bonus_campaign_reward(UUID) TO anon, authenticated, service_role;
+
+-- Rotina de Auto-Upgrade Livre da Interface (Criação de Entregadores ou Lojas a partir do App Comum)
+CREATE OR REPLACE FUNCTION public.upgrade_user_role(p_new_role TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_user_id UUID := auth.uid();
+BEGIN
+    IF v_user_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Usuário não conectado.');
+    END IF;
+
+    IF p_new_role NOT IN ('delivery_partner', 'store_partner') THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Cargo de upgrade inexistente nas regras do sistema.');
+    END IF;
+
+    -- Concretiza a fusão de papéis pulando o RLS original da user_profiles.
+    UPDATE public.user_profiles
+    SET role = p_new_role, last_updated = NOW()
+    WHERE id = v_user_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Perfil aprimorado com sucesso.');
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.upgrade_user_role(TEXT) TO anon, authenticated, service_role;

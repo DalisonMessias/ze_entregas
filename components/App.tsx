@@ -58,6 +58,7 @@ const StoreReceivingPayment = React.lazy(() => import('./StoreReceivingPayment')
 const AdminMercadoPagoConfig = React.lazy(() => import('./AdminMercadoPagoConfig').then(module => ({ default: module.AdminMercadoPagoConfig })));
 const AdminPlatformCoupons = React.lazy(() => import('./AdminPlatformCoupons'));
 const StorePromotions = React.lazy(() => import('./StorePromotions').then(module => ({ default: module.StorePromotions })));
+import { UpgradeToPartner } from './UpgradeToPartner';
 
 const DriverMarketing = React.lazy(() => import('./DriverMarketing').then(module => ({ default: module.DriverMarketing })));
 const Reports = React.lazy(() => import('./Reports').then(module => ({ default: module.Reports })));
@@ -1128,6 +1129,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'settings': return <SettingsPage onBack={() => navigate(effectiveRole === 'user' ? 'profile' : (isDriver ? 'daily_panel' : 'shop'))} userRole={effectiveRole} />;
                 case 'streets_list': return <StreetsList />;
                 case 'delivery_navigation': return <DeliveryNavigation userRole={effectiveRole} />;
+                case 'upgrade_to_partner': return <UpgradeToPartner onNavigate={navigate} />;
                 case 'not_found':
                     return (
                         <NotFound
