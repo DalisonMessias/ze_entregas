@@ -27,32 +27,74 @@ const getBearerToken = (req: Request): string | null => {
     return token.trim();
 };
 
+const getImpersonationStoreId = (req: Request): string | null => {
+    const rawValue = req.header('x-impersonation-store-id') || req.header('X-Impersonation-Store-Id');
+    if (!rawValue) return null;
+
+    const value = rawValue.trim();
+    return value || null;
+};
+
+const normalizeRole = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+
+    const role = value.trim().toLowerCase();
+    return role || null;
+};
+
 export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const token = getBearerToken(req);
         if (!token) {
-            return res.status(401).json({ success: false, message: 'Token de autenticação ausente.' });
+            return res.status(401).json({ success: false, message: 'Token de autenticacao ausente.' });
         }
 
         const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
         if (authError || !authData.user) {
-            return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada.' });
+            return res.status(401).json({ success: false, message: 'Sessao invalida ou expirada.' });
         }
+
+        const requestedStoreId = getImpersonationStoreId(req);
+
+        const { data: authenticatedProfile } = await supabaseAdmin
+            .from('user_profiles')
+            .select('id, email, role')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+
+        const authenticatedRole =
+            normalizeRole(authenticatedProfile?.role) ||
+            normalizeRole(authData.user.app_metadata?.role) ||
+            normalizeRole(authData.user.user_metadata?.role);
+
+        const isImpersonating = !!requestedStoreId && requestedStoreId !== authData.user.id;
+
+        if (isImpersonating && authenticatedRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Impersonacao permitida apenas para administradores.'
+            });
+        }
+
+        const targetUserId = requestedStoreId || authData.user.id;
 
         const { data: profile, error: profileError } = await supabaseAdmin
             .from('user_profiles')
             .select('id, email, role, is_super_store, city_slug, store_slug, store_name')
-            .eq('id', authData.user.id)
+            .eq('id', targetUserId)
             .single();
 
         if (profileError || !profile) {
-            return res.status(403).json({ success: false, message: 'Perfil do usuário não encontrado.' });
+            return res.status(403).json({
+                success: false,
+                message: isImpersonating ? 'Perfil da loja impersonada nao encontrado.' : 'Perfil do usuario nao encontrado.'
+            });
         }
 
         req.user = {
             id: profile.id,
-            email: authData.user.email || profile.email || null,
-            role: profile.role || null,
+            email: profile.email || authData.user.email || null,
+            role: normalizeRole(profile.role),
             is_super_store: !!profile.is_super_store,
             city_slug: profile.city_slug || null,
             store_slug: profile.store_slug || null,
@@ -61,8 +103,8 @@ export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res
 
         next();
     } catch (error: any) {
-        console.error('[SupabaseAuth] Erro ao autenticar requisição:', error);
-        return res.status(500).json({ success: false, message: 'Erro interno na autenticação.' });
+        console.error('[SupabaseAuth] Erro ao autenticar requisicao:', error);
+        return res.status(500).json({ success: false, message: 'Erro interno na autenticacao.' });
     }
 };
 

@@ -1,11 +1,20 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 
 vi.mock('../../services/cloud', () => ({
     getUserRole: vi.fn().mockResolvedValue('store_partner'),
-    getClient: vi.fn(() => null),
+    getClient: vi.fn(() => ({
+        auth: {
+            getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'store-test' } } })
+        },
+        channel: vi.fn(() => ({
+            on: vi.fn().mockReturnThis(),
+            subscribe: vi.fn(() => ({ unsubscribe: vi.fn() }))
+        })),
+        removeChannel: vi.fn()
+    })),
     getMyPartnerProfile: vi.fn(),
     getSystemPulse: vi.fn().mockResolvedValue({
         notifications: [],
@@ -29,6 +38,10 @@ vi.mock('../../utils/dialogService', () => ({
 }));
 
 vi.mock('@list-labs/react-joyride', () => ({ default: () => null }));
+vi.mock('../../services/notificationService', () => ({
+    initNotificationService: vi.fn(),
+    stopNotificationService: vi.fn()
+}));
 vi.mock('../Tour/TourContext', () => ({
     useTour: () => ({
         steps: [],
@@ -41,6 +54,11 @@ vi.mock('../Tour/TourContext', () => ({
     })
 }));
 vi.mock('../Tour/Tour', () => ({ default: () => null }));
+vi.mock('../../services/chatOfflineService', () => ({
+    chatOfflineService: {
+        getUnreadCount: vi.fn().mockResolvedValue(0)
+    }
+}));
 
 import * as cloud from '../../services/cloud';
 import { App } from '../App';
@@ -48,24 +66,42 @@ import { App } from '../App';
 describe('WhatsBot navigation', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        window.history.pushState({}, '', '/loja/dashboard');
+        Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+        Object.defineProperty(window, 'matchMedia', {
+            configurable: true,
+            writable: true,
+            value: vi.fn().mockImplementation((query: string) => ({
+                matches: false,
+                media: query,
+                onchange: null,
+                addEventListener: vi.fn(),
+                removeEventListener: vi.fn(),
+                addListener: vi.fn(),
+                removeListener: vi.fn(),
+                dispatchEvent: vi.fn()
+            }))
+        });
     });
 
     it('mostra item WhatsBot apenas para super lojista', async () => {
-        (cloud.getMyPartnerProfile as any).mockResolvedValueOnce({ is_super_store: true });
+        (cloud.getMyPartnerProfile as any).mockResolvedValue({ is_super_store: true });
 
-        render(<App userId="store-1" userRole="store_partner" />);
-        fireEvent.click(document.getElementById('header-menu-button')!);
+        const view = render(<App userId="store-1" userRole="store_partner" />);
 
-        expect(await screen.findByText('WhatsBot')).toBeInTheDocument();
+        expect(await screen.findByTitle('WhatsBot')).toBeInTheDocument();
+        view.unmount();
+        await Promise.resolve();
     });
 
     it('oculta item WhatsBot para lojista comum', async () => {
-        (cloud.getMyPartnerProfile as any).mockResolvedValueOnce({ is_super_store: false });
+        (cloud.getMyPartnerProfile as any).mockResolvedValue({ is_super_store: false });
 
-        render(<App userId="store-2" userRole="store_partner" />);
-        fireEvent.click(document.getElementById('header-menu-button')!);
+        const view = render(<App userId="store-2" userRole="store_partner" />);
 
-        expect(await screen.findByText('Painel')).toBeInTheDocument();
-        expect(screen.queryByText('WhatsBot')).not.toBeInTheDocument();
+        expect((await screen.findAllByTitle('Dashboard')).length).toBeGreaterThan(0);
+        expect(screen.queryByTitle('WhatsBot')).not.toBeInTheDocument();
+        view.unmount();
+        await Promise.resolve();
     });
 });

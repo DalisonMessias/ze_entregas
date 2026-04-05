@@ -1,4 +1,4 @@
-import { WhatsappConversation, WhatsappMessage } from '../components/InternalChat/types';
+import { ChatConversation, ChatMessage } from '../components/InternalChat/types';
 
 const DB_NAME = 'ze_entregas_chat_offline';
 const DB_VERSION = 2;
@@ -63,7 +63,7 @@ export class ChatOfflineService {
         }
     }
 
-    async saveConversations(storeId: string, conversations: WhatsappConversation[]) {
+    async saveConversations(storeId: string, conversations: ChatConversation[]) {
         const store = await this.getStore('conversations', 'readwrite');
         if (!store) return;
 
@@ -88,7 +88,7 @@ export class ChatOfflineService {
         return new Promise((resolve) => {
             const request = store.getAll();
             request.onsuccess = () => {
-                const all = request.result as WhatsappConversation[];
+                const all = request.result as ChatConversation[];
                 const total = all.reduce((acc, curr) => acc + (curr.unread_count || 0), 0);
                 resolve(total);
             };
@@ -96,21 +96,21 @@ export class ChatOfflineService {
         });
     }
 
-    async getConversations(storeId: string): Promise<WhatsappConversation[]> {
+    async getConversations(storeId: string): Promise<ChatConversation[]> {
         const store = await this.getStore('conversations');
         if (!store) return [];
 
         return new Promise((resolve) => {
             const request = store.getAll();
             request.onsuccess = () => {
-                const all = request.result as Array<WhatsappConversation & { store_id?: string }>;
+                const all = request.result as Array<ChatConversation & { store_id?: string }>;
                 resolve(all.filter((conversation) => conversation.store_id === storeId));
             };
             request.onerror = () => resolve([]);
         });
     }
 
-    async saveMessages(storeId: string, conversationId: string, messages: WhatsappMessage[]) {
+    async saveMessages(storeId: string, conversationId: string, messages: ChatMessage[]) {
         const store = await this.getStore('messages', 'readwrite');
         if (!store) return;
 
@@ -119,14 +119,14 @@ export class ChatOfflineService {
         }
     }
 
-    async getMessages(storeId: string, conversationId: string): Promise<WhatsappMessage[]> {
+    async getMessages(storeId: string, conversationId: string): Promise<ChatMessage[]> {
         const store = await this.getStore('messages');
         if (!store) return [];
 
         return new Promise((resolve) => {
             const request = store.getAll();
             request.onsuccess = () => {
-                const all = request.result as Array<WhatsappMessage & { store_id?: string; conversation_id?: string }>;
+                const all = request.result as Array<ChatMessage & { store_id?: string; conversation_id?: string }>;
                 resolve(all.filter((message) => message.store_id === storeId && message.conversation_id === conversationId));
             };
             request.onerror = () => resolve([]);

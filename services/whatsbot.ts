@@ -2,20 +2,35 @@ import axios from 'axios';
 import { WhatsBotConfigPayload, WhatsBotStatus } from '../types';
 import { getWhatsBotApiBaseUrl } from '../utils/apiConfig';
 import { getClient } from './cloud';
+import { getImpersonationState } from './impersonation';
+
+const getImpersonationHeaders = (): Record<string, string> => {
+    if (typeof window === 'undefined') return {};
+
+    const state = getImpersonationState();
+    if (!state?.isActive || !state.storeId) {
+        return {};
+    }
+
+    return {
+        'x-impersonation-store-id': state.storeId
+    };
+};
 
 const getAuthHeaders = async () => {
     const client = getClient();
     if (!client) {
-        throw new Error('Cliente Supabase não disponível.');
+        throw new Error('Cliente Supabase nao disponivel.');
     }
 
     const { data: { session } } = await client.auth.getSession();
     if (!session?.access_token) {
-        throw new Error('Sessão expirada. Faça login novamente.');
+        throw new Error('Sessao expirada. Faca login novamente.');
     }
 
     return {
-        Authorization: `Bearer ${session.access_token}`
+        Authorization: `Bearer ${session.access_token}`,
+        ...getImpersonationHeaders()
     };
 };
 
