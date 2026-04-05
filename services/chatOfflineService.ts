@@ -1,4 +1,3 @@
-
 import { WhatsappConversation, WhatsappMessage } from '../components/InternalChat/types';
 
 const DB_NAME = 'ze_entregas_chat_offline';
@@ -7,9 +6,12 @@ const DB_VERSION = 2;
 export class ChatOfflineService {
     private db: IDBDatabase | null = null;
 
+    private hasIndexedDbSupport(): boolean {
+        return typeof indexedDB !== 'undefined';
+    }
+
     async init(): Promise<void> {
-        // console.log('🔹 ChatOfflineService Init (v2)');
-        if (this.db) return;
+        if (this.db || !this.hasIndexedDbSupport()) return;
 
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -46,28 +48,43 @@ export class ChatOfflineService {
         });
     }
 
-    private async getStore(name: string, mode: IDBTransactionMode = 'readonly') {
+    private async getStore(name: string, mode: IDBTransactionMode = 'readonly'): Promise<IDBObjectStore | null> {
         await this.init();
-        const transaction = this.db!.transaction(name, mode);
+        if (!this.db) return null;
+
+        const transaction = this.db.transaction(name, mode);
         return transaction.objectStore(name);
     }
 
-    // Conversas
+    private notifyUnreadChange(count: number) {
+        if (typeof window !== 'undefined') {
+            const event = new CustomEvent('chat_unread_update', { detail: { count } });
+            window.dispatchEvent(event);
+        }
+    }
+
     async saveConversations(storeId: string, conversations: WhatsappConversation[]) {
         const store = await this.getStore('conversations', 'readwrite');
+        if (!store) return;
+
         let totalUnread = 0;
         for (const conv of conversations) {
             store.put({ ...conv, store_id: storeId });
-            totalUnread += (conv.unread_count || 0);
+            totalUnread += conv.unread_count || 0;
         }
+
         this.notifyUnreadChange(totalUnread);
     }
 
     async getUnreadCount(): Promise<number> {
-        const db = await this.init(); // Ensure init
+        if (!this.hasIndexedDbSupport()) return 0;
+
+        await this.init();
         if (!this.db) return 0;
+
         const transaction = this.db.transaction('conversations', 'readonly');
         const store = transaction.objectStore('conversations');
+
         return new Promise((resolve) => {
             const request = store.getAll();
             request.onsuccess = () => {
@@ -79,47 +96,48 @@ export class ChatOfflineService {
         });
     }
 
-    private notifyUnreadChange(count: number) {
-        if (typeof window !== 'undefined') {
-            const event = new CustomEvent('chat_unread_update', { detail: { count } });
-            window.dispatchEvent(event);
-        }
-    }
-
     async getConversations(storeId: string): Promise<WhatsappConversation[]> {
         const store = await this.getStore('conversations');
+        if (!store) return [];
+
         return new Promise((resolve) => {
             const request = store.getAll();
             request.onsuccess = () => {
-                const all = request.result as any[];
-                resolve(all.filter(c => c.store_id === storeId));
+                const all = request.result as Array<WhatsappConversation & { store_id?: string }>;
+                resolve(all.filter((conversation) => conversation.store_id === storeId));
             };
+            request.onerror = () => resolve([]);
         });
     }
 
-    // Mensagens
     async saveMessages(storeId: string, conversationId: string, messages: WhatsappMessage[]) {
         const store = await this.getStore('messages', 'readwrite');
+        if (!store) return;
+
         for (const msg of messages) {
-            store.put({ ...msg, store_id: storeId });
+            store.put({ ...msg, store_id: storeId, conversation_id: conversationId });
         }
     }
 
     async getMessages(storeId: string, conversationId: string): Promise<WhatsappMessage[]> {
         const store = await this.getStore('messages');
+        if (!store) return [];
+
         return new Promise((resolve) => {
             const request = store.getAll();
             request.onsuccess = () => {
-                const all = request.result as any[];
-                resolve(all.filter(m => m.store_id === storeId && m.conversation_id === conversationId));
+                const all = request.result as Array<WhatsappMessage & { store_id?: string; conversation_id?: string }>;
+                resolve(all.filter((message) => message.store_id === storeId && message.conversation_id === conversationId));
             };
+            request.onerror = () => resolve([]);
         });
     }
 
-    // Fila Offline (Mensagens enviadas enquanto offline)
     async queueMessage(storeId: string, to: string, text: string, attendantId?: string) {
-        const store = await this.getStore('pending_sync', 'readwrite');
         const tempId = `offline_${Date.now()}`;
+        const store = await this.getStore('pending_sync', 'readwrite');
+        if (!store) return tempId;
+
         store.add({
             temp_id: tempId,
             store_id: storeId,
@@ -129,25 +147,32 @@ export class ChatOfflineService {
             type: 'text',
             timestamp: new Date().toISOString()
         });
+
         return tempId;
     }
 
     async getPendingSync(): Promise<any[]> {
         const store = await this.getStore('pending_sync');
+        if (!store) return [];
+
         return new Promise((resolve) => {
             const request = store.getAll();
             request.onsuccess = () => resolve(request.result);
+            request.onerror = () => resolve([]);
         });
     }
 
     async clearPendingItem(tempId: string) {
         const store = await this.getStore('pending_sync', 'readwrite');
+        if (!store) return;
+
         store.delete(tempId);
     }
 
-    // Ordem das Conversas
     async saveConversationOrders(orders: any[]) {
         const store = await this.getStore('conversation_orders', 'readwrite');
+        if (!store) return;
+
         for (const order of orders) {
             store.put(order);
         }
@@ -156,11 +181,13 @@ export class ChatOfflineService {
     async getConversationOrders(attendantId: string, storeId: string): Promise<any[]> {
         try {
             const store = await this.getStore('conversation_orders');
+            if (!store) return [];
+
             return new Promise((resolve) => {
                 const request = store.getAll();
                 request.onsuccess = () => {
                     const all = request.result as any[];
-                    resolve(all.filter(o => o.attendant_id === attendantId && o.store_id === storeId));
+                    resolve(all.filter((order) => order.attendant_id === attendantId && order.store_id === storeId));
                 };
                 request.onerror = () => resolve([]);
             });

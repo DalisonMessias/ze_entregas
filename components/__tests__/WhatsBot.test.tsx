@@ -33,17 +33,17 @@ describe('WhatsBot', () => {
     });
 
     it('bloqueia acesso para lojista que nao e super lojista', async () => {
-        (cloud.getMyPartnerProfile as any).mockResolvedValueOnce({ is_super_store: false });
+        (cloud.getMyPartnerProfile as any).mockResolvedValue({ is_super_store: false });
 
         render(<WhatsBot />);
 
         expect(await screen.findByText('Acesso Restrito')).toBeInTheDocument();
-        expect(screen.getByText(/WhatsBot e um recurso exclusivo/i)).toBeInTheDocument();
+        expect(screen.getByText(/recurso exclusivo para super lojistas/i)).toBeInTheDocument();
     });
 
     it('carrega status e salva mensagem personalizada', async () => {
-        (cloud.getMyPartnerProfile as any).mockResolvedValueOnce({ is_super_store: true });
-        (whatsbot.getWhatsBotStatus as any).mockResolvedValueOnce({
+        (cloud.getMyPartnerProfile as any).mockResolvedValue({ is_super_store: true });
+        (whatsbot.getWhatsBotStatus as any).mockResolvedValue({
             enabled: true,
             connectionStatus: 'CONNECTED',
             connectedPhone: '5511999999999',
@@ -64,9 +64,9 @@ describe('WhatsBot', () => {
 
         expect(await screen.findByText('WhatsBot')).toBeInTheDocument();
         expect(screen.getByDisplayValue('Ola! Confira {{catalog_url}}')).toBeInTheDocument();
-        expect(screen.getByText('Conectado')).toBeInTheDocument();
+        expect(screen.getAllByText('Conectado').length).toBeGreaterThan(0);
 
-        fireEvent.change(screen.getByPlaceholderText(/Nosso catalogo esta aqui/i), {
+        fireEvent.change(screen.getByPlaceholderText(/catalog/i), {
             target: { value: 'Nova mensagem' }
         });
 

@@ -474,7 +474,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     }, []);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
         const media = window.matchMedia('(max-width: 767px)');
         const handleResize = () => setIsMobileViewport(media.matches);
         handleResize();
