@@ -1743,19 +1743,44 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                             {/* --- STORE MENU --- */}
                             {isStore && (
                                 <>
-                                    <MenuSection title="Minha Loja" />
-                                    <MenuButton icon={LayoutDashboard} label="Dashboard" tab="wallet" />
-                                    <MenuButton icon={Package} label="Pedidos & Entregas" tab="associate_orders" />
+                                    <MenuSection title="Visão Geral" />
+                                    <MenuButton icon={LayoutDashboard} label="Dashboard" tab="wallet" id="store-dashboard-link" />
+                                    <MenuButton icon={Power} label="Status da Loja" tab="store_status" />
+                                    <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
+                                    <MenuButton icon={TrendingUp} label="Desempenho" tab="store_performance" />
+
+                                    <MenuSection title="Operação" />
                                     <MenuButton icon={Plus} label="Nova Entrega" tab="new_request" />
-                                    <MenuButton icon={History} label="Histórico" tab="history" />
-                                    <MenuButton icon={Wallet} label="Financeiro" tab="store_finance_panel" />
+                                    <MenuButton icon={ClipboardList} label="Pedidos Ativos" tab="internal_orders" badge={pendingTicketsCount} />
+                                    <MenuButton icon={History} label="Histórico Geral" tab="history" />
+                                    <MenuButton icon={ShoppingBag} label="Catálogo / Produtos" tab="store_catalog" />
+                                    <MenuButton icon={FileText} label="Comanda (Novo)" tab="internal_orders_new" />
+                                    <MenuButton icon={Package} label="Entregadores" tab="associate_orders" />
+
+                                    <MenuSection title="Gestão & Equipe" />
                                     <MenuButton icon={Users} label="Minha Equipe" tab="store_team" />
+                                    <MenuButton icon={Settings} label="Ajustes da Loja" tab="store_settings" />
+                                    <MenuButton icon={Crown} label="Planos & Assinatura" tab="store_plans" />
 
                                     <MenuSection title="Marketing & Vendas" />
                                     <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
+                                    <MenuButton icon={Banknote} label="Promoções & Cupons" tab="store_promotions" />
                                     <MenuButton icon={Star} label="Avaliações" tab="store_ratings" />
-                                    <MenuSection title="Configurações" />
-                                    <MenuButton icon={Settings} label="Ajustes da Loja" tab="store_settings" />
+                                    <MenuButton icon={Zap} label="Destaque na Cidade" tab="store_highlight" />
+
+                                    <MenuSection title="Comunicação" />
+                                    <MenuButton icon={MessageSquare} label="Chat com Clientes" tab="internal_chat" />
+                                    <MenuButton icon={MessageCircle} label="Chat c/ Entregadores" tab="store_drivers_chat" />
+                                    <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
+
+                                    <MenuSection title="Finanças & Integração" />
+                                    <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
+                                    <MenuButton icon={CreditCard} label="ZéPay" tab="zepay_store" />
+                                    <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
+                                    <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
+                                    <MenuButton icon={Key} label="Documentação API" tab="store_api_docs" />
+                                    <MenuButton icon={Download} label="Importar/Exportar" tab="store_product_import" />
+                                    <MenuButton icon={ImageIcon} label="Catálogo Impresso" tab="store_print_catalog" />
                                 </>
                             )}
 

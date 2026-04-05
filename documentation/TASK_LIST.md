@@ -1,6 +1,7 @@
-# Lista de Tarefas - Restauração da Tela de Upgrade Original
+# Lista de Tarefas - Expansão do Menu Lateral do Lojista
 
-- [x] Remover arquivo redundante `components/UpgradeToPartner.tsx`.
-- [x] Remover importação incorreta de `UpgradeToPartner` em `components/App.tsx`.
-- [x] Restaurar o switch case de `upgrade_to_partner` no `components/App.tsx` para usar o componente interno original `UpgradeToPartnerPage`.
-- [x] Validar que o fluxo de envio de documentos (PartnerDocumentation) está aparecendo corretamente.
+- [ ] Identificar todas as seções faltantes no sidebar para `store_partner` no `App.tsx`.
+- [ ] Atualizar o bloco `isStore` no `renderSidebar` para incluir as seções categorizadas.
+- [ ] Ajustar as seções para que fiquem bem organizadas com títulos (`MenuSection`).
+- [ ] Verificar se todas as abas novas estão corretas no `accessControl.ts`.
+- [ ] Confirmar o título da página (`headerTitle`) para as novas abas integradas.
