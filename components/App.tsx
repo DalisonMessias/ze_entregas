@@ -102,6 +102,8 @@ const MerchantPOSDesktop = React.lazy(() => import('./MerchantPOSDesktop').then(
 const DeliveryNavigation = React.lazy(() => import('./DeliveryNavigation').then(m => ({ default: m.DeliveryNavigation })));
 const ReferralPublicPage = React.lazy(() => import('./ReferralPublicPage').then(m => ({ default: m.ReferralPublicPage })));
 const ReferralProgram = React.lazy(() => import('./ReferralProgram').then(m => ({ default: m.ReferralProgram })));
+const DriverBonusDashboard = React.lazy(() => import('./DriverBonusDashboard').then(m => ({ default: m.DriverBonusDashboard })));
+
 
 // Additional Components from Remote
 const AddressBook = React.lazy(() => import('./AddressBook').then(module => ({ default: module.AddressBook })));
@@ -1114,6 +1116,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'insurance': return <InsurancePage />;
                 case 'referral_info': return <ReferralProgram userRole={effectiveRole} onClose={() => navigate(defaultTabByRole[effectiveRole] || 'home')} />;
                 case 'referral_public': return <ReferralPublicPage />;
+                case 'driver_bonuses': return <DriverBonusDashboard />;
 
                 case 'about': return <AboutApp />;
                 case 'faq': return <FaqPage />;
@@ -1742,95 +1745,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={DollarSign} label="Financeiro das Lojas" tab="admin_store_finance" />
                                     <MenuButton icon={ClipboardList} label="Pedidos por Loja" tab="admin_store_orders" />
                                     <MenuButton icon={CreditCard} label="Gateways de Pagamento" tab="admin_payment_gateways" />
-                                    <MenuButton icon={Link2} label="Mercado Pago" tab="admin_mercadopago" />
-                                    <MenuButton icon={Smartphone} label="Configurar PIX" tab="admin_pix_config" />
-                                    <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
-                                    <MenuButton icon={Link2} label="Configurar InfinitePay" tab="admin_infinitepay" />
-
-                                    <MenuSection title="Marketing & Conteúdo" />
-                                    <MenuButton icon={Gift} label="Indique e Ganhe" onClick={() => navigate('referral_info')} />
-                                    <MenuButton icon={Megaphone} label="Gestão de Indicações" tab="admin_referrals" />
-                                    <MenuButton icon={Bell} label="Notificações Globais" tab="admin_notifications" />
-                                    <MenuButton icon={Shield} label="Config. Seguros" tab="admin_insurance" />
-                                    <MenuButton icon={FileText} label="Institucional" tab="admin_institutional" />
-                                    <MenuButton icon={Newspaper} label="Novidades da Plataforma" tab="admin_platform_news" />
-
-                                    <MenuSection title="Configurações do Sistema" />
-                                    <MenuButton icon={Cloud} label="APIs & Integrações" tab="admin_api_keys" />
-                                    <MenuButton icon={Smartphone} label="App PWA" tab="admin_pwa" />
-                                    <MenuButton icon={DollarSign} label="Taxas & Custos" tab="admin_fees" />
-                                    <MenuButton icon={Headphones} label="Suporte & Tickets" tab="admin_support" />
-                                    <MenuButton icon={TrendingUp} label="Gestão de Investimentos" tab="admin_investments" />
-                                </>
-                            )}
-
-                            {/* --- STORE PARTNER MENU --- */}
-                            {isStore && (
-                                <>
-                                    <MenuSection title="Minha Loja" />
-                                    <MenuButton icon={Power} label="Status da Loja" tab="store_status" />
-                                    <MenuButton icon={LayoutDashboard} label="Painel" tab="wallet" id="store-wallet-link" />
-                                    <MenuButton icon={Truck} label="Solicitar Entrega" tab="new_request" id="store-new-request-link" />
-                                    <MenuButton icon={History} label="Histórico de Pedidos" tab="history" />
-                                    <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
-                                    <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
-                                    <MenuButton icon={MessageSquare} label="Chat com Clientes" tab="internal_chat" />
-                                    <MenuButton icon={MessageCircle} label="Chat c/ Entregadores" tab="store_drivers_chat" />
-                                    <MenuButton icon={Users} label="Colaboradores" tab="store_team" />
-                                    <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
-                                    <MenuButton icon={DollarSign} label="Empréstimos" tab="store_loans" />
-
-                                    <MenuSection title="Gestão" />
-                                    <MenuButton icon={Gift} label="Indique e Ganhe" onClick={() => navigate('referral_info')} />
-                                    <MenuButton icon={BarChart3} label="Relatórios" tab="store_reports" />
-                                    <MenuButton icon={TrendingUp} label="Desempenho" tab="store_performance" />
-                                    <MenuButton icon={Megaphone} label="Marketing" tab="store_marketing" />
-                                    <MenuButton icon={Star} label="Destaque na Cidade" tab="store_highlight" />
-                                    <MenuButton icon={Cloud} label="Integrações" tab="store_integrations" />
-                                    <MenuButton icon={Star} label="Avaliações" tab="store_ratings" />
-                                    <MenuButton icon={Settings} label="Configurações" tab="store_settings" />
-                                    <MenuButton icon={Crown} label="Planos" tab="store_plans" />
-                                    <MenuButton icon={Smartphone} label="Recebimento PIX" tab="store_receiving_payment" />
-                                    <MenuButton icon={Download} label="Importar/Exportar Produtos" tab="store_product_import" />
-                                    <MenuButton icon={ShoppingBag} label="Catálogo" tab="store_catalog" />
-                                    <MenuButton icon={Banknote} label="Promoções e Cupons" tab="store_promotions" />
-                                    <MenuButton icon={FileText} label="Comanda" tab="internal_orders_new" />
-                                    <MenuButton icon={ClipboardList} label="Pedidos" tab="internal_orders" badge={pendingTicketsCount} />
-                                    <MenuButton icon={CreditCard} label="Financeiro ZéPay" tab="zepay_store" />
-                                    <MenuButton icon={Key} label="Docs API / Integradores" tab="store_api_docs" />
-                                </>
-                            )}
-
-
-                            {/* --- USER MENU --- */}
-                            {effectiveRole === 'user' && (
-                                <>
-                                    <MenuSection title="Minha Conta" />
-                                    <MenuButton icon={Home} label="Início" tab="home" />
-                                    <MenuButton icon={Gift} label="Indique e Ganhe" onClick={() => navigate('referral_info')} />
-                                    <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
-                                    <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
-                                </>
-                            )}
-
-                            {/* --- SHARED DRIVER MENU (PARTNER + NORMAL) --- */}
-                            {(isPartner || isNormalDriver) && (
-                                <>
-                                    <MenuSection title="Plataforma Zé" />
-                                    <MenuButton icon={ClipboardList} label="Painel Diário" tab="daily_panel" id="driver-daily-panel-link" />
-                                    <MenuButton icon={Package} label="Pedidos da Loja" tab="associate_orders" />
-                                    <MenuButton icon={Truck} label="Painel de Corridas" tab="partner" />
-                                    <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
-                                    <MenuButton icon={Star} label="Meu Score" tab="score" />
-                                    <MenuButton icon={History} label="Histórico Local" tab="local_history" />
-                                    <MenuButton icon={DollarSign} label="Empréstimos" tab="loans" />
-                                    <MenuButton icon={Megaphone} label="Divulgação" tab="driver_marketing" />
-                                    <MenuButton icon={History} label="Meus Pedidos" tab="my_orders" />
-                                    <MenuButton icon={Shield} label="Seguro Parceiro" tab="insurance" />
-
-                                    <MenuSection title="Crescimento" />
-                                    <MenuButton icon={Gift} label="Indique e Ganhe" onClick={() => navigate('referral_info')} />
-                                    <MenuButton icon={Store} label="Lojas Vinculadas" tab="associate_driver" />
 
                                     <MenuSection title="Ferramentas" />
                                     <MenuButton icon={ListPlus} label="Lista de Rotas" tab="route_list" />
