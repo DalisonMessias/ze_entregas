@@ -1011,3 +1011,164 @@ GRANT ALL ON TABLE public.whatsbot_auth_keys TO authenticated;
 -- Adicionar campo para mensagem de loja fechada (WhatsBot)
 ALTER TABLE public.whatsbot_settings 
 ADD COLUMN IF NOT EXISTS custom_closed_message TEXT;
+
+-- ==================================================================
+-- SISTEMA DE PLANOS REESTRUTURADO (06/04/2026)
+-- ==================================================================
+
+-- 1. Adicionar coluna plan_level em user_profiles
+-- Valores: 'GRATUITO', 'COMISSAO', 'MENSALIDADE'
+ALTER TABLE public.user_profiles
+ADD COLUMN IF NOT EXISTS plan_level TEXT DEFAULT 'GRATUITO';
+
+-- 2. Migrar dados existentes: quem já tem is_super_store = true recebe o plan_level do super_store_plan_type
+-- Quem estava no plano COMISSAO
+UPDATE public.user_profiles
+SET plan_level = 'COMISSAO'
+WHERE is_super_store = TRUE 
+  AND super_store_plan_type = 'COMISSAO'
+  AND (plan_level IS NULL OR plan_level = 'GRATUITO');
+
+-- Quem estava no plano MENSALIDADE
+UPDATE public.user_profiles
+SET plan_level = 'MENSALIDADE'
+WHERE is_super_store = TRUE 
+  AND super_store_plan_type = 'MENSALIDADE'
+  AND (plan_level IS NULL OR plan_level = 'GRATUITO');
+
+-- 3. Atualizar trigger handle_new_user para atribuir plan_level GRATUITO a novos lojistas
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.user_profiles (id, email, name, avatar_url, role, phone_number, cpf, city, store_name, store_document, address_street, address_number, address_district, address_zip, address_state, association_code, plan_level)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    NEW.raw_user_meta_data->>'name',
+    NEW.raw_user_meta_data->>'avatar_url',
+    COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person')::public.user_role,
+    NEW.raw_user_meta_data->>'phone_number',
+    NEW.raw_user_meta_data->>'cpf',
+    NEW.raw_user_meta_data->>'city',
+    NEW.raw_user_meta_data->>'store_name',
+    NEW.raw_user_meta_data->>'store_document',
+    NEW.raw_user_meta_data->>'address_street',
+    NEW.raw_user_meta_data->>'address_number',
+    NEW.raw_user_meta_data->>'address_district',
+    NEW.raw_user_meta_data->>'address_zip',
+    NEW.raw_user_meta_data->>'address_state',
+    upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6)),
+    'GRATUITO'
+  );
+
+  -- Logística de Carteiras (Zebank vs ZéPay)
+  -- 1. Carteira Pessoal (Zebank) - Agora para TODOS os usuários (Clientes, Entregadores e Lojistas)
+  INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal)
+  VALUES (NEW.id, 0, 0)
+  ON CONFLICT (driver_id) DO NOTHING;
+
+  -- 2. Carteira de Vendas (ZéPay) - Apenas para Lojistas (Preservado)
+  IF COALESCE(NEW.raw_user_meta_data->>'role', 'delivery_person') IN ('store_partner') THEN
+      INSERT INTO public.store_wallets (store_id, balance_decimal)
+      VALUES (NEW.id, 0)
+      ON CONFLICT (store_id) DO NOTHING;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. RPC: Retornar status completo do plano atual do usuário logado
+CREATE OR REPLACE FUNCTION public.get_my_plan_status()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_user_id UUID := auth.uid();
+    v_profile RECORD;
+    v_is_expired BOOLEAN := FALSE;
+    v_effective_level TEXT;
+    v_plan_status TEXT;
+BEGIN
+    SELECT 
+        is_super_store,
+        super_store_plan_type,
+        super_store_expiration,
+        plan_level
+    INTO v_profile
+    FROM public.user_profiles
+    WHERE id = v_user_id;
+
+    IF v_profile IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'Perfil não encontrado.'
+        );
+    END IF;
+
+    -- Verificar se o plano mensal expirou
+    IF v_profile.super_store_plan_type = 'MENSALIDADE' 
+       AND v_profile.super_store_expiration IS NOT NULL 
+       AND v_profile.super_store_expiration < NOW() THEN
+        v_is_expired := TRUE;
+    END IF;
+
+    -- Determinar nível efetivo do plano
+    IF v_is_expired THEN
+        v_effective_level := 'GRATUITO';
+        v_plan_status := 'EXPIRADO';
+    ELSIF v_profile.is_super_store = TRUE THEN
+        v_effective_level := COALESCE(v_profile.super_store_plan_type, 'COMISSAO');
+        v_plan_status := 'ATIVO';
+    ELSE
+        v_effective_level := 'GRATUITO';
+        v_plan_status := 'GRATUITO';
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'plan_level', v_effective_level,
+        'plan_status', v_plan_status,
+        'is_super_store', COALESCE(v_profile.is_super_store, FALSE),
+        'super_store_plan_type', v_profile.super_store_plan_type,
+        'super_store_expiration', v_profile.super_store_expiration,
+        'is_expired', v_is_expired
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_my_plan_status() TO authenticated;
+
+-- 5. RPC: Verificar e aplicar downgrade automático em planos mensais expirados
+-- Deve ser chamada periodicamente pelo sistema (ou no carregamento da página de planos)
+CREATE OR REPLACE FUNCTION public.check_and_downgrade_expired_plans()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_count INTEGER := 0;
+BEGIN
+    -- Rebaixar lojas cujo plano mensal expirou
+    UPDATE public.user_profiles
+    SET 
+        is_super_store = FALSE,
+        plan_level = 'GRATUITO'
+    WHERE 
+        is_super_store = TRUE
+        AND super_store_plan_type = 'MENSALIDADE'
+        AND super_store_expiration IS NOT NULL
+        AND super_store_expiration < NOW();
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'downgraded_count', v_count
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.check_and_downgrade_expired_plans() TO authenticated, service_role;
+
