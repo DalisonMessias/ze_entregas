@@ -475,7 +475,58 @@ class WhatsBotInstance {
         }
     }
 
+    private async upsertContacts(contacts: { id: string; name?: string | null; notify?: string | null }[]) {
+        if (!contacts.length) return;
+
+        const contactData = contacts
+            .map((c) => {
+                const phone = normalizePhone(c.id);
+                // Ignora grupos e números inválidos
+                if (!phone || c.id.includes('@g.us') || c.id.includes('@broadcast')) return null;
+
+                return {
+                    store_id: this.storeId,
+                    phone: phone,
+                    push_name: c.notify || null,
+                    name: c.name || null,
+                    updated_at: new Date().toISOString()
+                };
+            })
+            .filter((c): c is NonNullable<typeof c> => c !== null);
+
+        if (!contactData.length) return;
+
+        // Chunk para evitar limites do Postgres/Supabase em sincronizações de massa
+        const chunkSize = 100;
+        for (let i = 0; i < contactData.length; i += chunkSize) {
+            const chunk = contactData.slice(i, i + chunkSize);
+            const { error } = await supabaseAdmin
+                .from('whatsbot_contacts')
+                .upsert(chunk, { onConflict: 'store_id,phone' });
+
+            if (error) {
+                console.error(`[WhatsBot ${this.storeId}] Erro ao sincronizar contatos:`, error.message);
+            } else {
+                console.log(`[WhatsBot ${this.storeId}] 👥 Sincronizados ${chunk.length} contatos com sucesso.`);
+            }
+        }
+    }
+
     private setupEventHandlers(sock: WASocket) {
+        sock.ev.on('contacts.upsert', async (contacts) => {
+            if (sock !== this.sock) return;
+            console.log(`[WhatsBot ${this.storeId}] 📥 Recebidos ${contacts?.length || 0} novos contatos (upsert).`);
+            await this.upsertContacts(contacts);
+        });
+
+        sock.ev.on('messaging-history.set', async ({ contacts }) => {
+            if (sock !== this.sock) return;
+            if (contacts?.length) {
+                console.log(`[WhatsBot ${this.storeId}] 📥 Recebidos ${contacts.length} contatos do histórico (messaging-history.set).`);
+                await this.upsertContacts(contacts);
+            }
+        });
+
         sock.ev.on('connection.update', async (update) => {
             if (sock !== this.sock) return;
 
@@ -632,14 +683,18 @@ class WhatsBotInstance {
 
             console.log(`[WhatsBot ${this.storeId}] 📢 Disparando campanha "${campaign.name}" para ${recipient.phone}...`);
 
+            const campaignMessageWithLink = campaign.link_url 
+                ? `${campaign.message}\n\n${campaign.link_url}`
+                : campaign.message;
+
             try {
                 if (campaign.image_url) {
                     await this.sock.sendMessage(jid, { 
                         image: { url: campaign.image_url }, 
-                        caption: campaign.message 
+                        caption: campaignMessageWithLink 
                     });
                 } else {
-                    await this.sendText(jid, campaign.message);
+                    await this.sendText(jid, campaignMessageWithLink, campaign.link_url);
                 }
 
                 // Sucesso
@@ -907,7 +962,14 @@ class WhatsBotServiceManager {
         return data;
     }
 
-    public async createCampaign(storeId: string, name: string, message: string, recipients: string[], imageUrl: string | null = null) {
+    public async createCampaign(
+        storeId: string, 
+        name: string, 
+        message: string, 
+        recipients: string[], 
+        imageUrl: string | null = null,
+        linkUrl: string | null = null
+    ) {
         // 1. Criar a campanha
         const { data: campaign, error: campaignError } = await supabaseAdmin
             .from('whatsbot_campaigns')
@@ -916,6 +978,7 @@ class WhatsBotServiceManager {
                 name,
                 message,
                 image_url: imageUrl,
+                link_url: linkUrl,
                 status: 'pending',
                 total_recipients: recipients.length,
                 sent_successfully: 0,

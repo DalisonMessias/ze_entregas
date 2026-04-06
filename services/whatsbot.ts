@@ -86,10 +86,11 @@ export const createWhatsBotCampaign = async (
     message: string,
     recipients: string[],
     imageUrl: string | null = null,
+    linkUrl: string | null = null,
     options?: WhatsBotRequestOptions
 ): Promise<any> => {
     const headers = await getAuthHeaders(options);
-    const { data } = await axios.post<any>(`${getWhatsBotApiBaseUrl()}/campaigns`, { name, message, recipients, imageUrl }, { headers });
+    const { data } = await axios.post<any>(`${getWhatsBotApiBaseUrl()}/campaigns`, { name, message, recipients, imageUrl, linkUrl }, { headers });
     return data;
 };
 

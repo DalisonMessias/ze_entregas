@@ -5,6 +5,7 @@ import { AccessDenied } from './AccessDenied';
 import { Button } from './Button';
 import { Loading } from './Loading';
 import * as cloud from '../services/cloud';
+import { uploadMarketingAsset } from '../services/upload';
 import * as whatsbot from '../services/whatsbot';
 import { WhatsBotStatus } from '../types';
 import { useDialog } from '../utils/dialogService';
@@ -35,63 +36,104 @@ const ImageInput: React.FC<{
     onChange: (val: string | null) => void;
     placeholder?: string;
     setIsDirty?: (val: boolean) => void;
-}> = ({ label, value, onChange, placeholder, setIsDirty }) => (
-    <div className="space-y-2 mt-4 mb-4">
-        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-            <ImageIcon size={16} className="text-indigo-500" />
-            {label}
-        </label>
-        <div className="flex gap-2">
-            <div className="relative flex-1">
-                <input
-                    type="text"
-                    value={value || ''}
-                    onChange={(e) => {
-                        onChange(e.target.value || null);
-                        if (setIsDirty) setIsDirty(true);
-                    }}
-                    placeholder={placeholder || "https://exemplo.com/imagem.jpg"}
-                    className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 transition-all text-sm outline-none"
+}> = ({ label, value, onChange, placeholder, setIsDirty }) => {
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const url = await uploadMarketingAsset(file);
+            onChange(url);
+            if (setIsDirty) setIsDirty(true);
+        } catch (err) {
+            console.error('Erro no upload:', err);
+            alert('Falha ao carregar imagem. Tente novamente.');
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    return (
+        <div className="space-y-2 mt-4 mb-4">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <ImageIcon size={16} className="text-indigo-500" />
+                {label}
+            </label>
+            <div className="flex gap-2">
+                <div className="relative flex-1">
+                    <input
+                        type="text"
+                        value={value || ''}
+                        onChange={(e) => {
+                            onChange(e.target.value || null);
+                            if (setIsDirty) setIsDirty(true);
+                        }}
+                        placeholder={placeholder || "https://exemplo.com/imagem.jpg"}
+                        className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 transition-all text-sm outline-none"
+                    />
+                    <Camera size={18} className="absolute right-3 top-2.5 text-slate-400" />
+                </div>
+                
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleUpload} 
+                    accept="image/*" 
+                    className="hidden" 
                 />
-                <Camera size={18} className="absolute right-3 top-2.5 text-slate-400" />
-            </div>
-            {value && (
+                
                 <button
-                    onClick={() => {
-                        onChange(null);
-                        if (setIsDirty) setIsDirty(true);
-                    }}
-                    className="p-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl border border-rose-100 dark:border-rose-900/30 transition-colors"
-                    title="Remover imagem"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="p-2.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-900/30 transition-colors disabled:opacity-50"
+                    title="Upload de imagem"
                 >
-                    <Trash2 size={18} />
+                    {uploading ? <RefreshCcw size={18} className="animate-spin" /> : <Plus size={18} />}
                 </button>
+
+                {value && (
+                    <button
+                        onClick={() => {
+                            onChange(null);
+                            if (setIsDirty) setIsDirty(true);
+                        }}
+                        className="p-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl border border-rose-100 dark:border-rose-900/30 transition-colors"
+                        title="Remover imagem"
+                    >
+                        <Trash2 size={18} />
+                    </button>
+                )}
+            </div>
+            {value && value.startsWith('http') && (
+                <div className="mt-2 relative group w-full max-w-[240px] aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 shadow-sm">
+                    <img 
+                        src={value} 
+                        alt="Preview" 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://placehold.co/600x400?text=URL+Inv%C3%A1lida';
+                        }}
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <a href={value} target="_blank" rel="noopener noreferrer" className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white">
+                            <ExternalLink size={18} />
+                        </a>
+                    </div>
+                </div>
+            )}
+            {!value && (
+                <p className="text-[11px] text-slate-400 italic">
+                    Cole o link ou clique no <span className="font-bold text-indigo-500">+</span> para carregar uma imagem do seu computador.
+                </p>
             )}
         </div>
-        {value && value.startsWith('http') && (
-            <div className="mt-2 relative group w-full max-w-[240px] aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 shadow-sm">
-                <img 
-                    src={value} 
-                    alt="Preview" 
-                    className="w-full h-full object-cover" 
-                    onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://placehold.co/600x400?text=URL+Inv%C3%A1lida';
-                    }}
-                />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <a href={value} target="_blank" rel="noopener noreferrer" className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white">
-                        <ExternalLink size={18} />
-                    </a>
-                </div>
-            </div>
-        )}
-        {!value && (
-            <p className="text-[11px] text-slate-400 italic">
-                Cole o link de uma imagem (JPG, PNG) para enviar com a mensagem.
-            </p>
-        )}
-    </div>
-);
+    );
+};
 
 export const WhatsBot: React.FC = () => {
     const [status, setStatus] = useState<WhatsBotStatus | null>(null);
@@ -118,6 +160,7 @@ export const WhatsBot: React.FC = () => {
     const [newCampaignName, setNewCampaignName] = useState('');
     const [newCampaignMessage, setNewCampaignMessage] = useState('');
     const [newCampaignImageUrl, setNewCampaignImageUrl] = useState<string | null>(null);
+    const [newCampaignLinkUrl, setNewCampaignLinkUrl] = useState('');
     const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
     const [creatingCampaign, setCreatingCampaign] = useState(false);
 
@@ -156,8 +199,6 @@ export const WhatsBot: React.FC = () => {
                 if (!mounted) return;
                 setStoreId(profile?.id || null);
 
-                // Carrega o status do WhatsBot apenas se o plano permitir
-                // A verificação de plano é feita pelo hook usePlanPermissions
                 if (profile?.id) {
                     await refreshStatus(true, profile?.id || null);
                 } else {
@@ -233,7 +274,6 @@ export const WhatsBot: React.FC = () => {
         try {
             const data = await whatsbot.getWhatsBotAvailableContacts(requestOptions);
             setAvailableContacts(data || []);
-            // Pré-selecionar todos por padrão
             setSelectedContacts((data || []).map((c: any) => c.phone));
         } catch (err: any) {
             toast({ message: 'Erro ao carregar contatos para a campanha.', type: 'error' });
@@ -255,18 +295,31 @@ export const WhatsBot: React.FC = () => {
                 newCampaignMessage,
                 selectedContacts,
                 newCampaignImageUrl,
+                newCampaignLinkUrl || null,
                 requestOptions
             );
             toast({ message: 'Campanha criada com sucesso! O disparo começará em breve.', type: 'success' });
             setShowNewCampaignModal(false);
             setNewCampaignName('');
             setNewCampaignMessage('');
+            setNewCampaignImageUrl(null);
+            setNewCampaignLinkUrl('');
             void loadCampaigns();
         } catch (err: any) {
             toast({ message: err.message || 'Erro ao criar campanha.', type: 'error' });
         } finally {
             setCreatingCampaign(false);
         }
+    };
+
+    const handleReuseCampaign = (camp: any) => {
+        setNewCampaignName(camp.name);
+        setNewCampaignMessage(camp.message);
+        setNewCampaignImageUrl(camp.image_url);
+        setNewCampaignLinkUrl(camp.link_url || '');
+        setSelectedContacts([]);
+        setShowNewCampaignModal(true);
+        void loadAvailableContacts();
     };
 
     const handleStopCampaign = async (id: string) => {
@@ -285,7 +338,6 @@ export const WhatsBot: React.FC = () => {
         }
     }, [canAccessWhatsBot, storeId, loadCampaigns]);
 
-    // Polling para atualizar progresso das campanhas se houver alguma em processamento
     useEffect(() => {
         const hasActiveCampaigns = campaigns.some(c => c.status === 'processing' || c.status === 'pending');
         if (!hasActiveCampaigns || !canAccessWhatsBot || !storeId) return;
@@ -385,7 +437,6 @@ export const WhatsBot: React.FC = () => {
                 // Usuário cancelou ou erro no dispositivo
             }
         } else {
-            // Fallback para WhatsApp Web
             window.open(`https://wa.me/?text=${encodeURIComponent(shareData.text + " " + shareData.url)}`, '_blank');
         }
     };
@@ -500,7 +551,7 @@ export const WhatsBot: React.FC = () => {
                         <span className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${statusInfo.badge}`}>
                             {statusInfo.label}
                         </span>
-                        <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-white/10 text-white/90">
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-white/11 text-white/90">
                             {status.enabled ? 'Bot ligado' : 'Bot desligado'}
                         </span>
                     </div>
@@ -626,11 +677,11 @@ export const WhatsBot: React.FC = () => {
                                     className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
                                 />
                                 <ImageInput 
-                                    label="Imagem Opcional (URL) - Loja Aberta"
+                                    label="Imagem Opcional - Loja Aberta"
                                     value={draftImageUrl}
                                     onChange={setDraftImageUrl}
                                     setIsDirty={setIsDirty}
-                                    placeholder="Link da imagem para quando a loja estiver ABERTA"
+                                    placeholder="Faça upload ou cole o link da imagem"
                                 />
                                 <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/10">
                                     <div className="flex items-center gap-2 mb-2">
@@ -658,11 +709,11 @@ export const WhatsBot: React.FC = () => {
                                     className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
                                 />
                                 <ImageInput 
-                                    label="Imagem Opcional (URL) - Loja Fechada"
+                                    label="Imagem Opcional - Loja Fechada"
                                     value={draftClosedImageUrl}
                                     onChange={setDraftClosedImageUrl}
                                     setIsDirty={setIsDirty}
-                                    placeholder="Link da imagem para quando a loja estiver FECHADA"
+                                    placeholder="Faça upload ou cole o link da imagem"
                                 />
                                 <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/10">
                                     <div className="flex items-center gap-2 mb-2">
@@ -681,7 +732,8 @@ export const WhatsBot: React.FC = () => {
                 </div>
 
                 <div className="space-y-6">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4 h-fit sticky top-6">
+                    {/* Bloco: QR Code */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
                         <div className="flex items-center gap-2">
                             <QrCode className="w-5 h-5 text-gray-500" />
                             <h2 className="text-lg font-black text-gray-900 dark:text-white">QR Code de Conexão</h2>
@@ -744,6 +796,7 @@ export const WhatsBot: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Bloco: Catálogo Digital */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
                         <div className="flex items-center gap-2">
                             <Link2 className="w-5 h-5 text-gray-500" />
@@ -775,114 +828,86 @@ export const WhatsBot: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Nova Seção: Campanhas de Marketing */}
-            <div className="pt-8 border-t border-gray-100 dark:border-gray-700/50 mt-8">
-                <div className="flex items-center justify-between gap-4 mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
-                            <Megaphone className="w-5 h-5 text-orange-600" />
+                    {/* Bloco: Campanhas de Marketing */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6 mt-6">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
+                                    <Megaphone className="w-5 h-5 text-orange-600" />
+                                </div>
+                                <h2 className="text-lg font-black text-gray-900 dark:text-white">Campanhas</h2>
+                            </div>
+                            <Button 
+                                onClick={() => { setShowNewCampaignModal(true); void loadAvailableContacts(); }}
+                                className="!py-2 !px-4 !text-xs"
+                                icon={<Plus className="w-3.5 h-3.5" />}
+                            >
+                                Nova
+                            </Button>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                                Campanhas de Marketing
-                                <span className="px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-900/40 text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider">Beta</span>
-                            </h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Dispare mensagens em massa para seus contatos com segurança.</p>
+
+                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1 thin-scrollbar">
+                            {loadingCampaigns ? (
+                                <div className="py-12 flex flex-col items-center justify-center opacity-50">
+                                    <Loader2 className="w-6 h-6 text-brand-500 animate-spin mb-2" />
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Carregando...</p>
+                                </div>
+                            ) : campaigns.length === 0 ? (
+                                <div className="py-8 text-center px-4 border border-dashed border-gray-100 rounded-2xl">
+                                    <p className="text-xs text-gray-400 italic">Nenhuma campanha enviada recentemente.</p>
+                                </div>
+                            ) : (
+                                campaigns.map((camp) => (
+                                    <div key={camp.id} className="p-4 rounded-2xl border border-gray-50 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20 relative group">
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-sm text-gray-900 dark:text-white truncate">{camp.name}</p>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase">{new Date(camp.created_at).toLocaleDateString()}</p>
+                                            </div>
+                                            <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                camp.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                                                camp.status === 'processing' ? 'bg-amber-100 text-amber-700 animate-pulse' :
+                                                camp.status === 'stopped' ? 'bg-red-100 text-red-700' :
+                                                'bg-gray-100 text-gray-600'
+                                            }`}>
+                                                {camp.status === 'completed' ? 'Ok' : camp.status === 'processing' ? '...' : camp.status === 'stopped' ? 'Parado' : 'Pend'}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px] font-bold text-gray-500">
+                                            <span>{camp.sent_successfully + camp.sent_failed} / {camp.total_recipients}</span>
+                                            <span className="text-brand-500">{Math.round(((camp.sent_successfully + camp.sent_failed) / camp.total_recipients) * 100)}%</span>
+                                        </div>
+                                        <div className="mt-1 h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                            <div 
+                                                className={`h-full transition-all duration-500 ${camp.status === 'stopped' ? 'bg-red-500' : 'bg-brand-500'}`}
+                                                style={{ width: `${((camp.sent_successfully + camp.sent_failed) / camp.total_recipients) * 100}%` }}
+                                            />
+                                        </div>
+                                        <div className="absolute top-3 right-3 flex items-center gap-2">
+                                            {camp.status === 'processing' ? (
+                                                <button
+                                                    onClick={() => handleStopCampaign(camp.id)}
+                                                    className="p-1.5 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 transition-colors"
+                                                    title="Parar Campanha"
+                                                >
+                                                    <StopCircle className="w-3.5 h-3.5" />
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handleReuseCampaign(camp)}
+                                                    className="p-1.5 rounded-full bg-indigo-500 text-white shadow-lg hover:bg-indigo-600 transition-colors"
+                                                    title="Reusar/Editar Campanha"
+                                                >
+                                                    <RefreshCcw className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
-                    <Button 
-                        onClick={() => { setShowNewCampaignModal(true); void loadAvailableContacts(); }}
-                        icon={<Plus className="w-4 h-4" />}
-                    >
-                        Nova Campanha
-                    </Button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {loadingCampaigns ? (
-                        <div className="col-span-full py-12 flex flex-col items-center justify-center bg-gray-50/50 dark:bg-gray-900/10 rounded-[2.5rem] border border-dashed border-gray-200 dark:border-gray-700">
-                            <Loader2 className="w-8 h-8 text-brand-500 animate-spin mb-3" />
-                            <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">Carregando campanhas...</p>
-                        </div>
-                    ) : campaigns.length === 0 ? (
-                        <div className="col-span-full py-12 flex flex-col items-center justify-center bg-gray-50/50 dark:bg-gray-900/10 rounded-[2.5rem] border border-dashed border-gray-200 dark:border-gray-700 text-center px-6">
-                            <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-                                <Megaphone className="w-8 h-8 text-gray-400" />
-                            </div>
-                            <h3 className="text-lg font-black text-gray-900 dark:text-white mb-1">Nenhuma campanha enviada</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">
-                                Crie sua primeira campanha para disparar promoções ou avisos importantes para seus clientes via WhatsApp.
-                            </p>
-                        </div>
-                    ) : (
-                        campaigns.map((camp) => (
-                            <div key={camp.id} className="bg-white dark:bg-gray-800 p-5 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
-                                <div className="flex items-start justify-between gap-3 mb-4">
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-black text-gray-900 dark:text-white truncate" title={camp.name}>{camp.name}</h3>
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                                            {new Date(camp.created_at).toLocaleDateString()} às {new Date(camp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </p>
-                                    </div>
-                                    <div className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                        camp.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                                        camp.status === 'processing' ? 'bg-amber-100 text-amber-700 animate-pulse' :
-                                        camp.status === 'stopped' ? 'bg-red-100 text-red-700' :
-                                        'bg-gray-100 text-gray-600'
-                                    }`}>
-                                        {camp.status === 'completed' ? 'Concluída' :
-                                         camp.status === 'processing' ? 'Enviando...' :
-                                         camp.status === 'stopped' ? 'Parada' :
-                                         'Pendente'}
-                                    </div>
-                                </div>
-
-                                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 italic">
-                                    "{camp.message}"
-                                </p>
-
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between text-xs font-bold">
-                                        <span className="text-gray-500 uppercase tracking-widest text-[10px]">Progresso</span>
-                                        <span className="text-gray-900 dark:text-white">
-                                            {camp.sent_successfully + camp.sent_failed} / {camp.total_recipients}
-                                        </span>
-                                    </div>
-                                    
-                                    <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                        <div 
-                                            className={`h-full transition-all duration-500 rounded-full ${camp.status === 'stopped' ? 'bg-red-500' : 'bg-brand-500'}`}
-                                            style={{ width: `${( (camp.sent_successfully + camp.sent_failed) / camp.total_recipients ) * 100}%` }}
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2 pt-2">
-                                        <div className="p-2 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 text-center">
-                                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-tighter">Sucesso</p>
-                                            <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">{camp.sent_successfully}</p>
-                                        </div>
-                                        <div className="p-2 rounded-2xl bg-red-50 dark:bg-red-900/10 text-center">
-                                            <p className="text-[10px] font-black text-red-600 uppercase tracking-tighter">Falha</p>
-                                            <p className="text-sm font-black text-red-700 dark:text-red-400">{camp.sent_failed}</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {camp.status === 'processing' && (
-                                    <button
-                                        onClick={() => handleStopCampaign(camp.id)}
-                                        className="absolute bottom-4 right-4 p-2 rounded-full bg-red-500 text-white shadow-lg shadow-red-500/30 hover:scale-110 active:scale-95 transition-transform"
-                                        title="Parar campanha imediatamente"
-                                    >
-                                        <StopCircle className="w-5 h-5" />
-                                    </button>
-                                )}
-                            </div>
-                        ))
-                    )}
                 </div>
             </div>
 
@@ -930,11 +955,33 @@ export const WhatsBot: React.FC = () => {
                                     className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 transition-all min-h-[120px] resize-none"
                                 />
                                 <ImageInput 
-                                    label="Imagem da Campanha (URL)"
+                                    label="Imagem da Campanha"
                                     value={newCampaignImageUrl}
                                     onChange={setNewCampaignImageUrl}
-                                    placeholder="https://exemplo.com/banner-promocao.jpg"
+                                    placeholder="Faça upload ou cole o link da imagem"
                                 />
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Link Opcional (URL)</label>
+                                        <button 
+                                            onClick={() => setNewCampaignLinkUrl(status?.catalogUrl || '')}
+                                            className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
+                                        >
+                                            <Link2 size={10} />
+                                            Link do Catálogo
+                                        </button>
+                                    </div>
+                                    <input 
+                                        type="text"
+                                        placeholder="Ex: https://zeentregas.com/sua-loja"
+                                        value={newCampaignLinkUrl}
+                                        onChange={(e) => setNewCampaignLinkUrl(e.target.value)}
+                                        className="w-full px-5 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-brand-500 outline-none transition-all font-bold text-gray-800 dark:text-white"
+                                    />
+                                    <p className="text-[10px] text-gray-400 italic ml-1">O link será anexado ao final da mensagem automaticamente.</p>
+                                </div>
+
                                 <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-800/30 flex items-start gap-3">
                                     <Smartphone className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                                     <p className="text-[11px] text-blue-700/80 dark:text-blue-400 leading-relaxed font-semibold italic">
@@ -965,14 +1012,17 @@ export const WhatsBot: React.FC = () => {
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
                                                         selectedContacts.includes(contact.phone) ? 'bg-brand-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
                                                     }`}>
-                                                        {contact.phone.slice(-2)}
+                                                        {contact.name ? contact.name.charAt(0).toUpperCase() : contact.phone.slice(-2)}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-black text-gray-800 dark:text-white">+{contact.phone}</p>
-                                                        <p className="text-[10px] text-gray-400">Visto em {new Date(contact.last_interaction).toLocaleDateString()}</p>
+                                                        <p className="text-sm font-black text-gray-800 dark:text-white">
+                                                            {contact.name || `+${contact.phone}`}
+                                                        </p>
+                                                        {contact.name && <p className="text-[10px] text-gray-400 font-bold tracking-wider">+{contact.phone}</p>}
+                                                        <p className="text-[9px] text-gray-400 italic">Visto em {new Date(contact.last_interaction).toLocaleDateString()}</p>
                                                     </div>
                                                 </div>
                                                 <input 

@@ -1327,6 +1327,7 @@ GRANT ALL ON public.whatsbot_campaigns TO authenticated, service_role;
 GRANT ALL ON public.whatsbot_campaign_recipients TO authenticated, service_role;
 
 -- RPC para buscar contatos únicos que já falaram com o bot
+DROP FUNCTION IF EXISTS public.get_whatsbot_available_contacts(uuid) CASCADE;
 CREATE OR REPLACE FUNCTION public.get_whatsbot_available_contacts(p_store_id UUID)
 RETURNS TABLE (
     phone TEXT,
@@ -1375,8 +1376,78 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.increment_whatsbot_campaign_stats(UUID, BOOLEAN) TO authenticated, service_role;
 
--- 8. WhatsBot: Suporte para Imagens
-ALTER TABLE public.whatsbot_settings ADD COLUMN IF NOT EXISTS image_url TEXT;
-ALTER TABLE public.whatsbot_settings ADD COLUMN IF NOT EXISTS closed_image_url TEXT;
+-- 9. WhatsBot: Tabela de Contatos Sincronizados
+CREATE TABLE IF NOT EXISTS public.whatsbot_contacts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    phone TEXT NOT NULL,
+    push_name TEXT,
+    name TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_store_contact UNIQUE (store_id, phone)
+);
+
+CREATE INDEX IF NOT EXISTS idx_whatsbot_contacts_store ON public.whatsbot_contacts (store_id);
+CREATE INDEX IF NOT EXISTS idx_whatsbot_contacts_phone ON public.whatsbot_contacts (phone);
+
+ALTER TABLE public.whatsbot_contacts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Store manages own contacts" ON public.whatsbot_contacts;
+CREATE POLICY "Store manages own contacts"
+ON public.whatsbot_contacts
+FOR ALL
+USING (auth.uid() = store_id)
+WITH CHECK (auth.uid() = store_id);
+
+GRANT ALL ON public.whatsbot_contacts TO authenticated, service_role;
+
+-- Redefinir RPC para buscar contatos disponíveis (Sincronizados + Histórico)
+DROP FUNCTION IF EXISTS public.get_whatsbot_available_contacts(uuid) CASCADE;
+CREATE OR REPLACE FUNCTION public.get_whatsbot_available_contacts(p_store_id UUID)
+RETURNS TABLE (
+    phone TEXT,
+    name TEXT,
+    last_interaction TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH combined_contacts AS (
+        -- Contatos que já interagiram via WhatsBot (histórico)
+        SELECT 
+            contact_phone as c_phone,
+            NULL::TEXT as c_name,
+            MAX(created_at) as c_last
+        FROM public.whatsbot_send_history
+        WHERE store_id = p_store_id
+        GROUP BY contact_phone
+
+        UNION
+
+        -- Contatos sincronizados via WhatsApp
+        SELECT 
+            wc.phone as c_phone,
+            COALESCE(wc.push_name, wc.name) as c_name,
+            wc.updated_at as c_last
+        FROM public.whatsbot_contacts wc
+        WHERE wc.store_id = p_store_id
+    )
+    SELECT 
+        c_phone,
+        string_agg(c_name, ' / ') filter (where c_name is not null) as name,
+        MAX(c_last) as last_interaction
+    FROM combined_contacts
+    GROUP BY c_phone
+    ORDER BY last_interaction DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_whatsbot_available_contacts(UUID) TO authenticated, service_role;
+
+-- 10. WhatsBot: Melhorias nas Campanhas (Mídia e Links)
 ALTER TABLE public.whatsbot_campaigns ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.whatsbot_campaigns ADD COLUMN IF NOT EXISTS link_url TEXT;
 
