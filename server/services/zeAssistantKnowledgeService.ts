@@ -14,12 +14,11 @@ export class ZeAssistantKnowledgeService {
         if (!supabaseAdmin) return;
 
         try {
-            // Buscar produtos ativos da loja
+            // Buscar produtos ativos da loja (Simplificado para evitar erro de permissão em joins)
             const { data: products, error: getErr } = await supabaseAdmin
                 .from('products')
-                .select('id, name, description, price, category_id, categories(name)')
-                .eq('store_id', storeId)
-                .eq('is_active', true);
+                .select('id, name, description, price, category_id')
+                .eq('store_id', storeId); // Removido filtro is_active para garantir carga total
 
             if (getErr) {
                 console.error(`[KnowledgeService] ❌ Erro ao buscar produtos:`, getErr.message);
@@ -50,7 +49,7 @@ export class ZeAssistantKnowledgeService {
                     name: p.name,
                     price: p.price,
                     description: p.description,
-                    category: (p.categories as any)?.name
+                    category: null // Join removido para evitar erro de permissão
                 },
                 is_active: true
             }));
@@ -257,8 +256,7 @@ export class ZeAssistantKnowledgeService {
         const { data, error: listErr } = await supabaseAdmin
             .from('ze_assistant_knowledge_base')
             .select('*')
-            .eq('store_id', storeId)
-            .eq('is_active', true)
+            .eq('store_id', storeId) // Removido filtro is_active para depuração e carga total
             .order('content_type')
             .order('created_at', { ascending: false });
 

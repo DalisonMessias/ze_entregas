@@ -966,6 +966,10 @@ class WhatsBotInstance {
                     }
 
                     console.log(`[WhatsBot ${this.storeId}] 📚 CONHECIMENTO CARREGADO: ${knowledge.length} entradas encontradas!`);
+                    if (knowledge.length > 0) {
+                        const titles = knowledge.map(k => k.title).join(', ');
+                        console.log(`[WhatsBot ${this.storeId}] 📝 ITENS NA MEMÓRIA: ${titles}`);
+                    }
                     
                     const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
                     
@@ -981,7 +985,8 @@ class WhatsBotInstance {
                             assistantName: settings.ai_name || 'Assistente',
                             aiInstructions: settings.ai_context,
                             products: [], // Agora usamos a knowledge base no prompt
-                            knowledgeBase: knowledge 
+                            knowledgeBase: knowledge,
+                            catalogUrl: catalogUrl // Enviando o link real da loja
                         },
                         {
                             confusionCount: 0,
@@ -994,6 +999,9 @@ class WhatsBotInstance {
                     );
 
                     if (aiResult.success && aiResult.responseText) {
+                        console.log(`[WhatsBot ${this.storeId}] 👤 CLIENTE: "${messageText}"`);
+                        console.log(`[WhatsBot ${this.storeId}] 🤖 JULIA (IA): "${aiResult.responseText.substring(0, 50)}..."`);
+                        
                         let finalAiText = aiResult.responseText
                             .replace(/\{\{\s*catalog_url\s*\}\}/gi, catalogUrl)
                             .replace(/\{\s*catalogUrl\s*\}/g, catalogUrl);

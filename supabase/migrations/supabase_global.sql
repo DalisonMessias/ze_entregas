@@ -1782,3 +1782,37 @@ COMMENT ON COLUMN public.whatsbot_settings.ai_enabled IS 'Indica se o Assistente
 COMMENT ON COLUMN public.whatsbot_settings.ai_context IS 'Instruções e contexto para a Inteligência Artificial';
 COMMENT ON COLUMN public.whatsbot_settings.ai_name IS 'Nome personalizado do assistente de IA';
 
+
+-- ==================================================================
+-- 12. BASE DE CONHECIMENTO DO ZÉ ASSISTENTE (WhatsBot AI)
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.ze_assistant_knowledge_base (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL, -- 'PRODUCT', 'FAQ', 'HOURS', 'POLICY', 'GENERAL'
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Índices para performance
+CREATE INDEX IF NOT EXISTS idx_knowledge_base_store_type ON public.ze_assistant_knowledge_base(store_id, content_type);
+CREATE INDEX IF NOT EXISTS idx_knowledge_base_active ON public.ze_assistant_knowledge_base(is_active);
+
+-- Habilitar RLS
+ALTER TABLE public.ze_assistant_knowledge_base ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de Acesso
+DROP POLICY IF EXISTS "Store manages own knowledge base" ON public.ze_assistant_knowledge_base;
+CREATE POLICY "Store manages own knowledge base"
+ON public.ze_assistant_knowledge_base
+FOR ALL
+USING (auth.uid() = store_id)
+WITH CHECK (auth.uid() = store_id);
+
+-- Permissões Administrativas
+GRANT ALL ON public.ze_assistant_knowledge_base TO authenticated, service_role;
