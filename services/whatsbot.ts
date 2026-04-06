@@ -61,3 +61,9 @@ export const stopWhatsBot = async (options?: WhatsBotRequestOptions): Promise<Wh
     const { data } = await axios.post<WhatsBotStatus>(`${getWhatsBotApiBaseUrl()}/stop`, {}, { headers });
     return data;
 };
+
+export const logoutWhatsBot = async (options?: WhatsBotRequestOptions): Promise<WhatsBotStatus> => {
+    const headers = await getAuthHeaders(options);
+    const { data } = await axios.post<WhatsBotStatus>(`${getWhatsBotApiBaseUrl()}/logout`, {}, { headers });
+    return data;
+};
