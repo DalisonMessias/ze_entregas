@@ -14,6 +14,7 @@ import {
     WhatsBotConnectionStatus
 } from './useWhatsBotDatabaseAuth.js';
 import { ZeAssistantAIService } from './zeAssistantAIService.js';
+import { zeAssistantKnowledgeService } from './zeAssistantKnowledgeService.js';
 
 // Cache de Memória para evitar loops de Fallback (Silenciamento Instantâneo)
 // Chave: "storeId:contactPhone:date"
@@ -954,31 +955,22 @@ class WhatsBotInstance {
                 const apiKey = keyRow?.key_value || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
                 if (apiKey) {
-                    // Busca produtos para conhecimento da IA (simplificado para evitar erros de join)
-                    // Consulta de produtos da loja (Sincronizada com o ID real do usuário/perfil)
-                    // 1. Busca UNIVERSAL (Pente-fino no banco de dados)
-                    const { data: rawProducts, error: prodErr } = await supabaseAdmin
-                        .from('products')
-                        .select('name, price, description, is_active')
-                        .or(`store_id.eq.${this.storeId},user_id.eq.${this.storeId}`); // Tenta os dois campos comuns
-
-                    if (prodErr) {
-                        console.error(`[WhatsBot ${this.storeId}] ❌ Erro ao buscar produtos:`, prodErr.message);
-                    }
-
-                    const products = rawProducts || [];
-                    console.log(`[WhatsBot ${this.storeId}] 📦 CONTAGEM DE PRODUTOS: ${products.length} encontrados para a IA!`);
+                    // 1. CARREGAR CONHECIMENTO DA LOJA (Produtos, Info, FAQ)
+                    let knowledge = await zeAssistantKnowledgeService.listAll(this.storeId);
                     
-                    if (products.length > 0) {
-                        console.log(`[WhatsBot ${this.storeId}] 📋 PRODUTO DE EXEMPLO: ${products[0].name} - R$ ${products[0].price}`);
-                    } else {
-                        console.warn(`[WhatsBot ${this.storeId}] ⚠️ ALERTA: Nenhum produto vinculado a esse ID (${this.storeId}) nas tabelas!`);
+                    // 2. SINCRONIZAÇÃO AUTOMÁTICA (Se estiver vazio, tenta carregar da loja agora)
+                    if (knowledge.length === 0) {
+                        console.log(`[WhatsBot ${this.storeId}] 🔄 Base de conhecimento vazia. Sincronizando dados da loja agora...`);
+                        await zeAssistantKnowledgeService.fullSync(this.storeId);
+                        knowledge = await zeAssistantKnowledgeService.listAll(this.storeId);
                     }
 
+                    console.log(`[WhatsBot ${this.storeId}] 📚 CONHECIMENTO CARREGADO: ${knowledge.length} entradas encontradas!`);
+                    
                     const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
                     
-                    // 2. Montagem do pacote de dados para o Google
-                    console.log(`[WhatsBot ${this.storeId}] 📤 ENVIANDO AO GOOGLE: { Loja: "${store.store_name}", Produtos: ${products.length}, Contexto: ${settings.ai_context?.length || 0} caracteres }`);
+                    // 3. Montagem do pacote de dados para o Google Gemini
+                    console.log(`[WhatsBot ${this.storeId}] 📤 ENVIANDO AO GOOGLE: { Loja: "${store.store_name}", Conhecimento: ${knowledge.length} itens }`);
 
                     const aiResult = await aiService.processMessage(
                         messageText,
@@ -988,7 +980,8 @@ class WhatsBotInstance {
                             closedInstruction: settings.custom_closed_message,
                             assistantName: settings.ai_name || 'Assistente',
                             aiInstructions: settings.ai_context,
-                            products: products 
+                            products: [], // Agora usamos a knowledge base no prompt
+                            knowledgeBase: knowledge 
                         },
                         {
                             confusionCount: 0,

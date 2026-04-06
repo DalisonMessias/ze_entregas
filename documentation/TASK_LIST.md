@@ -1,7 +1,7 @@
-# TASK LIST - Estabilização de IA e Anti-Spam
-
-- [x] Sincronização de campos de IA no status do backend
-- [x] Ajuste da consulta de produtos para a IA
-- [/] Bloqueio do fluxo de boas-vindas se IA estiver ativa (Fim do conflito Anti-Spam)
-- [ ] Refinamento do prompt de venda proativo da IA
-- [ ] Inclusão de logs de diagnóstico de StoreID
+- [x] Corrigir erros de "Invalid hook call" no AdminDashboard (Documentado)
+- [x] Implementar Trava de Memória Instantânea (Flash Block) no WhatsBot
+- [x] Corrigir Fallback de Modelos Gemini (Nomes reais 2.0/1.5)
+- [x] Integrar WhatsBot com ZeAssistantKnowledgeService (Base de Conhecimento)
+- [x] Migrar KnowledgeService para supabaseAdmin (Service Role) para evitar erros de RLS
+- [x] Corrigir imports e referências órfãs no ZeAssistantKnowledgeService
+- [ ] Validar resposta rica da IA (Catálogo + FAQ + Horários) no WhatsApp

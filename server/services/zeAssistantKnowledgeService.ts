@@ -1,4 +1,4 @@
-import * as cloud from '../../services/cloud.js';
+import { supabaseAdmin } from './supabaseClient.js';
 import type { ZeAssistantKnowledgeBase, ZeAssistantContentType } from '../../types/zeAssistant.js';
 
 /**
@@ -11,25 +11,33 @@ export class ZeAssistantKnowledgeService {
      * Sincroniza produtos da loja na base de conhecimento
      */
     async syncProducts(storeId: string): Promise<void> {
-        const supabase = cloud.getClient();
-        if (!supabase) return;
+        if (!supabaseAdmin) return;
 
         try {
             // Buscar produtos ativos da loja
-            const { data: products } = await supabase
+            const { data: products, error: getErr } = await supabaseAdmin
                 .from('products')
                 .select('id, name, description, price, category_id, categories(name)')
                 .eq('store_id', storeId)
                 .eq('is_active', true);
 
+            if (getErr) {
+                console.error(`[KnowledgeService] ❌ Erro ao buscar produtos:`, getErr.message);
+                return;
+            }
+
             if (!products) return;
 
             // Limpar produtos antigos
-            await supabase
+            const { error: delErr } = await supabaseAdmin
                 .from('ze_assistant_knowledge_base')
                 .delete()
                 .eq('store_id', storeId)
                 .eq('content_type', 'PRODUCT');
+
+            if (delErr) {
+                console.error(`[KnowledgeService] ❌ Erro ao limpar conhecimento antigo:`, delErr.message);
+            }
 
             // Inserir produtos atualizados
             const entries = products.map(p => ({
@@ -48,9 +56,13 @@ export class ZeAssistantKnowledgeService {
             }));
 
             if (entries.length > 0) {
-                await supabase
+                const { error: insErr } = await supabaseAdmin
                     .from('ze_assistant_knowledge_base')
                     .insert(entries);
+
+                if (insErr) {
+                    console.error(`[KnowledgeService] ❌ Erro ao inserir na Knowledge Base:`, insErr.message);
+                }
             }
 
             console.log(`Sincronizados ${entries.length} produtos para loja ${storeId}`);
@@ -64,20 +76,24 @@ export class ZeAssistantKnowledgeService {
      * Sincroniza informações da loja
      */
     async syncStoreInfo(storeId: string): Promise<void> {
-        const supabase = cloud.getClient();
-        if (!supabase) return;
+        if (!supabaseAdmin) return;
 
         try {
-            const { data: store } = await supabase
+            const { data: store, error: storeErr } = await supabaseAdmin
                 .from('user_profiles')
                 .select('store_name, phone_number, opening_hours, store_address_street, store_address_number, store_address_city, store_address_state')
                 .eq('id', storeId)
                 .single();
 
+            if (storeErr) {
+                console.error(`[KnowledgeService] ❌ Erro ao buscar info da loja:`, storeErr.message);
+                return;
+            }
+
             if (!store) return;
 
             // Remover info antiga
-            await supabase
+            await supabaseAdmin
                 .from('ze_assistant_knowledge_base')
                 .delete()
                 .eq('store_id', storeId)
@@ -116,9 +132,13 @@ export class ZeAssistantKnowledgeService {
             }
 
             if (entries.length > 0) {
-                await supabase
+                const { error: insErr } = await supabaseAdmin
                     .from('ze_assistant_knowledge_base')
                     .insert(entries);
+
+                if (insErr) {
+                    console.error(`[KnowledgeService] ❌ Erro ao inserir na Knowledge Base:`, insErr.message);
+                }
             }
 
         } catch (error) {
@@ -134,10 +154,9 @@ export class ZeAssistantKnowledgeService {
         question: string,
         answer: string
     ): Promise<ZeAssistantKnowledgeBase | null> {
-        const supabase = cloud.getClient();
-        if (!supabase) return null;
+        if (!supabaseAdmin) return null;
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('ze_assistant_knowledge_base')
             .insert({
                 store_id: storeId,
@@ -166,10 +185,9 @@ export class ZeAssistantKnowledgeService {
         query: string,
         contentType?: ZeAssistantContentType
     ): Promise<ZeAssistantKnowledgeBase[]> {
-        const supabase = cloud.getClient();
-        if (!supabase) return [];
+        if (!supabaseAdmin) return [];
 
-        let queryBuilder = supabase
+        let queryBuilder = supabaseAdmin
             .from('ze_assistant_knowledge_base')
             .select('*')
             .eq('store_id', storeId)
@@ -194,10 +212,9 @@ export class ZeAssistantKnowledgeService {
         id: string,
         updates: Partial<ZeAssistantKnowledgeBase>
     ): Promise<boolean> {
-        const supabase = cloud.getClient();
-        if (!supabase) return false;
+        if (!supabaseAdmin) return false;
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('ze_assistant_knowledge_base')
             .update(updates)
             .eq('id', id);
@@ -209,10 +226,9 @@ export class ZeAssistantKnowledgeService {
      * Remove entrada da base de conhecimento
      */
     async deleteKnowledge(id: string): Promise<boolean> {
-        const supabase = cloud.getClient();
-        if (!supabase) return false;
+        if (!supabaseAdmin) return false;
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('ze_assistant_knowledge_base')
             .delete()
             .eq('id', id);
@@ -236,16 +252,19 @@ export class ZeAssistantKnowledgeService {
      * Lista toda a base de conhecimento de uma loja
      */
     async listAll(storeId: string): Promise<ZeAssistantKnowledgeBase[]> {
-        const supabase = cloud.getClient();
-        if (!supabase) return [];
+        if (!supabaseAdmin) return [];
 
-        const { data } = await supabase
+        const { data, error: listErr } = await supabaseAdmin
             .from('ze_assistant_knowledge_base')
             .select('*')
             .eq('store_id', storeId)
             .eq('is_active', true)
             .order('content_type')
             .order('created_at', { ascending: false });
+
+        if (listErr) {
+            console.error(`[KnowledgeService] ❌ Erro ao listar conhecimento de ${storeId}:`, listErr.message);
+        }
 
         return data || [];
     }
