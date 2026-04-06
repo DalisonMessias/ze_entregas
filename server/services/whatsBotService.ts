@@ -955,17 +955,31 @@ class WhatsBotInstance {
 
                 if (apiKey) {
                     // Busca produtos para conhecimento da IA (simplificado para evitar erros de join)
-                    const { data: rawProducts } = await supabaseAdmin
+                    // Consulta de produtos da loja (Sincronizada com o ID real do usuário/perfil)
+                    // 1. Busca UNIVERSAL (Pente-fino no banco de dados)
+                    const { data: rawProducts, error: prodErr } = await supabaseAdmin
                         .from('products')
-                        .select('name, price, description')
-                        .eq('store_id', this.storeId)
-                        .limit(100);
+                        .select('name, price, description, is_active')
+                        .or(`store_id.eq.${this.storeId},user_id.eq.${this.storeId}`); // Tenta os dois campos comuns
+
+                    if (prodErr) {
+                        console.error(`[WhatsBot ${this.storeId}] ❌ Erro ao buscar produtos:`, prodErr.message);
+                    }
 
                     const products = rawProducts || [];
-                    console.log(`[WhatsBot ${this.storeId}] 📦 Conhecimento de IA: ${products.length} produtos encontrados para a loja ID: ${this.storeId}`);
+                    console.log(`[WhatsBot ${this.storeId}] 📦 CONTAGEM DE PRODUTOS: ${products.length} encontrados para a IA!`);
+                    
+                    if (products.length > 0) {
+                        console.log(`[WhatsBot ${this.storeId}] 📋 PRODUTO DE EXEMPLO: ${products[0].name} - R$ ${products[0].price}`);
+                    } else {
+                        console.warn(`[WhatsBot ${this.storeId}] ⚠️ ALERTA: Nenhum produto vinculado a esse ID (${this.storeId}) nas tabelas!`);
+                    }
 
                     const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
                     
+                    // 2. Montagem do pacote de dados para o Google
+                    console.log(`[WhatsBot ${this.storeId}] 📤 ENVIANDO AO GOOGLE: { Loja: "${store.store_name}", Produtos: ${products.length}, Contexto: ${settings.ai_context?.length || 0} caracteres }`);
+
                     const aiResult = await aiService.processMessage(
                         messageText,
                         {
@@ -974,7 +988,7 @@ class WhatsBotInstance {
                             closedInstruction: settings.custom_closed_message,
                             assistantName: settings.ai_name || 'Assistente',
                             aiInstructions: settings.ai_context,
-                            products: products || []
+                            products: products 
                         },
                         {
                             confusionCount: 0,

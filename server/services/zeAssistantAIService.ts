@@ -210,10 +210,7 @@ SEMPRE diga que a loja está 🔴 FECHADA.`;
     }> {
         // Ordem de preferência de modelos (REST API v1) - Sincronizado conforme pedido
         const modelOrder = [
-            'gemini-2.0-flash',
-            'gemini-1.5-flash-latest',
-            'gemini-1.5-flash',
-            'gemini-1.5-pro-latest'
+            'gemini-2.5-flash'
         ];
 
         let lastError: any = null;
