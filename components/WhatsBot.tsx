@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone } from 'lucide-react';
+import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AccessDenied } from './AccessDenied';
 import { Button } from './Button';
@@ -392,6 +392,43 @@ export const WhatsBot: React.FC = () => {
                             <QrCode className="w-5 h-5 text-gray-500" />
                             <h2 className="text-lg font-black text-gray-900 dark:text-white">QR Code de Conexão</h2>
                         </div>
+
+                        {status.enabled && !status.qrCode && status.connectionStatus === 'CONNECTING' && (
+                            <div className="text-center py-10">
+                                <RefreshCcw className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+                                <p className="text-gray-600 dark:text-gray-400">Iniciando conexão segura...</p>
+                            </div>
+                        )}
+
+                        {!status.enabled && (
+                            <div className="text-center py-10 opacity-60">
+                                {status.connectedPhone ? (
+                                    <>
+                                        <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                                        <h3 className="font-semibold text-gray-800 dark:text-white mb-2">Pronto para Conectar</h3>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 px-6">
+                                            Identificamos uma sessão ativa com o número <strong>{status.connectedPhone}</strong>. <br />
+                                            Clique em <strong>"Ligar Bot"</strong> para ativar o atendimento automático.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <QrCode className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                        <h3 className="font-semibold text-gray-800 dark:text-white mb-2">Aguardando Ativação</h3>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 px-6">
+                                            Ligue o bot para gerar um novo QR Code e começar a automação.
+                                        </p>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {status.enabled && !status.qrCode && status.connectionStatus === 'DISCONNECTED' && (
+                            <div className="text-center py-10">
+                                <Power className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                <p className="text-gray-600 dark:text-gray-400">Clique em Ligar Bot para iniciar.</p>
+                            </div>
+                        )}
 
                         {status.enabled && status.connectionStatus === 'WAITING_QR' && status.qrCode ? (
                             <div className="flex flex-col items-center gap-4">
