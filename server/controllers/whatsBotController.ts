@@ -102,12 +102,12 @@ export const getCampaigns = async (req: AuthenticatedRequest, res: Response) => 
 
 export const createCampaign = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { name, message, recipients, imageUrl } = req.body;
+        const { name, message, recipients, imageUrl, linkUrl } = req.body;
         if (!name || !message || !recipients || !Array.isArray(recipients) || recipients.length === 0) {
             return res.status(400).json({ success: false, message: 'Dados da campanha inválidos.' });
         }
 
-        const campaign = await whatsBotService.createCampaign(getStoreId(req), name, message, recipients, imageUrl);
+        const campaign = await whatsBotService.createCampaign(getStoreId(req), name, message, recipients, imageUrl, linkUrl);
         res.status(201).json(campaign);
     } catch (error: any) {
         console.error('[WhatsBotController] Erro ao criar campanha:', error);
@@ -123,6 +123,17 @@ export const stopCampaign = async (req: AuthenticatedRequest, res: Response) => 
     } catch (error: any) {
         console.error('[WhatsBotController] Erro ao parar campanha:', error);
         res.status(500).json({ success: false, message: error.message || 'Erro ao parar campanha.' });
+    }
+};
+
+export const deleteCampaign = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const result = await whatsBotService.deleteCampaign(getStoreId(req), id);
+        res.status(200).json(result);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao deletar campanha:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao deletar campanha.' });
     }
 };
 

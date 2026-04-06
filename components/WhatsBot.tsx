@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check, Crown, Lock, Megaphone, Users, Plus, Play, StopCircle, Loader2, Image as ImageIcon, Camera, Trash2, ExternalLink } from 'lucide-react';
+import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check, Crown, Lock, Megaphone, Users, Plus, Play, StopCircle, Loader2, Image as ImageIcon, Camera, Trash2, ExternalLink, Sparkles, Edit2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AccessDenied } from './AccessDenied';
 import { Button } from './Button';
@@ -148,7 +148,9 @@ export const WhatsBot: React.FC = () => {
     const [isDirty, setIsDirty] = useState(false);
     const isDirtyRef = useRef(false);
     const [copied, setCopied] = useState(false);
-    const { toast } = useDialog();
+    const { toast, confirm } = useDialog();
+    const [isHarmonizing, setIsHarmonizing] = useState(false);
+    const [manualPhones, setManualPhones] = useState('');
     const { canAccessWhatsBot, loading: loadingPlan } = usePlanPermissions();
 
     // Estados de Campanhas
@@ -312,6 +314,93 @@ export const WhatsBot: React.FC = () => {
         }
     };
 
+    const handleHarmonizeMessage = async (isCampaign = true) => {
+        const currentText = isCampaign ? newCampaignMessage : draftMessage;
+        if (!currentText.trim()) return;
+
+        setIsHarmonizing(true);
+        try {
+            const apiKey = await cloud.getAPIKey('google');
+            if (!apiKey) {
+                toast({ message: 'API do Gemini não configurada.', type: 'error' });
+                return;
+            }
+
+            const prompt = `Atue como um EXPERT COPYWRITER para WhatsApp. 
+            Melhore e harmonize o texto abaixo para uma campanha de marketing. 
+            Deve ser profissional, atraente e amigável. 
+            Mantenha o sentido original e inclua emojis pertinentes.
+            
+            TEXTO ORIGINAL: "${currentText}"
+            
+            RETORNE APENAS O TEXTO MELHORADO, SEM EXPLICAÇÕES.`;
+
+            const response = await cloud.generateAIContent(prompt, apiKey);
+            if (response.text) {
+                const improvedText = response.text.trim();
+                if (isCampaign) {
+                    setNewCampaignMessage(improvedText);
+                } else {
+                    setDraftMessage(improvedText);
+                    setIsDirty(true);
+                }
+                toast({ message: 'Texto harmonizado com IA!', type: 'success' });
+            }
+        } catch (err: any) {
+            console.error('Erro ao harmonizar com IA:', err);
+            toast({ message: 'Erro ao harmonizar texto.', type: 'error' });
+        } finally {
+            setIsHarmonizing(false);
+        }
+    };
+
+    const handleAddManualPhones = () => {
+        if (!manualPhones.trim()) return;
+
+        const phones = manualPhones.split(/[, \n]+/).map(p => {
+            let clean = p.replace(/\D/g, '');
+            // Se começar com 0, remove o zero inicial
+            if (clean.length === 12 && clean.startsWith('0')) clean = clean.substring(1);
+            if (clean.length === 11 && clean.startsWith('0')) clean = clean.substring(1);
+            
+            // Se tiver 10 ou 11 dígitos, assume que falta o DDI +55
+            if (clean.length === 10 || clean.length === 11) {
+                return `+55${clean}`;
+            }
+            // Se já tiver o 55 mas sem o +, adiciona o +
+            if (clean.startsWith('55') && (clean.length === 12 || clean.length === 13)) {
+                return `+${clean}`;
+            }
+            // Se já estiver no formato correto com +55, mantém como está
+            if (clean.length >= 12) return `+${clean}`;
+            
+            return clean;
+        }).filter(p => p.length >= 10);
+
+        const newContacts = phones.map(p => ({
+            phone: p,
+            name: 'Contato Manual',
+            last_interaction: new Date().toISOString()
+        }));
+
+        // Evitar duplicados
+        const filteredNew = newContacts.filter(nc => !selectedContacts.includes(nc.phone));
+        
+        if (filteredNew.length > 0) {
+            setSelectedContacts(prev => [...prev, ...filteredNew.map(c => c.phone)]);
+            setAvailableContacts(prev => {
+                // Adiciona à lista de disponíveis se não estiverem lá
+                const existingPhones = prev.map(ac => ac.phone);
+                const toAdd = filteredNew.filter(fn => !existingPhones.includes(fn.phone));
+                return [...toAdd, ...prev];
+            });
+            setManualPhones('');
+            toast({ message: `${filteredNew.length} contatos adicionados manualmente.`, type: 'success' });
+        } else {
+            toast({ message: 'Nenhum contato novo adicionado.', type: 'info' });
+        }
+    };
+
     const handleReuseCampaign = (camp: any) => {
         setNewCampaignName(camp.name);
         setNewCampaignMessage(camp.message);
@@ -329,6 +418,25 @@ export const WhatsBot: React.FC = () => {
             void loadCampaigns(true);
         } catch (err: any) {
             toast({ message: 'Erro ao parar campanha.', type: 'error' });
+        }
+    };
+
+    const handleDeleteCampaign = async (id: string) => {
+        const confirmed = await confirm({
+            title: 'Excluir Campanha',
+            message: 'Tem certeza que deseja excluir esta campanha e todo o seu histórico de envios? Esta ação não pode ser desfeita.',
+            confirmButtonText: 'Excluir',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!confirmed) return;
+
+        try {
+            await whatsbot.deleteWhatsBotCampaign(id, requestOptions);
+            toast({ message: 'Campanha excluída com sucesso.', type: 'success' });
+            void loadCampaigns(true);
+        } catch (err: any) {
+            toast({ message: 'Erro ao excluir campanha.', type: 'error' });
         }
     };
 
@@ -665,17 +773,30 @@ export const WhatsBot: React.FC = () => {
                         <div className="space-y-6">
                             <div className="space-y-3">
                                 <label className="text-xs font-black uppercase tracking-wider text-gray-400">Mensagem (Loja Aberta)</label>
-                                <textarea
-                                    value={draftMessage}
-                                    onChange={(event) => {
-                                        setDraftMessage(event.target.value);
-                                        setIsDirty(true);
-                                        isDirtyRef.current = true;
-                                    }}
-                                    rows={4}
-                                    placeholder="Ex: Oi! Nosso catálogo está aqui: {{catalog_url}}"
-                                    className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
-                                />
+                                <div className="relative group">
+                                    <textarea
+                                        value={draftMessage}
+                                        onChange={(e) => {
+                                            setDraftMessage(e.target.value);
+                                            setIsDirty(true);
+                                        }}
+                                        placeholder="Ex: Olá! Temos novidades no nosso cardápio hoje..."
+                                        className="w-full h-32 p-4 pt-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm resize-none dark:text-white"
+                                    />
+                                    <div className="absolute top-2 right-2 flex gap-1">
+                                        <button
+                                            onClick={() => handleHarmonizeMessage(false)}
+                                            disabled={isHarmonizing || !draftMessage.trim()}
+                                            title="Harmonizar com IA (Gemini)"
+                                            className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition-all disabled:opacity-50"
+                                        >
+                                            {isHarmonizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                        </button>
+                                        <button className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-all">
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
                                 <ImageInput 
                                     label="Imagem Opcional - Loja Aberta"
                                     value={draftImageUrl}
@@ -885,6 +1006,15 @@ export const WhatsBot: React.FC = () => {
                                             }`}>
                                                 {camp.status === 'completed' ? 'Ok' : camp.status === 'processing' ? '...' : camp.status === 'stopped' ? 'Parado' : 'Pend'}
                                             </div>
+                                            {camp.status !== 'processing' && (
+                                                <button
+                                                    onClick={() => handleDeleteCampaign(camp.id)}
+                                                    className="p-1.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 transition-colors"
+                                                    title="Excluir Campanha"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                             {camp.status === 'processing' ? (
                                                 <button
                                                     onClick={() => handleStopCampaign(camp.id)}
@@ -934,6 +1064,7 @@ export const WhatsBot: React.FC = () => {
                         </div>
 
                         <div className="p-8 overflow-y-auto space-y-6 flex-1 thin-scrollbar">
+                            {/* Nome da Campanha */}
                             <div className="space-y-2">
                                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nome da Campanha</label>
                                 <input 
@@ -945,49 +1076,88 @@ export const WhatsBot: React.FC = () => {
                                 />
                             </div>
 
+                            {/* Mensagem com Harmonização IA */}
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Mensagem do Disparo</label>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Mensagem do Disparo</label>
+                                    <button
+                                        onClick={() => handleHarmonizeMessage(true)}
+                                        disabled={isHarmonizing || !newCampaignMessage.trim()}
+                                        title="Harmonizar com IA (Gemini)"
+                                        className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full disabled:opacity-50"
+                                    >
+                                        {isHarmonizing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                        {isHarmonizing ? 'Harmonizando...' : 'Harmonizar com IA'}
+                                    </button>
+                                </div>
                                 <textarea 
                                     rows={4}
                                     placeholder="Escreva sua mensagem aqui..."
                                     value={newCampaignMessage}
                                     onChange={(e) => setNewCampaignMessage(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 transition-all min-h-[120px] resize-none"
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 transition-all min-h-[120px] resize-none dark:text-white"
                                 />
-                                <ImageInput 
-                                    label="Imagem da Campanha"
-                                    value={newCampaignImageUrl}
-                                    onChange={setNewCampaignImageUrl}
-                                    placeholder="Faça upload ou cole o link da imagem"
-                                />
+                            </div>
 
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Link Opcional (URL)</label>
-                                        <button 
-                                            onClick={() => setNewCampaignLinkUrl(status?.catalogUrl || '')}
-                                            className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
-                                        >
-                                            <Link2 size={10} />
-                                            Link do Catálogo
-                                        </button>
-                                    </div>
+                            {/* Imagem */}
+                            <ImageInput 
+                                label="Imagem da Campanha"
+                                value={newCampaignImageUrl}
+                                onChange={setNewCampaignImageUrl}
+                                placeholder="Faça upload ou cole o link da imagem"
+                            />
+
+                            {/* Link Opcional */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Link Opcional (URL)</label>
+                                    <button 
+                                        onClick={() => setNewCampaignLinkUrl(status?.catalogUrl || '')}
+                                        className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
+                                    >
+                                        <Link2 size={10} />
+                                        Link do Catálogo
+                                    </button>
+                                </div>
+                                <input 
+                                    type="text"
+                                    placeholder="Ex: https://zeentregas.com/sua-loja"
+                                    value={newCampaignLinkUrl}
+                                    onChange={(e) => setNewCampaignLinkUrl(e.target.value)}
+                                    className="w-full px-5 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-brand-500 outline-none transition-all font-bold text-gray-800 dark:text-white"
+                                />
+                                <p className="text-[10px] text-gray-400 italic ml-1">O link será anexado ao final da mensagem automaticamente.</p>
+                            </div>
+
+                            <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-800/30 flex items-start gap-3">
+                                <Smartphone className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                                <p className="text-[11px] text-blue-700/80 dark:text-blue-400 leading-relaxed font-semibold italic">
+                                    Seu link do catálogo digital será adicionado manualmente se você desejar. Use palavras variadas para evitar o bloqueio do WhatsApp.
+                                </p>
+                            </div>
+
+                            {/* Inserção Manual de Contatos */}
+                            <div className="pt-4 border-t border-gray-50 dark:border-gray-700 space-y-3">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Adicionar Contatos Manualmente</label>
+                                <div className="flex gap-2">
                                     <input 
                                         type="text"
-                                        placeholder="Ex: https://zeentregas.com/sua-loja"
-                                        value={newCampaignLinkUrl}
-                                        onChange={(e) => setNewCampaignLinkUrl(e.target.value)}
-                                        className="w-full px-5 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-brand-500 outline-none transition-all font-bold text-gray-800 dark:text-white"
+                                        value={manualPhones}
+                                        onChange={(e) => setManualPhones(e.target.value)}
+                                        placeholder="DDD + Número (separe por vírgula para massa)"
+                                        className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 rounded-xl text-sm dark:text-white"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddManualPhones()}
                                     />
-                                    <p className="text-[10px] text-gray-400 italic ml-1">O link será anexado ao final da mensagem automaticamente.</p>
+                                    <button
+                                        onClick={handleAddManualPhones}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-2"
+                                    >
+                                        <Plus className="w-4 h-4" /> Adicionar
+                                    </button>
                                 </div>
-
-                                <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-800/30 flex items-start gap-3">
-                                    <Smartphone className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                                    <p className="text-[11px] text-blue-700/80 dark:text-blue-400 leading-relaxed font-semibold italic">
-                                        Seu link do catálogo digital será adicionado manualmente se você desejar. Use palavras variadas para evitar o bloqueio do WhatsApp.
-                                    </p>
-                                </div>
+                                <p className="text-[10px] text-slate-400 italic">
+                                    O sistema adiciona automaticamente o DDI +55 se você colocar apenas o DDD.
+                                </p>
                             </div>
 
                             <div className="space-y-3 pt-4 border-t border-gray-50 dark:border-gray-700">

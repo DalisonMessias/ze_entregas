@@ -108,3 +108,11 @@ export const getWhatsBotAvailableContacts = async (options?: WhatsBotRequestOpti
     const { data } = await axios.get<any[]>(`${getWhatsBotApiBaseUrl()}/contacts`, { headers });
     return data;
 };
+export const deleteWhatsBotCampaign = async (
+    campaignId: string,
+    options?: WhatsBotRequestOptions
+): Promise<any> => {
+    const headers = await getAuthHeaders(options);
+    const { data } = await axios.delete<any>(`${getWhatsBotApiBaseUrl()}/campaigns/${campaignId}`, { headers });
+    return data;
+};

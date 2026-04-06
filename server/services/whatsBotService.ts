@@ -400,6 +400,23 @@ class WhatsBotInstance {
         });
     }
 
+    public async deleteCampaign(campaignId: string) {
+        // Remove destinatários primeiro (devido a FK)
+        await supabaseAdmin
+            .from('whatsbot_campaign_recipients')
+            .delete()
+            .eq('campaign_id', campaignId);
+
+        // Remove a campanha
+        const { error } = await supabaseAdmin
+            .from('whatsbot_campaigns')
+            .delete()
+            .eq('id', campaignId)
+            .eq('store_id', this.storeId);
+
+        if (error) throw error;
+    }
+
     private clearReconnectTimer() {
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
@@ -1034,6 +1051,24 @@ class WhatsBotServiceManager {
         const { error } = await supabaseAdmin
             .from('whatsbot_campaigns')
             .update({ status: 'stopped', updated_at: new Date().toISOString() })
+            .eq('id', campaignId)
+            .eq('store_id', storeId);
+
+        if (error) throw error;
+        return { success: true };
+    }
+
+    public async deleteCampaign(storeId: string, campaignId: string) {
+        // Remove destinatários primeiro
+        await supabaseAdmin
+            .from('whatsbot_campaign_recipients')
+            .delete()
+            .eq('campaign_id', campaignId);
+
+        // Remove a campanha
+        const { error } = await supabaseAdmin
+            .from('whatsbot_campaigns')
+            .delete()
             .eq('id', campaignId)
             .eq('store_id', storeId);
 
