@@ -1,12 +1,25 @@
-
 export type Theme = 'light' | 'dark';
 export type UserRole = 'admin' | 'store_partner' | 'delivery_partner' | 'delivery_person' | 'collaborator' | 'user';
 export type UserStatus = 'active' | 'banned' | 'pending' | 'not_found' | 'blocked' | 'suspended' | 'error';
+
 export interface PublicStoreProfile extends PartnerProfile {
     orders_count?: number;
     is_top_seller?: boolean;
     is_paid_featured?: boolean;
 }
+
+// Sistema de Planos
+export type PlanLevel = 'GRATUITO' | 'COMISSAO' | 'MENSALIDADE';
+
+export interface PlanStatus {
+    plan_level: PlanLevel;
+    plan_status: 'GRATUITO' | 'ATIVO' | 'EXPIRADO';
+    is_super_store: boolean;
+    super_store_plan_type?: 'MENSALIDADE' | 'COMISSAO' | null;
+    super_store_expiration?: string | null;
+    is_expired: boolean;
+}
+
 export type PartnerRequestStatus = 'PENDING' | 'ACCEPTED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'RETURNING' | 'AWAITING_STORE_DECISION' | 'WAITING_PAYMENT_PIX' | 'PAYMENT_TO_ARRANGE';
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'CASH' | 'DEBIT_CARD' | 'OTHER' | 'PENDING';
 export type PayoutMethodType = 'PIX' | 'BANK_TRANSFER';
@@ -790,6 +803,7 @@ export interface PartnerProfile {
     ratings_sum?: number;
     average_rating?: number;
     super_store_plan_type?: 'MENSALIDADE' | 'COMISSAO';
+    plan_level?: PlanLevel;
     loyalty_settings?: LoyaltySettings;
 }
 
