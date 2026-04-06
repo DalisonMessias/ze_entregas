@@ -830,7 +830,7 @@ export const WhatsBot: React.FC = () => {
                     </div>
 
                     {/* Bloco: Campanhas de Marketing */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6 mt-6">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6 mt-10">
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
@@ -862,16 +862,8 @@ export const WhatsBot: React.FC = () => {
                                     <div key={camp.id} className="p-4 rounded-2xl border border-gray-50 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20 relative group">
                                         <div className="flex items-start justify-between gap-2 mb-2">
                                             <div className="min-w-0">
-                                                <p className="font-bold text-sm text-gray-900 dark:text-white truncate">{camp.name}</p>
+                                                <p className="font-bold text-sm text-gray-900 dark:text-white truncate pr-16">{camp.name}</p>
                                                 <p className="text-[9px] text-gray-400 font-bold uppercase">{new Date(camp.created_at).toLocaleDateString()}</p>
-                                            </div>
-                                            <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                                                camp.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                                                camp.status === 'processing' ? 'bg-amber-100 text-amber-700 animate-pulse' :
-                                                camp.status === 'stopped' ? 'bg-red-100 text-red-700' :
-                                                'bg-gray-100 text-gray-600'
-                                            }`}>
-                                                {camp.status === 'completed' ? 'Ok' : camp.status === 'processing' ? '...' : camp.status === 'stopped' ? 'Parado' : 'Pend'}
                                             </div>
                                         </div>
                                         <div className="flex items-center justify-between text-[10px] font-bold text-gray-500">
@@ -884,7 +876,15 @@ export const WhatsBot: React.FC = () => {
                                                 style={{ width: `${((camp.sent_successfully + camp.sent_failed) / camp.total_recipients) * 100}%` }}
                                             />
                                         </div>
-                                        <div className="absolute top-3 right-3 flex items-center gap-2">
+                                        <div className="absolute top-4 right-4 flex items-center gap-2">
+                                            <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                camp.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                                                camp.status === 'processing' ? 'bg-amber-100 text-amber-700 animate-pulse' :
+                                                camp.status === 'stopped' ? 'bg-red-100 text-red-700' :
+                                                'bg-gray-100 text-gray-600'
+                                            }`}>
+                                                {camp.status === 'completed' ? 'Ok' : camp.status === 'processing' ? '...' : camp.status === 'stopped' ? 'Parado' : 'Pend'}
+                                            </div>
                                             {camp.status === 'processing' ? (
                                                 <button
                                                     onClick={() => handleStopCampaign(camp.id)}

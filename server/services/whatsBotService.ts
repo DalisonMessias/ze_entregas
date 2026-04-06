@@ -519,11 +519,25 @@ class WhatsBotInstance {
             await this.upsertContacts(contacts);
         });
 
-        sock.ev.on('messaging-history.set', async ({ contacts }) => {
+        sock.ev.on('messaging-history.set', async ({ contacts, chats }) => {
             if (sock !== this.sock) return;
+            
+            // Processa contatos do histórico
             if (contacts?.length) {
-                console.log(`[WhatsBot ${this.storeId}] 📥 Recebidos ${contacts.length} contatos do histórico (messaging-history.set).`);
+                console.log(`[WhatsBot ${this.storeId}] 📥 Recebidos ${contacts.length} contatos do histórico.`);
                 await this.upsertContacts(contacts);
+            }
+
+            // Processa conversas (chats) do histórico para capturar JIDs que não estão na lista de contatos
+            if (chats?.length) {
+                console.log(`[WhatsBot ${this.storeId}] 📥 Processando ${chats.length} conversas do histórico para extrair contatos.`);
+                const chatContacts = chats
+                    .filter(c => !c.id.includes('@g.us') && !c.id.includes('@broadcast'))
+                    .map(c => ({ id: c.id, name: c.name || null }));
+                
+                if (chatContacts.length > 0) {
+                    await this.upsertContacts(chatContacts);
+                }
             }
         });
 
@@ -594,6 +608,17 @@ class WhatsBotInstance {
                     // Se a mensagem não tiver conteúdo (comum em erros de descriptografia), ignora silenciosamente
                     if (!message.message) continue;
                     
+                    // Sincroniza o remetente da mensagem como um contato disponível para campanhas
+                    if (!message.key.fromMe && message.key.remoteJid) {
+                        const jid = message.key.remoteJid;
+                        if (!jid.includes('@g.us') && !jid.includes('@broadcast')) {
+                            await this.upsertContacts([{ 
+                                id: jid, 
+                                name: message.pushName || null 
+                            }]);
+                        }
+                    }
+
                     await this.handleIncomingMessage(message);
                 } catch (error: any) {
                     // Erros de descriptografia (PreKeyError/SessionError) são comuns em sessões corrompidas
