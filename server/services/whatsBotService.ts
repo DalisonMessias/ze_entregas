@@ -701,6 +701,19 @@ class WhatsBotServiceManager {
             });
         }
 
+        // Limpa o histórico anti-spam ao desligar o bot
+        // Isso permite que novos envios sejam feitos ao ligar o bot novamente
+        const { error: histErr } = await supabaseAdmin
+            .from('whatsbot_send_history')
+            .delete()
+            .eq('store_id', storeId);
+
+        if (histErr) {
+            console.warn(`[WhatsBot ${storeId}] Aviso: não foi possível limpar histórico anti-spam:`, histErr.message);
+        } else {
+            console.log(`\x1b[36m[WhatsBot ${storeId}] 🧹 Histórico anti-spam limpo ao desligar o bot.\x1b[0m`);
+        }
+
         return this.getStatus(storeId, currentPublicUrl);
     }
 }
