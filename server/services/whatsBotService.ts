@@ -13,6 +13,14 @@ import {
     useWhatsBotDatabaseAuth,
     WhatsBotConnectionStatus
 } from './useWhatsBotDatabaseAuth.js';
+import { ZeAssistantAIService } from './zeAssistantAIService.js';
+
+// Cache de Memória para evitar loops de Fallback (Silenciamento Instantâneo)
+// Chave: "storeId:contactPhone:date"
+const aiFallbackCache = new Set<string>();
+
+// Instância global do serviço de IA
+const aiService = new ZeAssistantAIService();
 
 interface WhatsBotSettingsRow {
     store_id: string;
@@ -22,6 +30,9 @@ interface WhatsBotSettingsRow {
     image_url: string | null;
     closed_image_url: string | null;
     timezone: string | null;
+    ai_enabled: boolean;
+    ai_context: string;
+    ai_name: string;
 }
 
 interface StoreProfileRow {
@@ -65,6 +76,9 @@ export interface WhatsBotStatusPayload {
     imageUrl?: string | null;
     closedImageUrl?: string | null;
     catalogUrl: string;
+    ai_enabled: boolean;
+    ai_context: string;
+    ai_name: string;
     lastError?: string | null;
 }
 
@@ -112,43 +126,108 @@ export const getLocalDateString = (timezone = DEFAULT_TIMEZONE, date = new Date(
 };
 
 const getSettings = async (storeId: string): Promise<WhatsBotSettingsRow> => {
-    const { data, error } = await supabaseAdmin
-        .from('whatsbot_settings')
-        .select('store_id, enabled, custom_message, custom_closed_message, image_url, closed_image_url, timezone')
-        .eq('store_id', storeId)
-        .single();
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('whatsbot_settings')
+            .select('store_id, enabled, custom_message, custom_closed_message, image_url, closed_image_url, timezone, ai_enabled, ai_context, ai_name')
+            .eq('store_id', storeId)
+            .single();
 
-    if (error && error.code !== 'PGRST116') {
-        throw error;
+        if (error) {
+            if (error.code === 'PGRST116') return { 
+                store_id: storeId, enabled: false, custom_message: null, custom_closed_message: null, 
+                image_url: null, closed_image_url: null, timezone: DEFAULT_TIMEZONE, 
+                ai_enabled: false, ai_context: '', ai_name: 'Assistente' 
+            };
+            throw error;
+        }
+
+        return {
+            store_id: storeId,
+            enabled: !!data?.enabled,
+            custom_message: data?.custom_message || null,
+            custom_closed_message: data?.custom_closed_message || null,
+            image_url: data?.image_url || null,
+            closed_image_url: data?.closed_image_url || null,
+            timezone: data?.timezone || DEFAULT_TIMEZONE,
+            ai_enabled: !!data?.ai_enabled,
+            ai_context: data?.ai_context || '',
+            ai_name: data?.ai_name || 'Assistente'
+        };
+    } catch (err: any) {
+        // Se a coluna ai_name ainda não existir no banco, retornamos um fallback para não quebrar o dashboard
+        if (err.code === '42703' || err.message?.includes('ai_name')) {
+            console.warn(`[WhatsBot ${storeId}] Aviso: Coluna ai_name não encontrada. Usando padrão.`);
+            const { data } = await supabaseAdmin
+                .from('whatsbot_settings')
+                .select('store_id, enabled, custom_message, custom_closed_message, image_url, closed_image_url, timezone, ai_enabled, ai_context')
+                .eq('store_id', storeId)
+                .single();
+                
+            return {
+                store_id: storeId,
+                enabled: !!data?.enabled,
+                custom_message: data?.custom_message || null,
+                custom_closed_message: data?.custom_closed_message || null,
+                image_url: data?.image_url || null,
+                closed_image_url: data?.closed_image_url || null,
+                timezone: data?.timezone || DEFAULT_TIMEZONE,
+                ai_enabled: !!data?.ai_enabled,
+                ai_context: data?.ai_context || '',
+                ai_name: 'Assistente' // Fallback
+            };
+        }
+        throw err;
     }
-
-    return {
-        store_id: storeId,
-        enabled: !!data?.enabled,
-        custom_message: data?.custom_message || null,
-        custom_closed_message: data?.custom_closed_message || null,
-        image_url: data?.image_url || null,
-        closed_image_url: data?.closed_image_url || null,
-        timezone: data?.timezone || DEFAULT_TIMEZONE
-    };
 };
 
 const upsertSettings = async (
     storeId: string,
     updates: Partial<WhatsBotSettingsRow>
 ) => {
-    const payload = {
-        store_id: storeId,
-        timezone: DEFAULT_TIMEZONE,
-        ...updates,
-        updated_at: new Date().toISOString()
-    };
+    try {
+        // 1. Primeiro buscamos as configurações atuais para preservar o que não deve ser alterado
+        const { data: current, error: fetchError } = await supabaseAdmin
+            .from('whatsbot_settings')
+            .select('ai_enabled, ai_context, ai_name')
+            .eq('store_id', storeId)
+            .single();
 
-    const { error } = await supabaseAdmin
-        .from('whatsbot_settings')
-        .upsert(payload, { onConflict: 'store_id' });
+        // Se houver erro de "not found", tratamos como objeto vazio
+        const existing = (!fetchError && current) ? current : { ai_enabled: false, ai_context: '', ai_name: 'Assistente' };
 
-    if (error) {
+        const payload: any = {
+            store_id: storeId,
+            timezone: DEFAULT_TIMEZONE,
+            // Preservamos a IA se ela não estiver nos updates
+            ai_enabled: updates.ai_enabled !== undefined ? updates.ai_enabled : existing.ai_enabled,
+            ai_context: updates.ai_context !== undefined ? updates.ai_context : existing.ai_context,
+            ai_name: updates.ai_name !== undefined ? updates.ai_name : existing.ai_name,
+            ...updates,
+            updated_at: new Date().toISOString()
+        };
+
+        console.log(`[WhatsBot ${storeId}] 💾 Atualizando configurações (IA Ativa: ${payload.ai_enabled})`);
+
+        const { error } = await supabaseAdmin
+            .from('whatsbot_settings')
+            .upsert(payload, { onConflict: 'store_id' });
+
+        if (error) {
+            // Se o erro for de coluna inexistente (ai_name), tentamos sem ela
+            if (error.code === 'PGRST204' || error.message?.includes('ai_name')) {
+                console.warn(`[WhatsBot ${storeId}] Aviso: Tentando upsert sem ai_name por incompatibilidade de schema.`);
+                delete payload.ai_name;
+                const { error: retryError } = await supabaseAdmin
+                    .from('whatsbot_settings')
+                    .upsert(payload, { onConflict: 'store_id' });
+                if (retryError) throw retryError;
+            } else {
+                throw error;
+            }
+        }
+    } catch (error: any) {
+        console.error(`[WhatsBot ${storeId}] ❌ Erro ao fazer upsertSettings:`, error.message || error);
         throw error;
     }
 };
@@ -355,6 +434,9 @@ class WhatsBotInstance {
             imageUrl: settings.image_url,
             closedImageUrl: settings.closed_image_url,
             catalogUrl,
+            ai_enabled: !!settings.ai_enabled,
+            ai_context: settings.ai_context || '',
+            ai_name: settings.ai_name || 'Assistente',
             lastError: runtime.lastError ?? session?.last_disconnect_reason ?? null
         };
     }
@@ -798,11 +880,187 @@ class WhatsBotInstance {
 
         console.log(`\x1b[35m[WhatsBot ${this.storeId}] 📩 Mensagem recebida de ${contactPhone}\x1b[0m`);
 
+        // 1. Tenta extrair o texto da mensagem
+        const messageText = message.message?.conversation || 
+                           message.message?.extendedTextMessage?.text || 
+                           message.message?.imageMessage?.caption || 
+                           '';
+
+        // 2. Busca Gatilhos de Resposta (Keywords)
+        if (messageText.trim()) {
+            const { data: triggers } = await supabaseAdmin
+                .from('whatsbot_triggers')
+                .select('*')
+                .eq('store_id', this.storeId);
+
+            if (triggers && triggers.length > 0) {
+                const cleanText = messageText.toLowerCase().trim();
+                const matchedTrigger = triggers.find(t => 
+                    cleanText.includes(t.keyword.toLowerCase().trim())
+                );
+
+                if (matchedTrigger) {
+                    console.log(`\x1b[32m[WhatsBot ${this.storeId}] 🎯 Gatilho detectado: "${matchedTrigger.keyword}"\x1b[0m`);
+                    
+                    const [settings, store, session] = await Promise.all([
+                        getSettings(this.storeId),
+                        getStoreProfile(this.storeId),
+                        getSessionRow(this.storeId)
+                    ]);
+                    
+                    const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
+                    
+                    // Processando Variáveis Inteligentes
+                    const hour = new Date().getHours();
+                    const saudacao = hour >= 5 && hour < 12 ? 'Bom dia' : hour >= 12 && hour < 18 ? 'Boa tarde' : 'Boa noite';
+                    const firstName = (message.pushName || 'cliente').split(' ')[0];
+                    
+                    let finalResponse = matchedTrigger.response
+                        .replace(/\{\{\s*saudacao\s*\}\}/gi, saudacao)
+                        .replace(/\{\{\s*first_name\s*\}\}/gi, firstName)
+                        .replace(/\{\{\s*catalog_url\s*\}\}/gi, catalogUrl)
+                        .replace(/\{\s*catalogUrl\s*\}/g, catalogUrl);
+
+                    try {
+                        await this.sendText(contactJid, finalResponse, catalogUrl);
+                        console.log(`\x1b[32m[WhatsBot ${this.storeId}] ✅ Resposta de gatilho enviada!\x1b[0m`);
+                        return;
+                    } catch (err: any) {
+                        console.error(`[WhatsBot ${this.storeId}] Erro ao enviar gatilho:`, err.message);
+                    }
+                }
+            }
+        }
+
         const [settings, store, session] = await Promise.all([
             getSettings(this.storeId),
             getStoreProfile(this.storeId),
             getSessionRow(this.storeId)
         ]);
+
+        // 3. Resposta via Assistente de IA (se ativo)
+        if (settings.enabled && settings.ai_enabled && this.enabled) {
+            console.log(`\x1b[36m[WhatsBot ${this.storeId}] 🤖 Processando via Assistente de IA...\x1b[0m`);
+            
+            try {
+                // Busca API Key do Gemini
+                const { data: keyRow } = await supabaseAdmin
+                    .from('api_keys')
+                    .select('key_value')
+                    .eq('provider', 'google_gemini')
+                    .eq('is_active', true)
+                    .maybeSingle();
+
+                const apiKey = keyRow?.key_value || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+
+                if (apiKey) {
+                    // Busca produtos para conhecimento da IA (simplificado para evitar erros de join)
+                    const { data: rawProducts } = await supabaseAdmin
+                        .from('products')
+                        .select('name, price, description')
+                        .eq('store_id', this.storeId)
+                        .limit(100);
+
+                    const products = rawProducts || [];
+                    console.log(`[WhatsBot ${this.storeId}] 📦 Conhecimento de IA: ${products.length} produtos encontrados para a loja ID: ${this.storeId}`);
+
+                    const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
+                    
+                    const aiResult = await aiService.processMessage(
+                        messageText,
+                        {
+                            storeName: store.store_name,
+                            isClosed: store.is_open === false,
+                            closedInstruction: settings.custom_closed_message,
+                            assistantName: settings.ai_name || 'Assistente',
+                            aiInstructions: settings.ai_context,
+                            products: products || []
+                        },
+                        {
+                            confusionCount: 0,
+                            variables: {
+                                contactPhone,
+                                storeId: this.storeId
+                            }
+                        },
+                        apiKey
+                    );
+
+                    if (aiResult.success && aiResult.responseText) {
+                        let finalAiText = aiResult.responseText
+                            .replace(/\{\{\s*catalog_url\s*\}\}/gi, catalogUrl)
+                            .replace(/\{\s*catalogUrl\s*\}/g, catalogUrl);
+
+                        await this.sendText(contactJid, finalAiText, catalogUrl);
+                        console.log(`\x1b[32m[WhatsBot ${this.storeId}] ✅ Resposta de IA enviada!\x1b[0m`);
+                    } else {
+                        // IA retornou success: false (ou resposta vazia) - Enviar Fallback
+                        console.warn(`[WhatsBot ${this.storeId}] IA falhou no resultado (Quota/Erro). Enviando fallback.`);
+                        const fallbackMsg = "Nosso Assistente está conversando com muitas pessoas, peço que tente novamente mais tarde. 🙏";
+                        await this.sendText(contactJid, fallbackMsg);
+                    }
+
+                    return; // IMPORTANTE: Se IA está ativa, encerramos aqui para não mandar boas-vindas padrão
+                } else {
+                    console.warn(`[WhatsBot ${this.storeId}] IA ativa mas API Key não encontrada.`);
+                }
+            } catch (aiErr: any) {
+                console.error(`[WhatsBot ${this.storeId}] Erro no processamento de IA:`, aiErr.message);
+                
+                // Mensagem de Fallback Amigável Blindada (Cache de Memória + Banco)
+                const fallbackMsg = "Nosso Assistente está conversando com muitas pessoas, peço que tente novamente mais tarde. 🙏";
+                const sendDateLocal = getLocalDateString(settings.timezone || DEFAULT_TIMEZONE);
+                const memoryKey = `${this.storeId}:${contactPhone}:${sendDateLocal}`;
+                
+                try {
+                    // 1. Verificação de MEMÓRIA (Instantânea)
+                    if (aiFallbackCache.has(memoryKey)) {
+                        console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO DE MEMÓRIA: Silêncio total para ${contactPhone}.`);
+                        return;
+                    }
+
+                    // 2. Verificação de BANCO (Segurança de Persistência)
+                    const { data: alreadySent } = await supabaseAdmin
+                        .from('whatsbot_send_history')
+                        .select('id')
+                        .eq('store_id', this.storeId)
+                        .eq('contact_phone', contactPhone)
+                        .eq('send_date', sendDateLocal)
+                        .ilike('message_body', '%conversando com muitas pessoas%')
+                        .maybeSingle();
+
+                    if (!alreadySent) {
+                        const reservation = await reserveDailySend({
+                            storeId: this.storeId,
+                            contactPhone,
+                            contactJid,
+                            sendDateLocal,
+                            messageSource: 'custom', 
+                            messageBody: fallbackMsg,
+                            inboundMessageId: message.key.id || null,
+                            isClosedMessage: store.is_open === false
+                        });
+
+                        if (reservation.allowed) {
+                            await this.sendText(contactJid, fallbackMsg);
+                            await markSendHistorySent(reservation.history_id);
+                            
+                            // 3. Salva na MEMÓRIA para o próximo milissegundo
+                            aiFallbackCache.add(memoryKey);
+                            console.log(`[WhatsBot ${this.storeId}] 🛡️ PRIMEIRO AVISO: Enviado e salvo na memória para ${contactPhone}.`);
+                        }
+                    } else {
+                        // Se está no banco mas não na memória (ex: servidor resetou), alimentamos a memória
+                        aiFallbackCache.add(memoryKey);
+                        console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO BANCO: Já avisado hoje. Silenciando ${contactPhone}.`);
+                    }
+                } catch (sendErr) {
+                    console.error(`[WhatsBot ${this.storeId}] Erro ao processar blindagem de fallback:`, sendErr);
+                }
+                
+                return; // Bloqueia tudo
+            }
+        }
 
         if (!settings.enabled || !this.enabled) {
             console.log(`\x1b[33m[WhatsBot ${this.storeId}] ⏭️ Ignorando: Robô está desligado nas configurações.\x1b[0m`);
@@ -922,7 +1180,10 @@ class WhatsBotServiceManager {
         customClosedMessage: string, 
         imageUrl: string | null = null,
         closedImageUrl: string | null = null,
-        currentPublicUrl?: string | null
+        currentPublicUrl?: string | null,
+        ai_enabled: boolean = false,
+        ai_context: string = '',
+        ai_name: string = ''
     ) {
         const { error } = await supabaseAdmin.from('whatsbot_settings').upsert({
             store_id: storeId,
@@ -930,6 +1191,9 @@ class WhatsBotServiceManager {
             custom_closed_message: customClosedMessage,
             image_url: imageUrl,
             closed_image_url: closedImageUrl,
+            ai_enabled: ai_enabled,
+            ai_context: ai_context,
+            ai_name: ai_name,
             updated_at: new Date().toISOString()
         });
 

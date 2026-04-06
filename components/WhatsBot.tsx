@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check, Crown, Lock, Megaphone, Users, Plus, Play, StopCircle, Loader2, Image as ImageIcon, Camera, Trash2, ExternalLink, Sparkles, Edit2 } from 'lucide-react';
+import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check, Crown, Lock, Megaphone, Users, Plus, Play, StopCircle, Loader2, Image as ImageIcon, Camera, Trash2, ExternalLink, Sparkles, Edit2, Save } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AccessDenied } from './AccessDenied';
 import { Button } from './Button';
@@ -10,6 +10,7 @@ import * as whatsbot from '../services/whatsbot';
 import { WhatsBotStatus } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { usePlanPermissions } from '../hooks/usePlanPermissions';
+import { CustomDateInput } from './CustomDateInput';
 
 const statusMap: Record<WhatsBotStatus['connectionStatus'], { label: string; badge: string }> = {
     CONNECTED: {
@@ -30,6 +31,44 @@ const statusMap: Record<WhatsBotStatus['connectionStatus'], { label: string; bad
     }
 };
 
+const compressImage = async (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const MAX_WIDTH = 1024;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('Falha ao comprimir imagem'));
+                    },
+                    'image/jpeg',
+                    0.7
+                );
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
+};
+
 const ImageInput: React.FC<{
     label: string;
     value: string | null;
@@ -46,7 +85,13 @@ const ImageInput: React.FC<{
 
         setUploading(true);
         try {
-            const url = await uploadMarketingAsset(file);
+            // Compressão antes do upload
+            const compressedBlob = await compressImage(file);
+            const compressedFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+                type: 'image/jpeg'
+            });
+
+            const url = await uploadMarketingAsset(compressedFile);
             onChange(url);
             if (setIsDirty) setIsDirty(true);
         } catch (err) {
@@ -153,6 +198,9 @@ export const WhatsBot: React.FC = () => {
     const [manualPhones, setManualPhones] = useState('');
     const { canAccessWhatsBot, loading: loadingPlan } = usePlanPermissions();
 
+    const [creatingCampaign, setCreatingCampaign] = useState(false);
+    const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
+
     // Estados de Campanhas
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [loadingCampaigns, setLoadingCampaigns] = useState(false);
@@ -164,7 +212,37 @@ export const WhatsBot: React.FC = () => {
     const [newCampaignImageUrl, setNewCampaignImageUrl] = useState<string | null>(null);
     const [newCampaignLinkUrl, setNewCampaignLinkUrl] = useState('');
     const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
-    const [creatingCampaign, setCreatingCampaign] = useState(false);
+
+    // Estados de IA
+    const [aiEnabled, setAiEnabled] = useState(false);
+    const [aiContext, setAiContext] = useState('');
+    const [aiName, setAiName] = useState('Assistente');
+
+    // Estados de Gatilhos
+    const [triggers, setTriggers] = useState<any[]>([]);
+    const [loadingTriggers, setLoadingTriggers] = useState(false);
+    const [newTriggerKeyword, setNewTriggerKeyword] = useState('');
+    const [newTriggerResponse, setNewTriggerResponse] = useState('');
+    const [isAddingTrigger, setIsAddingTrigger] = useState(false);
+    const [isSavingAi, setIsSavingAi] = useState(false);
+
+    const getSaudacao = () => {
+        const hora = new Date().getHours();
+        if (hora >= 5 && hora < 12) return 'Bom dia';
+        if (hora >= 12 && hora < 18) return 'Boa tarde';
+        return 'Boa noite';
+    };
+
+    const processSmartVariables = (text: string, contactName?: string) => {
+        let processed = text.replace(/\{\{\s*saudacao\s*\}\}/gi, getSaudacao());
+        if (contactName) {
+            const firstName = contactName.split(' ')[0];
+            processed = processed.replace(/\{\{\s*first_name\s*\}\}/gi, firstName);
+        } else {
+            processed = processed.replace(/\{\{\s*first_name\s*\}\}/gi, 'cliente');
+        }
+        return processed;
+    };
 
     const requestOptions = useMemo(() => ({
         storeId
@@ -182,8 +260,14 @@ export const WhatsBot: React.FC = () => {
                 setDraftClosedMessage(data.customClosedMessage || '');
                 setDraftImageUrl(data.imageUrl || null);
                 setDraftClosedImageUrl(data.closedImageUrl || null);
-                setIsDirty(false);
-                isDirtyRef.current = false;
+                setAiEnabled((data as any).ai_enabled || false);
+                setAiContext((data as any).ai_context || '');
+                setAiName((data as any).ai_name || 'Assistente');
+                
+                if (syncDraft) {
+                    setIsDirty(false);
+                    isDirtyRef.current = false;
+                }
             }
         } catch (err: any) {
             setError(err?.response?.data?.message || err?.message || 'Erro ao carregar status do WhatsBot.');
@@ -239,7 +323,12 @@ export const WhatsBot: React.FC = () => {
                 draftClosedMessage, 
                 draftImageUrl, 
                 draftClosedImageUrl, 
-                requestOptions
+                {
+                    ...requestOptions,
+                    ai_enabled: aiEnabled,
+                    ai_context: aiContext,
+                    ai_name: aiName
+                }
             );
             setStatus(updated);
             setDraftMessage(updated.customMessage || '');
@@ -255,6 +344,51 @@ export const WhatsBot: React.FC = () => {
         } finally {
             setLoadingAction(null);
         }
+    };
+
+    const handleSaveAI = async (newAiEnabled?: boolean) => {
+        if (!status) return;
+        setIsSavingAi(true);
+        const targetAiEnabled = newAiEnabled !== undefined ? newAiEnabled : aiEnabled;
+        
+        try {
+            const updated = await whatsbot.updateWhatsBotConfig(
+                draftMessage, 
+                draftClosedMessage, 
+                draftImageUrl, 
+                draftClosedImageUrl, 
+                {
+                    ...requestOptions,
+                    ai_enabled: targetAiEnabled,
+                    ai_context: aiContext,
+                    ai_name: aiName
+                }
+            );
+            
+            setStatus(updated);
+            setAiEnabled(targetAiEnabled);
+            setIsDirty(false);
+            isDirtyRef.current = false;
+            
+            toast({ 
+                message: targetAiEnabled ? 'Assistente de IA ativado com sucesso!' : 'Assistente de IA desativado com sucesso!', 
+                type: 'success' 
+            });
+        } catch (error: any) {
+            console.error('Erro ao salvar IA:', error);
+            const message = error?.response?.data?.message || error?.message || 'Erro ao salvar configurações de IA.';
+            toast({ message, type: 'error' });
+            // Reverte o estado visual em caso de erro no toggle
+            if (newAiEnabled !== undefined) setAiEnabled(!newAiEnabled);
+        } finally {
+            setIsSavingAi(false);
+        }
+    };
+
+    const handleToggleAI = () => {
+        const nextState = !aiEnabled;
+        setAiEnabled(nextState);
+        void handleSaveAI(nextState);
     };
 
     const loadCampaigns = useCallback(async (quiet = false) => {
@@ -292,18 +426,24 @@ export const WhatsBot: React.FC = () => {
 
         setCreatingCampaign(true);
         try {
-            await whatsbot.createWhatsBotCampaign(
+            const response = await whatsbot.createWhatsBotCampaign(
                 newCampaignName,
                 newCampaignMessage,
                 selectedContacts,
                 newCampaignImageUrl,
                 newCampaignLinkUrl || null,
-                requestOptions
+                {
+                    ...requestOptions,
+                    scheduledAt: scheduledAt?.toISOString() || null
+                }
             );
-            toast({ message: 'Campanha criada com sucesso! O disparo começará em breve.', type: 'success' });
+            console.log('Campanha criada:', response);
+            toast({ message: scheduledAt ? 'Campanha agendada com sucesso!' : 'Campanha criada com sucesso!', type: 'success' });
             setShowNewCampaignModal(false);
             setNewCampaignName('');
             setNewCampaignMessage('');
+            setSelectedContacts([]);
+            setScheduledAt(null);
             setNewCampaignImageUrl(null);
             setNewCampaignLinkUrl('');
             void loadCampaigns();
@@ -314,41 +454,80 @@ export const WhatsBot: React.FC = () => {
         }
     };
 
-    const handleHarmonizeMessage = async (isCampaign = true) => {
-        const currentText = isCampaign ? newCampaignMessage : draftMessage;
-        if (!currentText.trim()) return;
+    const handleHarmonizeMessage = async (type: 'campaign' | 'open' | 'closed' = 'campaign') => {
+        let messageToHarmonize = '';
+        if (type === 'campaign') messageToHarmonize = newCampaignMessage;
+        else if (type === 'open') messageToHarmonize = draftMessage;
+        else if (type === 'closed') messageToHarmonize = draftClosedMessage;
+
+        if (!messageToHarmonize.trim()) return;
 
         setIsHarmonizing(true);
         try {
-            const apiKey = await cloud.getAPIKey('google');
+            let apiKey = await cloud.getAPIKey('google_gemini', storeId || undefined);
+            
             if (!apiKey) {
-                toast({ message: 'API do Gemini não configurada.', type: 'error' });
+                apiKey = (process as any)?.env?.GEMINI_API_KEY || (import.meta as any)?.env?.VITE_GEMINI_API_KEY || null;
+            }
+
+            if (!apiKey) {
+                toast({ message: 'API do Gemini não configurada ou ativa.', type: 'error' });
+                setIsHarmonizing(false);
                 return;
             }
 
-            const prompt = `Atue como um EXPERT COPYWRITER para WhatsApp. 
-            Melhore e harmonize o texto abaixo para uma campanha de marketing. 
-            Deve ser profissional, atraente e amigável. 
-            Mantenha o sentido original e inclua emojis pertinentes.
+            let prompt = `Atue como um Copywriter especialista em WhatsApp Marketing.
+            Melhore a mensagem abaixo para ser mais amigável, profissional e persuasiva, usando emojis de forma equilibrada.`;
+
+            if (type === 'closed') {
+                prompt = `Atue como um Copywriter especialista em WhatsApp Marketing.
+                Melhore a mensagem de fechamento da loja abaixo para ser educada, profissional e amigável.
+                Informe que estamos fechados mas que em breve retornaremos. Use emojis de forma equilibrada.`;
+            }
+
+            if (type === 'campaign') {
+                prompt = `Atue como um Copywriter especialista em WhatsApp Marketing.
+                Melhore a mensagem de campanha abaixo para ser persuasiva e profissional.
+                IMPORTANTE: NÃO inclua links, sites ou a tag [Link da Loja], pois o link já será enviado separadamente pelo sistema.`;
+            }
+
+            if (type === 'open') {
+                prompt += `\nSe a mensagem mencionar para acessar o site ou catálogo, use a tag [Link da Loja] no local apropriado.`;
+            }
             
-            TEXTO ORIGINAL: "${currentText}"
-            
-            RETORNE APENAS O TEXTO MELHORADO, SEM EXPLICAÇÕES.`;
+            prompt += `\n\nMENSAGEM ORIGINAL:\n"${messageToHarmonize}"\n\nRETORNE APENAS O TEXTO DA MENSAGEM HARMONIZADA, SEM COMENTÁRIOS ADICIONAIS.`;
 
             const response = await cloud.generateAIContent(prompt, apiKey);
-            if (response.text) {
-                const improvedText = response.text.trim();
-                if (isCampaign) {
-                    setNewCampaignMessage(improvedText);
+            
+            if (response && (response as any).text) {
+                let text = (response as any).text.trim();
+                
+                // Filtro para evitar duplicidade de link em campanhas
+                if (type === 'campaign') {
+                    text = text.replace(/\{\{\s*catalog_url\s*\}\}/gi, '')
+                               .replace(/\{\s*catalogUrl\s*\}/g, '')
+                               .replace(/\[Link da Loja\]/gi, '');
                 } else {
-                    setDraftMessage(improvedText);
-                    setIsDirty(true);
+                    text = text.replace(/\[Link da Loja\]/gi, '{{catalog_url}}');
                 }
-                toast({ message: 'Texto harmonizado com IA!', type: 'success' });
+
+                if (type === 'campaign') setNewCampaignMessage(text);
+                else if (type === 'open') {
+                    setDraftMessage(text);
+                    setIsDirty(true);
+                    isDirtyRef.current = true;
+                } else if (type === 'closed') {
+                    setDraftClosedMessage(text);
+                    setIsDirty(true);
+                    isDirtyRef.current = true;
+                }
+                toast({ message: 'Mensagem harmonizada com sucesso!', type: 'success' });
+            } else {
+                throw new Error('Resposta da IA inválida');
             }
         } catch (err: any) {
-            console.error('Erro ao harmonizar com IA:', err);
-            toast({ message: 'Erro ao harmonizar texto.', type: 'error' });
+            console.error('Erro ao harmonizar mensagem:', err);
+            toast({ message: 'Erro ao conectar com a IA.', type: 'error' });
         } finally {
             setIsHarmonizing(false);
         }
@@ -440,11 +619,60 @@ export const WhatsBot: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        if (canAccessWhatsBot && storeId) {
-            void loadCampaigns();
+    const loadTriggers = useCallback(async () => {
+        if (!storeId) return;
+        setLoadingTriggers(true);
+        try {
+            const data = await whatsbot.getWhatsBotTriggers(requestOptions);
+            setTriggers(data);
+        } catch (err) {
+            console.error('Erro ao carregar gatilhos:', err);
+        } finally {
+            setLoadingTriggers(false);
         }
-    }, [canAccessWhatsBot, storeId, loadCampaigns]);
+    }, [storeId, requestOptions]);
+
+    const handleAddTrigger = async () => {
+        if (!newTriggerKeyword.trim() || !newTriggerResponse.trim()) return;
+        setIsAddingTrigger(true);
+        try {
+            await whatsbot.createWhatsBotTrigger(newTriggerKeyword, newTriggerResponse, requestOptions);
+            toast({ message: 'Gatilho adicionado com sucesso!', type: 'success' });
+            setNewTriggerKeyword('');
+            setNewTriggerResponse('');
+            void loadTriggers();
+        } catch (err: any) {
+            toast({ message: err?.response?.data?.message || 'Erro ao adicionar gatilho.', type: 'error' });
+        } finally {
+            setIsAddingTrigger(false);
+        }
+    };
+
+    const handleDeleteTrigger = async (id: string) => {
+        const confirmed = await confirm({
+            title: 'Excluir Gatilho',
+            message: 'Tem certeza que deseja excluir este gatilho de auto-resposta?',
+            confirmButtonText: 'Excluir',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (confirmed) {
+            try {
+                await whatsbot.deleteWhatsBotTrigger(id, requestOptions);
+                toast({ message: 'Gatilho excluído!', type: 'success' });
+                void loadTriggers();
+            } catch (err) {
+                toast({ message: 'Erro ao excluir gatilho.', type: 'error' });
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (storeId) {
+            void loadCampaigns();
+            void loadTriggers();
+        }
+    }, [storeId, loadCampaigns, loadTriggers]);
 
     useEffect(() => {
         const hasActiveCampaigns = campaigns.some(c => c.status === 'processing' || c.status === 'pending');
@@ -553,30 +781,36 @@ export const WhatsBot: React.FC = () => {
         if (!status) return '';
         const customMessage = draftMessage.trim();
 
+        let text = '';
         if (customMessage) {
-            return customMessage
+            text = customMessage
                 .replace(/\{\{\s*catalog_url\s*\}\}/gi, status.catalogUrl)
                 .replace(/\{\s*catalogUrl\s*\}/g, status.catalogUrl);
+        } else {
+            text = status.catalogUrl
+                ? `Olá! Aqui está o link da nossa loja: ${status.catalogUrl}`
+                : 'Configure a URL pública do catálogo para usar a mensagem padrão com link.';
         }
 
-        return status.catalogUrl
-            ? `Olá! Aqui está o link da nossa loja: ${status.catalogUrl}`
-            : 'Configure a URL pública do catálogo para usar a mensagem padrão com link.';
+        return processSmartVariables(text);
     }, [draftMessage, status]);
 
     const previewClosedMessage = useMemo(() => {
         if (!status) return '';
         const customMessage = draftClosedMessage.trim();
 
+        let text = '';
         if (customMessage) {
-            return customMessage
+            text = customMessage
                 .replace(/\{\{\s*catalog_url\s*\}\}/gi, status.catalogUrl)
                 .replace(/\{\s*catalogUrl\s*\}/g, status.catalogUrl);
+        } else {
+            text = status.catalogUrl
+                ? `Olá! No momento estamos fechados, mas você pode conferir nossos produtos e preços aqui para o seu próximo pedido: ${status.catalogUrl}`
+                : 'Configure a URL pública do catálogo para usar a mensagem padrão com link.';
         }
 
-        return status.catalogUrl
-            ? `Olá! No momento estamos fechados, mas você pode conferir nossos produtos e preços aqui para o seu próximo pedido: ${status.catalogUrl}`
-            : 'Configure a URL pública do catálogo para usar a mensagem padrão com link.';
+        return processSmartVariables(text);
     }, [draftClosedMessage, status]);
 
     if (loading || loadingPlan) {
@@ -639,7 +873,7 @@ export const WhatsBot: React.FC = () => {
     const statusInfo = statusMap[status.connectionStatus];
 
     return (
-        <div className="space-y-6 animate-in fade-in pb-24">
+        <div className="space-y-8 animate-in fade-in pb-24">
             <div className="bg-gradient-to-br from-green-600 via-emerald-600 to-teal-700 text-white p-6 md:p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                 <div className="absolute -right-10 -top-10 opacity-10">
                     <Bot className="w-48 h-48" />
@@ -675,7 +909,7 @@ export const WhatsBot: React.FC = () => {
                         </div>
                         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
                             <p className="text-[11px] font-black uppercase tracking-wider text-white/60 mb-1">Proteção anti-spam</p>
-                            <p className="text-lg font-black">1 envio por dia</p>
+                            <p className="text-lg font-black">Gatilhos ILIMITADOS</p>
                         </div>
                     </div>
                 </div>
@@ -687,8 +921,8 @@ export const WhatsBot: React.FC = () => {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-6">
-                <div className="space-y-6">
+            <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-10">
+                <div className="space-y-10">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
                         <div className="flex items-start justify-between gap-4 flex-wrap">
                             <div>
@@ -738,7 +972,7 @@ export const WhatsBot: React.FC = () => {
                                     <span className="text-sm font-bold text-gray-900 dark:text-white">Envio controlado por contato</span>
                                 </div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    O WhatsBot só responde uma vez por dia para cada número, evitando mensagens repetidas no mesmo contato.
+                                    Mensagens de boas-vindas saem 1x ao dia, mas os **Gatilhos de Resposta** funcionam sempre que o cliente digitar a palavra-chave.
                                 </p>
                             </div>
                             <div className="rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4">
@@ -758,7 +992,7 @@ export const WhatsBot: React.FC = () => {
                             <div>
                                 <h2 className="text-lg font-black text-gray-900 dark:text-white">Mensagem Automática</h2>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    Se este campo ficar vazio, o sistema envia a mensagem padrão com o link do catálogo digital.
+                                    Defina as mensagens que o bot enviará automaticamente para seus clientes.
                                 </p>
                             </div>
                             <Button
@@ -766,93 +1000,270 @@ export const WhatsBot: React.FC = () => {
                                 loading={loadingAction === 'save'}
                                 disabled={loadingAction !== null || !isDirty}
                             >
-                                Salvar mensagem
+                                Salvar configurações
                             </Button>
                         </div>
-
-                        <div className="space-y-6">
+                        <div className="space-y-8">
+                            {/* Mensagem Aberta */}
                             <div className="space-y-3">
-                                <label className="text-xs font-black uppercase tracking-wider text-gray-400">Mensagem (Loja Aberta)</label>
-                                <div className="relative group">
-                                    <textarea
-                                        value={draftMessage}
-                                        onChange={(e) => {
-                                            setDraftMessage(e.target.value);
-                                            setIsDirty(true);
-                                        }}
-                                        placeholder="Ex: Olá! Temos novidades no nosso cardápio hoje..."
-                                        className="w-full h-32 p-4 pt-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm resize-none dark:text-white"
-                                    />
-                                    <div className="absolute top-2 right-2 flex gap-1">
-                                        <button
-                                            onClick={() => handleHarmonizeMessage(false)}
-                                            disabled={isHarmonizing || !draftMessage.trim()}
-                                            title="Harmonizar com IA (Gemini)"
-                                            className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition-all disabled:opacity-50"
-                                        >
-                                            {isHarmonizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                        </button>
-                                        <button className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-all">
-                                            <Edit2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Mensagem (Loja Aberta)</label>
+                                    <button
+                                        onClick={() => handleHarmonizeMessage('open')}
+                                        disabled={isHarmonizing || !draftMessage.trim()}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                                            isHarmonizing 
+                                            ? 'bg-gray-100 text-gray-400 dark:bg-gray-800' 
+                                            : 'bg-brand-500/10 text-brand-600 hover:bg-brand-500 hover:text-white'
+                                        }`}
+                                    >
+                                        {isHarmonizing ? (
+                                            <><Loader2 size={12} className="animate-spin" /> Harmonizando...</>
+                                        ) : (
+                                            <><Sparkles size={12} /> Harmonizar com IA</>
+                                        )}
+                                    </button>
                                 </div>
+                                <textarea 
+                                    value={draftMessage}
+                                    onChange={(e) => {
+                                        setDraftMessage(e.target.value);
+                                        setIsDirty(true);
+                                        isDirtyRef.current = true;
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = (e.target.scrollHeight) + 'px';
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = (e.target.scrollHeight) + 'px';
+                                    }}
+                                    placeholder="Olá! Seja bem-vindo ao {{store_name}}..."
+                                    className="w-full px-5 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-brand-500 outline-none transition-all font-bold text-gray-800 dark:text-white resize-none thin-scrollbar min-h-[120px] overflow-hidden leading-relaxed block"
+                                />
+                                <p className="text-[10px] text-gray-400 italic ml-1">Variáveis: {'{{customer_name}}'}, {'{{store_name}}'}, {'{{catalog_url}}'}</p>
                                 <ImageInput 
                                     label="Imagem Opcional - Loja Aberta"
                                     value={draftImageUrl}
                                     onChange={setDraftImageUrl}
                                     setIsDirty={setIsDirty}
-                                    placeholder="Faça upload ou cole o link da imagem"
+                                    placeholder="Upload ou link da imagem"
                                 />
-                                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/10">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <MessageSquare className="w-3 h-3 text-gray-400" />
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Prévia (Aberto)</span>
-                                    </div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words">{previewMessage}</p>
-                                </div>
                             </div>
 
+                            {/* Mensagem Fechada */}
                             <div className="pt-6 border-t border-gray-100 dark:border-gray-700 space-y-3">
-                                <label className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                                    <PowerOff className="w-3 h-3 text-rose-500" />
-                                    Mensagem (Loja Fechada)
-                                </label>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                        <PowerOff className="w-3 h-3 text-rose-500" />
+                                        Mensagem (Loja Fechada)
+                                    </label>
+                                    <button
+                                        onClick={() => handleHarmonizeMessage('closed')}
+                                        disabled={isHarmonizing || !draftClosedMessage.trim()}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                                            isHarmonizing 
+                                            ? 'bg-gray-100 text-gray-400 dark:bg-gray-800' 
+                                            : 'bg-brand-500/10 text-brand-600 hover:bg-brand-500 hover:text-white'
+                                        }`}
+                                    >
+                                        {isHarmonizing ? (
+                                            <><Loader2 size={12} className="animate-spin" /> Harmonizando...</>
+                                        ) : (
+                                            <><Sparkles size={12} /> Harmonizar com IA</>
+                                        )}
+                                    </button>
+                                </div>
                                 <textarea
                                     value={draftClosedMessage}
-                                    onChange={(event) => {
-                                        setDraftClosedMessage(event.target.value);
+                                    onChange={(e) => {
+                                        setDraftClosedMessage(e.target.value);
                                         setIsDirty(true);
                                         isDirtyRef.current = true;
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = (e.target.scrollHeight) + 'px';
                                     }}
-                                    rows={4}
-                                    placeholder="Ex: Olá! No momento estamos fechados, mas confira nosso catálogo: {{catalog_url}}"
-                                    className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
+                                    onFocus={(e) => {
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = (e.target.scrollHeight) + 'px';
+                                    }}
+                                    placeholder="Desculpe, no momento estamos fechados..."
+                                    className="w-full px-5 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-brand-500 outline-none transition-all font-bold text-gray-800 dark:text-white resize-none thin-scrollbar min-h-[100px] overflow-hidden leading-relaxed block"
                                 />
                                 <ImageInput 
                                     label="Imagem Opcional - Loja Fechada"
                                     value={draftClosedImageUrl}
                                     onChange={setDraftClosedImageUrl}
                                     setIsDirty={setIsDirty}
-                                    placeholder="Faça upload ou cole o link da imagem"
+                                    placeholder="Upload ou link da imagem"
                                 />
-                                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/10">
+
+                                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/10 mt-4">
                                     <div className="flex items-center gap-2 mb-2">
                                         <MessageSquare className="w-3 h-3 text-gray-400" />
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Prévia (Fechado)</span>
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Prévia do Atendimento (Fechado)</span>
                                     </div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words">{previewClosedMessage}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words italic leading-relaxed">
+                                        {processSmartVariables(draftClosedMessage || 'O bot enviará a mensagem de fechamento para os clientes.')}
+                                    </p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
 
-                            <p className="text-[11px] text-gray-400 italic">
-                                Você pode usar <code className="font-mono text-indigo-500 font-bold">{'{{catalog_url}}'}</code> para inserir o link automaticamente na mensagem.
-                            </p>
+                    {/* ASSISTENTE DE IA */}
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-700 mt-8 mb-8 animate-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                                    <Sparkles className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-black text-slate-900 dark:text-white">Assistente de IA</h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 italic">Deixe a inteligência artificial responder seus clientes.</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                <span className={`text-[10px] font-black uppercase tracking-wider ${aiEnabled ? 'text-indigo-500' : 'text-slate-400'}`}>
+                                    {aiEnabled ? 'Ativado' : 'Desativado'}
+                                </span>
+                                <button
+                                    onClick={handleToggleAI}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${aiEnabled ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${aiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {aiEnabled && (
+                            <div className="space-y-6 bg-indigo-50/50 dark:bg-indigo-900/10 p-6 rounded-[2rem] border border-indigo-100/50 dark:border-indigo-500/10 animate-in zoom-in-95 duration-300">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+                                    <div className="md:col-span-1 space-y-3">
+                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                            <Edit2 size={16} className="text-indigo-500" />
+                                            Nome do Assistente
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={aiName}
+                                            onChange={(e) => {
+                                                setAiName(e.target.value);
+                                                setIsDirty(true);
+                                                isDirtyRef.current = true;
+                                            }}
+                                            placeholder="Ex: Robô do Zé"
+                                            className="w-full px-4 py-3 rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-white/50 dark:bg-slate-900/50 focus:ring-2 focus:ring-indigo-500 transition-all text-sm outline-none"
+                                        />
+                                        <p className="text-[10px] text-slate-400 italic px-1">Como ele se apresentará aos clientes.</p>
+                                    </div>
+
+                                    <div className="md:col-span-3 space-y-3">
+                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                            <Bot size={16} className="text-indigo-500" />
+                                            Instruções do Assistente (Contexto)
+                                        </label>
+                                        <textarea
+                                            value={aiContext}
+                                            onChange={(e) => {
+                                                setAiContext(e.target.value);
+                                                setIsDirty(true);
+                                                isDirtyRef.current = true;
+                                            }}
+                                            placeholder="Ex: Você é um assistente de vendas da Pizzaria do Zé. Seja engraçado e use emojis. Foque em tirar dúvidas sobre o cardápio e preços."
+                                            className="w-full h-32 px-4 py-3 rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-white/50 dark:bg-slate-900/50 focus:ring-2 focus:ring-indigo-500 transition-all text-sm outline-none resize-none"
+                                        />
+                                        <div className="flex items-center gap-2 px-1">
+                                            <Sparkles className="w-4 h-4 text-amber-500" />
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                                Dica: Quanto mais detalhes você der aqui, mais inteligente a resposta da IA será.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end pt-4 border-t border-indigo-100 dark:border-indigo-500/10">
+                                    <Button
+                                        onClick={() => handleSaveAI()}
+                                        loading={isSavingAi}
+                                        className="!py-2.5 !px-8 !text-xs !bg-indigo-500 hover:!bg-indigo-600 rounded-xl"
+                                        icon={<Save className="w-4 h-4" />}
+                                    >
+                                        Salvar Configurações de IA
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Bloco: Gatilhos de Auto-resposta */}
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm space-y-8">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900 dark:text-white">Gatilhos de Resposta</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Auto-respostas baseadas em palavras-chave.</p>
+                            </div>
+                            <Button 
+                                onClick={handleAddTrigger}
+                                disabled={isAddingTrigger || !newTriggerKeyword.trim() || !newTriggerResponse.trim()}
+                                loading={isAddingTrigger}
+                                className="!py-2.5 !px-6 !text-xs rounded-xl"
+                                icon={<Plus className="w-4 h-4" />}
+                            >
+                                Adicionar
+                            </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Palavra-chave</label>
+                                <input 
+                                    type="text"
+                                    placeholder="Ex: Preço, Ajuda"
+                                    value={newTriggerKeyword}
+                                    onChange={(e) => setNewTriggerKeyword(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-brand-500 outline-none text-xs font-bold transition-all"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Resposta Automática</label>
+                                <input 
+                                    type="text"
+                                    placeholder="Resposta do bot..."
+                                    value={newTriggerResponse}
+                                    onChange={(e) => setNewTriggerResponse(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-brand-500 outline-none text-xs font-bold transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 max-h-64 overflow-y-auto pr-1 thin-scrollbar">
+                            {loadingTriggers ? (
+                                <div className="py-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-brand-500" /></div>
+                            ) : triggers.length === 0 ? (
+                                <div className="py-6 text-center border border-dashed rounded-2xl border-gray-100 dark:border-gray-700">
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Nenhum gatilho ativo</p>
+                                </div>
+                            ) : (
+                                triggers.map((t) => (
+                                    <div key={t.id} className="p-4 rounded-xl border border-gray-50 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20 flex items-center justify-between group">
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-black text-brand-500 uppercase tracking-widest">{t.keyword}</p>
+                                            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium truncate max-w-[250px]">{t.response}</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleDeleteTrigger(t.id)}
+                                            className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-100"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-10">
                     {/* Bloco: QR Code */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
                         <div className="flex items-center gap-2">
@@ -951,7 +1362,7 @@ export const WhatsBot: React.FC = () => {
                     </div>
 
                     {/* Bloco: Campanhas de Marketing */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6 mt-10">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6 mt-16">
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
@@ -1063,7 +1474,7 @@ export const WhatsBot: React.FC = () => {
                             </button>
                         </div>
 
-                        <div className="p-8 overflow-y-auto space-y-6 flex-1 thin-scrollbar">
+                        <div className="p-8 overflow-y-auto space-y-10 flex-1 thin-scrollbar">
                             {/* Nome da Campanha */}
                             <div className="space-y-2">
                                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nome da Campanha</label>
@@ -1080,22 +1491,33 @@ export const WhatsBot: React.FC = () => {
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Mensagem do Disparo</label>
-                                    <button
-                                        onClick={() => handleHarmonizeMessage(true)}
-                                        disabled={isHarmonizing || !newCampaignMessage.trim()}
-                                        title="Harmonizar com IA (Gemini)"
-                                        className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full disabled:opacity-50"
-                                    >
-                                        {isHarmonizing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                        {isHarmonizing ? 'Harmonizando...' : 'Harmonizar com IA'}
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded" title="Bom dia/tarde/noite automático">{"{{saudacao}}"}</span>
+                                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded" title="Primeiro nome do cliente">{"{{first_name}}"}</span>
+                                        <button
+                                            onClick={() => handleHarmonizeMessage('campaign')}
+                                            disabled={isHarmonizing || !newCampaignMessage.trim()}
+                                            title="Harmonizar com IA (Gemini)"
+                                            className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full disabled:opacity-50"
+                                        >
+                                            {isHarmonizing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                            {isHarmonizing ? 'Harmonizando...' : 'Harmonizar com IA'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <textarea 
-                                    rows={4}
                                     placeholder="Escreva sua mensagem aqui..."
                                     value={newCampaignMessage}
-                                    onChange={(e) => setNewCampaignMessage(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 transition-all min-h-[120px] resize-none dark:text-white"
+                                    onChange={(e) => {
+                                        setNewCampaignMessage(e.target.value);
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = (e.target.scrollHeight) + 'px';
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = (e.target.scrollHeight) + 'px';
+                                    }}
+                                    className="w-full px-5 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-brand-500 outline-none transition-all font-bold text-gray-800 dark:text-white resize-none thin-scrollbar min-h-[150px] overflow-hidden leading-relaxed block"
                                 />
                             </div>
 
@@ -1129,6 +1551,25 @@ export const WhatsBot: React.FC = () => {
                                 <p className="text-[10px] text-gray-400 italic ml-1">O link será anexado ao final da mensagem automaticamente.</p>
                             </div>
 
+                            <div className="space-y-4 pt-4 border-t border-gray-50 dark:border-gray-700">
+                                <div className="flex items-center gap-2 ml-1">
+                                    <RefreshCcw className="w-3.5 h-3.5 text-brand-500" />
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Agendamento de Disparo (Opcional)</label>
+                                </div>
+                                <CustomDateInput 
+                                    label="" 
+                                    value={scheduledAt} 
+                                    onChange={(date: Date | string | null) => {
+                                        if (typeof date === 'string') {
+                                            setScheduledAt(new Date(date));
+                                        } else {
+                                            setScheduledAt(date);
+                                        }
+                                    }} 
+                                />
+                                <p className="text-[10px] text-gray-400 italic ml-1">Selecione uma data e hora futura para o envio automático. Deixe vazio para envio imediato.</p>
+                            </div>
+
                             <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-800/30 flex items-start gap-3">
                                 <Smartphone className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                                 <p className="text-[11px] text-blue-700/80 dark:text-blue-400 leading-relaxed font-semibold italic">
@@ -1141,16 +1582,45 @@ export const WhatsBot: React.FC = () => {
                                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Adicionar Contatos Manualmente</label>
                                 <div className="flex gap-2">
                                     <input 
-                                        type="text"
+                                        type="tel"
                                         value={manualPhones}
-                                        onChange={(e) => setManualPhones(e.target.value)}
-                                        placeholder="DDD + Número (separe por vírgula para massa)"
-                                        className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700 rounded-xl text-sm dark:text-white"
+                                        onChange={(e) => {
+                                            const rawValue = e.target.value;
+                                            // Se for apagar, deixa apagar
+                                            if (rawValue.length < manualPhones.length) {
+                                                setManualPhones(rawValue);
+                                                return;
+                                            }
+
+                                            // Formatação para um único número ou o último número após a vírgula
+                                            const parts = rawValue.split(',');
+                                            const lastPart = parts[parts.length - 1].trim();
+                                            const digits = lastPart.replace(/\D/g, '').substring(0, 11);
+                                            
+                                            let formatted = digits;
+                                            if (digits.length > 0) {
+                                                if (digits.length <= 2) {
+                                                    formatted = `(${digits}`;
+                                                } else if (digits.length <= 6) {
+                                                    formatted = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+                                                } else if (digits.length <= 10) {
+                                                    formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+                                                } else {
+                                                    formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+                                                }
+                                            }
+
+                                            parts[parts.length - 1] = formatted;
+                                            setManualPhones(parts.join(', '));
+                                        }}
+                                        placeholder="(99) 99999-9999 (separe por vírgula)"
+                                        className="flex-1 px-5 py-3.5 bg-gray-50/50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
                                         onKeyDown={(e) => e.key === 'Enter' && handleAddManualPhones()}
                                     />
                                     <button
                                         onClick={handleAddManualPhones}
-                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-2"
+                                        disabled={!manualPhones.trim()}
+                                        className="px-6 py-3.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-2xl text-xs font-black transition-all shadow-lg flex items-center gap-2"
                                     >
                                         <Plus className="w-4 h-4" /> Adicionar
                                     </button>

@@ -1451,3 +1451,50 @@ GRANT EXECUTE ON FUNCTION public.get_whatsbot_available_contacts(UUID) TO authen
 ALTER TABLE public.whatsbot_campaigns ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.whatsbot_campaigns ADD COLUMN IF NOT EXISTS link_url TEXT;
 
+-- ==================================================================
+-- WHATSBOT ADVANCED FEATURES (06/04/2026)
+-- ==================================================================
+
+-- 1. Tabela de Gatilhos de Palavras-chave (Auto-respostas)
+CREATE TABLE IF NOT EXISTS public.whatsbot_triggers (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    keyword TEXT NOT NULL,
+    response TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (store_id, keyword)
+);
+
+-- RLS para Gatilhos
+ALTER TABLE public.whatsbot_triggers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own triggers" ON public.whatsbot_triggers;
+CREATE POLICY "Users can manage own triggers" ON public.whatsbot_triggers FOR ALL USING (auth.uid() = store_id);
+
+-- Permissões de Acesso
+GRANT ALL ON public.whatsbot_triggers TO authenticated;
+GRANT ALL ON public.whatsbot_triggers TO service_role;
+GRANT SELECT ON public.whatsbot_triggers TO anon;
+
+-- 2. Coluna de Agendamento em Campanhas
+DO $$
+BEGIN
+   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_campaigns' AND column_name = 'scheduled_at') THEN
+      ALTER TABLE public.whatsbot_campaigns ADD COLUMN scheduled_at TIMESTAMPTZ DEFAULT NULL;
+   END IF;
+END $$;
+
+-- 3. Modo Assistente de IA no WhatsBot
+DO $$
+BEGIN
+   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_enabled') THEN
+      ALTER TABLE public.whatsbot_settings ADD COLUMN ai_enabled BOOLEAN DEFAULT FALSE;
+   END IF;
+   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_context') THEN
+      ALTER TABLE public.whatsbot_settings ADD COLUMN ai_context TEXT DEFAULT 'Você é o assistente virtual da nossa loja. Seu objetivo é ser educado, tirar dúvidas dos clientes e incentivá-los a clicar no link do nosso catálogo digital para fazer o pedido.';
+   END IF;
+   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_name') THEN
+      ALTER TABLE public.whatsbot_settings ADD COLUMN ai_name TEXT DEFAULT 'Assistente';
+   END IF;
+END $$;

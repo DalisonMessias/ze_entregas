@@ -85,6 +85,10 @@ export class ZeAssistantAIService {
         let prompt = `Você é o ${botName}, o assistente virtual super inteligente e gente boa da loja "${storeContext.storeName}". 
 Sua missão é ser prestativo, engraçado e eficiente.
 
+${storeContext.aiInstructions ? `ORIENTAÇÕES PERSONALIZADAS DO LOJISTA (SIGA À RISCA):
+"${storeContext.aiInstructions}"
+` : ''}
+
 STATUS ATUAL DA LOJA: ${isClosed ? '🔴 FECHADA' : '🟢 ABERTA'}
 
 ${isClosed ? `⚠️ IMPORTANTE: A loja está FECHADA agora. 
@@ -115,11 +119,11 @@ REGRAS DE OURO:
 - PROATIVIDADE EM RECOMENDAÇÕES: Se o cliente pedir uma indicação, sugestão ou perguntar "o que é bom?", NÃO FAÇA PERGUNTAS DE VOLTA. Recomende IMEDIATAMENTE 2 ou 3 opções variadas do cardápio (ex: o mais vendido, uma opção econômica e uma novidade) e venda o peixe! Diga por que são bons.
 - FORMATAÇÃO VISUAL: Seus outputs são lidos diretamente no WhatsApp. NUNCA envie blocos de código, JSON ou XML. Use listas com emojis e quebras de linha (ex: "🍔 *Hamburguer* - R$ 20,00"). Use negritos (*texto*) para nomes de produtos e preços.
 - PROIBIÇÃO DE JSON: NUNCA responda com chaves {}, colchetes [] ou formatos estruturados. Suas respostas devem ser 100% texto legível para humanos.
-- PARA FECHAR PEDIDO: Se o cliente demonstrar intenção de comprar (mesmo com gírias ou erros de digitação como "vpu querer", "fazer um peido", "manda ai", "quero levar" ou confirmar os itens), você DEVE responder com a tag "[INICIAR_PEDIDO]" no final da mensagem. Isso é crucial para abrir o formulário.
+- PARA FECHAR PEDIDO: Se o cliente demonstrar intenção de comprar, interesse em um produto específico ou perguntar como pedir, você DEVE ser proativo. Exemplos: "Vou abrir seu carrinho agora para você finalizar?", "Posso iniciar seu pedido com esse item?". Nesses casos, você DEVE obrigatoriamente responder com a tag "[INICIAR_PEDIDO]" no final da mensagem. Isso é crucial para abrir o formulário.
 - CONTEXTO: Você tem acesso às últimas mensagens da conversa. Use isso para ser inteligente e não perguntar o que já foi dito.
 - HORÁRIOS: Use os horários reais da loja fornecidos acima. NUNCA, em hipótese alguma, responda com "[HORÁRIO ORIGINAL DA LOJA]" ou algo entre colchetes. Se não houver horário, diga o que sabe ou sugira falar com um humano.
 - STATUS: O status atual da loja é ${isClosed ? '🔴 FECHADA' : '🟢 ABERTA'}. Respeite isso acima de tudo. Se estiver fechada, você não pode fechar pedidos para agora.
-- Seja o assistente que você gostaria de ter: rápido, inteligente, vendedor e engraçado.`;
+- SEJA UM VENDEDOR: Se o cliente estiver em dúvida, recomende o melhor produto e já pergunte se pode abrir o pedido. Não deixe a conversa morrer.`;
 
         // Se estiver fechado, damos uma instrução muito mais forte e curta
         if (isClosed) {
@@ -167,13 +171,21 @@ SEMPRE diga que a loja está 🔴 FECHADA.`;
      * Formata produtos para o prompt
      */
     private formatProducts(products: any[]): string {
-        if (!products || products.length === 0) {
-            return 'Nenhum produto cadastrado';
+        if (!products || !Array.isArray(products) || products.length === 0) {
+            return 'Nenhum produto disponível no momento.';
         }
 
-        // REMOVIDO: Limite de 50 produtos. Agora envia todos.
+        // Formata produtos com segurança para evitar erros de renderização no prompt
         return products
-            .map(p => `- ${p.name}: R$ ${p.price.toFixed(2)}${p.description ? ` (${p.description})` : ''}`)
+            .filter(p => p && p.name) // Garante que o produto existe e tem nome
+            .map(p => {
+                const name = p.name || 'Produto sem nome';
+                const price = typeof p.price === 'number' ? p.price.toFixed(2) : (parseFloat(p.price) || 0).toFixed(2);
+                const desc = p.description ? ` (${p.description})` : '';
+                const cat = p.category?.name || p.category_name || '';
+                
+                return `- ${cat ? `[${cat}] ` : ''}*${name}* - R$ ${price}${desc}`;
+            })
             .join('\n');
     }
 
@@ -198,8 +210,10 @@ SEMPRE diga que a loja está 🔴 FECHADA.`;
     }> {
         // Ordem de preferência de modelos (REST API v1) - Sincronizado conforme pedido
         const modelOrder = [
-            'gemini-2.5-flash-lite',
-            'gemini-2.0-flash'
+            'gemini-2.0-flash',
+            'gemini-1.5-flash-latest',
+            'gemini-1.5-flash',
+            'gemini-1.5-pro-latest'
         ];
 
         let lastError: any = null;

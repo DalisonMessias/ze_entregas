@@ -1,8 +1,7 @@
-# TASK_LIST - Melhorias WhatsBot
+# TASK LIST - Estabilização de IA e Anti-Spam
 
-- [x] Correção de erro de Lint (showDialog/useDialog) e restauração de funções.
-- [x] Implementação de Harmonização com IA (Gemini) no campo de mensagem (padrão e campanha).
-- [x] Implementação de Inserção de Contatos Manuais (unitário e massa).
-- [x] Normalização automática de telefones para padrão internacional (+55).
-- [x] Melhoria de UI/UX com botões fixos e espaçamento de blocos.
-- [ ] Validação final com usuário.
+- [x] Sincronização de campos de IA no status do backend
+- [x] Ajuste da consulta de produtos para a IA
+- [/] Bloqueio do fluxo de boas-vindas se IA estiver ativa (Fim do conflito Anti-Spam)
+- [ ] Refinamento do prompt de venda proativo da IA
+- [ ] Inclusão de logs de diagnóstico de StoreID

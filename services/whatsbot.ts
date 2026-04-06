@@ -6,6 +6,10 @@ import { getImpersonationStoreId } from './impersonation';
 
 export interface WhatsBotRequestOptions {
     storeId?: string | null;
+    scheduledAt?: string | null;
+    ai_enabled?: boolean;
+    ai_context?: string;
+    ai_name?: string;
 }
 
 const getImpersonationHeaders = (options?: WhatsBotRequestOptions): Record<string, string> => {
@@ -51,7 +55,15 @@ export const updateWhatsBotConfig = async (
     closedImageUrl: string | null = null,
     options?: WhatsBotRequestOptions
 ): Promise<WhatsBotStatus> => {
-    const payload = { customMessage, customClosedMessage, imageUrl, closedImageUrl };
+    const payload = { 
+        customMessage, 
+        customClosedMessage, 
+        imageUrl, 
+        closedImageUrl,
+        ai_enabled: options?.ai_enabled,
+        ai_context: options?.ai_context,
+        ai_name: options?.ai_name
+    };
     const headers = await getAuthHeaders(options);
     const { data } = await axios.put<WhatsBotStatus>(`${getWhatsBotApiBaseUrl()}/config`, payload, { headers });
     return data;
@@ -115,4 +127,65 @@ export const deleteWhatsBotCampaign = async (
     const headers = await getAuthHeaders(options);
     const { data } = await axios.delete<any>(`${getWhatsBotApiBaseUrl()}/campaigns/${campaignId}`, { headers });
     return data;
+};
+export const getWhatsBotTriggers = async (options?: WhatsBotRequestOptions): Promise<any[]> => {
+    const client = getClient();
+    if (!client) throw new Error('Cliente Supabase nao disponivel.');
+
+    const storeId = options?.storeId || getImpersonationStoreId();
+    if (!storeId) return [];
+
+    const { data, error } = await client
+        .from('whatsbot_triggers')
+        .select('*')
+        .eq('store_id', storeId)
+        .order('keyword', { ascending: true });
+
+    if (error) {
+        console.warn('Erro ao ler gatilhos do Supabase:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const createWhatsBotTrigger = async (
+    keyword: string,
+    response: string,
+    options?: WhatsBotRequestOptions
+): Promise<any> => {
+    const client = getClient();
+    if (!client) throw new Error('Cliente Supabase nao disponivel.');
+
+    const storeId = options?.storeId || getImpersonationStoreId();
+    if (!storeId) throw new Error('Store ID nao identificado.');
+
+    const { data, error } = await client
+        .from('whatsbot_triggers')
+        .upsert({ 
+            store_id: storeId, 
+            keyword: keyword.trim(), 
+            response: response.trim(), 
+            updated_at: new Date().toISOString() 
+        }, { onConflict: 'store_id,keyword' })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const deleteWhatsBotTrigger = async (
+    triggerId: string,
+    options?: WhatsBotRequestOptions
+): Promise<any> => {
+    const client = getClient();
+    if (!client) throw new Error('Cliente Supabase nao disponivel.');
+
+    const { error } = await client
+        .from('whatsbot_triggers')
+        .delete()
+        .eq('id', triggerId);
+
+    if (error) throw error;
+    return { success: true };
 };

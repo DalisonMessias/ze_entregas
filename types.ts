@@ -2062,6 +2062,9 @@ export interface WhatsBotStatus {
     imageUrl?: string | null;
     closedImageUrl?: string | null;
     catalogUrl: string;
+    ai_enabled: boolean;
+    ai_context: string;
+    ai_name: string;
     lastError?: string | null;
 }
 

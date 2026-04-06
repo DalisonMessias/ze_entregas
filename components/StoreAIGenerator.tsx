@@ -102,7 +102,13 @@ export const StoreAIGenerator: React.FC<StoreAIGeneratorProps> = ({ onProductCre
 
     const loadSettings = async () => {
         try {
-            const key = await cloud.getAPIKey('google');
+            const userData = await cloud.getMe();
+            let key = await cloud.getAPIKey('google_gemini', userData?.id);
+            
+            if (!key) {
+                key = (process as any)?.env?.GEMINI_API_KEY || (import.meta as any)?.env?.VITE_GEMINI_API_KEY || null;
+            }
+            
             setApiKey(key || '');
         } catch (error) {
             console.error("Error loading settings:", error);

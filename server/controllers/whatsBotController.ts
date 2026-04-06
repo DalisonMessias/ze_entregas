@@ -40,13 +40,20 @@ export const updateConfig = async (req: AuthenticatedRequest, res: Response) => 
         const imageUrl = typeof req.body?.imageUrl === 'string' ? req.body.imageUrl : null;
         const closedImageUrl = typeof req.body?.closedImageUrl === 'string' ? req.body.closedImageUrl : null;
         
+        const ai_enabled = typeof req.body?.ai_enabled === 'boolean' ? req.body.ai_enabled : false;
+        const ai_context = typeof req.body?.ai_context === 'string' ? req.body.ai_context : '';
+        const ai_name = typeof req.body?.ai_name === 'string' ? req.body.ai_name : 'Assistente';
+        
         const status = await whatsBotService.updateConfig(
             getStoreId(req), 
             customMessage, 
             customClosedMessage, 
             imageUrl,
             closedImageUrl,
-            getRequestPublicUrl(req)
+            getRequestPublicUrl(req),
+            ai_enabled,
+            ai_context,
+            ai_name
         );
         res.status(200).json(status);
     } catch (error: any) {

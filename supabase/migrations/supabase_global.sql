@@ -1745,3 +1745,40 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.public_get_store_by_slug(text, text) TO anon, authenticated, service_role;
 
+-- ==================================================================
+-- WHATSBOT SETTINGS & AI ASSISTANT
+-- ==================================================================
+
+CREATE TABLE IF NOT EXISTS public.whatsbot_settings (
+    store_id UUID PRIMARY KEY REFERENCES public.user_profiles(id),
+    enabled BOOLEAN DEFAULT false,
+    custom_message TEXT,
+    custom_closed_message TEXT,
+    image_url TEXT,
+    closed_image_url TEXT,
+    timezone TEXT DEFAULT 'America/Sao_Paulo',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Adicionando colunas de IA de forma não destrutiva
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_enabled') THEN
+        ALTER TABLE public.whatsbot_settings ADD COLUMN ai_enabled BOOLEAN DEFAULT false;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_context') THEN
+        ALTER TABLE public.whatsbot_settings ADD COLUMN ai_context TEXT DEFAULT 'Você é o assistente virtual da nossa loja. Seu objetivo é ser educado, tirar dúvidas dos clientes e incentivá-los a clicar no link do nosso catálogo digital para fazer o pedido.';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_name') THEN
+        ALTER TABLE public.whatsbot_settings ADD COLUMN ai_name TEXT DEFAULT 'Assistente';
+    END IF;
+END $$;
+
+COMMENT ON TABLE public.whatsbot_settings IS 'Configurações do Robô de WhatsApp e Assistente de IA';
+COMMENT ON COLUMN public.whatsbot_settings.ai_enabled IS 'Indica se o Assistente de IA (Gemini) está ativo';
+COMMENT ON COLUMN public.whatsbot_settings.ai_context IS 'Instruções e contexto para a Inteligência Artificial';
+COMMENT ON COLUMN public.whatsbot_settings.ai_name IS 'Nome personalizado do assistente de IA';
+
