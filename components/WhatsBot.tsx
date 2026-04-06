@@ -203,6 +203,21 @@ export const WhatsBot: React.FC = () => {
             : 'Configure a URL pública do catálogo para usar a mensagem padrão com link.';
     }, [draftMessage, status]);
 
+    const previewClosedMessage = useMemo(() => {
+        if (!status) return '';
+        const customMessage = draftClosedMessage.trim();
+
+        if (customMessage) {
+            return customMessage
+                .replace(/\{\{\s*catalog_url\s*\}\}/gi, status.catalogUrl)
+                .replace(/\{\s*catalogUrl\s*\}/g, status.catalogUrl);
+        }
+
+        return status.catalogUrl
+            ? `Olá! No momento estamos fechados, mas você pode conferir nossos produtos e preços aqui para o seu próximo pedido: ${status.catalogUrl}`
+            : 'Configure a URL pública do catálogo para usar a mensagem padrão com link.';
+    }, [draftClosedMessage, status]);
+
     if (loading) {
         return <Loading variant="container" size="md" message="Carregando WhatsBot..." />;
     }
@@ -397,6 +412,13 @@ export const WhatsBot: React.FC = () => {
                                     <p className="text-[10px] text-gray-400 italic">
                                         Esta mensagem será enviada apenas quando a loja estiver marcada como <strong>FECHADA</strong>.
                                     </p>
+                                </div>
+                                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/10">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <MessageSquare className="w-3 h-3 text-gray-400" />
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Prévia (Fechado)</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words">{previewClosedMessage}</p>
                                 </div>
                             </div>
 
