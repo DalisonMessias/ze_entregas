@@ -33,7 +33,7 @@ describe('WhatsBot', () => {
     });
 
     it('bloqueia acesso para lojista que nao e super lojista', async () => {
-        (cloud.getMyPartnerProfile as any).mockResolvedValue({ is_super_store: false });
+        (cloud.getMyPartnerProfile as any).mockResolvedValue({ id: 'store-0', is_super_store: false });
 
         render(<WhatsBot />);
 
@@ -42,7 +42,7 @@ describe('WhatsBot', () => {
     });
 
     it('carrega status e salva mensagem personalizada', async () => {
-        (cloud.getMyPartnerProfile as any).mockResolvedValue({ is_super_store: true });
+        (cloud.getMyPartnerProfile as any).mockResolvedValue({ id: 'store-1', is_super_store: true });
         (whatsbot.getWhatsBotStatus as any).mockResolvedValue({
             enabled: true,
             connectionStatus: 'CONNECTED',
@@ -63,6 +63,7 @@ describe('WhatsBot', () => {
         render(<WhatsBot />);
 
         expect(await screen.findByText('WhatsBot')).toBeInTheDocument();
+        expect(whatsbot.getWhatsBotStatus).toHaveBeenCalledWith({ storeId: 'store-1' });
         expect(screen.getByDisplayValue('Ola! Confira {{catalog_url}}')).toBeInTheDocument();
         expect(screen.getAllByText('Conectado').length).toBeGreaterThan(0);
 
@@ -73,7 +74,10 @@ describe('WhatsBot', () => {
         fireEvent.click(screen.getByText('Salvar mensagem'));
 
         await waitFor(() => {
-            expect(whatsbot.updateWhatsBotConfig).toHaveBeenCalledWith({ customMessage: 'Nova mensagem' });
+            expect(whatsbot.updateWhatsBotConfig).toHaveBeenCalledWith(
+                { customMessage: 'Nova mensagem' },
+                { storeId: 'store-1' }
+            );
         });
 
         expect(await screen.findByDisplayValue('Nova mensagem')).toBeInTheDocument();

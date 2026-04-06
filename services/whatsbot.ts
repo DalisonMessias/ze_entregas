@@ -2,22 +2,26 @@ import axios from 'axios';
 import { WhatsBotConfigPayload, WhatsBotStatus } from '../types';
 import { getWhatsBotApiBaseUrl } from '../utils/apiConfig';
 import { getClient } from './cloud';
-import { getImpersonationState } from './impersonation';
+import { getImpersonationStoreId } from './impersonation';
 
-const getImpersonationHeaders = (): Record<string, string> => {
+export interface WhatsBotRequestOptions {
+    storeId?: string | null;
+}
+
+const getImpersonationHeaders = (options?: WhatsBotRequestOptions): Record<string, string> => {
     if (typeof window === 'undefined') return {};
 
-    const state = getImpersonationState();
-    if (!state?.isActive || !state.storeId) {
+    const storeId = options?.storeId || getImpersonationStoreId();
+    if (!storeId) {
         return {};
     }
 
     return {
-        'x-impersonation-store-id': state.storeId
+        'x-impersonation-store-id': storeId
     };
 };
 
-const getAuthHeaders = async () => {
+const getAuthHeaders = async (options?: WhatsBotRequestOptions) => {
     const client = getClient();
     if (!client) {
         throw new Error('Cliente Supabase nao disponivel.');
@@ -30,30 +34,30 @@ const getAuthHeaders = async () => {
 
     return {
         Authorization: `Bearer ${session.access_token}`,
-        ...getImpersonationHeaders()
+        ...getImpersonationHeaders(options)
     };
 };
 
-export const getWhatsBotStatus = async (): Promise<WhatsBotStatus> => {
-    const headers = await getAuthHeaders();
+export const getWhatsBotStatus = async (options?: WhatsBotRequestOptions): Promise<WhatsBotStatus> => {
+    const headers = await getAuthHeaders(options);
     const { data } = await axios.get<WhatsBotStatus>(`${getWhatsBotApiBaseUrl()}/status`, { headers });
     return data;
 };
 
-export const updateWhatsBotConfig = async (payload: WhatsBotConfigPayload): Promise<WhatsBotStatus> => {
-    const headers = await getAuthHeaders();
+export const updateWhatsBotConfig = async (payload: WhatsBotConfigPayload, options?: WhatsBotRequestOptions): Promise<WhatsBotStatus> => {
+    const headers = await getAuthHeaders(options);
     const { data } = await axios.put<WhatsBotStatus>(`${getWhatsBotApiBaseUrl()}/config`, payload, { headers });
     return data;
 };
 
-export const startWhatsBot = async (): Promise<WhatsBotStatus> => {
-    const headers = await getAuthHeaders();
+export const startWhatsBot = async (options?: WhatsBotRequestOptions): Promise<WhatsBotStatus> => {
+    const headers = await getAuthHeaders(options);
     const { data } = await axios.post<WhatsBotStatus>(`${getWhatsBotApiBaseUrl()}/start`, {}, { headers });
     return data;
 };
 
-export const stopWhatsBot = async (): Promise<WhatsBotStatus> => {
-    const headers = await getAuthHeaders();
+export const stopWhatsBot = async (options?: WhatsBotRequestOptions): Promise<WhatsBotStatus> => {
+    const headers = await getAuthHeaders(options);
     const { data } = await axios.post<WhatsBotStatus>(`${getWhatsBotApiBaseUrl()}/stop`, {}, { headers });
     return data;
 };

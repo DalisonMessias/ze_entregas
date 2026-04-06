@@ -30,6 +30,7 @@ const statusMap: Record<WhatsBotStatus['connectionStatus'], { label: string; bad
 
 export const WhatsBot: React.FC = () => {
     const [status, setStatus] = useState<WhatsBotStatus | null>(null);
+    const [storeId, setStoreId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadingAction, setLoadingAction] = useState<'start' | 'stop' | 'save' | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -39,9 +40,15 @@ export const WhatsBot: React.FC = () => {
     const isDirtyRef = useRef(false);
     const { toast } = useDialog();
 
-    const refreshStatus = useCallback(async (syncDraft = false) => {
+    const requestOptions = useMemo(() => ({
+        storeId
+    }), [storeId]);
+
+    const refreshStatus = useCallback(async (syncDraft = false, storeIdOverride?: string | null) => {
         try {
-            const data = await whatsbot.getWhatsBotStatus();
+            const data = await whatsbot.getWhatsBotStatus({
+                storeId: storeIdOverride || requestOptions.storeId
+            });
             setStatus(data);
             setError(null);
             if (syncDraft || !isDirtyRef.current) {
@@ -54,7 +61,7 @@ export const WhatsBot: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [requestOptions]);
 
     useEffect(() => {
         let mounted = true;
@@ -64,11 +71,12 @@ export const WhatsBot: React.FC = () => {
                 const profile = await cloud.getMyPartnerProfile();
                 if (!mounted) return;
 
+                setStoreId(profile?.id || null);
                 const superStore = !!profile?.is_super_store;
                 setIsSuperStore(superStore);
 
                 if (superStore) {
-                    await refreshStatus(true);
+                    await refreshStatus(true, profile?.id || null);
                 } else {
                     setLoading(false);
                 }
@@ -101,7 +109,7 @@ export const WhatsBot: React.FC = () => {
     const handleSave = async () => {
         setLoadingAction('save');
         try {
-            const updated = await whatsbot.updateWhatsBotConfig({ customMessage: draftMessage });
+            const updated = await whatsbot.updateWhatsBotConfig({ customMessage: draftMessage }, requestOptions);
             setStatus(updated);
             setDraftMessage(updated.customMessage || '');
             setIsDirty(false);
@@ -120,7 +128,7 @@ export const WhatsBot: React.FC = () => {
     const handleStart = async () => {
         setLoadingAction('start');
         try {
-            const updated = await whatsbot.startWhatsBot();
+            const updated = await whatsbot.startWhatsBot(requestOptions);
             setStatus(updated);
             setDraftMessage(updated.customMessage || '');
             setIsDirty(false);
@@ -139,7 +147,7 @@ export const WhatsBot: React.FC = () => {
     const handleStop = async () => {
         setLoadingAction('stop');
         try {
-            const updated = await whatsbot.stopWhatsBot();
+            const updated = await whatsbot.stopWhatsBot(requestOptions);
             setStatus(updated);
             setDraftMessage(updated.customMessage || '');
             setIsDirty(false);

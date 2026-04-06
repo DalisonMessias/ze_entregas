@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import axios from 'axios';
 import { getApiBaseUrl } from '../utils/apiConfig';
+import { getImpersonationStoreId } from './impersonation';
 import {
     PartnerRequest, UserRole, UserStatus, ManagedUser, PartnerProfile, PartnerDocument,
     City, CityRequest, PayoutSettings, PartnerLevelBenefit, PartnerFeeSettings,
@@ -217,7 +218,7 @@ export const getInitialUserData = async (): Promise<{ role: UserRole, status: Us
         if (!user) return { role: 'delivery_person' as UserRole, status: 'not_found' as any };
 
         // IMPERSONATION CHECK
-        const impersonatedStoreId = getImpersonationId();
+        const impersonatedStoreId = getImpersonationStoreId();
         if (impersonatedStoreId) {
             const { data: storeData } = await sb.from('user_profiles')
                 .select('role, status')
@@ -303,23 +304,6 @@ export const getNavigationIcons = async () => {
         return [];
     }
 };
-
-// --- IMPERSONATION HELPER ---
-const getImpersonationId = (): string | null => {
-    if (typeof window === 'undefined') return null;
-    try {
-        const stored = localStorage.getItem('ze_impersonation_mode');
-        if (!stored) return null;
-        const state = JSON.parse(stored);
-        // Validação básica se expirou
-        if (Date.now() - state.startedAt > 30 * 60 * 1000) return null;
-        return state.storeId;
-    } catch {
-        return null;
-    }
-};
-
-
 
 export const getUserRole = async (): Promise<UserRole> => {
     const { role } = await getInitialUserData();
@@ -895,7 +879,7 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
     if (!user) return null;
 
     // IMPERSONATION: Se houver ID simulado, usamos ele.
-    const impersonatedStoreId = getImpersonationId();
+    const impersonatedStoreId = getImpersonationStoreId();
     const targetUserId = impersonatedStoreId || user.id;
 
     // Fetch from user_profiles as partner_profiles table does not exist
@@ -986,7 +970,7 @@ export const updateMyPartnerProfile = async (updates: Partial<PartnerProfile>) =
     if (!user) return { error: { message: "Not logged in" } };
 
     // Keep behavior consistent with getMyPartnerProfile() when admin is impersonating a store.
-    const targetUserId = getImpersonationId() || user.id;
+    const targetUserId = getImpersonationStoreId() || user.id;
 
     // Using user_profiles as partner_profiles table does not exist
     const { error } = await sb.from('user_profiles').update({
