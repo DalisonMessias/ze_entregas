@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2 } from 'lucide-react';
+import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AccessDenied } from './AccessDenied';
 import { Button } from './Button';
@@ -39,6 +39,7 @@ export const WhatsBot: React.FC = () => {
     const [isDirty, setIsDirty] = useState(false);
     const [isSuperStore, setIsSuperStore] = useState<boolean | null>(null);
     const isDirtyRef = useRef(false);
+    const [copied, setCopied] = useState(false);
     const { toast } = useDialog();
 
     const requestOptions = useMemo(() => ({
@@ -185,6 +186,39 @@ export const WhatsBot: React.FC = () => {
             toast({ message, type: 'error' });
         } finally {
             setLoadingAction(null);
+        }
+    };
+
+    const handleCopyLink = async () => {
+        if (!status?.catalogUrl) return;
+        try {
+            await navigator.clipboard.writeText(status.catalogUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            toast({ message: 'Link copiado para a área de transferência!', type: 'success' });
+        } catch (err) {
+            toast({ message: 'Erro ao copiar o link.', type: 'error' });
+        }
+    };
+
+    const handleShareLink = async () => {
+        if (!status?.catalogUrl) return;
+        
+        const shareData = {
+            title: status.enabled ? `Catálogo - ${status.connectedPhone || 'Loja'}` : 'Meu Catálogo Digital',
+            text: 'Confira nosso catálogo digital e faça seu pedido!',
+            url: status.catalogUrl
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                // Usuário cancelou ou erro no dispositivo
+            }
+        } else {
+            // Fallback para WhatsApp Web
+            window.open(`https://wa.me/?text=${encodeURIComponent(shareData.text + " " + shareData.url)}`, '_blank');
         }
     };
 
@@ -504,11 +538,30 @@ export const WhatsBot: React.FC = () => {
                             <Link2 className="w-5 h-5 text-gray-500" />
                             <h2 className="text-lg font-black text-gray-900 dark:text-white">Catálogo Digital</h2>
                         </div>
-                        <div className="rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4">
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-400 mb-2">Link usado na mensagem padrão</p>
-                            <p className="text-sm font-mono break-all text-gray-700 dark:text-gray-200">
-                                {status.catalogUrl || 'Configure PUBLIC_APP_URL e os slugs da loja para montar o link público.'}
-                            </p>
+                        <div className="rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4 space-y-4">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-wider text-gray-400 mb-2">Link usado na mensagem padrão</p>
+                                <p className="text-sm font-mono break-all text-gray-700 dark:text-gray-200">
+                                    {status.catalogUrl || 'Configure PUBLIC_APP_URL e os slugs da loja para montar o link público.'}
+                                </p>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    onClick={handleCopyLink}
+                                    className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+                                >
+                                    {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                    {copied ? 'Copiado!' : 'Copiar Link'}
+                                </button>
+                                <button
+                                    onClick={handleShareLink}
+                                    className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-brand-500 text-white text-xs font-bold hover:bg-brand-600 transition-colors shadow-sm shadow-brand-500/20"
+                                >
+                                    <Share2 className="w-3 h-3" />
+                                    Compartilhar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
