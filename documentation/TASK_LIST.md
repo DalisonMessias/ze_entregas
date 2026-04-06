@@ -1,7 +1,6 @@
-# Lista de Tarefas - Expansão do Menu Lateral do Lojista
-
-- [ ] Identificar todas as seções faltantes no sidebar para `store_partner` no `App.tsx`.
-- [ ] Atualizar o bloco `isStore` no `renderSidebar` para incluir as seções categorizadas.
-- [ ] Ajustar as seções para que fiquem bem organizadas com títulos (`MenuSection`).
-- [ ] Verificar se todas as abas novas estão corretas no `accessControl.ts`.
-- [ ] Confirmar o título da página (`headerTitle`) para as novas abas integradas.
+- [ ] Analisar os logs do servidor local para identificar o `targetUserId` recebido.
+- [ ] Adicionar depuração temporária no middleware de autenticação do Supabase no servidor.
+- [ ] Verificar se a consulta ao banco de dados no middleware está falhando por algum motivo específico (ex: tipos de dados, UUID format).
+- [ ] Validar por que o `isImpersonating` está sendo ativado ou se o `targetUserId` está correto.
+- [ ] Corrigir o middleware ou o serviço de chamada se houver discrepância entre frontend e backend.
+- [ ] Testar a correção e atualizar o `documentation/TASK_LIST.md`.

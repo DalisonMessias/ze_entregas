@@ -77,6 +77,7 @@ export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res
         }
 
         const targetUserId = requestedStoreId || authData.user.id;
+        console.log(`[SupabaseAuth] Autenticando... targetUserId: ${targetUserId}, isImpersonating: ${isImpersonating}`);
 
         const { data: profile, error: profileError } = await supabaseAdmin
             .from('user_profiles')
@@ -85,6 +86,7 @@ export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res
             .single();
 
         if (profileError || !profile) {
+            console.error(`[SupabaseAuth] Erro ao buscar perfil:`, profileError || 'Perfil vazio');
             return res.status(403).json({
                 success: false,
                 message: isImpersonating ? 'Perfil da loja impersonada nao encontrado.' : 'Perfil do usuario nao encontrado.'
