@@ -444,14 +444,12 @@ export const WhatsBot: React.FC = () => {
                             <h2 className="text-lg font-black text-gray-900 dark:text-white">QR Code de Conexão</h2>
                         </div>
 
-                        {status.enabled && !status.qrCode && status.connectionStatus === 'CONNECTING' && (
+                        {status.enabled && !status.qrCode && status.connectionStatus === 'CONNECTING' ? (
                             <div className="text-center py-10">
                                 <RefreshCcw className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
                                 <p className="text-gray-600 dark:text-gray-400">Iniciando conexão segura...</p>
                             </div>
-                        )}
-
-                        {!status.enabled && (
+                        ) : !status.enabled ? (
                             <div className="text-center py-10 opacity-60">
                                 {status.connectedPhone ? (
                                     <>
@@ -472,16 +470,7 @@ export const WhatsBot: React.FC = () => {
                                     </>
                                 )}
                             </div>
-                        )}
-
-                        {status.enabled && !status.qrCode && status.connectionStatus === 'DISCONNECTED' && (
-                            <div className="text-center py-10">
-                                <Power className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                                <p className="text-gray-600 dark:text-gray-400">Clique em Ligar Bot para iniciar.</p>
-                            </div>
-                        )}
-
-                        {status.enabled && status.connectionStatus === 'WAITING_QR' && status.qrCode ? (
+                        ) : status.enabled && status.connectionStatus === 'WAITING_QR' && status.qrCode ? (
                             <div className="flex flex-col items-center gap-4">
                                 <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
                                     <QRCodeSVG value={status.qrCode} size={240} includeMargin />
