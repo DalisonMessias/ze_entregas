@@ -993,21 +993,18 @@ class WhatsBotInstance {
 
                         await this.sendText(contactJid, finalAiText, catalogUrl);
                         console.log(`\x1b[32m[WhatsBot ${this.storeId}] ✅ Resposta de IA enviada!\x1b[0m`);
+                        return;
                     } else {
-                        // IA retornou success: false (ou resposta vazia) - Enviar Fallback
-                        console.warn(`[WhatsBot ${this.storeId}] IA falhou no resultado (Quota/Erro). Enviando fallback.`);
-                        const fallbackMsg = "Nosso Assistente está conversando com muitas pessoas, peço que tente novamente mais tarde. 🙏";
-                        await this.sendText(contactJid, fallbackMsg);
+                        // Lança erro para ser tratado no CATCH unificado de fallback blindado
+                        throw new Error(aiResult.handoffReason || 'IA falhou no processamento');
                     }
-
-                    return; // IMPORTANTE: Se IA está ativa, encerramos aqui para não mandar boas-vindas padrão
                 } else {
                     console.warn(`[WhatsBot ${this.storeId}] IA ativa mas API Key não encontrada.`);
                 }
             } catch (aiErr: any) {
-                console.error(`[WhatsBot ${this.storeId}] Erro no processamento de IA:`, aiErr.message);
+                console.error(`[WhatsBot ${this.storeId}] Iniciando fallback blindado para:`, aiErr.message);
                 
-                // Mensagem de Fallback Amigável Blindada (Cache de Memória + Banco)
+                // MENSAGEM DE FALLBACK UNIFICADA E PROTEGIDA
                 const fallbackMsg = "Nosso Assistente está conversando com muitas pessoas, peço que tente novamente mais tarde. 🙏";
                 const sendDateLocal = getLocalDateString(settings.timezone || DEFAULT_TIMEZONE);
                 const memoryKey = `${this.storeId}:${contactPhone}:${sendDateLocal}`;
@@ -1015,11 +1012,11 @@ class WhatsBotInstance {
                 try {
                     // 1. Verificação de MEMÓRIA (Instantânea)
                     if (aiFallbackCache.has(memoryKey)) {
-                        console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO DE MEMÓRIA: Silêncio total para ${contactPhone}.`);
+                        console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO DE MEMÓRIA: Silêncio total mantido para ${contactPhone}.`);
                         return;
                     }
 
-                    // 2. Verificação de BANCO (Segurança de Persistência)
+                    // 2. Verificação de BANCO (Persistência)
                     const { data: alreadySent } = await supabaseAdmin
                         .from('whatsbot_send_history')
                         .select('id')
@@ -1045,20 +1042,20 @@ class WhatsBotInstance {
                             await this.sendText(contactJid, fallbackMsg);
                             await markSendHistorySent(reservation.history_id);
                             
-                            // 3. Salva na MEMÓRIA para o próximo milissegundo
+                            // Salva na memória RAM para os próximos eventos
                             aiFallbackCache.add(memoryKey);
-                            console.log(`[WhatsBot ${this.storeId}] 🛡️ PRIMEIRO AVISO: Enviado e salvo na memória para ${contactPhone}.`);
+                            console.log(`[WhatsBot ${this.storeId}] 🛡️ PRIMEIRO AVISO: Enviado e silenciado na memória para ${contactPhone}.`);
                         }
                     } else {
-                        // Se está no banco mas não na memória (ex: servidor resetou), alimentamos a memória
+                        // Se não estava no cache mas estava no banco, atualiza o cache
                         aiFallbackCache.add(memoryKey);
-                        console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO BANCO: Já avisado hoje. Silenciando ${contactPhone}.`);
+                        console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO BANCO: Já avisado hoje. Silenciando ${contactPhone} na memória agora.`);
                     }
-                } catch (sendErr) {
-                    console.error(`[WhatsBot ${this.storeId}] Erro ao processar blindagem de fallback:`, sendErr);
+                } catch (sendErr: any) {
+                    console.error(`[WhatsBot ${this.storeId}] Falha crítica na blindagem de fallback:`, sendErr.message);
                 }
                 
-                return; // Bloqueia tudo
+                return; // Bloqueia tudo no final
             }
         }
 
