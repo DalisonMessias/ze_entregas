@@ -40,13 +40,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use((req, res, next) => {
-  (req as any).user = {
-    id: '123e4567-e89b-12d3-a456-426614174000',
-    email: 'usuario@example.com'
-  };
-  next();
-});
+// Middleware de autenticação real é aplicado via rotas específicas ou herança de token
 
 app.use('/api/streets-neighborhoods', streetsNeighborhoodsRoutes);
 app.use('/api/v1', integrationRoutes);

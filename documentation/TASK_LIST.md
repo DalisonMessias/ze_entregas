@@ -1,6 +1,8 @@
-- [ ] Analisar os logs do servidor local para identificar o `targetUserId` recebido.
-- [ ] Adicionar depuração temporária no middleware de autenticação do Supabase no servidor.
-- [ ] Verificar se a consulta ao banco de dados no middleware está falhando por algum motivo específico (ex: tipos de dados, UUID format).
-- [ ] Validar por que o `isImpersonating` está sendo ativado ou se o `targetUserId` está correto.
-- [ ] Corrigir o middleware ou o serviço de chamada se houver discrepância entre frontend e backend.
-- [ ] Testar a correção e atualizar o `documentation/TASK_LIST.md`.
+- [x] Analisar os logs do servidor local para identificar o `targetUserId` recebido. (Identificado: Erro 42501 - Permissão negada).
+- [x] Corrigir permissões da tabela `user_profiles` para a role `service_role` no banco de dados. (Adicionado GRANT em `supabase_global_part3.sql`).
+- [x] Remover middleware global de teste que sobrescreve `req.user` no `server/server.ts`.
+- [ ] Implementar rota de `/logout` no backend para limpeza total da sessão do WhatsApp.
+- [ ] Adicionar botão "Desconectar" na interface do WhatsBot no frontend.
+- [ ] Corrigir lógica de exibição do QR Code e mensagens de estado (evitar mensagem de "Ligue o bot" quando conectado).
+- [ ] Corrigir exibição do link real do catálogo (Substituir string PUBLIC_APP_URL pela URL formatada).
+- [ ] Validar o fluxo: Desconectar -> Ligar -> Escanear QR limpo.

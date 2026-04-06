@@ -65,6 +65,7 @@ const normalizeDirectJid = (value?: string | null) => {
 };
 
 const resolvePublicAppUrl = () => {
+    // Busca em diversas variáveis de ambiente comuns no projeto
     const candidates = [
         process.env.PUBLIC_APP_URL,
         process.env.FRONTEND_URL,
@@ -73,7 +74,7 @@ const resolvePublicAppUrl = () => {
         process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : ''
     ];
 
-    const match = candidates.find((candidate) => !!candidate);
+    const match = candidates.find((candidate) => !!candidate && candidate !== 'PUBLIC_APP_URL');
     return match ? match.replace(/\/+$/, '') : '';
 };
 
@@ -266,6 +267,28 @@ class WhatsBotInstance {
             connectedPhone: this.connectedPhone,
             lastError: this.lastError
         };
+    }
+
+    public async logout() {
+        this.enabled = false;
+        this.stopRequested = true;
+
+        if (this.sock) {
+            try {
+                await this.sock.logout('Usuário desconectou via painel.');
+                (this.sock as any)?.end?.(undefined);
+            } catch (err: any) {
+                console.error(`[WhatsBot ${this.storeId}] Erro ao deslogar do WhatsApp:`, err.message);
+                (this.sock as any)?.end?.(undefined);
+            }
+        }
+
+        this.sock = undefined;
+        this.connectionStatus = 'DISCONNECTED';
+        this.qrCode = undefined;
+        this.connectedPhone = null;
+
+        await clearWhatsBotSessionData(this.storeId);
     }
 
     public async start() {
@@ -596,6 +619,18 @@ class WhatsBotServiceManager {
         const instance = this.getOrCreateInstance(storeId);
         await instance.start();
 
+        return this.getStatus(storeId);
+    }
+
+    public async stopWhatsBot(storeId: string) {
+        const instance = this.getOrCreateInstance(storeId);
+        await instance.stop();
+        return this.getStatus(storeId);
+    }
+
+    public async logoutWhatsBot(storeId: string) {
+        const instance = this.getOrCreateInstance(storeId);
+        await instance.logout();
         return this.getStatus(storeId);
     }
 

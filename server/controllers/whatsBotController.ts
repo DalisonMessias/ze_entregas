@@ -50,3 +50,17 @@ export const stop = async (req: AuthenticatedRequest, res: Response) => {
         res.status(500).json({ success: false, message: error.message || 'Erro ao desligar o WhatsBot.' });
     }
 };
+
+export const logout = async (req: AuthenticatedRequest, res: Response) => {
+    const storeId = getStoreId(req);
+    if (!storeId) {
+        return res.status(401).json({ success: false, message: 'Usuário não autenticado.' });
+    }
+
+    try {
+        const status = await whatsBotService.logoutWhatsBot(storeId);
+        res.json(status);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message || 'Erro ao deslogar do WhatsBot.' });
+    }
+};

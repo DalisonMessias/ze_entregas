@@ -963,3 +963,16 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION public.upgrade_user_role(TEXT) TO anon, authenticated, service_role;
+
+-- 15. Garantir permissões de sistema para tabelas críticas (06/04/2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_profiles TO service_role;
+GRANT SELECT, UPDATE ON public.user_profiles TO authenticated;
+GRANT SELECT ON public.user_profiles TO anon; -- Necessário para public_get_store_by_slug
+
+-- 16. Garantir permissões para as tabelas do WhatsBot (06/04/2026)
+GRANT ALL ON TABLE public.whatsbot_sessions TO service_role;
+GRANT ALL ON TABLE public.whatsbot_settings TO service_role;
+GRANT ALL ON TABLE public.whatsbot_send_history TO service_role;
+GRANT ALL ON TABLE public.whatsbot_sessions TO authenticated;
+GRANT ALL ON TABLE public.whatsbot_settings TO authenticated;
+GRANT ALL ON TABLE public.whatsbot_send_history TO authenticated;
