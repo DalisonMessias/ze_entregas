@@ -236,7 +236,7 @@ const upsertSettings = async (
 const getStoreProfile = async (storeId: string): Promise<StoreProfileRow> => {
     const { data, error } = await supabaseAdmin
         .from('user_profiles')
-        .select('id, city_slug, store_slug, store_name, is_open')
+        .select('id, city_slug, store_slug, store_name, is_open, opening_hours')
         .eq('id', storeId)
         .single();
 
@@ -941,6 +941,16 @@ class WhatsBotInstance {
 
         // 3. Resposta via Assistente de IA (se ativo)
         if (settings.enabled && settings.ai_enabled && this.enabled) {
+            // VERIFICAÇÃO DE BLOQUEIO (Anti-spam / Erro / Humano)
+            const sendDateLocal = getLocalDateString(settings.timezone || DEFAULT_TIMEZONE);
+            const blockKey = `${this.storeId}:${contactPhone}:${sendDateLocal}`;
+            const humanPendingKey = `humanPending:${this.storeId}:${contactPhone}`;
+
+            if (aiFallbackCache.has(blockKey)) {
+                console.log(`[WhatsBot ${this.storeId}] 🛡️ IGNORADO: Número ${contactPhone} está bloqueado no cache (anti-spam ativo).`);
+                return;
+            }
+
             console.log(`\x1b[36m[WhatsBot ${this.storeId}] 🤖 Processando via Assistente de IA...\x1b[0m`);
             
             try {
@@ -986,7 +996,8 @@ class WhatsBotInstance {
                             aiInstructions: settings.ai_context,
                             products: [], // Agora usamos a knowledge base no prompt
                             knowledgeBase: knowledge,
-                            catalogUrl: catalogUrl // Enviando o link real da loja
+                            catalogUrl: catalogUrl, // Enviando o link real da loja
+                            openingHours: (store as any).opening_hours || null // Horários de funcionamento
                         },
                         {
                             confusionCount: 0,
@@ -1000,17 +1011,60 @@ class WhatsBotInstance {
 
                     if (aiResult.success && aiResult.responseText) {
                         console.log(`[WhatsBot ${this.storeId}] 👤 CLIENTE: "${messageText}"`);
-                        console.log(`[WhatsBot ${this.storeId}] 🤖 JULIA (IA): "${aiResult.responseText.substring(0, 50)}..."`);
+                        console.log(`[WhatsBot ${this.storeId}] 🤖 JULIA (IA): "${aiResult.responseText.substring(0, 80)}..."`);
+                        
+                        // Verificar se a mensagem contém a tag de transferência para humano
+                        const hasHumanTransferTag = aiResult.responseText.includes('[FALAR_COM_HUMANO]');
+                        
+                        // Verificar se o CLIENTE está confirmando um pedido de humano anterior
+                        const humanTransferPendingKey = `humanPending:${this.storeId}:${contactPhone}`;
+                        const isHumanTransferPending = aiFallbackCache.has(humanTransferPendingKey);
+                        
+                        const confirmWords = /\b(sim|quero|pode|claro|ok|manda|chama|preciso|queria|please|s|yes|tá|ta|tô|vai|vamo|bora)\b/i;
+                        const clientConfirmsHuman = isHumanTransferPending && confirmWords.test(messageText.trim());
+                        
+                        if (clientConfirmsHuman) {
+                            // Cliente confirmou: bloquear IA para este número e notificar
+                            const blockKey = `${this.storeId}:${contactPhone}:${getLocalDateString(settings.timezone || DEFAULT_TIMEZONE)}`;
+                            aiFallbackCache.add(blockKey);
+                            aiFallbackCache.delete(humanTransferPendingKey);
+                            console.log(`[WhatsBot ${this.storeId}] 🛑 TRANSFERÊNCIA HUMANA: IA bloqueada para ${contactPhone}. Atendente deve assumir.`);
+                            await this.sendText(contactJid, 'Certo! Sua solicitação foi encaminhada. Em breve um atendente vai entrar em contato.');
+                            return;
+                        }
+                        
+                        // Se a IA gerou uma tag de transferência, marcar como pendente (aguardando confirmação do cliente)
+                        if (hasHumanTransferTag) {
+                            aiFallbackCache.add(humanTransferPendingKey);
+                            console.log(`[WhatsBot ${this.storeId}] ⏳ Aguardando confirmação do cliente ${contactPhone} para transferência humana.`);
+                        } else {
+                            // Limpar pendência se o cliente mudou de assunto
+                            aiFallbackCache.delete(humanTransferPendingKey);
+                        }
                         
                         let finalAiText = aiResult.responseText
+                            .replace('[FALAR_COM_HUMANO]', '') // Remover a tag da mensagem enviada ao cliente
                             .replace(/\{\{\s*catalog_url\s*\}\}/gi, catalogUrl)
-                            .replace(/\{\s*catalogUrl\s*\}/g, catalogUrl);
+                            .replace(/\{\s*catalogUrl\s*\}/g, catalogUrl)
+                            .trim();
 
                         await this.sendText(contactJid, finalAiText, catalogUrl);
                         console.log(`\x1b[32m[WhatsBot ${this.storeId}] ✅ Resposta de IA enviada!\x1b[0m`);
                         return;
                     } else {
-                        // Lança erro para ser tratado no CATCH unificado de fallback blindado
+                        // IA falhou mas tem mensagem de erro amigável — envia direto ao cliente
+                        if (aiResult.responseText) {
+                            console.warn(`[WhatsBot ${this.storeId}] ⚠️ IA falhou (${aiResult.handoffReason}). Enviando mensagem de erro amigável.`);
+                            
+                            // Bloquear este número no cache para não repetir o erro enquanto a IA estiver fora
+                            const blockKey = `${this.storeId}:${contactPhone}:${getLocalDateString(settings.timezone || DEFAULT_TIMEZONE)}`;
+                            aiFallbackCache.add(blockKey);
+                            console.log(`[WhatsBot ${this.storeId}] 🔒 Número ${contactPhone} bloqueado no cache por erro de IA (válido até meia-noite).`);
+                            
+                            await this.sendText(contactJid, aiResult.responseText);
+                            return;
+                        }
+                        // Sem mensagem de fallback — aciona o fallback blindado
                         throw new Error(aiResult.handoffReason || 'IA falhou no processamento');
                     }
                 } else {

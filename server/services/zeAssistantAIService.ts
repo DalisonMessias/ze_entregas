@@ -72,11 +72,19 @@ export class ZeAssistantAIService {
 
         } catch (error) {
             console.error('Erro ao processar com Gemini:', error);
+            // Detectar se é erro de quota (429) para mensagem específica
+            const isQuotaError = error instanceof Error && (
+                error.message.includes('429') ||
+                error.message.includes('quota') ||
+                error.message.includes('Quota exceeded')
+            );
             return {
                 success: false,
-                responseText: `Opa! Tive um problema técnico: ${error instanceof Error ? error.message : 'Erro na IA'}. Vou chamar alguém pra te ajudar!`,
+                responseText: isQuotaError
+                    ? 'Estou com muitas conversas ao mesmo tempo agora. Por favor, tente novamente em alguns instantes! 🙏'
+                    : 'Tive um problema técnico aqui. Por favor, tente novamente em breve!',
                 responseType: 'AI',
-                shouldHandoff: true,
+                shouldHandoff: false,
                 handoffReason: 'Erro na IA'
             };
         }
@@ -101,12 +109,12 @@ export class ZeAssistantAIService {
                 : JSON.stringify(storeContext.openingHours, null, 2))
             : 'Não informado';
 
-        const prompt = `Você é ${botName}, assistente virtual da loja "${storeName}".
-Sua função é responder perguntas dos clientes via WhatsApp de forma clara, objetiva e profissional.
+        const prompt = `Você é ${botName}, assistente da loja "${storeName}" no WhatsApp.
+Responda de forma simpática, direta e natural — como uma boa atendente real, sem ser formal demais nem exagerada.
 
 ${storeContext.aiInstructions ? `INSTRUÇÕES DO LOJISTA (PRIORIDADE MÁXIMA):\n"${storeContext.aiInstructions}"\n` : ''}
 STATUS DA LOJA: ${isClosed ? 'FECHADA AGORA' : 'ABERTA'}
-${isClosed ? `AVISO: A loja está fechada. Informe ao cliente: "${closedInstruction}". Você pode tirar dúvidas sobre produtos e preços, mas não pode processar pedidos.` : ''}
+${isClosed ? `AVISO: A loja está fechada. Informe isso com simpatia: "${closedInstruction}". Pode tirar dúvidas sobre produtos e preços, mas não pode processar pedidos.` : ''}
 
 INFORMAÇÕES DA LOJA:
 - Nome: ${storeName}
@@ -116,107 +124,20 @@ INFORMAÇÕES DA LOJA:
 
 LINK DO CATÁLOGO DIGITAL:
 ${storeContext.catalogUrl || 'Não informado'}
-(Se o cliente pedir o link, o catálogo, o site ou perguntar como ver os produtos com fotos, envie este link.)
+(Se o cliente pedir o link, o catálogo, o site ou quiser ver os produtos com fotos, envie este link.)
 
 CATÁLOGO E CONHECIMENTO DA LOJA:
 ${knowledgeBase}
 
-REGRAS OBRIGATÓRIAS DE COMPORTAMENTO:
-1. Tom: Seja profissional, cordial e direto. Respostas curtas (2 a 3 linhas no máximo).
-2. SEM CUMPRIMENTOS AUTOMÁTICOS: Nunca comece a resposta com "Opa!", "E aí!", "Olá!", "Oi!" ou similares. Vá direto ao ponto.
-3. EMOJIS: Use no máximo 1 emoji por mensagem e apenas quando for realmente relevante. Evite ao máximo.
+REGRAS DE COMPORTAMENTO:
+1. TOM: Seja simpática, leve e direta. Fale como uma atendente real — nem robótico, nem informal demais. Respostas curtas (2 a 4 linhas).
+2. SEM CUMPRIMENTOS DE ABERTURA: Nunca inicie respostas com "Opa!", "E aí!", "Olá!", "Oi!" ou similares. Vá direto à resposta.
+3. EMOJIS: Use com moderação — até 2 emojis por mensagem, apenas quando fizerem sentido. Evite excesso.
 4. NUNCA invente preços, produtos ou informações que não estejam no catálogo acima.
-5. ATENDIMENTO HUMANO: Se a dúvida estiver fora do seu conhecimento, diga: "Essa pergunta precisa de um atendente. Deseja que eu chame nossa equipe?" e inclua a tag [FALAR_COM_HUMANO] no final da resposta.
-6. FORMATAÇÃO: Use listas simples e negrito (*texto*) para nomes de produtos. NUNCA envie JSON ou blocos de código.
-7. SEU PAPEL É APENAS INFORMATIVO: Não inicie pedidos. Encaminhe para o link da loja quando necessário.
-8. HORÁRIOS: Use os horários reais informados acima. Nunca escreva placeholders ou texto entre colchetes.`;
-
-        return prompt;
-    }
-
-
-
-        // Base de Conhecimento Estruturada
-        const knowledgeBase = this.formatKnowledgeBase(storeContext.knowledgeBase, storeContext.products);
-
-        // Formatar horários de funcionamento
-        const openingHours = storeContext.openingHours
-            ? (typeof storeContext.openingHours === 'string'
-                ? storeContext.openingHours
-                : JSON.stringify(storeContext.openingHours, null, 2))
-            : 'Não informado';
-
-        const prompt = `Você é ${botName}, assistente virtual da loja "${storeName}".
-Sua função é responder perguntas dos clientes via WhatsApp de forma clara, objetiva e profissional.
-
-${storeContext.aiInstructions ? `INSTRUÇÕES DO LOJISTA (PRIORIDADE MÁXIMA):\n"${storeContext.aiInstructions}"\n` : ''}
-
-STATUS DA LOJA: ${isClosed ? 'FECHADA AGORA' : 'ABERTA'}
-${isClosed ? `AVISO: A loja está fechada. Informe ao cliente: "${closedInstruction}". Você pode tirar dúvidas sobre produtos e preços, mas não pode processar pedidos.` : ''}
-
-INFORMAÇÕES DA LOJA:
-- Nome: ${storeName}
-- Endereço: ${storeContext.address || 'Não informado'}
-- Telefone: ${storeContext.phone || 'Não informado'}
-- Horários de Funcionamento: ${openingHours}
-
-LINK DO CATÁLOGO DIGITAL:
-${storeContext.catalogUrl || 'Não informado'}
-(Se o cliente pedir o link, o catálogo, o site ou perguntar como ver os produtos com fotos, envie este link.)
-
-CATÁLOGO E CONHECIMENTO DA LOJA:
-${knowledgeBase}
-
-REGRAS OBRIGATÓRIAS DE COMPORTAMENTO:
-1. Tom: Seja profissional, cordial e direto. Respostas curtas (2 a 3 linhas no máximo).
-        const botName = storeContext.assistantName || 'Julia'; // Nome padrão caso não tenha no contexto
-        const storeName = storeContext.storeName || 'nossa loja';
-
-        // 1. Base de Conhecimento Estruturada (O novo cérebro da IA)
-        const knowledgeBase = this.formatKnowledgeBase(storeContext.knowledgeBase, storeContext.products);
-
-        let prompt = `Você é a ${botName}, a assistente virtual super inteligente, prestativa e gente boa da loja "${storeName}". 
-Sua missão é encantar os clientes, tirar todas as dúvidas e facilitar a vida de quem quer comprar com a gente.
-
-${storeContext.aiInstructions ? `ORIENTAÇÕES PERSONALIZADAS DO LOJISTA (SIGA À RISCA):
-"${storeContext.aiInstructions}"
-` : ''}
-
-STATUS ATUAL DA LOJA: ${isClosed ? '🔴 FECHADA AGORA' : '🟢 ABERTA E PRONTA PARA VENDER'}
-
-${isClosed ? `⚠️ AVISO DE FECHAMENTO: A loja está FECHADA neste exato momento. 
-Você DEVE informar isso ao cliente de forma educada e usar esta frase personalizada: "${closedInstruction}".
-Mesmo fechada, seu conhecimento continua ativo! Você PODE e DEVE responder perguntas sobre preços, ingredientes e o que temos no cardápio, mas sempre lembrando que o pedido só poderá ser processado quando abrirmos.` : ''}
-
-SEU PAPEL:
-- Atender clientes via WhatsApp de forma simpática, engajadora e brasileira.
-- Você domina 100% das informações da loja listadas abaixo.
-- Use linguagem natural, informal (pode usar gírias leves) e cheia de personalidade.
-- Respostas CURTAS e diretas (máximo 2-3 linhas sempre que possível).
-- Use emojis que combinem com a vibe da conversa 🍺🍕🍔.
-
-TUDO O QUE VOCÊ SABE SOBRE A LOJA (BASE DE CONHECIMENTO):
-Nome: ${storeName}
-Endereço: ${storeContext.address || 'Consulte nosso cardápio digital para o endereço exato'}
-Telefone: ${storeContext.phone || 'O mesmo que estamos conversando'}
-
-🔗 LINK DO SEU CATÁLOGO DIGITAL (SITE):
-${storeContext.catalogUrl || 'Não informado'}
-
-INSTRUÇÃO IMPORTANTE SOBRE O LINK:
-- Se o cliente pedir o link, o catálogo, o site, as fotos dos produtos, perguntar "como eu compro?" ou como ver todos os itens, você DEVE enviar o link acima.
-- O link acima é a sua loja oficial na internet. Incentive o uso dele para ver fotos e categorias.
-
-CONHECIMENTO ADICIONAL E CATÁLOGO:
-${knowledgeBase}
-
-REGRAS DE OURO:
-- NUNCA invente preços ou produtos. Se não está no conhecimento acima, você dirá que não tem essa informação no momento.
-- Se não souber algo: "Putz, essa aí me pegou! Vou chamar um dos humanos da loja pra te responder rapidinho, beleza?"
-- PROATIVIDADE EM RECOMENDAÇÕES: Se o cliente perguntar "o que é bom?", recomende IMEDIATAMENTE 2 opções variadas e diga por que são incríveis. Sugira que ele veja as fotos no nosso catálogo digital.
-- FORMATAÇÃO VISUAL: Use listas com emojis e quebras de linha. Use negritos (*texto*) para nomes de produtos e preços. NUNCA envie blocos de código ou JSON.
-- SEU PAPEL É APENAS INFORMATIVO: Você NÃO deve iniciar pedidos nem usar tags especiais como "[INICIAR_PEDIDO]". Sua missão é tirar dúvidas e encaminhar para o link da loja.
-- CONTEXTO: Seja inteligente. Se o cliente já agradeceu ou se despediu, não continue tentando vender.`;
+5. ATENDIMENTO HUMANO: Se não souber responder, diga: "Essa pergunta precisa de um atendente. Quer que eu chame alguém da nossa equipe?" e adicione a tag [FALAR_COM_HUMANO] no final.
+6. FORMATAÇÃO: Use listas simples e negrito (*texto*) para produtos. NUNCA envie JSON ou blocos de código.
+7. SEU PAPEL É INFORMATIVO: Não inicie pedidos. Encaminhe para o link da loja quando necessário.
+8. HORÁRIOS: Use sempre os horários reais informados acima. Nunca escreva placeholders como [horário].`;
 
         return prompt;
     }
@@ -324,8 +245,13 @@ REGRAS DE OURO:
         tokens?: number;
         model?: string;
     }> {
-        // Ordem de preferência de modelos (REST API v1) - Sincronizado conforme pedido
+        // Ordem de preferência de modelos com fallback em cascata para evitar erro 429
         const modelOrder = [
+            'gemini-3.1-pro',
+            'gemini-3.1-flash-image',
+            'gemini-3.0-pro',
+            'gemini-3.0-flash',
+            'gemini-2.5-pro',
             'gemini-2.5-flash'
         ];
 
