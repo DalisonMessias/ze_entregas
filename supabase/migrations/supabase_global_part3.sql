@@ -1007,3 +1007,7 @@ WITH CHECK (true);
 
 GRANT ALL ON TABLE public.whatsbot_auth_keys TO service_role;
 GRANT ALL ON TABLE public.whatsbot_auth_keys TO authenticated;
+
+-- Adicionar campo para mensagem de loja fechada (WhatsBot)
+ALTER TABLE public.whatsbot_settings 
+ADD COLUMN IF NOT EXISTS custom_closed_message TEXT;

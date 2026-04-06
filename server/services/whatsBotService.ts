@@ -18,6 +18,7 @@ interface WhatsBotSettingsRow {
     store_id: string;
     enabled: boolean;
     custom_message: string | null;
+    custom_closed_message: string | null;
     timezone: string | null;
 }
 
@@ -26,6 +27,7 @@ interface StoreProfileRow {
     city_slug: string | null;
     store_slug: string | null;
     store_name: string | null;
+    is_open: boolean | null;
 }
 
 interface WhatsBotSessionRow {
@@ -57,6 +59,7 @@ export interface WhatsBotStatusPayload {
     qrCode?: string;
     connectedPhone?: string | null;
     customMessage: string;
+    customClosedMessage: string;
     catalogUrl: string;
     lastError?: string | null;
 }
@@ -107,7 +110,7 @@ export const getLocalDateString = (timezone = DEFAULT_TIMEZONE, date = new Date(
 const getSettings = async (storeId: string): Promise<WhatsBotSettingsRow> => {
     const { data, error } = await supabaseAdmin
         .from('whatsbot_settings')
-        .select('store_id, enabled, custom_message, timezone')
+        .select('store_id, enabled, custom_message, custom_closed_message, timezone')
         .eq('store_id', storeId)
         .single();
 
@@ -119,13 +122,14 @@ const getSettings = async (storeId: string): Promise<WhatsBotSettingsRow> => {
         store_id: storeId,
         enabled: !!data?.enabled,
         custom_message: data?.custom_message || null,
+        custom_closed_message: data?.custom_closed_message || null,
         timezone: data?.timezone || DEFAULT_TIMEZONE
     };
 };
 
 const upsertSettings = async (
     storeId: string,
-    updates: Partial<Pick<WhatsBotSettingsRow, 'enabled' | 'custom_message' | 'timezone'>>
+    updates: Partial<Pick<WhatsBotSettingsRow, 'enabled' | 'custom_message' | 'custom_closed_message' | 'timezone'>>
 ) => {
     const payload = {
         store_id: storeId,
@@ -146,7 +150,7 @@ const upsertSettings = async (
 const getStoreProfile = async (storeId: string): Promise<StoreProfileRow> => {
     const { data, error } = await supabaseAdmin
         .from('user_profiles')
-        .select('id, city_slug, store_slug, store_name')
+        .select('id, city_slug, store_slug, store_name, is_open')
         .eq('id', storeId)
         .single();
 
@@ -237,12 +241,17 @@ const buildCatalogUrl = (store: StoreProfileRow, lastKnownUrl?: string | null) =
 
 export const buildWhatsBotReplyMessage = (params: {
     customMessage?: string | null;
+    customClosedMessage?: string | null;
     catalogUrl: string;
     storeName?: string | null;
+    isOpen?: boolean | null;
 }) => {
-    const customMessage = params.customMessage?.trim() || '';
-    if (customMessage) {
-        return customMessage
+    const message = (params.isOpen === false && params.customClosedMessage?.trim()) 
+        ? params.customClosedMessage.trim() 
+        : (params.customMessage?.trim() || '');
+
+    if (message) {
+        return message
             .replace(/\{\{\s*catalog_url\s*\}\}/gi, params.catalogUrl)
             .replace(/\{\s*catalogUrl\s*\}/g, params.catalogUrl);
     }
@@ -330,6 +339,7 @@ class WhatsBotInstance {
             qrCode: enabled ? runtime.qrCode : undefined,
             connectedPhone: runtime.connectedPhone ?? session?.connected_phone ?? null,
             customMessage: settings.custom_message || '',
+            customClosedMessage: settings.custom_closed_message || '',
             catalogUrl,
             lastError: runtime.lastError ?? session?.last_disconnect_reason ?? null
         };
@@ -563,8 +573,10 @@ class WhatsBotInstance {
         const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
         const replyMessage = buildWhatsBotReplyMessage({
             customMessage: settings.custom_message,
+            customClosedMessage: settings.custom_closed_message,
             catalogUrl,
-            storeName: store.store_name
+            storeName: store.store_name,
+            isOpen: store.is_open
         });
 
         const messageSource = settings.custom_message?.trim() ? 'custom' as const : 'catalog_default' as const;
@@ -651,9 +663,10 @@ class WhatsBotServiceManager {
         return instance.getStatus(currentPublicUrl);
     }
 
-    public async updateConfig(storeId: string, customMessage: string, currentPublicUrl?: string | null) {
+    public async updateConfig(storeId: string, customMessage: string, customClosedMessage: string, currentPublicUrl?: string | null) {
         await upsertSettings(storeId, {
             custom_message: customMessage.trim() || null,
+            custom_closed_message: customClosedMessage.trim() || null,
             timezone: DEFAULT_TIMEZONE
         });
 

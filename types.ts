@@ -2044,10 +2044,12 @@ export interface WhatsBotStatus {
     qrCode?: string;
     connectedPhone?: string | null;
     customMessage: string;
+    customClosedMessage: string;
     catalogUrl: string;
     lastError?: string | null;
 }
 
 export interface WhatsBotConfigPayload {
     customMessage: string;
+    customClosedMessage: string;
 }

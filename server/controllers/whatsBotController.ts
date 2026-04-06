@@ -36,7 +36,8 @@ export const getStatus = async (req: AuthenticatedRequest, res: Response) => {
 export const updateConfig = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const customMessage = typeof req.body?.customMessage === 'string' ? req.body.customMessage : '';
-        const status = await whatsBotService.updateConfig(getStoreId(req), customMessage, getRequestPublicUrl(req));
+        const customClosedMessage = typeof req.body?.customClosedMessage === 'string' ? req.body.customClosedMessage : '';
+        const status = await whatsBotService.updateConfig(getStoreId(req), customMessage, customClosedMessage, getRequestPublicUrl(req));
         res.status(200).json(status);
     } catch (error: any) {
         console.error('[WhatsBotController] Erro ao salvar configuração:', error);

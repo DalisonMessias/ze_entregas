@@ -35,6 +35,7 @@ export const WhatsBot: React.FC = () => {
     const [loadingAction, setLoadingAction] = useState<'start' | 'stop' | 'save' | 'logout' | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [draftMessage, setDraftMessage] = useState('');
+    const [draftClosedMessage, setDraftClosedMessage] = useState('');
     const [isDirty, setIsDirty] = useState(false);
     const [isSuperStore, setIsSuperStore] = useState<boolean | null>(null);
     const isDirtyRef = useRef(false);
@@ -53,6 +54,7 @@ export const WhatsBot: React.FC = () => {
             setError(null);
             if (syncDraft || !isDirtyRef.current) {
                 setDraftMessage(data.customMessage || '');
+                setDraftClosedMessage(data.customClosedMessage || '');
                 setIsDirty(false);
                 isDirtyRef.current = false;
             }
@@ -109,13 +111,14 @@ export const WhatsBot: React.FC = () => {
     const handleSave = async () => {
         setLoadingAction('save');
         try {
-            const updated = await whatsbot.updateWhatsBotConfig({ customMessage: draftMessage }, requestOptions);
+            const updated = await whatsbot.updateWhatsBotConfig(draftMessage, draftClosedMessage, requestOptions);
             setStatus(updated);
             setDraftMessage(updated.customMessage || '');
+            setDraftClosedMessage(updated.customClosedMessage || '');
             setIsDirty(false);
             isDirtyRef.current = false;
             setError(null);
-            toast({ message: 'Mensagem do WhatsBot salva com sucesso.', type: 'success' });
+            toast({ message: 'Configurações do WhatsBot salvas com sucesso.', type: 'success' });
         } catch (err: any) {
             const message = err?.response?.data?.message || err?.message || 'Erro ao salvar a mensagem do WhatsBot.';
             setError(message);
@@ -131,6 +134,7 @@ export const WhatsBot: React.FC = () => {
             const updated = await whatsbot.startWhatsBot(requestOptions);
             setStatus(updated);
             setDraftMessage(updated.customMessage || '');
+            setDraftClosedMessage(updated.customClosedMessage || '');
             setIsDirty(false);
             isDirtyRef.current = false;
             setError(null);
@@ -150,6 +154,7 @@ export const WhatsBot: React.FC = () => {
             const updated = await whatsbot.stopWhatsBot(requestOptions);
             setStatus(updated);
             setDraftMessage(updated.customMessage || '');
+            setDraftClosedMessage(updated.customClosedMessage || '');
             setIsDirty(false);
             isDirtyRef.current = false;
             setError(null);
@@ -169,6 +174,7 @@ export const WhatsBot: React.FC = () => {
             const updated = await whatsbot.logoutWhatsBot(requestOptions);
             setStatus(updated);
             setDraftMessage(updated.customMessage || '');
+            setDraftClosedMessage(updated.customClosedMessage || '');
             setIsDirty(false);
             isDirtyRef.current = false;
             setError(null);
@@ -371,6 +377,29 @@ export const WhatsBot: React.FC = () => {
                                 placeholder="Ex: Oi! Nosso catálogo está aqui: {{catalog_url}}"
                                 className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
                             />
+                            <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                                        <PowerOff className="w-3 h-3" />
+                                        Texto (Loja Fechada)
+                                    </label>
+                                    <textarea
+                                        value={draftClosedMessage}
+                                        onChange={(event) => {
+                                            setDraftClosedMessage(event.target.value);
+                                            setIsDirty(true);
+                                            isDirtyRef.current = true;
+                                        }}
+                                        rows={4}
+                                        placeholder="Ex: Olá! No momento estamos fechados, mas confira nosso catálogo: {{catalog_url}}"
+                                        className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
+                                    />
+                                    <p className="text-[10px] text-gray-400 italic">
+                                        Esta mensagem será enviada apenas quando a loja estiver marcada como <strong>FECHADA</strong>.
+                                    </p>
+                                </div>
+                            </div>
+
                             <p className="text-xs text-gray-400">
                                 Você pode usar <code className="font-mono">{'{{catalog_url}}'}</code> ou <code className="font-mono">{'{catalogUrl}'}</code> para inserir o link automaticamente na mensagem.
                             </p>

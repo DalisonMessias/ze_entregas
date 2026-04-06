@@ -44,7 +44,12 @@ export const getWhatsBotStatus = async (options?: WhatsBotRequestOptions): Promi
     return data;
 };
 
-export const updateWhatsBotConfig = async (payload: WhatsBotConfigPayload, options?: WhatsBotRequestOptions): Promise<WhatsBotStatus> => {
+export const updateWhatsBotConfig = async (
+    customMessage: string,
+    customClosedMessage: string,
+    options?: WhatsBotRequestOptions
+): Promise<WhatsBotStatus> => {
+    const payload: WhatsBotConfigPayload = { customMessage, customClosedMessage };
     const headers = await getAuthHeaders(options);
     const { data } = await axios.put<WhatsBotStatus>(`${getWhatsBotApiBaseUrl()}/config`, payload, { headers });
     return data;

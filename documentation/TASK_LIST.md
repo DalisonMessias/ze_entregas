@@ -6,9 +6,12 @@
 - [x] Corrigir lógica de exibição do QR Code e mensagens de estado.
 - [x] Implementar captura dinâmica de URL base do sistema.
 - [x] Adicionar logs de diagnóstico coloridos no backend.
-- [x] Identificar causa raiz dos erros PreKeyError/SessionError (chaves de sinal salvas incorretamente).
-- [x] Criar tabela `whatsbot_auth_keys` para armazenar chaves de sinal individualmente.
+- [x] Identificar causa raiz dos erros PreKeyError/SessionError.
+- [x] Criar tabela `whatsbot_auth_keys` para armazenar chaves de sinal.
 - [x] Reescrever `useWhatsBotDatabaseAuth.ts` para salvar credenciais e chaves separadamente.
-- [x] Atualizar `clearWhatsBotSessionData` para limpar credenciais E chaves de sinal.
-- [ ] Usuário deve aplicar o SQL no painel Supabase e fazer reset completo da sessão.
-- [ ] Validar o fluxo: Reset -> Escanear QR -> Enviar mensagem -> Bot responde.
+- [x] Atualizar `utilitários` de banco de dados para limpar chaves no logout.
+- [x] Melhorar UX do painel de QR Code quando o bot já possui sessão salva.
+- [ ] Adicionar campo `custom_closed_message` na tabela de configurações.
+- [ ] Implementar lógica de mensagem diferenciada para loja aberta/fechada no backend.
+- [ ] Adicionar campo de texto para mensagem da loja fechada no Frontend (`WhatsBot.tsx`).
+- [ ] Validar o fluxo: Mensagem quando Aberto vs Mensagem quando Fechado.
