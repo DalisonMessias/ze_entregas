@@ -1172,3 +1172,211 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.check_and_downgrade_expired_plans() TO authenticated, service_role;
 
+-- 6. Evolução WhatsBot: Suporte a mensagens duplas (Aberto/Fechado) no mesmo dia
+ALTER TABLE public.whatsbot_send_history 
+ADD COLUMN IF NOT EXISTS is_closed_message BOOLEAN DEFAULT FALSE;
+
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'whatsbot_send_history_unique_day') THEN
+        ALTER TABLE public.whatsbot_send_history DROP CONSTRAINT whatsbot_send_history_unique_day;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'whatsbot_send_history_unique_day_v2') THEN
+        ALTER TABLE public.whatsbot_send_history 
+        ADD CONSTRAINT whatsbot_send_history_unique_day_v2 
+        UNIQUE (store_id, contact_phone, send_date_local, is_closed_message);
+    END IF;
+END $$;
+
+-- Redefinir função de reserva para considerar o tipo de mensagem
+CREATE OR REPLACE FUNCTION public.reserve_whatsbot_daily_send(
+    p_store_id UUID,
+    p_contact_phone TEXT,
+    p_contact_jid TEXT,
+    p_send_date_local DATE,
+    p_message_source TEXT,
+    p_message_body TEXT,
+    p_inbound_message_id TEXT DEFAULT NULL,
+    p_is_closed_message BOOLEAN DEFAULT FALSE
+)
+RETURNS TABLE (
+    allowed BOOLEAN,
+    history_id UUID,
+    current_status TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_row public.whatsbot_send_history%ROWTYPE;
+BEGIN
+    INSERT INTO public.whatsbot_send_history (
+        store_id,
+        contact_phone,
+        contact_jid,
+        send_date_local,
+        status,
+        message_source,
+        message_body,
+        inbound_message_id,
+        is_closed_message,
+        created_at,
+        updated_at
+    )
+    VALUES (
+        p_store_id,
+        p_contact_phone,
+        p_contact_jid,
+        p_send_date_local,
+        'reserved',
+        p_message_source,
+        p_message_body,
+        p_inbound_message_id,
+        p_is_closed_message,
+        now(),
+        now()
+    )
+    ON CONFLICT (store_id, contact_phone, send_date_local, is_closed_message)
+    DO UPDATE
+        SET contact_jid = EXCLUDED.contact_jid,
+            status = 'reserved',
+            message_source = EXCLUDED.message_source,
+            message_body = EXCLUDED.message_body,
+            inbound_message_id = COALESCE(EXCLUDED.inbound_message_id, public.whatsbot_send_history.inbound_message_id),
+            last_error = NULL,
+            updated_at = now()
+    WHERE public.whatsbot_send_history.status = 'failed'
+    RETURNING * INTO v_row;
+
+    IF FOUND THEN
+        RETURN QUERY SELECT TRUE, v_row.id, v_row.status;
+        RETURN;
+    END IF;
+
+    SELECT *
+      INTO v_row
+      FROM public.whatsbot_send_history
+     WHERE store_id = p_store_id
+       AND contact_phone = p_contact_phone
+       AND send_date_local = p_send_date_local
+       AND is_closed_message = p_is_closed_message
+     LIMIT 1;
+
+    RETURN QUERY
+    SELECT FALSE, v_row.id, v_row.status;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.reserve_whatsbot_daily_send(UUID, TEXT, TEXT, DATE, TEXT, TEXT, TEXT, BOOLEAN) TO authenticated, service_role;
+
+-- 7. WhatsBot: Sistema de Campanhas de Marketing
+CREATE TABLE IF NOT EXISTS public.whatsbot_campaigns (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, processing, completed, stopped
+    total_recipients INTEGER DEFAULT 0,
+    sent_successfully INTEGER DEFAULT 0,
+    sent_failed INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT whatsbot_campaign_status_chk CHECK (status IN ('pending', 'processing', 'completed', 'stopped'))
+);
+
+CREATE TABLE IF NOT EXISTS public.whatsbot_campaign_recipients (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    campaign_id UUID NOT NULL REFERENCES public.whatsbot_campaigns(id) ON DELETE CASCADE,
+    phone TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, sent, failed
+    error_message TEXT,
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Índices de performance
+CREATE INDEX IF NOT EXISTS idx_whatsbot_campaigns_store ON public.whatsbot_campaigns (store_id);
+CREATE INDEX IF NOT EXISTS idx_whatsbot_campaign_recipients_lookup ON public.whatsbot_campaign_recipients (campaign_id, status);
+
+-- RLS para Campanhas
+ALTER TABLE public.whatsbot_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsbot_campaign_recipients ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Store manages own campaigns" ON public.whatsbot_campaigns;
+CREATE POLICY "Store manages own campaigns"
+ON public.whatsbot_campaigns
+FOR ALL
+USING (auth.uid() = store_id)
+WITH CHECK (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Store manages own campaign recipients" ON public.whatsbot_campaign_recipients;
+CREATE POLICY "Store manages own campaign recipients"
+ON public.whatsbot_campaign_recipients
+FOR ALL
+USING (
+    EXISTS (
+        SELECT 1 FROM public.whatsbot_campaigns
+        WHERE id = public.whatsbot_campaign_recipients.campaign_id
+        AND store_id = auth.uid()
+    )
+);
+
+GRANT ALL ON public.whatsbot_campaigns TO authenticated, service_role;
+GRANT ALL ON public.whatsbot_campaign_recipients TO authenticated, service_role;
+
+-- RPC para buscar contatos únicos que já falaram com o bot
+CREATE OR REPLACE FUNCTION public.get_whatsbot_available_contacts(p_store_id UUID)
+RETURNS TABLE (
+    phone TEXT,
+    last_interaction TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        contact_phone as phone,
+        MAX(created_at) as last_interaction
+    FROM public.whatsbot_send_history
+    WHERE store_id = p_store_id
+    GROUP BY contact_phone
+    ORDER BY last_interaction DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_whatsbot_available_contacts(UUID) TO authenticated, service_role;
+
+-- RPC para incrementar estatísticas de campanha de forma atômica
+CREATE OR REPLACE FUNCTION public.increment_whatsbot_campaign_stats(
+    p_campaign_id UUID,
+    p_success BOOLEAN
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    IF p_success THEN
+        UPDATE public.whatsbot_campaigns
+        SET sent_successfully = sent_successfully + 1,
+            updated_at = now()
+        WHERE id = p_campaign_id;
+    ELSE
+        UPDATE public.whatsbot_campaigns
+        SET sent_failed = sent_failed + 1,
+            updated_at = now()
+        WHERE id = p_campaign_id;
+    END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.increment_whatsbot_campaign_stats(UUID, BOOLEAN) TO authenticated, service_role;
+
+-- 8. WhatsBot: Suporte para Imagens
+ALTER TABLE public.whatsbot_settings ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.whatsbot_settings ADD COLUMN IF NOT EXISTS closed_image_url TEXT;
+ALTER TABLE public.whatsbot_campaigns ADD COLUMN IF NOT EXISTS image_url TEXT;
+

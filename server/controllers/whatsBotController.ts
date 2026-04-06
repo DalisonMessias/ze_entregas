@@ -37,7 +37,17 @@ export const updateConfig = async (req: AuthenticatedRequest, res: Response) => 
     try {
         const customMessage = typeof req.body?.customMessage === 'string' ? req.body.customMessage : '';
         const customClosedMessage = typeof req.body?.customClosedMessage === 'string' ? req.body.customClosedMessage : '';
-        const status = await whatsBotService.updateConfig(getStoreId(req), customMessage, customClosedMessage, getRequestPublicUrl(req));
+        const imageUrl = typeof req.body?.imageUrl === 'string' ? req.body.imageUrl : null;
+        const closedImageUrl = typeof req.body?.closedImageUrl === 'string' ? req.body.closedImageUrl : null;
+        
+        const status = await whatsBotService.updateConfig(
+            getStoreId(req), 
+            customMessage, 
+            customClosedMessage, 
+            imageUrl,
+            closedImageUrl,
+            getRequestPublicUrl(req)
+        );
         res.status(200).json(status);
     } catch (error: any) {
         console.error('[WhatsBotController] Erro ao salvar configuração:', error);
@@ -77,5 +87,51 @@ export const logout = async (req: AuthenticatedRequest, res: Response) => {
         res.json(status);
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message || 'Erro ao deslogar do WhatsBot.' });
+    }
+};
+
+export const getCampaigns = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const campaigns = await whatsBotService.getCampaigns(getStoreId(req));
+        res.status(200).json(campaigns);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao buscar campanhas:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao buscar campanhas.' });
+    }
+};
+
+export const createCampaign = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { name, message, recipients, imageUrl } = req.body;
+        if (!name || !message || !recipients || !Array.isArray(recipients) || recipients.length === 0) {
+            return res.status(400).json({ success: false, message: 'Dados da campanha inválidos.' });
+        }
+
+        const campaign = await whatsBotService.createCampaign(getStoreId(req), name, message, recipients, imageUrl);
+        res.status(201).json(campaign);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao criar campanha:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao criar campanha.' });
+    }
+};
+
+export const stopCampaign = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const result = await whatsBotService.stopCampaign(getStoreId(req), id);
+        res.status(200).json(result);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao parar campanha:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao parar campanha.' });
+    }
+};
+
+export const getAvailableContacts = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const contacts = await whatsBotService.getAvailableContacts(getStoreId(req));
+        res.status(200).json(contacts);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao buscar contatos:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao buscar contatos.' });
     }
 };

@@ -1,12 +1,23 @@
 import React, { useState } from 'react';
-import { Gift, Share2, Award, Wand2, ChevronLeft, Megaphone, ChevronRight, Palette } from 'lucide-react';
+import { Gift, Share2, Award, Wand2, ChevronLeft, Megaphone, ChevronRight, Palette, Lock, Crown } from 'lucide-react';
 import { ReferralProgram } from './ReferralProgram';
 import { PromotionCardGenerator } from './PromotionCardGenerator';
 import { MarketingModule } from './MarketingModule';
+import { usePlanPermissions } from '../hooks/usePlanPermissions';
 
 export const StoreMarketing: React.FC = () => {
     // Alterado o estado inicial para 'menu' para não abrir o Indique e Ganhe direto
     const [currentView, setCurrentView] = useState<'menu' | 'referral' | 'digital_card' | 'studio'>('menu');
+    const { canAccessMarketing, loading: loadingPlan } = usePlanPermissions();
+
+    const handlePaidFeatureClick = (view: 'digital_card' | 'studio') => {
+        if (!canAccessMarketing) {
+            const event = new CustomEvent('navigateToTab', { detail: { tab: 'store_plans' } });
+            window.dispatchEvent(event);
+            return;
+        }
+        setCurrentView(view);
+    };
 
     return (
         <div className="space-y-6 animate-in fade-in">
@@ -43,9 +54,17 @@ export const StoreMarketing: React.FC = () => {
 
                         {/* Card: Cartão Digital */}
                         <button
-                            onClick={() => setCurrentView('digital_card')}
-                            className="flex flex-col items-start p-6 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-3xl shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1 w-full text-left group"
+                            onClick={() => handlePaidFeatureClick('digital_card')}
+                            className="flex flex-col items-start p-6 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-3xl shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1 w-full text-left group relative overflow-hidden"
                         >
+                            {!canAccessMarketing && !loadingPlan && (
+                                <div className="absolute inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-[2px] rounded-3xl flex items-center justify-center z-10">
+                                    <div className="bg-white/90 dark:bg-gray-800/90 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-lg">
+                                        <Lock className="w-4 h-4 text-amber-500" />
+                                        <span className="text-xs font-black text-gray-700 dark:text-white uppercase tracking-wider">Plano Pago</span>
+                                    </div>
+                                </div>
+                            )}
                             <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-2xl mb-4 text-orange-600 dark:text-orange-400">
                                 <Wand2 className="w-8 h-8" />
                             </div>
@@ -54,15 +73,23 @@ export const StoreMarketing: React.FC = () => {
                                 Crie artes profissionais para postar nas redes sociais.
                             </p>
                             <div className="mt-auto flex items-center text-xs font-bold text-gray-600 dark:text-gray-300 group-hover:text-brand-600 transition-colors">
-                                Criar Arte <ChevronRight className="w-3 h-3 ml-1" />
+                                {canAccessMarketing ? 'Criar Arte' : 'Requer plano pago'} <ChevronRight className="w-3 h-3 ml-1" />
                             </div>
                         </button>
 
                         {/* Card: Estúdio de Marketing (Canvas) */}
                         <button
-                            onClick={() => setCurrentView('studio')}
-                            className="flex flex-col items-start p-6 bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800/50 rounded-3xl shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1 w-full text-left group"
+                            onClick={() => handlePaidFeatureClick('studio')}
+                            className="flex flex-col items-start p-6 bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800/50 rounded-3xl shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1 w-full text-left group relative overflow-hidden"
                         >
+                            {!canAccessMarketing && !loadingPlan && (
+                                <div className="absolute inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-[2px] rounded-3xl flex items-center justify-center z-10">
+                                    <div className="bg-white/90 dark:bg-gray-800/90 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-lg">
+                                        <Lock className="w-4 h-4 text-amber-500" />
+                                        <span className="text-xs font-black text-gray-700 dark:text-white uppercase tracking-wider">Plano Pago</span>
+                                    </div>
+                                </div>
+                            )}
                             <div className="bg-purple-600 p-3 rounded-2xl mb-4 text-white">
                                 <Palette className="w-8 h-8" />
                             </div>
@@ -71,7 +98,7 @@ export const StoreMarketing: React.FC = () => {
                                 Crie artes personalizadas com nosso editor avançado.
                             </p>
                             <div className="mt-auto flex items-center text-xs font-bold text-purple-600 dark:text-purple-400 group-hover:text-purple-500 transition-colors">
-                                Abrir Estúdio <ChevronRight className="w-3 h-3 ml-1" />
+                                {canAccessMarketing ? 'Abrir Estúdio' : 'Requer plano pago'} <ChevronRight className="w-3 h-3 ml-1" />
                             </div>
                         </button>
                     </div>

@@ -4,7 +4,7 @@ import { StoreProduct, Category, StoreAddonGroup } from '../types';
 import { StoreAIGenerator } from './StoreAIGenerator';
 import { SuperStoreModal } from './SuperStoreModal';
 import { AddonModal } from './AddonModal';
-import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera, Eye, Image as ImageIcon } from 'lucide-react';
+import { Bot, Sparkles, Send, Trash2, Edit2, Check, X, Package, Plus, BarChart3, AlertCircle, Search, Filter, LayoutGrid, Layers, Tag as TagIcon, ShoppingBag, Crown, Camera, Eye, Image as ImageIcon, Lock } from 'lucide-react';
 import { Loading } from './Loading';
 import { Button } from './Button';
 import * as cloud from '../services/cloud';
@@ -17,6 +17,7 @@ import { ProfileValidationAlert } from './ProfileValidationAlert';
 import { validateStoreProfile } from '../utils/profileValidation';
 import { Toast } from './Toast';
 import { useDebounce } from '../hooks/useDebounce';
+import { usePlanPermissions } from '../hooks/usePlanPermissions';
 
 type Tab = 'products' | 'categories' | 'addons' | 'import';
 
@@ -53,6 +54,7 @@ const isFuzzyMatch = (text: string, search: string) => {
 export const StoreCatalog: React.FC = () => {
     // ... (rest of imports/hooks)
     const [activeTab, setActiveTab] = useState<Tab>('products');
+    const { canAccessAI, maxProducts, loading: loadingPlan } = usePlanPermissions();
 
     // Products State
     const [products, setProducts] = useState<StoreProduct[]>([]);
@@ -69,6 +71,8 @@ export const StoreCatalog: React.FC = () => {
     const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
     const [editingAddonGroup, setEditingAddonGroup] = useState<Partial<StoreAddonGroup>>({});
 
+    // Limite de produtos: true quando está no plano gratuito e já atingiu o limite
+    const isAtProductLimit = maxProducts > 0 && products.length >= maxProducts;
 
     // Super Store State
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -168,6 +172,14 @@ export const StoreCatalog: React.FC = () => {
     };
 
     const handleSaveProduct = async (productData: Partial<StoreProduct>) => {
+        // Bloqueia criação se atingiu o limite do plano gratuito
+        if (!productData.id && isAtProductLimit) {
+            setToast({
+                message: `Seu plano gratuito permite até ${maxProducts} produtos. Faça upgrade para cadastrar mais.`,
+                type: 'warning'
+            });
+            return;
+        }
         setIsSaving(true);
         try {
             if (productData.id) {
@@ -201,6 +213,15 @@ export const StoreCatalog: React.FC = () => {
     };
 
     const handleImportProduct = async (baseProduct: any) => {
+        // Bloqueia importação se atingiu o limite do plano gratuito
+        if (isAtProductLimit) {
+            setToast({
+                message: `Seu plano gratuito permite até ${maxProducts} produtos. Faça upgrade para importar mais.`,
+                type: 'warning'
+            });
+            return;
+        }
+
         // Verificar duplicação
         const isDuplicate = products.some(p =>
             p.base_product_id === baseProduct.id ||
@@ -434,13 +455,21 @@ export const StoreCatalog: React.FC = () => {
                                 <div className="flex gap-2 w-full md:w-auto">
                                     <Button
                                         onClick={() => {
+                                            if (isAtProductLimit) {
+                                                setToast({
+                                                    message: `Limite atingido: seu plano gratuito permite até ${maxProducts} produtos. Faça upgrade para adicionar mais.`,
+                                                    type: 'warning'
+                                                });
+                                                return;
+                                            }
                                             setEditingProduct({});
                                             setIsProductModalOpen(true);
                                         }}
                                         className="flex-1 md:flex-none rounded-2xl h-14"
+                                        title={isAtProductLimit ? `Limite de ${maxProducts} produtos atingido no plano gratuito` : 'Adicionar novo produto'}
                                     >
-                                        <Plus className="w-5 h-5 mr-2" />
-                                        Novo Produto
+                                        {isAtProductLimit ? <Lock className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
+                                        {isAtProductLimit ? `Limite (${products.length}/${maxProducts})` : 'Novo Produto'}
                                     </Button>
                                     <Button
                                         variant="outline"

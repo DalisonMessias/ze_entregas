@@ -82,6 +82,52 @@ export const cancelSuperStoreSubscription = async (): Promise<{ success: boolean
     return { success: true };
 };
 
+/**
+ * Retorna o status completo do plano atual do lojista logado.
+ * Inclui: nível do plano, status, data de expiração, e flag de expirado.
+ */
+export const getMyPlanStatus = async (): Promise<import('../types').PlanStatus | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb.rpc('get_my_plan_status');
+
+    if (error) {
+        console.error('[getMyPlanStatus] Erro ao buscar status do plano:', error);
+        return null;
+    }
+
+    if (!data || !data.success) return null;
+
+    return {
+        plan_level: data.plan_level,
+        plan_status: data.plan_status,
+        is_super_store: data.is_super_store,
+        super_store_plan_type: data.super_store_plan_type || null,
+        super_store_expiration: data.super_store_expiration || null,
+        is_expired: data.is_expired
+    } as import('../types').PlanStatus;
+};
+
+/**
+ * Verifica e aplica downgrade automático para lojas com plano mensal expirado.
+ * Retorna quantas lojas foram rebaixadas para o plano gratuito.
+ */
+export const checkAndDowngradeExpiredPlan = async (): Promise<{ downgraded_count: number } | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    const { data, error } = await sb.rpc('check_and_downgrade_expired_plans');
+
+    if (error) {
+        console.error('[checkAndDowngradeExpiredPlan] Erro:', error);
+        return null;
+    }
+
+    return data ? { downgraded_count: data.downgraded_count || 0 } : null;
+};
+
+
 // --- OFFLINE SYNC LOGIC ---
 
 interface OfflineQueueItem {

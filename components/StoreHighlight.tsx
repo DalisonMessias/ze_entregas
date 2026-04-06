@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, MapPin, Star, Image as ImageIcon, MessageCircle, ChevronDown, HelpCircle, Info, CreditCard, Wallet, ExternalLink, FileCheck, Loader2 } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, MapPin, Star, Image as ImageIcon, MessageCircle, ChevronDown, HelpCircle, Info, CreditCard, Wallet, ExternalLink, FileCheck, Loader2, Crown, Lock } from 'lucide-react';
 import * as cloud from '../services/cloud';
 import { CityStoreHighlightOrder, CityStoreHighlightSettings, PartnerProfile, CityStoreBannerAssets, CityStoreBannerRequest, CityStoreBannerRequestMessage } from '../types';
 import { Button } from './Button';
@@ -9,6 +9,7 @@ import { BaseModal } from './BaseModal';
 import { ChatExclusivoModal } from './ChatExclusivoModal';
 import { MobileBannerPreview } from './MobileBannerPreview';
 import { useNotification } from '../contexts/NotificationContext';
+import { usePlanPermissions } from '../hooks/usePlanPermissions';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 const formatPercent = (val?: number) => `${Number(val || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
@@ -104,6 +105,7 @@ const CustomSelect: React.FC<{
 export const StoreHighlight: React.FC = () => {
     const { alert } = useDialog();
     const { showNotification } = useNotification();
+    const { canAccessHighlight, isMonthly, loading: loadingPlan } = usePlanPermissions();
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [settings, setSettings] = useState<CityStoreHighlightSettings | null>(null);
@@ -398,6 +400,46 @@ export const StoreHighlight: React.FC = () => {
         if (!basePrice || !baseDays || !days) return 0;
         return Math.round(((basePrice / baseDays) * days) * 100) / 100;
     }, [settings, days]);
+
+    if (!loadingPlan && !canAccessHighlight) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in">
+                <div className="bg-white dark:bg-gray-800 p-10 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-xl max-w-md w-full">
+                    <div className="w-20 h-20 rounded-[1.5rem] bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-brand-500/30">
+                        <Star className="w-10 h-10 text-white" />
+                    </div>
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Exclusivo Plano Mensal</h2>
+                    <p className="text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
+                        O <strong>Destaque por Cidade</strong> e os <strong>banners premium</strong> são recursos exclusivos do plano <strong>Mensal</strong>, que garante máxima visibilidade para sua loja.
+                    </p>
+                    <div className="space-y-3 mb-6">
+                        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-sm text-left">
+                            <Star className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                            <span className="text-gray-600 dark:text-gray-300">Apareça no topo das buscas da sua cidade</span>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-sm text-left">
+                            <ImageIcon className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                            <span className="text-gray-600 dark:text-gray-300">Banner premium no app e no site</span>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-sm text-left">
+                            <CheckCircle2 className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                            <span className="text-gray-600 dark:text-gray-300">Métricas de visualizações e cliques em tempo real</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => {
+                            const event = new CustomEvent('navigateToTab', { detail: { tab: 'store_plans' } });
+                            window.dispatchEvent(event);
+                        }}
+                        className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-brand-500 to-purple-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md"
+                    >
+                        <Crown className="w-4 h-4" />
+                        Assinar Plano Mensal
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in">

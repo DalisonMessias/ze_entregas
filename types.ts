@@ -2059,6 +2059,8 @@ export interface WhatsBotStatus {
     connectedPhone?: string | null;
     customMessage: string;
     customClosedMessage: string;
+    imageUrl?: string | null;
+    closedImageUrl?: string | null;
     catalogUrl: string;
     lastError?: string | null;
 }
@@ -2066,4 +2068,6 @@ export interface WhatsBotStatus {
 export interface WhatsBotConfigPayload {
     customMessage: string;
     customClosedMessage: string;
+    imageUrl?: string | null;
+    closedImageUrl?: string | null;
 }

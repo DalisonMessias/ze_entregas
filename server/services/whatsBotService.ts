@@ -19,6 +19,8 @@ interface WhatsBotSettingsRow {
     enabled: boolean;
     custom_message: string | null;
     custom_closed_message: string | null;
+    image_url: string | null;
+    closed_image_url: string | null;
     timezone: string | null;
 }
 
@@ -60,6 +62,8 @@ export interface WhatsBotStatusPayload {
     connectedPhone?: string | null;
     customMessage: string;
     customClosedMessage: string;
+    imageUrl?: string | null;
+    closedImageUrl?: string | null;
     catalogUrl: string;
     lastError?: string | null;
 }
@@ -110,7 +114,7 @@ export const getLocalDateString = (timezone = DEFAULT_TIMEZONE, date = new Date(
 const getSettings = async (storeId: string): Promise<WhatsBotSettingsRow> => {
     const { data, error } = await supabaseAdmin
         .from('whatsbot_settings')
-        .select('store_id, enabled, custom_message, custom_closed_message, timezone')
+        .select('store_id, enabled, custom_message, custom_closed_message, image_url, closed_image_url, timezone')
         .eq('store_id', storeId)
         .single();
 
@@ -123,13 +127,15 @@ const getSettings = async (storeId: string): Promise<WhatsBotSettingsRow> => {
         enabled: !!data?.enabled,
         custom_message: data?.custom_message || null,
         custom_closed_message: data?.custom_closed_message || null,
+        image_url: data?.image_url || null,
+        closed_image_url: data?.closed_image_url || null,
         timezone: data?.timezone || DEFAULT_TIMEZONE
     };
 };
 
 const upsertSettings = async (
     storeId: string,
-    updates: Partial<Pick<WhatsBotSettingsRow, 'enabled' | 'custom_message' | 'custom_closed_message' | 'timezone'>>
+    updates: Partial<WhatsBotSettingsRow>
 ) => {
     const payload = {
         store_id: storeId,
@@ -210,6 +216,7 @@ const reserveDailySend = async (params: {
     messageSource: 'custom' | 'catalog_default';
     messageBody: string;
     inboundMessageId?: string | null;
+    isClosedMessage?: boolean;
 }) => {
     const { data, error } = await supabaseAdmin.rpc('reserve_whatsbot_daily_send', {
         p_store_id: params.storeId,
@@ -218,7 +225,8 @@ const reserveDailySend = async (params: {
         p_send_date_local: params.sendDateLocal,
         p_message_source: params.messageSource,
         p_message_body: params.messageBody,
-        p_inbound_message_id: params.inboundMessageId || null
+        p_inbound_message_id: params.inboundMessageId || null,
+        p_is_closed_message: !!params.isClosedMessage
     });
 
     if (error) {
@@ -275,6 +283,8 @@ class WhatsBotInstance {
     private isConnecting = false;
     private reconnectAttempts = 0;
     private reconnectTimer: NodeJS.Timeout | null = null;
+    private campaignTimer: NodeJS.Timeout | null = null;
+    private isProcessingCampaign = false;
     private stopRequested = false;
 
     constructor(storeId: string) {
@@ -304,6 +314,8 @@ class WhatsBotInstance {
                 (this.sock as any)?.end?.(undefined);
             }
         }
+
+        this.stopCampaignWorker();
 
         console.log(`[WhatsBot ${this.storeId}] Limpando dados de sessão do banco de dados...`);
         this.sock = undefined;
@@ -340,6 +352,8 @@ class WhatsBotInstance {
             connectedPhone: runtime.connectedPhone ?? session?.connected_phone ?? null,
             customMessage: settings.custom_message || '',
             customClosedMessage: settings.custom_closed_message || '',
+            imageUrl: settings.image_url,
+            closedImageUrl: settings.closed_image_url,
             catalogUrl,
             lastError: runtime.lastError ?? session?.last_disconnect_reason ?? null
         };
@@ -376,6 +390,7 @@ class WhatsBotInstance {
             } catch { }
         }
 
+        this.stopCampaignWorker();
         this.sock = undefined;
 
         await updateWhatsBotSession(this.storeId, {
@@ -539,6 +554,133 @@ class WhatsBotInstance {
                 }
             }
         });
+
+        // Iniciar worker de campanhas após conexão bem-sucedida
+        this.startCampaignWorker();
+    }
+
+    private startCampaignWorker() {
+        this.stopCampaignWorker();
+        this.campaignTimer = setTimeout(() => this.processCampaigns(), 5000);
+    }
+
+    private stopCampaignWorker() {
+        if (this.campaignTimer) {
+            clearTimeout(this.campaignTimer);
+            this.campaignTimer = null;
+        }
+        this.isProcessingCampaign = false;
+    }
+
+    private async processCampaigns() {
+        if (!this.enabled || this.isProcessingCampaign || this.connectionStatus !== 'CONNECTED' || !this.sock) {
+            return;
+        }
+
+        this.isProcessingCampaign = true;
+
+        try {
+            // 1. Buscar a campanha ativa mais antiga desta loja
+            const { data: campaigns, error: campaignError } = await supabaseAdmin
+                .from('whatsbot_campaigns')
+                .select('*')
+                .in('status', ['pending', 'processing'])
+                .eq('store_id', this.storeId)
+                .order('created_at', { ascending: true })
+                .limit(1);
+
+            if (campaignError || !campaigns?.length) {
+                this.isProcessingCampaign = false;
+                this.campaignTimer = setTimeout(() => this.processCampaigns(), 10000); // Tentar novamente em 10s
+                return;
+            }
+
+            const campaign = campaigns[0];
+
+            // Atualizar status para processing se estiver pending
+            if (campaign.status === 'pending') {
+                await supabaseAdmin
+                    .from('whatsbot_campaigns')
+                    .update({ status: 'processing', updated_at: new Date().toISOString() })
+                    .eq('id', campaign.id);
+            }
+
+            // 2. Buscar o próximo destinatário pendente desta campanha
+            const { data: recipients, error: recipientError } = await supabaseAdmin
+                .from('whatsbot_campaign_recipients')
+                .select('*')
+                .eq('campaign_id', campaign.id)
+                .eq('status', 'pending')
+                .order('created_at', { ascending: true })
+                .limit(1);
+
+            if (recipientError || !recipients?.length) {
+                // Se não houver mais destinatários, finaliza a campanha
+                await supabaseAdmin
+                    .from('whatsbot_campaigns')
+                    .update({ status: 'completed', updated_at: new Date().toISOString() })
+                    .eq('id', campaign.id);
+
+                console.log(`[WhatsBot ${this.storeId}] ✅ Campanha "${campaign.name}" concluída.`);
+                this.isProcessingCampaign = false;
+                this.campaignTimer = setTimeout(() => this.processCampaigns(), 5000);
+                return;
+            }
+
+            const recipient = recipients[0];
+            const jid = normalizeDirectJid(recipient.phone);
+
+            console.log(`[WhatsBot ${this.storeId}] 📢 Disparando campanha "${campaign.name}" para ${recipient.phone}...`);
+
+            try {
+                if (campaign.image_url) {
+                    await this.sock.sendMessage(jid, { 
+                        image: { url: campaign.image_url }, 
+                        caption: campaign.message 
+                    });
+                } else {
+                    await this.sendText(jid, campaign.message);
+                }
+
+                // Sucesso
+                await supabaseAdmin
+                    .from('whatsbot_campaign_recipients')
+                    .update({ status: 'sent', sent_at: new Date().toISOString() })
+                    .eq('id', recipient.id);
+
+                await supabaseAdmin.rpc('increment_whatsbot_campaign_stats', {
+                    p_campaign_id: campaign.id,
+                    p_success: true
+                });
+
+            } catch (err: any) {
+                // Falha
+                console.error(`[WhatsBot ${this.storeId}] ❌ Erro ao disparar para ${recipient.phone}:`, err.message);
+                await supabaseAdmin
+                    .from('whatsbot_campaign_recipients')
+                    .update({ status: 'failed', error_message: err.message })
+                    .eq('id', recipient.id);
+
+                await supabaseAdmin.rpc('increment_whatsbot_campaign_stats', {
+                    p_campaign_id: campaign.id,
+                    p_success: false
+                });
+            }
+
+            // 3. Agendar o próximo disparo com delay de segurança (30 a 90 segundos)
+            const minDelay = 30000;
+            const maxDelay = 90000;
+            const randomDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+
+            console.log(`[WhatsBot ${this.storeId}] ⏳ Próximo disparo em ${Math.round(randomDelay / 1000)}s...`);
+            this.isProcessingCampaign = false;
+            this.campaignTimer = setTimeout(() => this.processCampaigns(), randomDelay);
+
+        } catch (error) {
+            console.error(`[WhatsBot ${this.storeId}] Erro crítico no worker de campanhas:`, error);
+            this.isProcessingCampaign = false;
+            this.campaignTimer = setTimeout(() => this.processCampaigns(), 30000); // Esperar 30s após erro crítico
+        }
     }
 
     private async handleIncomingMessage(message: WAMessage) {
@@ -581,6 +723,7 @@ class WhatsBotInstance {
 
         const messageSource = settings.custom_message?.trim() ? 'custom' as const : 'catalog_default' as const;
         const sendDateLocal = getLocalDateString(settings.timezone || DEFAULT_TIMEZONE);
+        const isClosedMessage = store.is_open === false;
 
         const reservation = await reserveDailySend({
             storeId: this.storeId,
@@ -589,17 +732,30 @@ class WhatsBotInstance {
             sendDateLocal,
             messageSource,
             messageBody: replyMessage,
-            inboundMessageId: message.key.id || null
+            inboundMessageId: message.key.id || null,
+            isClosedMessage
         });
 
         if (!reservation.allowed) {
-            console.log(`\x1b[33m[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO ANTI-SPAM: ${contactPhone} já recebeu mensagem hoje.\x1b[0m`);
+            const typeLabel = isClosedMessage ? 'FECHADA' : 'ABERTA';
+            console.log(`\x1b[33m[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO ANTI-SPAM (${typeLabel}): ${contactPhone} já recebeu esta mensagem hoje.\x1b[0m`);
             return;
         }
 
         try {
             console.log(`\x1b[32m[WhatsBot ${this.storeId}] 📤 Enviando resposta automática para ${contactPhone}...\x1b[0m`);
-            await this.sendText(contactJid, replyMessage, catalogUrl);
+            
+            const targetImageUrl = isClosedMessage ? settings.closed_image_url : settings.image_url;
+
+            if (targetImageUrl) {
+                await this.sock.sendMessage(contactJid, { 
+                    image: { url: targetImageUrl }, 
+                    caption: replyMessage 
+                });
+            } else {
+                await this.sendText(contactJid, replyMessage, catalogUrl);
+            }
+
             await markSendHistorySent(reservation.history_id);
             console.log(`\x1b[32m[WhatsBot ${this.storeId}] ✅ Resposta enviada com sucesso!\x1b[0m`);
         } catch (error: any) {
@@ -663,13 +819,24 @@ class WhatsBotServiceManager {
         return instance.getStatus(currentPublicUrl);
     }
 
-    public async updateConfig(storeId: string, customMessage: string, customClosedMessage: string, currentPublicUrl?: string | null) {
-        await upsertSettings(storeId, {
-            custom_message: customMessage.trim() || null,
-            custom_closed_message: customClosedMessage.trim() || null,
-            timezone: DEFAULT_TIMEZONE
+    public async updateConfig(
+        storeId: string, 
+        customMessage: string, 
+        customClosedMessage: string, 
+        imageUrl: string | null = null,
+        closedImageUrl: string | null = null,
+        currentPublicUrl?: string | null
+    ) {
+        const { error } = await supabaseAdmin.from('whatsbot_settings').upsert({
+            store_id: storeId,
+            custom_message: customMessage,
+            custom_closed_message: customClosedMessage,
+            image_url: imageUrl,
+            closed_image_url: closedImageUrl,
+            updated_at: new Date().toISOString()
         });
 
+        if (error) throw error;
         return this.getStatus(storeId, currentPublicUrl);
     }
 
@@ -728,6 +895,71 @@ class WhatsBotServiceManager {
         }
 
         return this.getStatus(storeId, currentPublicUrl);
+    }
+    public async getCampaigns(storeId: string) {
+        const { data, error } = await supabaseAdmin
+            .from('whatsbot_campaigns')
+            .select('*')
+            .eq('store_id', storeId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data;
+    }
+
+    public async createCampaign(storeId: string, name: string, message: string, recipients: string[], imageUrl: string | null = null) {
+        // 1. Criar a campanha
+        const { data: campaign, error: campaignError } = await supabaseAdmin
+            .from('whatsbot_campaigns')
+            .insert({
+                store_id: storeId,
+                name,
+                message,
+                image_url: imageUrl,
+                status: 'pending',
+                total_recipients: recipients.length,
+                sent_successfully: 0,
+                sent_failed: 0
+            })
+            .select()
+            .single();
+
+        if (campaignError) throw campaignError;
+
+        // 2. Inserir os destinatários
+        const recipientData = recipients.map(phone => ({
+            campaign_id: campaign.id,
+            phone,
+            status: 'pending'
+        }));
+
+        const { error: recipientError } = await supabaseAdmin
+            .from('whatsbot_campaign_recipients')
+            .insert(recipientData);
+
+        if (recipientError) throw recipientError;
+
+        return campaign;
+    }
+
+    public async stopCampaign(storeId: string, campaignId: string) {
+        const { error } = await supabaseAdmin
+            .from('whatsbot_campaigns')
+            .update({ status: 'stopped', updated_at: new Date().toISOString() })
+            .eq('id', campaignId)
+            .eq('store_id', storeId);
+
+        if (error) throw error;
+        return { success: true };
+    }
+
+    public async getAvailableContacts(storeId: string) {
+        const { data, error } = await supabaseAdmin.rpc('get_whatsbot_available_contacts', {
+            p_store_id: storeId
+        });
+
+        if (error) throw error;
+        return data;
     }
 }
 

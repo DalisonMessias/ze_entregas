@@ -1387,10 +1387,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 <div className="p-4 space-y-5 pb-[calc(env(safe-area-inset-bottom,0)+4.5rem)]">
                     {storeMoreSections.map(section => {
                         const visibleItems = section.items.filter(item => {
-                            if (item.tab === 'store_whatsbot' && !isSuperStoreUser) {
-                                return false;
-                            }
-
                             return !item.tab || canAccessTab(item.tab);
                         });
                         if (visibleItems.length === 0) return null;
@@ -1565,10 +1561,6 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 <div className="p-4 space-y-5 pb-[calc(env(safe-area-inset-bottom,0)+4.5rem)]">
                     {driverMoreSections.map(section => {
                         const visibleItems = section.items.filter(item => {
-                            if (item.tab === 'store_whatsbot' && !isSuperStoreUser) {
-                                return false;
-                            }
-
                             return !item.tab || canAccessTab(item.tab);
                         });
                         if (visibleItems.length === 0) return null;
@@ -1823,7 +1815,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuSection title="Comunicação" />
                                     <MenuButton icon={MessageSquare} label="Chat com Clientes" tab="internal_chat" />
                                     <MenuButton icon={MessageCircle} label="Chat c/ Entregadores" tab="store_drivers_chat" />
-                                    {isSuperStoreUser && <MenuButton icon={Bot} label="WhatsBot" tab="store_whatsbot" />}
+                                    <MenuButton icon={Bot} label="WhatsBot" tab="store_whatsbot" />
                                     <MenuButton icon={Smartphone} label="ZéPoint (POS)" tab="zepoint" />
 
                                     <MenuSection title="Finanças & Integração" />

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Tag, Ticket, Calendar, Search, Trash2, Edit2, CheckCircle, XCircle, AlertCircle, Percent, DollarSign, Truck, Package, Info, ArrowRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Tag, Ticket, Calendar, Search, Trash2, Edit2, CheckCircle, XCircle, AlertCircle, Percent, DollarSign, Truck, Package, Info, ArrowRight, ChevronUp, ChevronDown, Lock, Crown } from 'lucide-react';
 import { Loading } from './Loading';
 import { MobileTabsSelect } from './MobileTabsSelect';
 import * as cloud from '../services/cloud';
@@ -11,6 +11,7 @@ import { CustomSelect } from './CustomSelect';
 import { CustomDateInput } from './CustomDateInput';
 import { Switch } from './Switch';
 import { useDialog } from '../utils/dialogService';
+import { usePlanPermissions } from '../hooks/usePlanPermissions';
 
 interface AdminPromotionsProps {
     storeId: string;
@@ -18,6 +19,7 @@ interface AdminPromotionsProps {
 
 
 export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => {
+    const { canAccessPromotions, loading: loadingPlan } = usePlanPermissions();
     const [activeTab, setActiveTab] = useState<'PROMOTIONS' | 'COUPONS'>('PROMOTIONS');
     const [loading, setLoading] = useState(true);
     const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -187,6 +189,47 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
     };
 
     if (loading) return <div className="flex justify-center p-20"><Loading variant="container" size="md" message="Carregando promoções e cupons..." /></div>;
+
+    // Bloqueio real: plano não permite acesso a promoções
+    if (!loadingPlan && !canAccessPromotions) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in">
+                <div className="bg-white dark:bg-gray-800 p-10 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-xl max-w-md w-full">
+                    <div className="w-20 h-20 rounded-[1.5rem] bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/30">
+                        <Crown className="w-10 h-10 text-white" />
+                    </div>
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Recurso Bloqueado</h2>
+                    <p className="text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
+                        A criação de <strong>promoções</strong> e <strong>cupons de desconto</strong> é exclusiva para lojistas nos planos <strong>Por Pedido</strong> ou <strong>Mensal</strong>.
+                    </p>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-sm text-left">
+                            <Tag className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                            <span className="text-gray-600 dark:text-gray-300">Crie promoções em produtos específicos</span>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-sm text-left">
+                            <Ticket className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                            <span className="text-gray-600 dark:text-gray-300">Gere códigos de cupom персонáveis</span>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-sm text-left">
+                            <Truck className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                            <span className="text-gray-600 dark:text-gray-300">Cupons de frete grátis e descontos acumuláveis</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => {
+                            const event = new CustomEvent('navigateToTab', { detail: { tab: 'store_plans' } });
+                            window.dispatchEvent(event);
+                        }}
+                        className="mt-6 w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md"
+                    >
+                        <Crown className="w-4 h-4" />
+                        Ver Planos e Fazer Upgrade
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-6xl mx-auto p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4">
