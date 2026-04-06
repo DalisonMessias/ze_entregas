@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Link2, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone } from 'lucide-react';
+import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AccessDenied } from './AccessDenied';
 import { Button } from './Button';
@@ -32,7 +32,7 @@ export const WhatsBot: React.FC = () => {
     const [status, setStatus] = useState<WhatsBotStatus | null>(null);
     const [storeId, setStoreId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [loadingAction, setLoadingAction] = useState<'start' | 'stop' | 'save' | null>(null);
+    const [loadingAction, setLoadingAction] = useState<'start' | 'stop' | 'save' | 'logout' | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [draftMessage, setDraftMessage] = useState('');
     const [isDirty, setIsDirty] = useState(false);
@@ -163,6 +163,25 @@ export const WhatsBot: React.FC = () => {
         }
     };
 
+    const handleLogout = async () => {
+        setLoadingAction('logout');
+        try {
+            const updated = await whatsbot.logoutWhatsBot(requestOptions);
+            setStatus(updated);
+            setDraftMessage(updated.customMessage || '');
+            setIsDirty(false);
+            isDirtyRef.current = false;
+            setError(null);
+            toast({ message: 'Sessão do WhatsBot encerrada com sucesso.', type: 'success' });
+        } catch (err: any) {
+            const message = err?.response?.data?.message || err?.message || 'Erro ao encerrar sessão do WhatsBot.';
+            setError(message);
+            toast({ message, type: 'error' });
+        } finally {
+            setLoadingAction(null);
+        }
+    };
+
     const previewMessage = useMemo(() => {
         if (!status) return '';
         const customMessage = draftMessage.trim();
@@ -240,7 +259,7 @@ export const WhatsBot: React.FC = () => {
                         </div>
                         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
                             <p className="text-[11px] font-black uppercase tracking-wider text-white/60 mb-1">Número conectado</p>
-                            <p className="text-lg font-black break-all">{status.connectedPhone || 'Ainda não conectado'}</p>
+                            <p className="text-lg font-black break-all">+{status.connectedPhone || 'Ainda não conectado'}</p>
                         </div>
                         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
                             <p className="text-[11px] font-black uppercase tracking-wider text-white/60 mb-1">Proteção anti-spam</p>
@@ -267,23 +286,35 @@ export const WhatsBot: React.FC = () => {
                                 </p>
                             </div>
                             <div className="flex gap-2 flex-wrap">
+                                {!status.enabled ? (
+                                    <Button
+                                        variant="success"
+                                        onClick={handleStart}
+                                        loading={loadingAction === 'start'}
+                                        disabled={loadingAction !== null}
+                                        icon={<Power className="w-4 h-4" />}
+                                    >
+                                        Ligar Bot
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleStop}
+                                        loading={loadingAction === 'stop'}
+                                        disabled={loadingAction !== null}
+                                        icon={<PowerOff className="w-4 h-4" />}
+                                    >
+                                        Desligar Bot
+                                    </Button>
+                                )}
                                 <Button
-                                    variant="success"
-                                    onClick={handleStart}
-                                    loading={loadingAction === 'start'}
-                                    disabled={status.enabled || loadingAction !== null}
-                                    icon={<Power className="w-4 h-4" />}
+                                    variant="danger"
+                                    onClick={handleLogout}
+                                    loading={loadingAction === 'logout'}
+                                    disabled={loadingAction !== null}
+                                    icon={<LogOut className="w-4 h-4" />}
                                 >
-                                    Ligar Bot
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    onClick={handleStop}
-                                    loading={loadingAction === 'stop'}
-                                    disabled={!status.enabled || loadingAction !== null}
-                                    icon={<PowerOff className="w-4 h-4" />}
-                                >
-                                    Desligar Bot
+                                    Sair / Reset
                                 </Button>
                             </div>
                         </div>
@@ -304,7 +335,7 @@ export const WhatsBot: React.FC = () => {
                                     <span className="text-sm font-bold text-gray-900 dark:text-white">Reconexão automática</span>
                                 </div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    Se o WhatsApp cair enquanto o bot estiver ligado, o backend tenta reconectar automaticamente preservando a sessão salva.
+                                    Se o WhatsApp cair enquanto o bot estiver ligado, o sistema tenta reconectar automaticamente preservando a sessão salva.
                                 </p>
                             </div>
                         </div>
@@ -369,6 +400,16 @@ export const WhatsBot: React.FC = () => {
                                 </div>
                                 <p className="text-sm text-center text-gray-500 dark:text-gray-400">
                                     Escaneie este QR Code com o WhatsApp do número que ficará responsável pelas respostas automáticas.
+                                </p>
+                            </div>
+                        ) : status.connectionStatus === 'CONNECTED' ? (
+                            <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/30 p-8 text-center bg-emerald-50/50 dark:bg-emerald-900/10">
+                                <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
+                                    <ShieldCheck className="w-8 h-8 text-emerald-600" />
+                                </div>
+                                <p className="font-black text-gray-900 dark:text-white mb-1">WhatsApp Conectado</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    O robô está pronto para responder mensagens. Você pode usar o botão "Sair / Reset" para trocar de conta.
                                 </p>
                             </div>
                         ) : (

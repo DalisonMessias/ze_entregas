@@ -31,9 +31,19 @@ interface StoreProfileRow {
 interface WhatsBotSessionRow {
     store_id: string;
     connection_status: WhatsBotConnectionStatus | null;
-    connected_phone: string | null;
-    last_disconnect_reason: string | null;
+    connected_phone?: string | null;
+    last_connected_at?: string | null;
+    last_disconnect_reason?: string | null;
+    last_known_public_url?: string | null;
 }
+
+const updateSessionRow = async (storeId: string, data: Partial<WhatsBotSessionRow>) => {
+    await supabaseAdmin.from('whatsbot_sessions').upsert({
+        store_id: storeId,
+        ...data,
+        updated_at: new Date().toISOString()
+    });
+};
 
 interface ReservedDailySend {
     allowed: boolean;
@@ -71,11 +81,12 @@ const resolvePublicAppUrl = () => {
         process.env.FRONTEND_URL,
         process.env.APP_BASE_URL,
         process.env.VITE_PUBLIC_APP_URL,
-        process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : ''
+        process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '',
+        'http://localhost:3000' // Fallback padrão
     ];
 
     const match = candidates.find((candidate) => !!candidate && candidate !== 'PUBLIC_APP_URL');
-    return match ? match.replace(/\/+$/, '') : '';
+    return match ? match.replace(/\/+$/, '') : 'http://localhost:3000';
 };
 
 export const getLocalDateString = (timezone = DEFAULT_TIMEZONE, date = new Date()) => {
@@ -149,7 +160,7 @@ const getStoreProfile = async (storeId: string): Promise<StoreProfileRow> => {
 const getSessionRow = async (storeId: string): Promise<WhatsBotSessionRow | null> => {
     const { data, error } = await supabaseAdmin
         .from('whatsbot_sessions')
-        .select('store_id, connection_status, connected_phone, last_disconnect_reason')
+        .select('store_id, connection_status, connected_phone, last_disconnect_reason, last_known_public_url')
         .eq('store_id', storeId)
         .single();
 
@@ -214,13 +225,14 @@ const reserveDailySend = async (params: {
     return row || { allowed: false, history_id: null, current_status: null };
 };
 
-const buildCatalogUrl = (store: StoreProfileRow) => {
-    const baseUrl = resolvePublicAppUrl();
+const buildCatalogUrl = (store: StoreProfileRow, lastKnownUrl?: string | null) => {
+    const baseUrl = lastKnownUrl || resolvePublicAppUrl();
     if (!baseUrl || !store.city_slug || !store.store_slug) {
         return '';
     }
 
-    return `${baseUrl}/${store.city_slug}/${store.store_slug}/produtos`;
+    const cleanBase = baseUrl.replace(/\/+$/, '');
+    return `${cleanBase}/${store.city_slug}/${store.store_slug}/produtos`;
 };
 
 export const buildWhatsBotReplyMessage = (params: {
@@ -275,6 +287,7 @@ class WhatsBotInstance {
 
         if (this.sock) {
             try {
+                console.log(`[WhatsBot ${this.storeId}] Solicitando logout do WhatsApp...`);
                 await this.sock.logout('Usuário desconectou via painel.');
                 (this.sock as any)?.end?.(undefined);
             } catch (err: any) {
@@ -283,12 +296,43 @@ class WhatsBotInstance {
             }
         }
 
+        console.log(`[WhatsBot ${this.storeId}] Limpando dados de sessão do banco de dados...`);
         this.sock = undefined;
         this.connectionStatus = 'DISCONNECTED';
         this.qrCode = undefined;
         this.connectedPhone = null;
 
         await clearWhatsBotSessionData(this.storeId);
+        console.log(`[WhatsBot ${this.storeId}] Logout concluído e banco de dados limpo.`);
+    }
+
+    public async getStatus(currentPublicUrl?: string | null): Promise<WhatsBotStatusPayload> {
+        const [settings, store, session] = await Promise.all([
+            getSettings(this.storeId),
+            getStoreProfile(this.storeId),
+            getSessionRow(this.storeId)
+        ]);
+
+        if (currentPublicUrl && currentPublicUrl !== 'PUBLIC_APP_URL' && currentPublicUrl !== session?.last_known_public_url) {
+            await updateSessionRow(this.storeId, { last_known_public_url: currentPublicUrl });
+            if (session) session.last_known_public_url = currentPublicUrl;
+        }
+
+        const runtime = this.getRuntimeStatus();
+        const enabled = !!settings.enabled;
+        const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
+
+        return {
+            enabled,
+            connectionStatus: enabled
+                ? (runtime?.connectionStatus || session?.connection_status || 'DISCONNECTED')
+                : 'DISCONNECTED',
+            qrCode: enabled ? runtime.qrCode : undefined,
+            connectedPhone: runtime.connectedPhone ?? session?.connected_phone ?? null,
+            customMessage: settings.custom_message || '',
+            catalogUrl,
+            lastError: runtime.lastError ?? session?.last_disconnect_reason ?? null
+        };
     }
 
     public async start() {
@@ -471,9 +515,17 @@ class WhatsBotInstance {
 
             for (const message of payload.messages) {
                 try {
+                    // Se a mensagem não tiver conteúdo (comum em erros de descriptografia), ignora silenciosamente
+                    if (!message.message) continue;
+                    
                     await this.handleIncomingMessage(message);
-                } catch (error) {
-                    console.error(`[WhatsBot ${this.storeId}] Erro ao processar mensagem recebida:`, error);
+                } catch (error: any) {
+                    // Erros de descriptografia (PreKeyError/SessionError) são comuns em sessões corrompidas
+                    // e já são logados pela biblioteca Baileys em nível 50. Aqui silenciamos para não poluir.
+                    if (error?.name === 'SessionError' || error?.name === 'PreKeyError') {
+                        continue;
+                    }
+                    console.error(`[WhatsBot ${this.storeId}] Erro ao processar mensagem recebida:`, error.message || error);
                 }
             }
         });
@@ -495,16 +547,20 @@ class WhatsBotInstance {
             return;
         }
 
-        const [settings, store] = await Promise.all([
+        console.log(`\x1b[35m[WhatsBot ${this.storeId}] 📩 Mensagem recebida de ${contactPhone}\x1b[0m`);
+
+        const [settings, store, session] = await Promise.all([
             getSettings(this.storeId),
-            getStoreProfile(this.storeId)
+            getStoreProfile(this.storeId),
+            getSessionRow(this.storeId)
         ]);
 
         if (!settings.enabled || !this.enabled) {
+            console.log(`\x1b[33m[WhatsBot ${this.storeId}] ⏭️ Ignorando: Robô está desligado nas configurações.\x1b[0m`);
             return;
         }
 
-        const catalogUrl = buildCatalogUrl(store);
+        const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
         const replyMessage = buildWhatsBotReplyMessage({
             customMessage: settings.custom_message,
             catalogUrl,
@@ -525,25 +581,38 @@ class WhatsBotInstance {
         });
 
         if (!reservation.allowed) {
+            console.log(`\x1b[33m[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO ANTI-SPAM: ${contactPhone} já recebeu mensagem hoje.\x1b[0m`);
             return;
         }
 
         try {
-            await this.sendText(contactJid, replyMessage);
+            console.log(`\x1b[32m[WhatsBot ${this.storeId}] 📤 Enviando resposta automática para ${contactPhone}...\x1b[0m`);
+            await this.sendText(contactJid, replyMessage, catalogUrl);
             await markSendHistorySent(reservation.history_id);
+            console.log(`\x1b[32m[WhatsBot ${this.storeId}] ✅ Resposta enviada com sucesso!\x1b[0m`);
         } catch (error: any) {
             const messageText = error?.message || 'Falha ao enviar resposta automática.';
+            console.error(`\x1b[31m[WhatsBot ${this.storeId}] ❌ Erro ao enviar resposta: ${messageText}\x1b[0m`);
             await markSendHistoryFailed(reservation.history_id, messageText);
             throw error;
         }
     }
 
-    private async sendText(to: string, text: string) {
+    private async sendText(to: string, text: string, linkUrl?: string) {
         if (!this.sock || this.connectionStatus !== 'CONNECTED') {
             throw new Error('WhatsBot não está conectado.');
         }
 
-        await this.sock.sendMessage(to, { text });
+        // Apenas tenta gerar preview se a URL for pública (não é localhost)
+        const isPublicUrl = linkUrl &&
+            !linkUrl.includes('localhost') &&
+            !linkUrl.includes('127.0.0.1') &&
+            linkUrl.startsWith('http');
+
+        await this.sock.sendMessage(to, {
+            text,
+            ...(isPublicUrl ? {} : { linkPreview: undefined })
+        });
     }
 }
 
@@ -577,40 +646,21 @@ class WhatsBotServiceManager {
         }
     }
 
-    public async getStatus(storeId: string): Promise<WhatsBotStatusPayload> {
-        const [settings, store, session] = await Promise.all([
-            getSettings(storeId),
-            getStoreProfile(storeId),
-            getSessionRow(storeId)
-        ]);
-
-        const instance = this.instances.get(storeId);
-        const runtime = instance?.getRuntimeStatus();
-        const enabled = !!settings.enabled;
-
-        return {
-            enabled,
-            connectionStatus: enabled
-                ? (runtime?.connectionStatus || session?.connection_status || 'DISCONNECTED')
-                : 'DISCONNECTED',
-            qrCode: enabled ? runtime?.qrCode : undefined,
-            connectedPhone: runtime?.connectedPhone ?? session?.connected_phone ?? null,
-            customMessage: settings.custom_message || '',
-            catalogUrl: buildCatalogUrl(store),
-            lastError: runtime?.lastError ?? session?.last_disconnect_reason ?? null
-        };
+    public async getStatus(storeId: string, currentPublicUrl?: string | null) {
+        const instance = this.getOrCreateInstance(storeId);
+        return instance.getStatus(currentPublicUrl);
     }
 
-    public async updateConfig(storeId: string, customMessage: string) {
+    public async updateConfig(storeId: string, customMessage: string, currentPublicUrl?: string | null) {
         await upsertSettings(storeId, {
             custom_message: customMessage.trim() || null,
             timezone: DEFAULT_TIMEZONE
         });
 
-        return this.getStatus(storeId);
+        return this.getStatus(storeId, currentPublicUrl);
     }
 
-    public async start(storeId: string) {
+    public async start(storeId: string, currentPublicUrl?: string | null) {
         await upsertSettings(storeId, {
             enabled: true,
             timezone: DEFAULT_TIMEZONE
@@ -619,22 +669,22 @@ class WhatsBotServiceManager {
         const instance = this.getOrCreateInstance(storeId);
         await instance.start();
 
-        return this.getStatus(storeId);
+        return this.getStatus(storeId, currentPublicUrl);
     }
 
-    public async stopWhatsBot(storeId: string) {
+    public async stopWhatsBot(storeId: string, currentPublicUrl?: string | null) {
         const instance = this.getOrCreateInstance(storeId);
         await instance.stop();
-        return this.getStatus(storeId);
+        return this.getStatus(storeId, currentPublicUrl);
     }
 
-    public async logoutWhatsBot(storeId: string) {
+    public async logoutWhatsBot(storeId: string, currentPublicUrl?: string | null) {
         const instance = this.getOrCreateInstance(storeId);
         await instance.logout();
-        return this.getStatus(storeId);
+        return this.getStatus(storeId, currentPublicUrl);
     }
 
-    public async stop(storeId: string) {
+    public async stop(storeId: string, currentPublicUrl?: string | null) {
         await upsertSettings(storeId, {
             enabled: false,
             timezone: DEFAULT_TIMEZONE
@@ -645,13 +695,13 @@ class WhatsBotServiceManager {
             await instance.stop();
             this.instances.delete(storeId);
         } else {
-            await updateWhatsBotSession(storeId, {
+            await updateSessionRow(storeId, {
                 connection_status: 'DISCONNECTED',
                 last_disconnect_reason: 'bot_stopped'
             });
         }
 
-        return this.getStatus(storeId);
+        return this.getStatus(storeId, currentPublicUrl);
     }
 }
 

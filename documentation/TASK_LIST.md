@@ -1,8 +1,14 @@
-- [x] Analisar os logs do servidor local para identificar o `targetUserId` recebido. (Identificado: Erro 42501 - Permissão negada).
-- [x] Corrigir permissões da tabela `user_profiles` para a role `service_role` no banco de dados. (Adicionado GRANT em `supabase_global_part3.sql`).
-- [x] Remover middleware global de teste que sobrescreve `req.user` no `server/server.ts`.
-- [ ] Implementar rota de `/logout` no backend para limpeza total da sessão do WhatsApp.
-- [ ] Adicionar botão "Desconectar" na interface do WhatsBot no frontend.
-- [ ] Corrigir lógica de exibição do QR Code e mensagens de estado (evitar mensagem de "Ligue o bot" quando conectado).
-- [ ] Corrigir exibição do link real do catálogo (Substituir string PUBLIC_APP_URL pela URL formatada).
-- [ ] Validar o fluxo: Desconectar -> Ligar -> Escanear QR limpo.
+- [x] Analisar os logs do servidor local para identificar o `targetUserId` recebido.
+- [x] Corrigir permissões da tabela `user_profiles` para a role `service_role`.
+- [x] Remover middleware global de teste que sobrescreve `req.user`.
+- [x] Implementar rota de `/logout` no backend para limpeza total da sessão.
+- [x] Adicionar botão "Sair / Reset" e tornar botões condicionais ao status na UI.
+- [x] Corrigir lógica de exibição do QR Code e mensagens de estado.
+- [x] Implementar captura dinâmica de URL base do sistema.
+- [x] Adicionar logs de diagnóstico coloridos no backend.
+- [x] Identificar causa raiz dos erros PreKeyError/SessionError (chaves de sinal salvas incorretamente).
+- [x] Criar tabela `whatsbot_auth_keys` para armazenar chaves de sinal individualmente.
+- [x] Reescrever `useWhatsBotDatabaseAuth.ts` para salvar credenciais e chaves separadamente.
+- [x] Atualizar `clearWhatsBotSessionData` para limpar credenciais E chaves de sinal.
+- [ ] Usuário deve aplicar o SQL no painel Supabase e fazer reset completo da sessão.
+- [ ] Validar o fluxo: Reset -> Escanear QR -> Enviar mensagem -> Bot responde.

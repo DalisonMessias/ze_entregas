@@ -10,9 +10,22 @@ const getStoreId = (req: AuthenticatedRequest) => {
     return req.user.id;
 };
 
+const getRequestPublicUrl = (req: AuthenticatedRequest) => {
+    const origin = req.headers.origin;
+    if (origin && typeof origin === 'string') return origin;
+
+    const referer = req.headers.referer;
+    if (referer && typeof referer === 'string') {
+        const url = new URL(referer);
+        return `${url.protocol}//${url.host}`;
+    }
+
+    return null;
+};
+
 export const getStatus = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const status = await whatsBotService.getStatus(getStoreId(req));
+        const status = await whatsBotService.getStatus(getStoreId(req), getRequestPublicUrl(req));
         res.status(200).json(status);
     } catch (error: any) {
         console.error('[WhatsBotController] Erro ao buscar status:', error);
@@ -23,7 +36,7 @@ export const getStatus = async (req: AuthenticatedRequest, res: Response) => {
 export const updateConfig = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const customMessage = typeof req.body?.customMessage === 'string' ? req.body.customMessage : '';
-        const status = await whatsBotService.updateConfig(getStoreId(req), customMessage);
+        const status = await whatsBotService.updateConfig(getStoreId(req), customMessage, getRequestPublicUrl(req));
         res.status(200).json(status);
     } catch (error: any) {
         console.error('[WhatsBotController] Erro ao salvar configuração:', error);
@@ -33,7 +46,7 @@ export const updateConfig = async (req: AuthenticatedRequest, res: Response) => 
 
 export const start = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const status = await whatsBotService.start(getStoreId(req));
+        const status = await whatsBotService.start(getStoreId(req), getRequestPublicUrl(req));
         res.status(200).json(status);
     } catch (error: any) {
         console.error('[WhatsBotController] Erro ao ligar bot:', error);
@@ -43,7 +56,8 @@ export const start = async (req: AuthenticatedRequest, res: Response) => {
 
 export const stop = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const status = await whatsBotService.stop(getStoreId(req));
+        // Usa whatsBotService.stop() (completo) que grava enabled=false no banco
+        const status = await whatsBotService.stop(getStoreId(req), getRequestPublicUrl(req));
         res.status(200).json(status);
     } catch (error: any) {
         console.error('[WhatsBotController] Erro ao desligar bot:', error);
@@ -58,7 +72,7 @@ export const logout = async (req: AuthenticatedRequest, res: Response) => {
     }
 
     try {
-        const status = await whatsBotService.logoutWhatsBot(storeId);
+        const status = await whatsBotService.logoutWhatsBot(storeId, getRequestPublicUrl(req));
         res.json(status);
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message || 'Erro ao deslogar do WhatsBot.' });

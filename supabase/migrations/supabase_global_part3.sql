@@ -976,3 +976,34 @@ GRANT ALL ON TABLE public.whatsbot_send_history TO service_role;
 GRANT ALL ON TABLE public.whatsbot_sessions TO authenticated;
 GRANT ALL ON TABLE public.whatsbot_settings TO authenticated;
 GRANT ALL ON TABLE public.whatsbot_send_history TO authenticated;
+
+-- Adicionar coluna para descoberta dinâmica de URL
+ALTER TABLE public.whatsbot_sessions 
+ADD COLUMN IF NOT EXISTS last_known_public_url TEXT;
+
+-- Tabela para armazenar chaves de sinal do WhatsApp individualmente (evita corrupção de sessão)
+CREATE TABLE IF NOT EXISTS public.whatsbot_auth_keys (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    key_type TEXT NOT NULL,
+    key_id TEXT NOT NULL,
+    key_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (store_id, key_type, key_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_whatsbot_auth_keys_lookup ON public.whatsbot_auth_keys (store_id, key_type, key_id);
+
+ALTER TABLE public.whatsbot_auth_keys ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Service manages whatsbot auth keys" ON public.whatsbot_auth_keys;
+CREATE POLICY "Service manages whatsbot auth keys"
+ON public.whatsbot_auth_keys
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+GRANT ALL ON TABLE public.whatsbot_auth_keys TO service_role;
+GRANT ALL ON TABLE public.whatsbot_auth_keys TO authenticated;
