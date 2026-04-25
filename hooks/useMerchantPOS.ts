@@ -82,7 +82,6 @@ export const useMerchantPOS = () => {
     // UI States (moved from components)
     const [errorType, setErrorType] = useState<'timeout' | 'auth' | 'validation' | 'unknown' | null>(null);
     const [isWhatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
-    const [isSplitButtonActive, setIsSplitButtonActive] = useState(false);
     const [isDeactivateModalOpen, setDeactivateModalOpen] = useState(false);
     const [showSummaryModal, setShowSummaryModal] = useState(false);
     const [showLogsModal, setShowLogsModal] = useState(false);
@@ -121,84 +120,6 @@ export const useMerchantPOS = () => {
             content: 'Visualize suas vendas passadas aqui.'
         }
     ];
-
-    // -- KEYPAD & NAVIGATION HANDLERS --
-
-    const handleKeypadPress = (key: string) => {
-        if (step === 'amount' || (step === 'split_config' && isSplitButtonActive)) {
-            setAmount(prev => {
-                if (!/^\d$/.test(key)) return prev;
-                const numStr = prev.replace(/\D/g, '');
-                if (numStr.length >= 11) return prev;
-                const newNumStr = numStr + key;
-                const num = parseInt(newNumStr, 10);
-                return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(num / 100);
-            });
-        } else if (step === 'pin_lock') {
-            const pinLen = terminal?.pin_code?.length || 4;
-            setPinEntry(prev => (prev.length < pinLen ? prev + key : prev));
-        } else if (step === 'create_pin') {
-            setNewPin(prev => {
-                if (!/\d/.test(key) || prev.length >= 6) return prev;
-                return prev + key;
-            });
-        } else if (step === 'confirm_pin') {
-            setConfirmPin(prev => {
-                if (!/\d/.test(key) || prev.length >= 6) return prev;
-                return prev + key;
-            });
-        }
-        else if (step === 'sales_simulator' && !showHistory) {
-            setSimulatorAmount(prev => {
-                if (!/^\d$/.test(key)) return prev;
-                const numStr = prev.replace(/\D/g, '');
-                if (numStr.length >= 11) return prev;
-                const newNumStr = numStr + key;
-                const num = parseInt(newNumStr, 10);
-                return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(num / 100);
-            });
-        }
-    };
-
-    const handleKeypadClear = () => {
-        if (step === 'amount' || (step === 'split_config' && isSplitButtonActive)) {
-            setAmount('0,00');
-        } else if (step === 'pin_lock') {
-            setPinEntry('');
-        } else if (step === 'create_pin') {
-            setNewPin('');
-        } else if (step === 'confirm_pin') {
-            setConfirmPin('');
-        } else if (step === 'sales_simulator' && !showHistory) {
-            setSimulatorAmount('0,00');
-        }
-    };
-
-    const handleKeypadBackspace = () => {
-        if (step === 'amount' || (step === 'split_config' && isSplitButtonActive)) {
-            setAmount(prev => {
-                let numStr = prev.replace(/\./g, '').replace(',', '');
-                if (numStr.length <= 1) return '0,00';
-                numStr = numStr.slice(0, -1);
-                const num = parseInt(numStr, 10);
-                return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num / 100);
-            });
-        } else if (step === 'pin_lock') {
-            setPinEntry(prev => prev.slice(0, -1));
-        } else if (step === 'create_pin') {
-            setNewPin(prev => prev.slice(0, -1));
-        } else if (step === 'confirm_pin') {
-            setConfirmPin(prev => prev.slice(0, -1));
-        } else if (step === 'sales_simulator' && !showHistory) {
-            setSimulatorAmount(prev => {
-                let numStr = prev.replace(/\./g, '').replace(',', '');
-                if (numStr.length <= 1) return '0,00';
-                numStr = numStr.slice(0, -1);
-                const num = parseInt(numStr, 10);
-                return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num / 100);
-            });
-        }
-    };
 
     const handleGoBack = (onClose?: () => void) => {
         if (step === 'amount') {
@@ -748,7 +669,6 @@ export const useMerchantPOS = () => {
         // UI States
         errorType, setErrorType,
         isWhatsAppModalOpen, setWhatsAppModalOpen,
-        isSplitButtonActive, setIsSplitButtonActive,
         isDeactivateModalOpen, setDeactivateModalOpen,
         showSummaryModal, setShowSummaryModal,
         showLogsModal, setShowLogsModal,
@@ -761,10 +681,7 @@ export const useMerchantPOS = () => {
         setIsPolling, setPixCodeData, setPixTxId,
         isPolling,
 
-        // New Handlers
-        handleKeypadPress,
-        handleKeypadClear,
-        handleKeypadBackspace,
+        // Navigation Handlers
         handleGoBack,
         handleContinueFromAmount,
         resetFlow

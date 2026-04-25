@@ -161,6 +161,32 @@ const parseCurrency = (val: string) => {
     return Number(digits) / 100;
 };
 
+const CURRENCY_INPUT_MAX_DIGITS = 11;
+const PIN_MIN_LENGTH = 4;
+const PIN_MAX_LENGTH = 6;
+
+const formatDigitsAsCurrency = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, CURRENCY_INPUT_MAX_DIGITS);
+    if (!digits) return '0,00';
+
+    return new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(Number(digits) / 100);
+};
+
+const sanitizePinInput = (value: string, maxLength = PIN_MAX_LENGTH) => value.replace(/\D/g, '').slice(0, maxLength);
+
+const formatPhoneNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+
+    if (!digits) return '';
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
 
 
 
@@ -177,31 +203,8 @@ const WhatsAppReceiptModal = ({
     const [message, setMessage] = useState('Segue o comprovante de pagamento.');
     const dialog = useDialog(); // Use the custom dialog service
 
-    const handleKeypadPress = (key: string) => {
-        setPhone(prev => {
-            let value = prev.replace(/\D/g, '');
-            if (value.length >= 11) return prev;
-            value += key;
-
-            value = value.replace(/^(\d{2})/, '($1) ');
-            value = value.replace(/(\s\d{5})/, '$1-');
-            return value;
-        });
-    };
-
-    const handleBackspace = () => {
-        setPhone(prev => {
-            let value = prev.replace(/(\s|-|\(|\))/g, '');
-            value = value.slice(0, -1);
-
-            value = value.replace(/^(\d{2})/, '($1) ');
-            value = value.replace(/(\s\d{5})/, '$1-');
-            return value;
-        });
-    };
-
-    const handleClear = () => {
-        setPhone('');
+    const handlePhoneChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setPhone(formatPhoneNumber(event.target.value));
     };
 
     const handleSendClick = async () => {

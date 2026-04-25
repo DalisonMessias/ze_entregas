@@ -34,7 +34,7 @@ import { CityStoresList } from './CityStoresList';
 const updateAuthUrl = (view: AuthView) => {
   // Se estivermos em uma rota interna válida do App, não forçamos a URL para a landing de auth
   const isAppRoute = getTabFromUrl(window.location.pathname) !== null;
-  const authRoutes = ['/login', '/cadastro', '/recuperar-senha', '/'];
+  const authRoutes = ['/login', '/cadastro', '/recuperar-senha', '/', '/home'];
 
   // Se for uma rota de autenticação, forçamos o path correto
   let path = window.location.pathname;
@@ -43,7 +43,7 @@ const updateAuthUrl = (view: AuthView) => {
   else if (view === 'forgot_password') path = '/recuperar-senha';
   else if (view === 'landing' && !isAppRoute) {
     if (window.location.pathname === '/cidades') path = '/cidades';
-    else if (window.location.pathname === '/' || window.location.pathname === '/home') path = '/';
+    else if (window.location.pathname === '/' || window.location.pathname === '/home') path = '/home';
     else return; // Don't redirect URL for unknown paths (let App handle 404)
   }
 
