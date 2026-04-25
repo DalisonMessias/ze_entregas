@@ -49,6 +49,8 @@ const updateAuthUrl = (view: AuthView) => {
 
   if (window.location.pathname !== path && authRoutes.includes(path)) {
     window.history.pushState({ authView: view }, '', path);
+    // Disparar evento para que o estado currentPath no AuthWrapper se atualize
+    window.dispatchEvent(new CustomEvent('pushstate_changed', { detail: { path } }));
   }
 };
 
@@ -101,11 +103,16 @@ export const AuthWrapper: React.FC = () => {
       setView(newView);
       setCurrentPath(window.location.pathname);
     };
+
+    const handlePushState = (e: any) => {
+      setCurrentPath(e.detail?.path || window.location.pathname);
+    };
+
     window.addEventListener('popstate', handlePopState);
-    window.addEventListener('pushstate_changed', handlePopState); // Evento customizado opcional
+    window.addEventListener('pushstate_changed', handlePushState as EventListener);
     return () => {
       window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('pushstate_changed', handlePopState);
+      window.removeEventListener('pushstate_changed', handlePushState as EventListener);
     };
   }, []);
   const [signupType, setSignupType] = useState<'STORE_PARTNER' | 'DELIVERY_PARTNER' | 'USER' | null>(null);
@@ -184,7 +191,11 @@ export const AuthWrapper: React.FC = () => {
 
       const tab = defaultTabByRole[role] || 'shop';
       logger.info('ROLE_REDIRECT', { role, tab });
-      window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
+      
+      // Pequeno delay para garantir que o componente App.tsx esteja montado e ouvindo
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
+      }, 100);
     } catch { }
   };
 

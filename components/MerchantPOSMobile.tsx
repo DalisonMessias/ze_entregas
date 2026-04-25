@@ -1169,10 +1169,57 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
             case 'create_pin':
             case 'confirm_pin':
             case 'pin_lock':
+                const pinLength = Math.max(PIN_MIN_LENGTH, terminal?.pin_code?.length || PIN_MIN_LENGTH);
+                const pinValue = step === 'pin_lock' ? pinEntry : step === 'create_pin' ? newPin : confirmPin;
+                const pinTitle = step === 'pin_lock' ? 'Digite seu PIN' : step === 'create_pin' ? 'Criar PIN' : 'Confirmar PIN';
+                const pinDescription = step === 'pin_lock'
+                    ? 'Use o teclado nativo do aparelho para liberar o terminal.'
+                    : step === 'create_pin'
+                        ? 'Defina um PIN numérico com 4 a 6 dígitos.'
+                        : 'Digite novamente o PIN para confirmar.';
+                const pinAction = step === 'pin_lock'
+                    ? handlePinVerify
+                    : step === 'create_pin'
+                        ? handleCreatePin
+                        : handleCreatePinConfirm;
+                const pinDisabled = isLockedOut ||
+                    (step === 'pin_lock' && pinEntry.length !== pinLength) ||
+                    (step === 'create_pin' && !isNewPinValid) ||
+                    (step === 'confirm_pin' && !isConfirmPinValid);
+
                 return (
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900">
-                        <Loader2 className="w-8 h-8 animate-spin text-brand-500 mb-4" />
-                        <p className="text-gray-500">Acessando PDV...</p>
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900 text-center">
+                        <div className="w-20 h-20 rounded-full bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center mb-6">
+                            <Lock className="w-10 h-10 text-brand-600 dark:text-brand-400" />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">{pinTitle}</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-xs">{pinDescription}</p>
+                        <input
+                            ref={pinInputRef}
+                            type="password"
+                            value={pinValue}
+                            onChange={handlePinInputChange}
+                            onKeyDown={handlePinKeyDown}
+                            inputMode="numeric"
+                            pattern="\d*"
+                            autoComplete="one-time-code"
+                            maxLength={step === 'pin_lock' ? pinLength : PIN_MAX_LENGTH}
+                            placeholder={step === 'pin_lock' ? '••••' : '0000'}
+                            aria-label={pinTitle}
+                            className="w-full max-w-xs rounded-2xl border-2 border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-4 text-center text-3xl font-black tracking-[0.4em] text-gray-900 dark:text-white outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                        />
+                        {step === 'pin_lock' && isLockedOut && (
+                            <p className="mt-4 text-sm font-bold text-red-500">
+                                Terminal bloqueado. Tente novamente em {lockoutCountdown}s.
+                            </p>
+                        )}
+                        <Button
+                            onClick={() => void pinAction()}
+                            disabled={pinDisabled}
+                            className="w-full max-w-xs mt-6 py-4 text-lg shadow-xl shadow-brand-500/20"
+                        >
+                            Confirmar
+                        </Button>
                     </div>
                 );
 
@@ -1240,25 +1287,43 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
                         <div className={`${isDesktop ? 'flex flex-row items-center justify-around gap-8' : 'flex flex-col'}`}>
                             <div className="flex-1">
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor a Cobrar</p>
-                                <h1
-                                    className="font-black text-gray-900 dark:text-white my-4 tracking-tighter transition-all duration-200"
-                                    style={{ fontSize: `${isDesktop ? amountFontSize * 1.5 : amountFontSize}px` }}
-                                >
-                                    <span className="text-2xl align-baseline mr-1 text-gray-400 font-bold">R$</span>{amount}
-                                </h1>
-                                <div
-                                    ref={splitButtonRef}
-                                    className={`mx-auto mt-4 transition-opacity duration-300 ${parseCurrency(amount) > 0 ? 'opacity-100' : 'opacity-0 invisible'}`}
-                                    aria-hidden={parseCurrency(amount) <= 0}
-                                >
+                                <div className="my-4">
+                                    <label className="sr-only" htmlFor="pos-amount-input">Valor a cobrar</label>
+                                    <div className="flex items-center justify-center gap-2">
+                                        <span className="text-2xl align-baseline text-gray-400 font-bold">R$</span>
+                                        <input
+                                            id="pos-amount-input"
+                                            ref={amountInputRef}
+                                            value={amount}
+                                            onChange={handleAmountInputChange}
+                                            onKeyDown={handleAmountKeyDown}
+                                            inputMode="decimal"
+                                            enterKeyHint="done"
+                                            autoFocus
+                                            aria-label="Valor a cobrar"
+                                            className="w-full max-w-xs bg-transparent text-center font-black text-gray-900 dark:text-white tracking-tighter outline-none"
+                                            style={{ fontSize: `${isDesktop ? amountFontSize * 1.5 : amountFontSize}px` }}
+                                        />
+                                    </div>
+                                </div>
+                                <div className={`mx-auto mt-4 transition-opacity duration-300 ${parseCurrency(amount) > 0 ? 'opacity-100' : 'opacity-0 invisible'}`} aria-hidden={parseCurrency(amount) <= 0}>
                                     <Button
-                                        variant={isSplitButtonActive ? 'primary' : 'outline'}
+                                        variant="outline"
                                         size="sm"
                                         onClick={handleSplitClick}
-                                        className={`rounded-xl px-6 ${isSplitButtonActive ? 'bg-red-500 hover:bg-red-600 text-white' : ''}`}
+                                        className="rounded-xl px-6"
                                     >
                                         <Users className="w-4 h-4 mr-2" /> Dividir Conta
                                     </Button>
+                                    <div className="mt-4">
+                                        <Button
+                                            onClick={handleContinueFromAmount}
+                                            className="w-full py-4 text-lg shadow-xl shadow-brand-500/20"
+                                        >
+                                            Cobrar {formatCurrency(parseCurrency(amount))}
+                                            <ArrowRight className="w-5 h-5 ml-2" />
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1276,11 +1341,23 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
                             }
                         </div>
 
-                        {remainingToSplit > 0 &&
-                            <h1 className="text-6xl font-black text-gray-900 dark:text-white my-4 tracking-tighter">
-                                <span className="text-2xl align-baseline mr-1 text-gray-400 font-bold">R$</span>{amount}
-                            </h1>
-                        }
+                        <div className="my-4 px-4">
+                            <label className="sr-only" htmlFor="pos-split-amount-input">Valor da parcela</label>
+                            <div className="flex items-center justify-center gap-2">
+                                <span className="text-2xl align-baseline text-gray-400 font-bold">R$</span>
+                                <input
+                                    id="pos-split-amount-input"
+                                    ref={splitAmountInputRef}
+                                    value={amount}
+                                    onChange={handleAmountInputChange}
+                                    onKeyDown={handleSplitAmountKeyDown}
+                                    inputMode="decimal"
+                                    enterKeyHint="done"
+                                    aria-label="Valor da parcela"
+                                    className="w-full max-w-xs bg-transparent text-center text-5xl font-black tracking-tighter text-gray-900 dark:text-white outline-none"
+                                />
+                            </div>
+                        </div>
 
                         <div className="flex-1 relative mb-2">
                             <div ref={scrollContainerRef} className="absolute inset-0 bg-gray-50 dark:bg-gray-800 rounded-2xl p-2 overflow-y-auto custom-scrollbar">
@@ -1608,9 +1685,23 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
                             <>
                                 <div className="flex-1 flex flex-col justify-center text-center px-4">
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor da Venda</p>
-                                    <h1 className="text-3xl font-black text-gray-900 dark:text-white my-4 tracking-tighter">
-                                        <span className="text-2xl align-baseline mr-1 text-gray-400 font-bold">R$</span>{simulatorAmount}
-                                    </h1>
+                                    <div className="my-4">
+                                        <label className="sr-only" htmlFor="pos-simulator-amount-input">Valor da venda</label>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="text-2xl align-baseline text-gray-400 font-bold">R$</span>
+                                            <input
+                                                id="pos-simulator-amount-input"
+                                                ref={simulatorInputRef}
+                                                value={simulatorAmount}
+                                                onChange={handleSimulatorInputChange}
+                                                onKeyDown={handleSimulatorKeyDown}
+                                                inputMode="decimal"
+                                                enterKeyHint="done"
+                                                aria-label="Valor da venda"
+                                                className="w-full max-w-xs bg-transparent text-center text-3xl font-black tracking-tighter text-gray-900 dark:text-white outline-none"
+                                            />
+                                        </div>
+                                    </div>
                                     <div className="flex items-center justify-center gap-4 my-4">
                                         <span className={`text-sm font-bold ${feePayer === 'seller' ? 'text-brand-500' : 'text-gray-400'}`}>Vendedor</span>
                                         <label className="relative inline-flex items-center cursor-pointer">
@@ -1670,8 +1761,7 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
         }
     };
 
-    const showKeypad = ['amount', 'pin_lock', 'create_pin', 'confirm_pin', 'split_config'].includes(step) || (step === 'sales_simulator' && !showHistory);
-    const showFooter = step === 'amount' || step === 'split_config' || step === 'payment_list';
+    const showFooter = step === 'split_config' || step === 'payment_list';
 
     // Loading Splash
     if (step === 'loading') {
@@ -1755,30 +1845,6 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
                     </div>
                 )}
 
-                {showKeypad && (
-                    <div className="animate-in slide-in-from-bottom-10">
-                        <Keypad
-                            onKeyPress={isLockedOut ? () => { } : handleKeypadPress} // Disable key presses if locked out
-                            onClear={isLockedOut ? () => { } : handleKeypadClear} // Disable clear if locked out
-                            onBackspace={isLockedOut ? () => { } : handleKeypadBackspace} // Disable backspace if locked out
-                            onConfirm={
-                                step === 'amount' ? handleContinueFromAmount :
-                                    step === 'pin_lock' ? handlePinVerify :
-                                        step === 'create_pin' ? handleCreatePin :
-                                            step === 'confirm_pin' ? handleCreatePinConfirm : // Corrected this line
-                                                undefined // Fallback for other steps
-                            }
-                            confirmDisabled={
-                                isLockedOut ||
-                                (step === 'amount' && parseCurrency(amount) <= 0) ||
-                                (step === 'pin_lock' && pinEntry.length !== (terminal?.pin_code?.length || 4)) ||
-                                (step === 'create_pin' && !isNewPinValid) ||
-                                (step === 'confirm_pin' && !isConfirmPinValid)
-                            }
-                            showConfirm={step === 'pin_lock' || step === 'create_pin' || step === 'confirm_pin' || step === 'amount'}
-                        />
-                    </div>
-                )}
                 <ReactJoyride
                     steps={tutorialSteps}
                     run={runTutorial}

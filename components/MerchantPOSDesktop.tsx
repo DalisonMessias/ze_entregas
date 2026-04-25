@@ -161,6 +161,32 @@ const parseCurrency = (val: string) => {
     return Number(digits) / 100;
 };
 
+const CURRENCY_INPUT_MAX_DIGITS = 11;
+const PIN_MIN_LENGTH = 4;
+const PIN_MAX_LENGTH = 6;
+
+const formatDigitsAsCurrency = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, CURRENCY_INPUT_MAX_DIGITS);
+    if (!digits) return '0,00';
+
+    return new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(Number(digits) / 100);
+};
+
+const sanitizePinInput = (value: string, maxLength = PIN_MAX_LENGTH) => value.replace(/\D/g, '').slice(0, maxLength);
+
+const formatPhoneNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+
+    if (!digits) return '';
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
 
 
 
@@ -177,31 +203,8 @@ const WhatsAppReceiptModal = ({
     const [message, setMessage] = useState('Segue o comprovante de pagamento.');
     const dialog = useDialog(); // Use the custom dialog service
 
-    const handleKeypadPress = (key: string) => {
-        setPhone(prev => {
-            let value = prev.replace(/\D/g, '');
-            if (value.length >= 11) return prev;
-            value += key;
-
-            value = value.replace(/^(\d{2})/, '($1) ');
-            value = value.replace(/(\s\d{5})/, '$1-');
-            return value;
-        });
-    };
-
-    const handleBackspace = () => {
-        setPhone(prev => {
-            let value = prev.replace(/(\s|-|\(|\))/g, '');
-            value = value.slice(0, -1);
-
-            value = value.replace(/^(\d{2})/, '($1) ');
-            value = value.replace(/(\s\d{5})/, '$1-');
-            return value;
-        });
-    };
-
-    const handleClear = () => {
-        setPhone('');
+    const handlePhoneChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setPhone(formatPhoneNumber(event.target.value));
     };
 
     const handleSendClick = async () => {
@@ -233,12 +236,17 @@ const WhatsAppReceiptModal = ({
                     <div className="space-y-4">
                         <div>
                             <label className="text-xs font-bold text-gray-300">Número com DDD</label>
-                            <div className="w-full mt-1 p-3 h-12 flex items-center justify-center bg-gray-50/10 rounded-lg border border-gray-200/20 text-white text-2xl font-mono tracking-widest">
-                                {phone || <span className="text-gray-400 text-base">(11) 99999-9999</span>}
-                            </div>
+                            <input
+                                value={phone}
+                                onChange={handlePhoneChange}
+                                inputMode="tel"
+                                autoFocus
+                                placeholder="(11) 99999-9999"
+                                className="w-full mt-1 p-3 h-12 bg-gray-50/10 rounded-lg border border-gray-200/20 text-white text-xl font-mono tracking-widest outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 placeholder:text-gray-400"
+                            />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-300">Mensagem (use o teclado do aparelho)</label>
+                            <label className="text-xs font-bold text-gray-300">Mensagem</label>
                             <textarea
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
@@ -257,12 +265,6 @@ const WhatsAppReceiptModal = ({
                         </Button>
                     </div>
                 </div>
-                <Keypad
-                    onKeyPress={handleKeypadPress}
-                    onBackspace={handleBackspace}
-                    onClear={handleClear}
-                    showConfirm={false}
-                />
             </div>
         </div>
     );
@@ -319,47 +321,6 @@ interface PartialPayment {
 }
 
 type POSStep = 'loading' | 'activation_intro' | 'activating_animation_1' | 'create_pin' | 'confirm_pin' | 'pin_lock' | 'home' | 'amount' | 'split_config' | 'payment_list' | 'processing' | 'success' | 'error' | 'history' | 'settings' | 'inactive' | 'sales_simulator' | 'choose_sale_type' | 'select_associated_store' | 'select_order_for_store' | 'activating_animation_2';
-
-const Key: React.FC<{ children: React.ReactNode, onClick: () => void, className?: string, disabled?: boolean }> = ({ children, onClick, className = '', disabled }) => (
-    <button
-        onClick={onClick}
-        disabled={disabled}
-        className={`h-12 rounded-md flex items-center justify-center text-xl font-bold transition-transform duration-100 ease-in-out active:scale-95 ${className}`}
-    >
-        {children}
-    </button>
-);
-
-const Keypad: React.FC<{ onKeyPress: (key: string) => void, onConfirm?: () => void, onClear: () => void, onBackspace: () => void, confirmDisabled?: boolean, showConfirm?: boolean }> = ({ onKeyPress, onConfirm, onClear, onBackspace, confirmDisabled, showConfirm = true }) => {
-    const baseKeyStyle = "bg-gray-100 text-gray-900 hover:bg-gray-200 border-t border-l border-r border-gray-200 border-b-2 border-gray-300 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:border-gray-700";
-
-    return (
-        <div className="flex flex-col gap-1 p-2 rounded-lg bg-white shadow-xl border-b-2 border-gray-300">
-            <div className="grid grid-cols-3 gap-1">
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(k => (
-                    <Key key={k} onClick={() => onKeyPress(k)} className={baseKeyStyle}>{k}</Key>
-                ))}
-                <Key onClick={() => onKeyPress('*')} className={baseKeyStyle}>*</Key>
-                <Key key='0' onClick={() => onKeyPress('0')} className={baseKeyStyle}>0</Key>
-                <Key onClick={() => onKeyPress('#')} className={baseKeyStyle}>#</Key>
-            </div>
-            <div className="grid grid-cols-2 gap-1 mt-1">
-                <Key onClick={onClear} className={`bg-yellow-400 text-black hover:bg-yellow-500 rounded-lg border-b-2 border-yellow-600 dark:border-yellow-700`}>
-                    <ArrowLeft size={20} />
-                </Key>
-                <Key onClick={onBackspace} className={`bg-red-600 text-white hover:bg-red-700 rounded-lg border-b-2 border-red-800 dark:border-red-900`}>
-                    <X size={20} />
-                </Key>
-
-            </div>
-            {showConfirm && (
-                <Button onClick={onConfirm} disabled={confirmDisabled} className="w-full h-12 mt-1 text-lg bg-green-600 hover:bg-green-700 text-white rounded-lg border-b-2 border-green-800 dark:border-green-900">
-                    Confirmar
-                </Button>
-            )}
-        </div>
-    );
-};
 
 const InfoRow = ({ label, value, onCopy }: { label: string, value: string | undefined, onCopy?: (value: string) => void }) => (
     <div className="relative">
@@ -512,7 +473,6 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
         // New UI States from hook
         errorType, setErrorType,
         isWhatsAppModalOpen, setWhatsAppModalOpen,
-        isSplitButtonActive, setIsSplitButtonActive,
         isDeactivateModalOpen, setDeactivateModalOpen,
         showSummaryModal, setShowSummaryModal,
         showLogsModal, setShowLogsModal,
@@ -524,9 +484,6 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
         isPolling,
 
         // New central handlers
-        handleKeypadPress,
-        handleKeypadClear,
-        handleKeypadBackspace,
         handleGoBack,
         handleContinueFromAmount,
         resetFlow
@@ -538,20 +495,18 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const settings = { enableHighContrast: false }; // Default settings if not provided by context
 
     // Additional local logic
-    const { showNotification } = useNotification();
     const amountFontSize = useDynamicFont(amount, 60, 30, 1);
 
     useEffect(() => {
         setIsDesktop(true);
     }, []);
 
-    // Simulation Message
-    const [simMessage, setSimMessage] = useState(''); // Seems unused or local
-    const [pendingOpId, setPendingOpId] = useState<string | null>(null);
-
     // Scrolling refs
-    const splitButtonRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const amountInputRef = useRef<HTMLInputElement>(null);
+    const splitAmountInputRef = useRef<HTMLInputElement>(null);
+    const simulatorInputRef = useRef<HTMLInputElement>(null);
+    const pinInputRef = useRef<HTMLInputElement>(null);
     const [showScrollButtons, setShowScrollButtons] = useState(false);
 
     const handlePinVerify = () => handlePinSubmit(pinEntry);
