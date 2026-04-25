@@ -236,12 +236,17 @@ const WhatsAppReceiptModal = ({
                     <div className="space-y-4">
                         <div>
                             <label className="text-xs font-bold text-gray-300">Número com DDD</label>
-                            <div className="w-full mt-1 p-3 h-12 flex items-center justify-center bg-gray-50/10 rounded-lg border border-gray-200/20 text-white text-2xl font-mono tracking-widest">
-                                {phone || <span className="text-gray-400 text-base">(11) 99999-9999</span>}
-                            </div>
+                            <input
+                                value={phone}
+                                onChange={handlePhoneChange}
+                                inputMode="tel"
+                                autoFocus
+                                placeholder="(11) 99999-9999"
+                                className="w-full mt-1 p-3 h-12 bg-gray-50/10 rounded-lg border border-gray-200/20 text-white text-xl font-mono tracking-widest outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 placeholder:text-gray-400"
+                            />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-300">Mensagem (use o teclado do aparelho)</label>
+                            <label className="text-xs font-bold text-gray-300">Mensagem</label>
                             <textarea
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
@@ -260,12 +265,6 @@ const WhatsAppReceiptModal = ({
                         </Button>
                     </div>
                 </div>
-                <Keypad
-                    onKeyPress={handleKeypadPress}
-                    onBackspace={handleBackspace}
-                    onClear={handleClear}
-                    showConfirm={false}
-                />
             </div>
         </div>
     );
@@ -311,47 +310,6 @@ interface MerchantPOSProps {
 }
 
 // Types moved to useMerchantPOS
-
-const Key: React.FC<{ children: React.ReactNode, onClick: () => void, className?: string, disabled?: boolean }> = ({ children, onClick, className = '', disabled }) => (
-    <button
-        onClick={onClick}
-        disabled={disabled}
-        className={`h-12 rounded-md flex items-center justify-center text-xl font-bold transition-transform duration-100 ease-in-out active:scale-95 ${className}`}
-    >
-        {children}
-    </button>
-);
-
-const Keypad: React.FC<{ onKeyPress: (key: string) => void, onConfirm?: () => void, onClear: () => void, onBackspace: () => void, confirmDisabled?: boolean, showConfirm?: boolean }> = ({ onKeyPress, onConfirm, onClear, onBackspace, confirmDisabled, showConfirm = true }) => {
-    const baseKeyStyle = "bg-gray-100 text-gray-900 hover:bg-gray-200 border-t border-l border-r border-gray-200 border-b-2 border-gray-300 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:border-gray-700";
-
-    return (
-        <div className="flex flex-col gap-1 p-2 rounded-lg bg-white shadow-xl border-b-2 border-gray-300">
-            <div className="grid grid-cols-3 gap-1">
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(k => (
-                    <Key key={k} onClick={() => onKeyPress(k)} className={baseKeyStyle}>{k}</Key>
-                ))}
-                <Key onClick={() => onKeyPress('*')} className={baseKeyStyle}>*</Key>
-                <Key key='0' onClick={() => onKeyPress('0')} className={baseKeyStyle}>0</Key>
-                <Key onClick={() => onKeyPress('#')} className={baseKeyStyle}>#</Key>
-            </div>
-            <div className="grid grid-cols-2 gap-1 mt-1">
-                <Key onClick={onClear} className={`bg-yellow-400 text-black hover:bg-yellow-500 rounded-lg border-b-2 border-yellow-600 dark:border-yellow-700`}>
-                    <ArrowLeft size={20} />
-                </Key>
-                <Key onClick={onBackspace} className={`bg-red-600 text-white hover:bg-red-700 rounded-lg border-b-2 border-red-800 dark:border-red-900`}>
-                    <X size={20} />
-                </Key>
-
-            </div>
-            {showConfirm && (
-                <Button onClick={onConfirm} disabled={confirmDisabled} className="w-full h-12 mt-1 text-lg bg-green-600 hover:bg-green-700 text-white rounded-lg border-b-2 border-green-800 dark:border-green-900">
-                    Confirmar
-                </Button>
-            )}
-        </div>
-    );
-};
 
 const InfoRow = ({ label, value, onCopy }: { label: string, value: string | undefined, onCopy?: (value: string) => void }) => (
     <div className="relative">
@@ -505,7 +463,6 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
         // UI States from hook
         errorType, setErrorType,
         isWhatsAppModalOpen, setWhatsAppModalOpen,
-        isSplitButtonActive, setIsSplitButtonActive,
         isDeactivateModalOpen, setDeactivateModalOpen,
         showSummaryModal, setShowSummaryModal,
         showLogsModal, setShowLogsModal,
@@ -516,9 +473,6 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
         isPolling,
 
         // New central handlers
-        handleKeypadPress,
-        handleKeypadClear,
-        handleKeypadBackspace,
         handleGoBack,
         handleContinueFromAmount,
         resetFlow,
@@ -546,8 +500,11 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
     // Settings
 
     // New state for payment modals
-    const splitButtonRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const amountInputRef = useRef<HTMLInputElement>(null);
+    const splitAmountInputRef = useRef<HTMLInputElement>(null);
+    const simulatorInputRef = useRef<HTMLInputElement>(null);
+    const pinInputRef = useRef<HTMLInputElement>(null);
     const [showScrollButtons, setShowScrollButtons] = useState(false);
 
     const handleScroll = (direction: 'up' | 'down') => {
@@ -573,8 +530,90 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
         return () => clearTimeout(timer);
     }, [partialAmounts, step]); // Re-check when amounts change or when step changes
 
+    useEffect(() => {
+        const focusMap: Partial<Record<POSStep, React.RefObject<HTMLInputElement>>> = {
+            amount: amountInputRef,
+            split_config: splitAmountInputRef,
+            pin_lock: pinInputRef,
+            create_pin: pinInputRef,
+            confirm_pin: pinInputRef,
+            sales_simulator: simulatorInputRef
+        };
 
+        if (step === 'sales_simulator' && showHistory) return;
 
+        const targetRef = focusMap[step];
+        if (!targetRef?.current) return;
+
+        const timer = window.setTimeout(() => {
+            targetRef.current?.focus();
+            targetRef.current?.select();
+        }, 0);
+
+        return () => window.clearTimeout(timer);
+    }, [step, showHistory]);
+
+    const handleAmountInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setAmount(formatDigitsAsCurrency(event.target.value));
+    };
+
+    const handleSimulatorInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSimulatorAmount(formatDigitsAsCurrency(event.target.value));
+    };
+
+    const handlePinInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const value = sanitizePinInput(event.target.value);
+
+        if (step === 'pin_lock') {
+            const pinLength = Math.max(PIN_MIN_LENGTH, terminal?.pin_code?.length || PIN_MIN_LENGTH);
+            setPinEntry(value.slice(0, pinLength));
+            return;
+        }
+
+        if (step === 'create_pin') {
+            setNewPin(value);
+            return;
+        }
+
+        if (step === 'confirm_pin') {
+            setConfirmPin(value);
+        }
+    };
+
+    const handleAmountKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            handleContinueFromAmount();
+        }
+    };
+
+    const handleSplitAmountKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            void addPartialAmount();
+        }
+    };
+
+    const handleSimulatorKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            void handleSaveSimulation();
+        }
+    };
+
+    const handlePinKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key !== 'Enter') return;
+
+        event.preventDefault();
+
+        if (step === 'pin_lock') {
+            handlePinVerify();
+        } else if (step === 'create_pin') {
+            void handleCreatePin();
+        } else if (step === 'confirm_pin') {
+            void handleCreatePinConfirm();
+        }
+    };
 
     const handleSaveSimulation = async () => {
         const saleValue = parseCurrency(simulatorAmount);
@@ -628,19 +667,6 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
         }
     };
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (splitButtonRef.current && !splitButtonRef.current.contains(event.target as Node)) {
-                setIsSplitButtonActive(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
     const handleScanSuccess = (decodedText: string) => {
         if (activePayment) {
             confirmPayment(activePayment.id, 'ZE_QR', decodedText);
@@ -678,7 +704,6 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
     // resetFlow moved to hook
 
     const handleSplitClick = () => {
-        setIsSplitButtonActive(prev => !prev);
         if (parseCurrency(amount) > 0) {
             setTotalToSplit(parseCurrency(amount));
             setPartialAmounts([]);
@@ -709,12 +734,6 @@ export const MerchantPOSMobile: React.FC<MerchantPOSProps> = ({ onClose }) => {
         setPartialAmounts(prev => [...prev, { id: crypto.randomUUID(), amount: currentAmount, status: 'unpaid' }]);
         setAmount('0,00'); // Reset amount input
     };
-
-    // Keypad handlers moved to hook
-    const handleKeypadPressLocal = (key: string) => handleKeypadPress(key);
-    const handleKeypadClearLocal = () => handleKeypadClear();
-    const handleKeypadBackspaceLocal = () => handleKeypadBackspace();
-    const handleContinueFromAmountLocal = () => handleContinueFromAmount();
 
     const closePaymentOverlay = () => {
         resetPaymentState();
