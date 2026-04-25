@@ -1782,6 +1782,113 @@ COMMENT ON COLUMN public.whatsbot_settings.ai_enabled IS 'Indica se o Assistente
 COMMENT ON COLUMN public.whatsbot_settings.ai_context IS 'Instruções e contexto para a Inteligência Artificial';
 COMMENT ON COLUMN public.whatsbot_settings.ai_name IS 'Nome personalizado do assistente de IA';
 
+-- ==================================================================
+-- 11. FUNÇÕES DE CHECKOUT E PEDIDOS
+-- ==================================================================
+
+DROP FUNCTION IF EXISTS public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC);
+
+CREATE OR REPLACE FUNCTION public.create_public_order(
+    p_store_id UUID,
+    p_items JSONB,
+    p_total_price NUMERIC,
+    p_payment_method TEXT,
+    p_shipping_address JSONB,
+    p_delivery_mode TEXT,
+    p_customer_name TEXT,
+    p_customer_phone TEXT,
+    p_is_location_delivery BOOLEAN,
+    p_observation TEXT,
+    p_pix_active BOOLEAN,
+    p_shipping_cost NUMERIC,
+    p_points_redeemed INTEGER,
+    p_loyalty_discount_value NUMERIC,
+    p_coupon_code TEXT,
+    p_coupon_discount_value NUMERIC
+)
+RETURNS UUID
+AS $$
+DECLARE
+    v_status TEXT;
+    v_order_id UUID;
+BEGIN
+    -- Definir status baseado na ativação do PIX
+    IF p_payment_method = 'PIX' THEN
+        IF p_pix_active THEN
+            v_status := 'Aguardando pagamento (PIX)';
+        ELSE
+            v_status := 'Pagamento a combinar com a loja';
+        END IF;
+    END IF;
+
+    INSERT INTO public.orders (
+        store_id, 
+        user_id, 
+        status, 
+        items, 
+        total_price, 
+        payment_method, 
+        shipping_address, 
+        order_type,
+        customer_name, 
+        customer_phone,
+        observation,
+        is_location_delivery,
+        shipping_cost,
+        points_redeemed,
+        loyalty_discount_value,
+        coupon_code,
+        coupon_discount_value,
+        origin
+    )
+    VALUES (
+        p_store_id, 
+        auth.uid(),
+        v_status, 
+        p_items, 
+        p_total_price, 
+        p_payment_method::public.payment_method, 
+        p_shipping_address, 
+        p_delivery_mode, 
+        p_customer_name, 
+        p_customer_phone,
+        p_observation,
+        p_is_location_delivery,
+        p_shipping_cost,
+        p_points_redeemed,
+        p_loyalty_discount_value,
+        upper(trim(p_coupon_code)),
+        p_coupon_discount_value,
+        'DIGITAL_MENU'
+    )
+    RETURNING id INTO v_order_id;
+
+    -- DEDUZIR PONTOS (Se houver resgate)
+    IF p_points_redeemed > 0 THEN
+        -- Registrar no histórico
+        INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
+        VALUES (p_store_id, auth.uid(), v_order_id, -p_points_redeemed, 'DEBIT', 'Uso de pontos no pedido #' || SUBSTRING(v_order_id::text, 1, 8));
+
+        -- Atualizar saldo
+        UPDATE public.loyalty_points 
+        SET balance = balance - p_points_redeemed, updated_at = now()
+        WHERE store_id = p_store_id AND user_id = auth.uid();
+    END IF;
+
+    -- MARCAR CUPOM COMO USADO (Se for de indicação/recompensa)
+    IF p_coupon_code IS NOT NULL THEN
+        UPDATE public.claimed_rewards 
+        SET status = 'USED' 
+        WHERE upper(coupon_code) = upper(trim(p_coupon_code)) 
+          AND user_id = auth.uid()
+          AND status = 'ACTIVE';
+    END IF;
+
+    RETURN v_order_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC) TO anon, authenticated;
 
 -- ==================================================================
 -- 12. BASE DE CONHECIMENTO DO ZÉ ASSISTENTE (WhatsBot AI)
@@ -1816,3 +1923,7 @@ WITH CHECK (auth.uid() = store_id);
 
 -- Permissões Administrativas
 GRANT ALL ON public.ze_assistant_knowledge_base TO authenticated, service_role;
+
+
+-- Ajuste de compatibilidade para chaves de API
+ALTER TABLE public.api_keys ALTER COLUMN encrypted_key DROP NOT NULL;

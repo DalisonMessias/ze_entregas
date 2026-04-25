@@ -1,4 +1,4 @@
-﻿-- ==================================================================
+-- ==================================================================
 -- [DOCUMENTATION NOTE]
 -- AS TABELAS COM PREFIXO 'chat_' REFEREM-SE AO CHAT INTERNO DO SISTEMA.
 -- ELAS FORAM UNIFICADAS PARA UM PADRÃO NATIVO.
@@ -9447,6 +9447,7 @@ BEGIN
     -- ==================================================================
     -- View Unificada de Logs Financeiros (21/01/2026)
     -- ==================================================================
+    DROP VIEW IF EXISTS public.admin_financial_transactions_view CASCADE;
     CREATE OR REPLACE VIEW public.admin_financial_transactions_view AS
     SELECT
         t.id,
@@ -10642,6 +10643,7 @@ BEGIN
 END $$;
 
 -- 2. Função RPC: Buscar Loja por Slug (Versão Definitiva)
+DROP FUNCTION IF EXISTS public.public_get_store_by_slug(text, text);
 CREATE OR REPLACE FUNCTION public.public_get_store_by_slug(p_city_slug text, p_store_slug text)
 RETURNS json
 LANGUAGE plpgsql

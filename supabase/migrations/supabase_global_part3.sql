@@ -1498,3 +1498,5 @@ BEGIN
       ALTER TABLE public.whatsbot_settings ADD COLUMN ai_name TEXT DEFAULT 'Assistente';
    END IF;
 END $$;
+
+

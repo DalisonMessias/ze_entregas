@@ -43,27 +43,74 @@ export const getBusinessStatus = () => {
   };
 };
 
-export const promptLibrary = {
-  operacional: [
-    'Resuma pedidos pendentes e tempos médios de preparo.',
-    'Mostre prioridades do turno com foco em atrasos.',
-    'Liste alertas críticos do dia.'
-  ],
-  catalogo: [
-    'Quais produtos estão com baixa saída esta semana?',
-    'Sugira melhorias de descrição para meus top 5 itens.',
-    'Indique ajustes de preço para itens estratégicos.'
-  ],
-  marketing: [
-    'Crie uma promoção rápida para aumentar pedidos hoje.',
-    'Sugira um combo com maior margem.',
-    'Gere um texto curto para divulgar no WhatsApp.'
-  ],
-  suporte: [
-    'Explique o erro mais comum e como resolver.',
-    'Dê um script rápido para atraso de entrega.',
-    'Checklist para atendimento quando o cliente reclama.'
-  ]
+export const getPromptLibrary = (role: UserRole) => {
+  if (role === 'admin') {
+    return {
+      plataforma: [
+        'Resumo da saúde do sistema agora.',
+        'Quais lojas estão com mais problemas técnicos?',
+        'Status dos serviços externos (Gemini, Groq, etc).'
+      ],
+      financeiro: [
+        'Total movimentado na rede hoje.',
+        'Volume de depósitos pendentes.',
+        'Top 10 lojas por faturamento hoje.'
+      ],
+      seguranca: [
+        'Alertas de segurança e fraude recentes.',
+        'Lojas sinalizadas por comportamento atípico.',
+        'Log de ações administrativas críticas.'
+      ]
+    };
+  }
+
+  if (role === 'store_partner' || role === 'collaborator') {
+    return {
+      operacional: [
+        'Resuma pedidos pendentes e tempos de preparo.',
+        'Mostre prioridades do turno com foco em atrasos.',
+        'Liste alertas críticos do dia.'
+      ],
+      catalogo: [
+        'Quais produtos estão com baixa saída esta semana?',
+        'Sugira melhorias de descrição para meus produtos.',
+        'Indique ajustes de preço para itens estratégicos.'
+      ],
+      marketing: [
+        'Crie uma promoção rápida para aumentar pedidos.',
+        'Sugira um combo com maior margem.',
+        'Gere um texto curto para divulgar no WhatsApp.'
+      ]
+    };
+  }
+
+  if (role === 'delivery_partner' || role === 'delivery_person') {
+    return {
+      ganhos: [
+        'Resumo de ganhos da última semana.',
+        'Minha posição no ranking de entregadores.',
+        'Dicas para aumentar meus ganhos mensais.'
+      ],
+      logistica: [
+        'Quais regiões estão com maior demanda agora?',
+        'Como otimizar meu tempo entre coletas?',
+        'Status das taxas de entrega na minha cidade.'
+      ]
+    };
+  }
+
+  return {
+    ajuda: [
+      'Onde está o meu pedido atual?',
+      'Como cancelar um pedido em andamento?',
+      'Como aplicar meu cupom de desconto?'
+    ],
+    suporte: [
+      'Problema com o pagamento do pedido.',
+      'Minha comida veio errada, o que fazer?',
+      'Como falar com o suporte humano?'
+    ]
+  };
 };
 
 export const getQuickSuggestions = (

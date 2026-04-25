@@ -1588,45 +1588,14 @@ export const getShopSettings = async (): Promise<ShopSettings | null> => {
     return data;
 };
 
+// Funções de configuração de loja e chaves removidas destas linhas duplicadas (mantidas as versões no final do arquivo)
+
 /**
  * Busca uma chave de API na tabela api_keys, com suporte a isolamento por loja e fallback global.
- * @param serviceName Nome do serviço (ex: 'google_gemini', 'open_route_service_api_key')
- * @param storeId ID da loja (opcional)
  */
 export const getApiKey = async (serviceName: string, storeId?: string): Promise<string | null> => {
-    const sb = getClient();
-    if (!sb) return null;
-
-    try {
-        const normalizedService = serviceName.toLowerCase();
-
-        // 1. Tentar buscar chave da loja (se storeId fornecido)
-        if (storeId) {
-            const { data: storeKey } = await sb
-                .from('api_keys')
-                .select('key_token, encrypted_key, key_value')
-                .eq('is_active', true)
-                .eq('store_id', storeId)
-                .or(`service_name.eq.${normalizedService},service_name.eq.${normalizedService}_api_key`)
-                .maybeSingle();
-
-            if (storeKey) return storeKey.key_token || storeKey.encrypted_key || storeKey.key_value || null;
-        }
-
-        // 2. Fallback para chave global (sistema)
-        const { data: globalKey } = await sb
-            .from('api_keys')
-            .select('key_token, encrypted_key, key_value')
-            .eq('is_active', true)
-            .is('store_id', null)
-            .or(`service_name.eq.${normalizedService},service_name.eq.${normalizedService}_api_key`)
-            .maybeSingle();
-
-        return globalKey ? (globalKey.key_token || globalKey.encrypted_key || globalKey.key_value || null) : null;
-    } catch (e) {
-        console.error(`Error fetching API key for ${serviceName}:`, e);
-        return null;
-    }
+    const details = await getApiKeyFullDetails(serviceName, storeId);
+    return details?.key || null;
 };
 
 
@@ -2038,12 +2007,7 @@ export const deleteStoreProduct = async (id: string) => {
 
 // --- SHOP & ORDERS ---
 
-export const adminUpdateShopSettings = async (settings: Partial<ShopSettings>) => {
-    const sb = getClient();
-    if (!sb) return;
-    // Ensure singleton row ID is '1' in shop_settings
-    await sb.from('shop_settings').upsert({ ...settings, id: '1' });
-};
+// adminUpdateShopSettings duplicada removida
 
 
 
@@ -8993,9 +8957,40 @@ export const getApiKeyDetails = async (provider: string): Promise<{ key: string;
 };
 
 /**
- * Atualiza ou cria uma chave de API, suportando Voice ID opcional.
+ * Retorna os detalhes completos de uma chave de API, incluindo status de ativação.
  */
-export const adminUpdateApiKey = async (provider: string, key: string, voiceId?: string) => {
+export const getApiKeyFullDetails = async (provider: string, storeId?: string): Promise<{ key: string; is_active: boolean; voice_id?: string } | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+    try {
+        let query = sb
+            .from('api_keys')
+            .select('key_token, is_active, voice_id')
+            .eq('service_name', provider);
+        
+        if (storeId) {
+            query = query.eq('store_id', storeId);
+        }
+
+        const { data, error } = await query.maybeSingle();
+
+        if (error || !data) return null;
+
+        return {
+            key: data.key_token,
+            is_active: data.is_active === true,
+            voice_id: data.voice_id
+        };
+    } catch (e) {
+        console.error(`Error fetching full API key details for ${provider}:`, e);
+        return null;
+    }
+};
+
+/**
+ * Atualiza ou cria uma chave de API, suportando Voice ID e status de ativação.
+ */
+export const adminUpdateApiKey = async (provider: string, key: string, voiceId?: string, isActive: boolean = true) => {
     const sb = getClient();
     if (!sb) return { success: false, error: 'Client not ready' };
 
@@ -9008,7 +9003,7 @@ export const adminUpdateApiKey = async (provider: string, key: string, voiceId?:
             .from('api_keys')
             .select('id')
             .eq('service_name', provider)
-            .single();
+            .maybeSingle();
 
         if (existing) {
             // Update
@@ -9016,9 +9011,10 @@ export const adminUpdateApiKey = async (provider: string, key: string, voiceId?:
                 .from('api_keys')
                 .update({
                     key_token: key,
+                    encrypted_key: key, // Compatibilidade com schema antigo que exige NOT NULL
                     voice_id: voiceId || null,
                     updated_at: new Date().toISOString(),
-                    is_active: true
+                    is_active: isActive
                 })
                 .eq('id', existing.id);
             if (error) throw error;
@@ -9029,9 +9025,10 @@ export const adminUpdateApiKey = async (provider: string, key: string, voiceId?:
                 .insert({
                     service_name: provider,
                     key_token: key,
+                    encrypted_key: key, // Compatibilidade com schema antigo que exige NOT NULL
                     voice_id: voiceId || null,
-                    user_id: user.id,
-                    is_active: true
+                    user_id: user.id || null,
+                    is_active: isActive
                 });
             if (error) throw error;
         }

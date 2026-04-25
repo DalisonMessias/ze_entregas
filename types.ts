@@ -461,6 +461,8 @@ export interface ShopSettings {
     navigation_sounds_enabled?: boolean;
     created_at?: string;
     infinitepay_handle?: string;
+    primary_ai_provider?: 'google_gemini' | 'groq';
+    groq_enabled?: boolean;
 }
 
 

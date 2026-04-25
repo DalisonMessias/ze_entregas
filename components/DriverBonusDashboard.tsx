@@ -171,8 +171,12 @@ export const DriverBonusDashboard: React.FC = () => {
                                             <div className="flex justify-between items-start mb-8">
                                                 <div>
                                                     <div className="flex items-center gap-2 mb-1">
-                                                        <span className="bg-brand-100 dark:bg-brand-900/30 text-brand-600 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">CAMPANHA ATIVA</span>
-                                                        <span className="text-gray-400 text-[10px] font-bold flex items-center gap-1"><Calendar className="w-3 h-3" />Expira em {new Date(progress.campaign?.end_date || '').toLocaleDateString()}</span>
+                                                        {progress.campaign?.end_date && new Date(progress.campaign.end_date) < new Date() ? (
+                                                              <span className="bg-red-100 dark:bg-red-900/30 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">CAMPANHA ENCERRADA</span>
+                                                         ) : (
+                                                              <span className="bg-brand-100 dark:bg-brand-900/30 text-brand-600 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider">CAMPANHA ATIVA</span>
+                                                         )}
+                                                        <span className={`${progress.campaign?.end_date && new Date(progress.campaign.end_date) < new Date() ? 'text-red-400' : 'text-gray-400'} text-[10px] font-bold flex items-center gap-1`}><Calendar className="w-3 h-3" />{progress.campaign?.end_date && new Date(progress.campaign.end_date) < new Date() ? 'Encerrada em' : 'Expira em'} {new Date(progress.campaign?.end_date || '').toLocaleDateString()}</span>
                                                     </div>
                                                     <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{progress.campaign?.title}</h3>
                                                 </div>

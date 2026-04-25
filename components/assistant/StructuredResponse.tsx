@@ -1,4 +1,4 @@
-﻿import React, { Suspense, useMemo, useState } from 'react';
+import React, { Suspense, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, FileJson } from 'lucide-react';
 
 const LazyJsonViewer = React.lazy(() => import('./JsonViewer').then(module => ({ default: module.JsonViewer })));
@@ -38,7 +38,7 @@ const splitDetails = (text: string) => {
 };
 
 export const StructuredResponse: React.FC<StructuredResponseProps> = ({ text, renderText }) => {
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
 
   const { summary, details } = useMemo(() => splitDetails(text), [text]);
 

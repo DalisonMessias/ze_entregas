@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Bot, Map, Navigation, Save, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Key, Shield, Activity, Trash2 } from 'lucide-react';
+import { Loader2, Bot, Map, Navigation, Save, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Key, Shield, Activity, Trash2, Cpu, Zap } from 'lucide-react';
 import { Button } from './Button';
 import { MobileTabsSelect } from './MobileTabsSelect';
+import { CustomSelect } from './CustomSelect';
 import * as cloud from '../services/cloud';
 import { useDialog } from '../utils/dialogService';
 import { ShopSettings } from '../types';
@@ -65,6 +66,7 @@ export const AdminApiKeysUnified: React.FC = () => {
     const [dataLoading, setDataLoading] = useState(false);
     const [globalKeys, setGlobalKeys] = useState<{ [key: string]: string }>({
         google_gemini: '',
+        groq: '',
         open_route_service: '',
         eleven_labs: '',
         eleven_labs_voice_id: ''
@@ -75,19 +77,23 @@ export const AdminApiKeysUnified: React.FC = () => {
         setLoading(true);
         try {
             // Carregar chaves globais da tabela api_keys
-            const [gemini, ors, eleven] = await Promise.all([
+            const [gemini, groqData, ors, eleven, primaryAI] = await Promise.all([
                 cloud.getApiKey('google_gemini'),
+                cloud.getApiKeyFullDetails('groq'),
                 cloud.getApiKey('open_route_service'),
-                cloud.getApiKeyDetails('eleven_labs')
+                cloud.getApiKeyDetails('eleven_labs'),
+                cloud.getApiKey('ai_primary_provider')
             ]);
 
             setGlobalKeys({
                 google_gemini: gemini || '',
+                groq: groqData?.key || '',
+                groq_enabled: groqData?.is_active ? 'true' : 'false',
+                ai_primary_provider: primaryAI || 'google_gemini',
                 open_route_service: ors || '',
                 eleven_labs: eleven?.key || '',
                 eleven_labs_voice_id: eleven?.voice_id || ''
             });
-
 
             const s = await cloud.getShopSettings();
             setShopSettings(s);
@@ -149,6 +155,12 @@ export const AdminApiKeysUnified: React.FC = () => {
             if (globalKeys.google_gemini !== undefined) {
                 keyUpdatePromises.push(cloud.adminUpdateApiKey('google_gemini', globalKeys.google_gemini));
             }
+            if (globalKeys.groq !== undefined) {
+                // Para o Groq, o status é controlado pela ativação da chave
+                // Se a chave estiver vazia, desativamos
+                const isGroqActive = !!globalKeys.groq && !!globalKeys.groq_enabled;
+                keyUpdatePromises.push(cloud.adminUpdateApiKey('groq', globalKeys.groq, undefined, isGroqActive));
+            }
             if (globalKeys.open_route_service !== undefined) {
                 keyUpdatePromises.push(cloud.adminUpdateApiKey('open_route_service', globalKeys.open_route_service));
             }
@@ -156,10 +168,14 @@ export const AdminApiKeysUnified: React.FC = () => {
                 keyUpdatePromises.push(cloud.adminUpdateApiKey('eleven_labs', globalKeys.eleven_labs, globalKeys.eleven_labs_voice_id));
             }
 
+            // Salvar configuração de IA Principal na tabela api_keys (como uma configuração centralizada)
+            if (globalKeys.ai_primary_provider) {
+                keyUpdatePromises.push(cloud.adminUpdateApiKey('ai_primary_provider', globalKeys.ai_primary_provider));
+            }
 
             await Promise.all(keyUpdatePromises);
 
-            setFeedback({ type: 'success', text: 'Chaves de API salvas com sucesso!' });
+            setFeedback({ type: 'success', text: 'Configurações de IA e Chaves salvas na tabela api_keys!' });
         } catch (e: any) {
             setFeedback({ type: 'error', text: 'Erro ao salvar chaves: ' + e.message });
         } finally {
@@ -229,6 +245,56 @@ export const AdminApiKeysUnified: React.FC = () => {
 
     const renderExternalServicesTab = () => (
         <div className="mt-8 space-y-8">
+            {/* Configuração Global de IA */}
+            <div className="bg-gradient-to-br from-brand-50 to-white dark:from-brand-900/10 dark:to-gray-800 p-6 rounded-2xl border border-brand-100 dark:border-brand-900/30 shadow-sm relative">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Zap className="w-24 h-24 text-brand-600" />
+                </div>
+                
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-6">
+                    <div className="p-2 bg-brand-100 dark:bg-brand-900/40 rounded-lg">
+                        <Cpu className="w-6 h-6 text-brand-600" />
+                    </div>
+                    Orquestração de Inteligência Artificial
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <CustomSelect
+                        label="IA Principal (Preferencial)"
+                        value={globalKeys.ai_primary_provider || 'google_gemini'}
+                        onChange={(val) => setGlobalKeys(prev => ({ ...prev, ai_primary_provider: val }))}
+                        options={[
+                            { label: 'Google Gemini (Padrão)', value: 'google_gemini' },
+                            { label: 'Groq (Llama 3.1 - Ultra Rápida)', value: 'groq' }
+                        ]}
+                    />
+
+                    <div className="flex flex-col justify-end">
+                        <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-600">
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Ativar IA Secundária (Groq)</span>
+                                <span className="text-[10px] text-gray-500 uppercase tracking-tight font-bold">Resiliência de Serviço Ativa</span>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={globalKeys.groq_enabled === 'true'}
+                                    onChange={(e) => setGlobalKeys(prev => ({ ...prev, groq_enabled: e.target.checked ? 'true' : 'false' }))}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/20 rounded-lg">
+                    <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed font-medium">
+                        <span className="font-bold">✨ Como funciona o Fallback:</span> Se a IA Principal falhar (indisponibilidade ou limite de uso), o sistema alterna instantaneamente para a IA Secundária, garantindo que o seu assistente nunca fique fora do ar.
+                    </p>
+                </div>
+            </div>
+
             {/* Google Gemini AI */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
                 <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
@@ -243,7 +309,25 @@ export const AdminApiKeysUnified: React.FC = () => {
                     'AIzaSy...',
                     'https://aistudio.google.com/app/apikey',
                     'Google AI Studio',
-                    'Responsável pela inteligência do Zé Assistente, permitindo que ele gere respostas para o suporte, analise catálogos e interaja com os usuários de forma humana.'
+                    'Provedor robusto para análise de linguagem natural e histórico de conversas longo.'
+                )}
+            </div>
+
+            {/* Groq AI */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                    <div className="p-2 bg-orange-50 dark:bg-orange-900/30 rounded-lg">
+                        <Cpu className="w-6 h-6 text-orange-600" />
+                    </div>
+                    Groq Cloud AI (Llama 3.1 8B)
+                </h2>
+                {renderApiKeyInput(
+                    'groq',
+                    'Chave de API do Groq',
+                    'gsk_...',
+                    'https://console.groq.com/keys',
+                    'Groq Console',
+                    'Ideal para respostas instantâneas devido à baixa latência (modelo llama-3.1-8b-instant).'
                 )}
             </div>
 

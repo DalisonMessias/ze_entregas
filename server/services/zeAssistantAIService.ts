@@ -2,29 +2,32 @@ import type { ProcessMessageResponse, ConversationContext } from '../../types/ze
 
 /**
  * Serviço de IA do Zé Assistente
- * Processa mensagens usando inteligência artificial do Google Gemini
+ * Sistema híbrido com suporte a Google Gemini e Groq (Llama 3)
  */
 export class ZeAssistantAIService {
-
 
     constructor() {
         console.log('🤖 ZeAssistantAIService inicializado');
     }
 
     /**
-     * Processa mensagem com IA
+     * Processa mensagem com IA (Suporta Gemini e Groq com Fallback)
      */
     async processMessage(
         messageText: string,
         storeContext: any,
         conversationContext: ConversationContext,
-        apiKey: string,
+        apiKeys: { gemini?: string; groq?: string },
+        primaryProvider: 'google_gemini' | 'groq' = 'google_gemini',
         history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
     ): Promise<ProcessMessageResponse> {
 
-        // Verificar se IA está configurada
-        if (!apiKey) {
-            console.warn('IA não configurada - API Key ausente');
+        const groqEnabled = !!apiKeys.groq;
+        const geminiEnabled = !!apiKeys.gemini;
+
+        // Verificar se alguma IA está configurada
+        if (!geminiEnabled && !groqEnabled) {
+            console.warn('Nenhuma IA configurada - API Keys ausentes');
             return {
                 success: false,
                 responseText: 'Desculpe, o assistente de IA não está disponível no momento (configuração pendente).',
@@ -36,23 +39,41 @@ export class ZeAssistantAIService {
 
         try {
             const startTime = Date.now();
-
-            // Montar prompt de sistema
             const systemPrompt = this.buildSystemPrompt(storeContext);
-            
-            // Log de Debug do Conhecimento injetado
-            const knowledgeCount = storeContext.knowledgeBase?.length || 0;
-            console.log(`[ZeAssistantAI] 🧠 Injetando ${knowledgeCount} itens de conhecimento no prompt.`);
-            if (knowledgeCount > 0) {
-                const firstItem = storeContext.knowledgeBase[0];
-                console.log(`[ZeAssistantAI] 🔍 Amostra de Conhecimento: "${firstItem.title}"`);
-            }
-
-            // Montar prompt do usuário
             const userPrompt = this.buildUserPrompt(messageText, conversationContext);
 
-            // Chamar API do Gemini com Histórico
-            const response = await this.callAIAPI(apiKey, systemPrompt, userPrompt, history);
+            let response: any = null;
+            let usedProvider = primaryProvider;
+
+            // Lógica de Orquestração com Fallback
+            try {
+                if (primaryProvider === 'groq' && groqEnabled) {
+                    console.log('[ZeAssistantAI] 🚀 Usando Groq como provedor principal');
+                    response = await this.callGroqAPI(apiKeys.groq!, systemPrompt, userPrompt, history);
+                } else if (geminiEnabled) {
+                    console.log('[ZeAssistantAI] 🚀 Usando Gemini como provedor principal');
+                    response = await this.callGeminiAPI(apiKeys.gemini!, systemPrompt, userPrompt, history);
+                } else if (groqEnabled) {
+                    console.log('[ZeAssistantAI] 🔄 Gemini indisponível, usando Groq como fallback');
+                    usedProvider = 'groq';
+                    response = await this.callGroqAPI(apiKeys.groq!, systemPrompt, userPrompt, history);
+                }
+            } catch (error) {
+                console.error(`[ZeAssistantAI] ❌ Erro no provedor principal (${primaryProvider}):`, error);
+                
+                // Tentar o provedor secundário em caso de falha do primeiro
+                if (primaryProvider === 'google_gemini' && groqEnabled) {
+                    console.log('[ZeAssistantAI] 🔄 Fallback automático para Groq...');
+                    usedProvider = 'groq';
+                    response = await this.callGroqAPI(apiKeys.groq!, systemPrompt, userPrompt, history);
+                } else if (primaryProvider === 'groq' && geminiEnabled) {
+                    console.log('[ZeAssistantAI] 🔄 Fallback automático para Gemini...');
+                    usedProvider = 'google_gemini';
+                    response = await this.callGeminiAPI(apiKeys.gemini!, systemPrompt, userPrompt, history);
+                } else {
+                    throw error;
+                }
+            }
 
             const processingTime = Date.now() - startTime;
 
@@ -65,303 +86,166 @@ export class ZeAssistantAIService {
                 confidenceScore: response.confidence,
                 metadata: {
                     model: response.model || 'unknown',
+                    provider: usedProvider,
                     processingTimeMs: processingTime,
                     tokens: response.tokens
                 }
             };
 
         } catch (error) {
-            console.error('Erro ao processar com Gemini:', error);
-            // Detectar se é erro de quota (429) para mensagem específica
-            const isQuotaError = error instanceof Error && (
-                error.message.includes('429') ||
-                error.message.includes('quota') ||
-                error.message.includes('Quota exceeded')
-            );
+            console.error('Erro crítico no processamento de IA:', error);
             return {
                 success: false,
-                responseText: isQuotaError
-                    ? 'Estou com muitas conversas ao mesmo tempo agora. Por favor, tente novamente em alguns instantes! 🙏'
-                    : 'Tive um problema técnico aqui. Por favor, tente novamente em breve!',
+                responseText: 'Tive um problema técnico ao processar sua solicitação. Por favor, tente novamente em instantes!',
                 responseType: 'AI',
                 shouldHandoff: false,
-                handoffReason: 'Erro na IA'
+                handoffReason: 'Erro total na IA'
             };
         }
     }
 
     /**
-     * Monta prompt de sistema com dados da loja
+     * Monta o prompt do sistema (instruções base)
      */
     private buildSystemPrompt(storeContext: any): string {
         const isClosed = storeContext.isClosed === true;
-        const closedInstruction = storeContext.closedInstruction || 'No momento estamos fechados, mas posso te ajudar com dúvidas sobre o nosso cardápio!';
         const botName = storeContext.assistantName || 'Assistente';
-        const storeName = storeContext.storeName || 'nossa loja';
-
-        // Base de Conhecimento Estruturada
+        const storeName = storeContext.storeName || 'Loja';
         const knowledgeBase = this.formatKnowledgeBase(storeContext.knowledgeBase, storeContext.products);
 
-        // Formatar horários de funcionamento
-        const openingHours = storeContext.openingHours
-            ? (typeof storeContext.openingHours === 'string'
-                ? storeContext.openingHours
-                : JSON.stringify(storeContext.openingHours, null, 2))
-            : 'Não informado';
+        return `Você é ${botName}, assistente da loja "${storeName}" no WhatsApp.
+Responda de forma simpática, direta e natural.
 
-        const prompt = `Você é ${botName}, assistente da loja "${storeName}" no WhatsApp.
-Responda de forma simpática, direta e natural — como uma boa atendente real, sem ser formal demais nem exagerada.
-
-${storeContext.aiInstructions ? `INSTRUÇÕES DO LOJISTA (PRIORIDADE MÁXIMA):\n"${storeContext.aiInstructions}"\n` : ''}
+${storeContext.aiInstructions ? `INSTRUÇÕES DO LOJISTA:\n"${storeContext.aiInstructions}"\n` : ''}
 STATUS DA LOJA: ${isClosed ? 'FECHADA AGORA' : 'ABERTA'}
-${isClosed ? `AVISO: A loja está fechada. Informe isso com simpatia: "${closedInstruction}". Pode tirar dúvidas sobre produtos e preços, mas não pode processar pedidos.` : ''}
+${isClosed ? `AVISO: A loja está fechada agora. Informe isso gentilmente se necessário.` : ''}
 
 INFORMAÇÕES DA LOJA:
-- Nome: ${storeName}
 - Endereço: ${storeContext.address || 'Não informado'}
-- Telefone: ${storeContext.phone || 'Não informado'}
-- Horários de Funcionamento: ${openingHours}
+- Horários: ${storeContext.openingHours ? JSON.stringify(storeContext.openingHours) : 'Não informado'}
+- Catálogo: ${storeContext.catalogUrl || 'Não informado'}
 
-LINK DO CATÁLOGO DIGITAL:
-${storeContext.catalogUrl || 'Não informado'}
-(Se o cliente pedir o link, o catálogo, o site ou quiser ver os produtos com fotos, envie este link.)
-
-CATÁLOGO E CONHECIMENTO DA LOJA:
+BASE DE CONHECIMENTO:
 ${knowledgeBase}
 
-REGRAS DE COMPORTAMENTO:
-1. TOM: Seja simpática, leve e direta. Fale como uma atendente real — nem robótico, nem informal demais. Respostas curtas (2 a 4 linhas).
-2. SEM CUMPRIMENTOS DE ABERTURA: Nunca inicie respostas com "Opa!", "E aí!", "Olá!", "Oi!" ou similares. Vá direto à resposta.
-3. EMOJIS: Use com moderação — até 2 emojis por mensagem, apenas quando fizerem sentido. Evite excesso.
-4. NUNCA invente preços, produtos ou informações que não estejam no catálogo acima.
-5. ATENDIMENTO HUMANO: Se não souber responder, diga: "Essa pergunta precisa de um atendente. Quer que eu chame alguém da nossa equipe?" e adicione a tag [FALAR_COM_HUMANO] no final.
-6. FORMATAÇÃO: Use listas simples e negrito (*texto*) para produtos. NUNCA envie JSON ou blocos de código.
-7. SEU PAPEL É INFORMATIVO: Não inicie pedidos. Encaminhe para o link da loja quando necessário.
-8. HORÁRIOS: Use sempre os horários reais informados acima. Nunca escreva placeholders como [horário].`;
-
-        return prompt;
+REGRAS:
+1. Seja breve (2-4 linhas).
+2. Não use saudações formais repetitivas.
+3. Se o cliente quiser falar com alguém humano, use a tag [FALAR_COM_HUMANO].
+4. Nunca invente informações. Se não souber, peça para aguardar um atendente.`;
     }
 
     /**
-     * Formata a Base de Conhecimento Completa para o prompt
+     * Monta o prompt do usuário com contexto
      */
-    private formatKnowledgeBase(knowledge: any[], legacyProducts: any[]): string {
-        let output = '';
-
-        // Prioridade 1: Dados da Nova Base de Conhecimento
-        if (knowledge && Array.isArray(knowledge) && knowledge.length > 0) {
-            const products = knowledge.filter(k => k.content_type === 'PRODUCT');
-            const faqs = knowledge.filter(k => k.content_type === 'FAQ');
-            const general = knowledge.filter(k => !['PRODUCT', 'FAQ'].includes(k.content_type));
-
-            if (products.length > 0) {
-                output += `🛒 PRODUTOS E PREÇOS:\n${products.map(p => `- *${p.title}*: ${p.content}`).join('\n')}\n\n`;
-            }
-
-            if (faqs.length > 0) {
-                output += `❓ PERGUNTAS FREQUENTES (FAQ):\n${faqs.map(f => `P: ${f.title}\nR: ${f.content}`).join('\n')}\n\n`;
-            }
-
-            if (general.length > 0) {
-                output += `ℹ️ INFORMAÇÕES GERAIS:\n${general.map(g => `- ${g.title}: ${g.content}`).join('\n')}\n\n`;
-            }
-        } 
-        
-        // Prioridade 2: Fallback para Catalogo Legado (se a knowledge base estiver vazia)
-        if (!output && legacyProducts && legacyProducts.length > 0) {
-            output += `🛒 CATÁLOGO DE PRODUTOS:\n${this.formatProducts(legacyProducts)}`;
-        }
-
-        return output || 'Não temos informações detalhadas carregadas no momento, mas estamos à disposição!';
-    }
-
-    /**
-     * Monta prompt do usuário com histórico
-     */
-    private buildUserPrompt(
-        messageText: string,
-        context: ConversationContext
-    ): string {
+    private buildUserPrompt(messageText: string, context: ConversationContext): string {
         let prompt = '';
-
-        // Adicionar contexto de pedido em andamento
         if (context.currentOrder && context.currentOrder.items.length > 0) {
-            prompt += `PEDIDO EM ANDAMENTO:\n`;
-            prompt += `Itens: ${context.currentOrder.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}\n`;
-            if (context.currentOrder.orderType) {
-                prompt += `Tipo: ${context.currentOrder.orderType === 'DELIVERY' ? 'Entrega' : 'Retirada'}\n`;
-            }
-            prompt += '\n';
+            prompt += `PEDIDO ATUAL: ${context.currentOrder.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}\n\n`;
         }
-
-        // Adicionar última intenção
-        if (context.lastIntent) {
-            prompt += `Última intenção detectada: ${context.lastIntent}\n\n`;
-        }
-
-        prompt += `MENSAGEM DO CLIENTE:\n${messageText}`;
-
+        prompt += `MENSAGEM: ${messageText}`;
         return prompt;
     }
 
     /**
-     * Formata produtos para o prompt
+     * Formata base de conhecimento
      */
-    private formatProducts(products: any[]): string {
-        if (!products || !Array.isArray(products) || products.length === 0) {
-            return 'Nenhum produto disponível no momento.';
+    private formatKnowledgeBase(knowledge: any[], products: any[]): string {
+        let output = '';
+        if (knowledge && knowledge.length > 0) {
+            output += knowledge.map(k => `- ${k.title}: ${k.content}`).join('\n');
+        } else if (products && products.length > 0) {
+            output += products.map(p => `- ${p.name}: R$ ${p.price}`).join('\n');
         }
-
-        // Formata produtos com segurança para evitar erros de renderização no prompt
-        return products
-            .filter(p => p && p.name) // Garante que o produto existe e tem nome
-            .map(p => {
-                const name = p.name || 'Produto sem nome';
-                const price = typeof p.price === 'number' ? p.price.toFixed(2) : (parseFloat(p.price) || 0).toFixed(2);
-                const desc = p.description ? ` (${p.description})` : '';
-                const cat = p.category?.name || p.category_name || '';
-                
-                return `- ${cat ? `[${cat}] ` : ''}*${name}* - R$ ${price}${desc}`;
-            })
-            .join('\n');
+        return output || 'Informações indisponíveis.';
     }
 
     /**
-     * Chama API do Google Gemini
+     * Chama API do Gemini (helper para callAIAPI)
      */
+    private async callGeminiAPI(apiKey: string, systemPrompt: string, userPrompt: string, history: any[]) {
+        return this.callAIAPI(apiKey, systemPrompt, userPrompt, history);
+    }
+
     /**
-     * Chama API do Google Gemini via REST com Fallback de Modelos
+     * Chama API da Groq
      */
-    private async callAIAPI(
-        apiKey: string,
-        systemPrompt: string,
-        userPrompt: string,
-        history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
-    ): Promise<{
-        text: string;
-        confidence: number;
-        shouldHandoff: boolean;
-        handoffReason?: string;
-        tokens?: number;
-        model?: string;
-    }> {
-        // Ordem de preferência de modelos com fallback em cascata para evitar erro 429
-        const modelOrder = [
-            'gemini-3.1-pro',
-            'gemini-3.1-flash-image',
-            'gemini-3.0-pro',
-            'gemini-3.0-flash',
-            'gemini-2.5-pro',
-            'gemini-2.5-flash'
+    private async callGroqAPI(apiKey: string, systemPrompt: string, userPrompt: string, history: any[]) {
+        const model = "llama-3.1-8b-instant";
+        const messages = [
+            { role: "system", content: systemPrompt },
+            ...history.map(h => ({
+                role: h.role === 'model' ? 'assistant' : 'user',
+                content: h.parts[0].text
+            })),
+            { role: "user", content: userPrompt }
         ];
 
-        let lastError: any = null;
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({ model, messages, temperature: 0.7 })
+        });
 
-        for (const model of modelOrder) {
+        if (!response.ok) throw new Error(`Erro Groq: ${response.status}`);
+        const data = await response.json();
+        const text = data.choices[0]?.message?.content || "";
+        
+        return {
+            text: text.replace(/\[FALAR_COM_HUMANO\]/gi, '').trim(),
+            confidence: 0.9,
+            shouldHandoff: text.includes('[FALAR_COM_HUMANO]'),
+            handoffReason: text.includes('[FALAR_COM_HUMANO]') ? 'IA sugeriu humano' : undefined,
+            tokens: data.usage?.total_tokens,
+            model
+        };
+    }
+
+    /**
+     * Implementação REST do Gemini com modelos em cascata
+     */
+    private async callAIAPI(apiKey: string, systemPrompt: string, userPrompt: string, history: any[]) {
+        const models = ['gemini-1.5-pro', 'gemini-1.5-flash'];
+        let lastError = null;
+
+        for (const model of models) {
             try {
-                console.log(`[ZeAssistantAI] Tentando modelo: ${model}`);
-
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-                const bodyPayload: any = {
-                    contents: [
-                        ...history,
-                        {
-                            role: 'user',
-                            parts: [{ text: userPrompt }]
-                        }
-                    ],
-                    generationConfig: {
-                        temperature: 0.7,
-                        maxOutputTokens: 500
-                    }
-                };
-
-                if (systemPrompt) {
-                    bodyPayload.system_instruction = {
-                        parts: [{ text: systemPrompt }]
-                    };
-                }
-
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(bodyPayload)
+                    body: JSON.stringify({
+                        contents: [...history, { role: 'user', parts: [{ text: userPrompt }] }],
+                        system_instruction: { parts: [{ text: systemPrompt }] }
+                    })
                 });
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    let errorJson;
-                    try { errorJson = JSON.parse(errorText); } catch { }
-                    const errorMessage = errorJson?.error?.message || errorText || response.statusText;
-
-                    console.warn(`[ZeAssistantAI] Falha no modelo ${model} (HTTP ${response.status}):`, errorMessage);
-                    throw new Error(errorMessage);
-                }
-
+                if (!response.ok) throw new Error(`Erro Gemini ${model}: ${response.status}`);
                 const data = await response.json();
-
-                // Extração resiliente de texto conforme cloud.ts
-                let aiText = "";
-                if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-                    aiText = data.candidates[0].content.parts[0].text || "";
-                }
-
-                if (!aiText) {
-                    throw new Error("Resposta Vazia da IA");
-                }
-
-                // Detectar se IA sugere handoff
-                const shouldHandoff = aiText.toLowerCase().includes('[transferir]') ||
-                    aiText.toLowerCase().includes('[humano]');
-
-                const tokenCount = data?.usageMetadata?.totalTokenCount || 0;
-
-                console.log(`[ZeAssistantAI] Sucesso com modelo ${model}`);
+                const aiText = data.candidates[0]?.content?.parts[0]?.text || "";
 
                 return {
-                    text: aiText.replace(/\[(transferir|humano)\]/gi, '').trim(),
+                    text: aiText.replace(/\[FALAR_COM_HUMANO\]/gi, '').trim(),
                     confidence: 0.9,
-                    shouldHandoff,
-                    handoffReason: shouldHandoff ? 'IA sugeriu transferência' : undefined,
-                    tokens: tokenCount,
-                    model: model
+                    shouldHandoff: aiText.includes('[FALAR_COM_HUMANO]'),
+                    handoffReason: aiText.includes('[FALAR_COM_HUMANO]') ? 'IA sugeriu humano' : undefined,
+                    tokens: data.usageMetadata?.totalTokenCount,
+                    model
                 };
-
-            } catch (e: any) {
-                console.warn(`[ZeAssistantAI] Erro ao processar ${model}:`, e.message);
+            } catch (e) {
                 lastError = e;
-                // Continua para o próximo loop
             }
         }
-
-        console.error('[ZeAssistantAI] Todos os modelos falharam.');
-        throw lastError || new Error("Falha em todos os modelos de IA");
+        throw lastError;
     }
 
-    /**
-     * Extrai intenção da mensagem
-     */
     async extractIntent(messageText: string): Promise<string | null> {
-        // Análise simples de intenções comuns
-        const normalizedText = messageText.toLowerCase();
-
-        if (normalizedText.includes('pedido') || normalizedText.includes('pedir')) {
-            return 'FAZER_PEDIDO';
-        }
-        if (normalizedText.includes('preço') || normalizedText.includes('quanto')) {
-            return 'CONSULTAR_PRECO';
-        }
-        if (normalizedText.includes('horário') || normalizedText.includes('abre')) {
-            return 'CONSULTAR_HORARIO';
-        }
-        if (normalizedText.includes('entrega') || normalizedText.includes('delivery')) {
-            return 'CONSULTAR_ENTREGA';
-        }
-        if (normalizedText.includes('cardápio') || normalizedText.includes('produtos')) {
-            return 'VER_CARDAPIO';
-        }
-
+        const text = messageText.toLowerCase();
+        if (text.includes('pedido') || text.includes('quero comprar')) return 'FAZER_PEDIDO';
+        if (text.includes('horário') || text.includes('abre')) return 'CONSULTAR_HORARIO';
         return null;
     }
 }

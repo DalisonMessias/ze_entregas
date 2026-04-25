@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -33,8 +33,8 @@ import {
   AssistantStoreInsights,
   buildSystemPrompt,
   buildUserPrompt,
-  getQuickSuggestions,
-  promptLibrary
+  getPromptLibrary,
+  getQuickSuggestions
 } from './assistant/assistantPrompts';
 import { getRoleLabel } from '../utils/accessControl';
 
@@ -413,6 +413,11 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
         inputRef.current.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
     }
   }, [input]);
+ 
+  const userPromptLibrary = useMemo(
+    () => getPromptLibrary(userRole),
+    [userRole]
+  );
 
   const suggestions = useMemo(
     () => getQuickSuggestions(userRole, collaboratorFunction),
@@ -772,7 +777,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                     Biblioteca de Prompts
                   </h3>
                   <div className="mt-4 space-y-3">
-                    {Object.entries(promptLibrary).map(([category, prompts]) => (
+                    {Object.entries(userPromptLibrary).map(([category, prompts]) => (
                       <PromptCategoryCard
                         key={category}
                         title={category}
@@ -811,7 +816,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                     <Sparkles className="h-4 w-4 text-brand-600" />
                   </div>
                   <div className="mt-4 space-y-3">
-                    {Object.entries(promptLibrary).map(([category, prompts]) => (
+                    {Object.entries(userPromptLibrary).map(([category, prompts]) => (
                       <PromptCategoryCard
                         key={category}
                         title={category}
