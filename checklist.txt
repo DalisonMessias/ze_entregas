@@ -31,3 +31,5 @@
 [25/04/2026] Alterada visibilidade padrão da seção 'Ver detalhes' no assistente para expandido
 
 [25/04/2026] Implementada biblioteca de prompts dinâmica (Biblioteca de Prompts) que muda de acordo com o papel do usuário (admin, lojista, entregador)
+
+[25/04/2026] Corrigida exibição de campanhas de bônus expiradas no dashboard do entregador (agora exibe 'CAMPANHA ENCERRADA' após a data de expiração)
