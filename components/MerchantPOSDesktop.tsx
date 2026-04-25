@@ -12,7 +12,6 @@ import { ReceiptModal } from './ReceiptModal';
 import html2canvas from 'html2canvas';
 import { useDialog } from '../utils/dialogService'; // Import useDialog
 import { useDemoMode } from '../hooks/useDemoMode';
-import { useNotification } from '../contexts/NotificationContext';
 import { useDynamicFont } from '../hooks/useDynamicFont';
 import { SummaryReportModal } from './SummaryReportModal';
 import { QrCodeLogsModal } from './QrCodeLogsModal';
@@ -322,6 +321,15 @@ interface PartialPayment {
 
 type POSStep = 'loading' | 'activation_intro' | 'activating_animation_1' | 'create_pin' | 'confirm_pin' | 'pin_lock' | 'home' | 'amount' | 'split_config' | 'payment_list' | 'processing' | 'success' | 'error' | 'history' | 'settings' | 'inactive' | 'sales_simulator' | 'choose_sale_type' | 'select_associated_store' | 'select_order_for_store' | 'activating_animation_2';
 
+const Keypad: React.FC<{
+    onKeyPress?: (key: string) => void;
+    onConfirm?: () => void;
+    onClear?: () => void;
+    onBackspace?: () => void;
+    confirmDisabled?: boolean;
+    showConfirm?: boolean;
+}> = () => null;
+
 const InfoRow = ({ label, value, onCopy }: { label: string, value: string | undefined, onCopy?: (value: string) => void }) => (
     <div className="relative">
         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{label}</label>
@@ -510,16 +518,16 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
     const [showScrollButtons, setShowScrollButtons] = useState(false);
 
     const handlePinVerify = () => handlePinSubmit(pinEntry);
+    const handleKeypadPress = () => undefined;
+    const handleKeypadClear = () => undefined;
+    const handleKeypadBackspace = () => undefined;
 
     // Ouvinte para teclado físico (Desktop)
     useEffect(() => {
-        const handlePhysicalKeyboard = (e: KeyboardEvent) => {
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-            const key = e.key;
-            const code = e.code;
-
+        const handlePhysicalKeyboard = () => {
+            return undefined;
             // Suporte robusto para linha numérica superior (Digit0-9) e Numpad
+            /* global keyboard shortcuts removed
             if (/^\d$/.test(key)) {
                 handleKeypadPress(key);
             } else if (code.startsWith('Digit')) {
@@ -541,12 +549,11 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 else if (step === 'confirm_pin') handleCreatePinConfirm();
             } else if (key === 'Escape' || code === 'Escape') {
                 handleGoBack(onClose);
-            }
+            */
         };
 
-        window.addEventListener('keydown', handlePhysicalKeyboard);
-        return () => window.removeEventListener('keydown', handlePhysicalKeyboard);
-    }, [step, amount, pinEntry, newPin, confirmPin, simulatorAmount, showHistory, onClose]);
+        return undefined;
+    }, []);
 
     // tutorialSteps moved to hook
 
@@ -589,21 +596,90 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
         return () => clearTimeout(timer);
     }, [partialAmounts, step]); // Re-check when amounts change or when step changes
 
-    // Define showKeypad logic based on steps where input is needed
-    // Modified to NOT show keypad at bottom if it's already shown on side (Desktop + amount step)
-    const showKeypad = useMemo(() => {
-        const keypadSteps = ['amount', 'pin_lock', 'create_pin', 'confirm_pin', 'sales_simulator'];
-        if (!keypadSteps.includes(step)) return false;
+    useEffect(() => {
+        const focusMap: Partial<Record<POSStep, React.RefObject<HTMLInputElement>>> = {
+            amount: amountInputRef,
+            split_config: splitAmountInputRef,
+            pin_lock: pinInputRef,
+            create_pin: pinInputRef,
+            confirm_pin: pinInputRef,
+            sales_simulator: simulatorInputRef
+        };
 
-        // If desktop and step is 'amount', we show it on the side, not bottom
-        if (isDesktop && step === 'amount') return false;
+        if (step === 'sales_simulator' && showHistory) return;
 
-        return true;
-    }, [step, isDesktop]);
+        const targetRef = focusMap[step];
+        if (!targetRef?.current) return;
 
-    // Lockout effects removed (handled by hook)
+        const timer = window.setTimeout(() => {
+            targetRef.current?.focus();
+            targetRef.current?.select();
+        }, 0);
 
+        return () => window.clearTimeout(timer);
+    }, [step, showHistory]);
 
+    const handleAmountInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setAmount(formatDigitsAsCurrency(event.target.value));
+    };
+
+    const handleSimulatorInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSimulatorAmount(formatDigitsAsCurrency(event.target.value));
+    };
+
+    const handlePinInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const value = sanitizePinInput(event.target.value);
+
+        if (step === 'pin_lock') {
+            const pinLength = Math.max(PIN_MIN_LENGTH, terminal?.pin_code?.length || PIN_MIN_LENGTH);
+            setPinEntry(value.slice(0, pinLength));
+            return;
+        }
+
+        if (step === 'create_pin') {
+            setNewPin(value);
+            return;
+        }
+
+        if (step === 'confirm_pin') {
+            setConfirmPin(value);
+        }
+    };
+
+    const handleAmountKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            handleContinueFromAmount();
+        }
+    };
+
+    const handleSplitAmountKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            void addPartialAmount();
+        }
+    };
+
+    const handleSimulatorKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            void handleSaveSimulation();
+        }
+    };
+
+    const handlePinKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key !== 'Enter') return;
+
+        event.preventDefault();
+
+        if (step === 'pin_lock') {
+            handlePinVerify();
+        } else if (step === 'create_pin') {
+            void handleCreatePin();
+        } else if (step === 'confirm_pin') {
+            void handleCreatePinConfirm();
+        }
+    };
 
     const handleSaveSimulation = async () => {
         const saleValue = parseCurrency(simulatorAmount);
@@ -656,19 +732,6 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
             }
         }
     };
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (splitButtonRef.current && !splitButtonRef.current.contains(event.target as Node)) {
-                setIsSplitButtonActive(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
 
     // confirmPayment removed (handled by hook)
 
@@ -753,7 +816,6 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
     // resetFlow moved to hook
 
     const handleSplitClick = () => {
-        setIsSplitButtonActive(prev => !prev);
         if (parseCurrency(amount) > 0) {
             setTotalToSplit(parseCurrency(amount));
             setPartialAmounts([]);
@@ -784,8 +846,6 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
         setPartialAmounts(prev => [...prev, { id: crypto.randomUUID(), amount: currentAmount, status: 'unpaid' }]);
         setAmount('0,00'); // Reset amount input
     };
-
-    // Keypad handlers moved to hook
 
     const closePaymentOverlay = () => {
         setActivePayment(null);
@@ -1249,10 +1309,57 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
             case 'create_pin':
             case 'confirm_pin':
             case 'pin_lock':
+                const pinLength = Math.max(PIN_MIN_LENGTH, terminal?.pin_code?.length || PIN_MIN_LENGTH);
+                const pinValue = step === 'pin_lock' ? pinEntry : step === 'create_pin' ? newPin : confirmPin;
+                const pinTitle = step === 'pin_lock' ? 'Digite seu PIN' : step === 'create_pin' ? 'Criar PIN' : 'Confirmar PIN';
+                const pinDescription = step === 'pin_lock'
+                    ? 'Use o teclado nativo do sistema para liberar o terminal.'
+                    : step === 'create_pin'
+                        ? 'Defina um PIN numérico com 4 a 6 dígitos.'
+                        : 'Digite novamente o PIN para confirmar.';
+                const pinAction = step === 'pin_lock'
+                    ? handlePinVerify
+                    : step === 'create_pin'
+                        ? handleCreatePin
+                        : handleCreatePinConfirm;
+                const pinDisabled = isLockedOut ||
+                    (step === 'pin_lock' && pinEntry.length !== pinLength) ||
+                    (step === 'create_pin' && !isNewPinValid) ||
+                    (step === 'confirm_pin' && !isConfirmPinValid);
+
                 return (
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900">
-                        <Loader2 className="w-8 h-8 animate-spin text-brand-500 mb-4" />
-                        <p className="text-gray-500">Acessando PDV...</p>
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900 text-center">
+                        <div className="w-20 h-20 rounded-full bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center mb-6">
+                            <Lock className="w-10 h-10 text-brand-600 dark:text-brand-400" />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">{pinTitle}</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-xs">{pinDescription}</p>
+                        <input
+                            ref={pinInputRef}
+                            type="password"
+                            value={pinValue}
+                            onChange={handlePinInputChange}
+                            onKeyDown={handlePinKeyDown}
+                            inputMode="numeric"
+                            pattern="\d*"
+                            autoComplete="one-time-code"
+                            maxLength={step === 'pin_lock' ? pinLength : PIN_MAX_LENGTH}
+                            placeholder={step === 'pin_lock' ? '••••' : '0000'}
+                            aria-label={pinTitle}
+                            className="w-full max-w-xs rounded-2xl border-2 border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-4 text-center text-3xl font-black tracking-[0.4em] text-gray-900 dark:text-white outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                        />
+                        {step === 'pin_lock' && isLockedOut && (
+                            <p className="mt-4 text-sm font-bold text-red-500">
+                                Terminal bloqueado. Tente novamente em {lockoutCountdown}s.
+                            </p>
+                        )}
+                        <Button
+                            onClick={() => void pinAction()}
+                            disabled={pinDisabled}
+                            className="w-full max-w-xs mt-6 py-4 text-lg shadow-xl shadow-brand-500/20"
+                        >
+                            Confirmar
+                        </Button>
                     </div>
                 );
 
@@ -1312,28 +1419,37 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                         <div className={`${isDesktop ? 'flex flex-row items-center justify-center gap-12 h-full' : 'flex flex-col'}`}>
                             <div className="flex-1 max-w-md">
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor a Cobrar</p>
-                                <h1
-                                    className="font-black text-gray-900 dark:text-white my-4 tracking-tighter transition-all duration-200"
-                                    style={{ fontSize: `${isDesktop ? amountFontSize * 1.5 : amountFontSize}px` }}
-                                >
-                                    <span className="text-2xl align-baseline mr-1 text-gray-400 font-bold">R$</span>{amount}
-                                </h1>
-                                <div
-                                    ref={splitButtonRef}
-                                    className={`mx-auto mt-4 transition-opacity duration-300 ${parseCurrency(amount) > 0 ? 'opacity-100' : 'opacity-0 invisible'}`}
-                                    aria-hidden={parseCurrency(amount) <= 0}
-                                >
+                                <div className="my-4">
+                                    <label className="sr-only" htmlFor="pos-amount-input-desktop">Valor a cobrar</label>
+                                    <div className="flex items-center justify-center gap-2">
+                                        <span className="text-2xl align-baseline text-gray-400 font-bold">R$</span>
+                                        <input
+                                            id="pos-amount-input-desktop"
+                                            ref={amountInputRef}
+                                            value={amount}
+                                            onChange={handleAmountInputChange}
+                                            onKeyDown={handleAmountKeyDown}
+                                            inputMode="decimal"
+                                            enterKeyHint="done"
+                                            autoFocus
+                                            aria-label="Valor a cobrar"
+                                            className="w-full max-w-xs bg-transparent text-center font-black text-gray-900 dark:text-white tracking-tighter outline-none"
+                                            style={{ fontSize: `${isDesktop ? amountFontSize * 1.5 : amountFontSize}px` }}
+                                        />
+                                    </div>
+                                </div>
+                                <div className={`mx-auto mt-4 transition-opacity duration-300 ${parseCurrency(amount) > 0 ? 'opacity-100' : 'opacity-0 invisible'}`} aria-hidden={parseCurrency(amount) <= 0}>
                                     <Button
-                                        variant={isSplitButtonActive ? 'primary' : 'outline'}
+                                        variant="outline"
                                         size="sm"
                                         onClick={handleSplitClick}
-                                        className={`rounded-xl px-6 ${isSplitButtonActive ? 'bg-red-500 hover:bg-red-600 text-white' : ''}`}
+                                        className="rounded-xl px-6"
                                     >
                                         <Users className="w-4 h-4 mr-2" /> Dividir Conta
                                     </Button>
 
                                     {/* Add Continue Button for Desktop here if needed, or rely on Keypad Confirm */}
-                                    {isDesktop && parseCurrency(amount) > 0 && (
+                                    {parseCurrency(amount) > 0 && (
                                         <div className="mt-8">
                                             <Button
                                                 onClick={handleContinueFromAmount}
@@ -1348,7 +1464,7 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                             </div>
 
                             {/* Desktop Side Keypad */}
-                            {isDesktop && (
+                            {false && (
                                 <div className="w-[350px] shrink-0 animate-in slide-in-from-right-10">
                                     <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-3xl shadow-inner">
                                         <Keypad
@@ -1380,11 +1496,23 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                             }
                         </div>
 
-                        {remainingToSplit > 0 &&
-                            <h1 className="text-6xl font-black text-gray-900 dark:text-white my-4 tracking-tighter">
-                                <span className="text-2xl align-baseline mr-1 text-gray-400 font-bold">R$</span>{amount}
-                            </h1>
-                        }
+                        <div className="my-4 px-4">
+                            <label className="sr-only" htmlFor="pos-split-amount-input-desktop">Valor da parcela</label>
+                            <div className="flex items-center justify-center gap-2">
+                                <span className="text-2xl align-baseline text-gray-400 font-bold">R$</span>
+                                <input
+                                    id="pos-split-amount-input-desktop"
+                                    ref={splitAmountInputRef}
+                                    value={amount}
+                                    onChange={handleAmountInputChange}
+                                    onKeyDown={handleSplitAmountKeyDown}
+                                    inputMode="decimal"
+                                    enterKeyHint="done"
+                                    aria-label="Valor da parcela"
+                                    className="w-full max-w-xs bg-transparent text-center text-5xl font-black tracking-tighter text-gray-900 dark:text-white outline-none"
+                                />
+                            </div>
+                        </div>
 
                         <div className="flex-1 relative mb-2">
                             <div ref={scrollContainerRef} className="absolute inset-0 bg-gray-50 dark:bg-gray-800 rounded-2xl p-2 overflow-y-auto custom-scrollbar">
@@ -1711,9 +1839,23 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                             <>
                                 <div className="flex-1 flex flex-col justify-center text-center px-4">
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor da Venda</p>
-                                    <h1 className="text-3xl font-black text-gray-900 dark:text-white my-4 tracking-tighter">
-                                        <span className="text-2xl align-baseline mr-1 text-gray-400 font-bold">R$</span>{simulatorAmount}
-                                    </h1>
+                                    <div className="my-4">
+                                        <label className="sr-only" htmlFor="pos-simulator-amount-input-desktop">Valor da venda</label>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="text-2xl align-baseline text-gray-400 font-bold">R$</span>
+                                            <input
+                                                id="pos-simulator-amount-input-desktop"
+                                                ref={simulatorInputRef}
+                                                value={simulatorAmount}
+                                                onChange={handleSimulatorInputChange}
+                                                onKeyDown={handleSimulatorKeyDown}
+                                                inputMode="decimal"
+                                                enterKeyHint="done"
+                                                aria-label="Valor da venda"
+                                                className="w-full max-w-xs bg-transparent text-center text-3xl font-black tracking-tighter text-gray-900 dark:text-white outline-none"
+                                            />
+                                        </div>
+                                    </div>
                                     <div className="flex items-center justify-center gap-4 my-4">
                                         <span className={`text-sm font-bold ${feePayer === 'seller' ? 'text-brand-500' : 'text-gray-400'}`}>Vendedor</span>
                                         <label className="relative inline-flex items-center cursor-pointer">
@@ -1772,9 +1914,8 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 return <div className="p-4 pt-20 text-center text-sm text-gray-400"><SubPageHeader title={step} onBack={resetFlow} />Etapa não implementada: {step}</div>;
         }
     };
-
-
-    const showFooter = step === 'amount' || step === 'split_config' || step === 'payment_list';
+    const showKeypad = false;
+    const showFooter = step === 'split_config' || step === 'payment_list';
 
     if (step === 'loading') {
         return (
