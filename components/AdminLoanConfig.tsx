@@ -3,6 +3,7 @@ import { Settings, Plus, Trash2, Edit, Loader2, Save, DollarSign, Percent, Hash,
 import * as cloud from '../services/cloud';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { LoanType, LoanLevelLimit, PartnerLoan } from '../types';
 import { useDialog } from '../utils/dialogService';
 
