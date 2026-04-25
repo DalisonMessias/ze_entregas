@@ -316,7 +316,7 @@ describe('Merchant POS native keyboard', () => {
     hookConfig = { step: 'success', isWhatsAppModalOpen: true };
     render(<MerchantPOSMobile onClose={vi.fn()} />);
 
-    const phoneInput = screen.getByLabelText('NÃºmero com DDD') as HTMLInputElement;
+    const phoneInput = screen.getByPlaceholderText('(11) 99999-9999') as HTMLInputElement;
     fireEvent.change(phoneInput, { target: { value: '11999999999abc' } });
 
     expect(phoneInput.value).toBe('(11) 99999-9999');
