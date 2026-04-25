@@ -1364,48 +1364,55 @@ export const MerchantPOSDesktop: React.FC<MerchantPOSProps> = ({ onClose }) => {
                 );
 
             case 'home':
-                const HomeButton = ({ icon, text, onClick, colorClass }: { icon: React.ReactNode, text: string, onClick: () => void, colorClass: string }) => (
+                const HomeButton = ({ icon, text, onClick, colorClass, bgClass }: { icon: React.ReactNode, text: string, onClick: () => void, colorClass: string, bgClass: string }) => (
                     <button
                         onClick={onClick}
-                        className={`flex flex-col items-center justify-center aspect-square p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-lg dark:hover:bg-gray-700 transition-all duration-200 ${colorClass}`}
+                        className={`flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800 border-b-4 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group ${bgClass}`}
                     >
-                        {icon}
-                        <span className="text-sm font-bold mt-2 text-center">{text}</span>
+                        <div className={`p-4 rounded-2xl mb-4 transition-transform group-hover:scale-110 ${colorClass} bg-white/50 dark:bg-gray-900/50 shadow-inner`}>
+                            {icon}
+                        </div>
+                        <span className="text-sm font-black uppercase tracking-wider text-gray-700 dark:text-gray-200">{text}</span>
                     </button>
                 );
 
                 return (
-                    <div className="flex-1 flex flex-col justify-start pt-8 p-4 bg-gray-50 dark:bg-gray-900 overflow-y-auto custom-scrollbar">
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="flex-1 flex flex-col justify-start pt-12 p-8 bg-gray-50/50 dark:bg-gray-950 overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-6xl mx-auto w-full">
                             <HomeButton
                                 icon={<DollarSign className="w-8 h-8" />}
                                 text="Nova Venda"
                                 onClick={() => setStep('amount')}
-                                colorClass="text-brand-600 dark:text-brand-400"
+                                colorClass="text-brand-600"
+                                bgClass="border-brand-500/20 hover:border-brand-500"
                             />
                             <HomeButton
                                 icon={<Calculator className="w-8 h-8" />}
-                                text="Simulador de Vendas"
+                                text="Simulador"
                                 onClick={() => setStep('sales_simulator')}
-                                colorClass="text-gray-500 dark:text-gray-400"
+                                colorClass="text-green-600"
+                                bgClass="border-green-500/20 hover:border-green-500"
                             />
                             <HomeButton
                                 icon={<History className="w-8 h-8" />}
                                 text="Histórico"
                                 onClick={loadHistory}
-                                colorClass="text-gray-500 dark:text-gray-400"
+                                colorClass="text-orange-600"
+                                bgClass="border-orange-500/20 hover:border-orange-500"
+                            />
+                            <HomeButton
+                                icon={<FileText className="w-8 h-8" />}
+                                text="Resumo"
+                                onClick={() => setShowSummaryModal(true)}
+                                colorClass="text-blue-600"
+                                bgClass="border-blue-500/20 hover:border-blue-500"
                             />
                             <HomeButton
                                 icon={<Settings className="w-8 h-8" />}
                                 text="Ajustes"
                                 onClick={openSettings}
-                                colorClass="text-gray-500 dark:text-gray-400"
-                            />
-                            <HomeButton
-                                icon={<FileText className="w-8 h-8" />}
-                                text="Relatório Resumo"
-                                onClick={() => setShowSummaryModal(true)}
-                                colorClass="text-blue-600 dark:text-blue-400"
+                                colorClass="text-purple-600"
+                                bgClass="border-purple-500/20 hover:border-purple-500"
                             />
                         </div>
                         {/* Botão Sair removido por solicitação do usuário */}
