@@ -158,7 +158,7 @@ export const AdminApiKeysUnified: React.FC = () => {
             if (globalKeys.groq !== undefined) {
                 // Para o Groq, o status é controlado pela ativação da chave
                 // Se a chave estiver vazia, desativamos
-                const isGroqActive = !!globalKeys.groq && !!globalKeys.groq_enabled;
+                const isGroqActive = !!globalKeys.groq && globalKeys.groq_enabled === 'true';
                 keyUpdatePromises.push(cloud.adminUpdateApiKey('groq', globalKeys.groq, undefined, isGroqActive));
             }
             if (globalKeys.open_route_service !== undefined) {

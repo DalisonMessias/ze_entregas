@@ -1494,9 +1494,151 @@ BEGIN
    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_context') THEN
       ALTER TABLE public.whatsbot_settings ADD COLUMN ai_context TEXT DEFAULT 'Você é o assistente virtual da nossa loja. Seu objetivo é ser educado, tirar dúvidas dos clientes e incentivá-los a clicar no link do nosso catálogo digital para fazer o pedido.';
    END IF;
-   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_name') THEN
-      ALTER TABLE public.whatsbot_settings ADD COLUMN ai_name TEXT DEFAULT 'Assistente';
-   END IF;
 END $$;
+
+
+-- ==================================================================
+-- ADIÇÃO DO CONTROLE TEMPORÁRIO DE MODO MANUAL (MÃOS JUNTAS UX)
+-- ==================================================================
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS manual_override_until TIMESTAMPTZ DEFAULT NULL;
+COMMENT ON COLUMN public.user_profiles.manual_override_until IS 'Data e hora limite do modo manual. Após este prazo, o sistema desativa manual_override e retorna ao modo automático.';
+
+-- ==================================================================
+-- CORREÇÃO DA AUTOMAÇÃO DE STATUS DA LOJA COM CRUZAMENTO DE MEIA-NOITE E EXPIRAÇÃO TEMPORÁRIA
+-- ==================================================================
+
+CREATE OR REPLACE FUNCTION public.update_shop_status_based_on_schedule()
+RETURNS void AS $$
+DECLARE
+    store_record RECORD;
+    day_index INT;
+    day_of_week_pt TEXT;
+    day_of_week_prev_pt TEXT;
+    opening_hours_today JSONB;
+    opening_hours_prev JSONB;
+    time_range JSONB;
+    is_currently_open BOOLEAN;
+    current_time_local TIME;
+    v_now_local TIMESTAMPTZ;
+BEGIN
+    -- Obter a data/hora atual no fuso local
+    v_now_local := NOW() AT TIME ZONE 'America/Sao_Paulo';
+
+    -- Pega o dia da semana como um número (0 = Domingo, 1 = Segunda, ..., 6 = Sábado)
+    day_index := EXTRACT(DOW FROM v_now_local);
+    day_of_week_pt := CASE day_index
+        WHEN 0 THEN 'domingo'
+        WHEN 1 THEN 'segunda'
+        WHEN 2 THEN 'terca'
+        WHEN 3 THEN 'quarta'
+        WHEN 4 THEN 'quinta'
+        WHEN 5 THEN 'sexta'
+        WHEN 6 THEN 'sabado'
+    END;
+
+    day_of_week_prev_pt := CASE (day_index + 6) % 7
+        WHEN 0 THEN 'domingo'
+        WHEN 1 THEN 'segunda'
+        WHEN 2 THEN 'terca'
+        WHEN 3 THEN 'quarta'
+        WHEN 4 THEN 'quinta'
+        WHEN 5 THEN 'sexta'
+        WHEN 6 THEN 'sabado'
+    END;
+
+    -- Pega a hora atual no fuso horário da loja
+    current_time_local := v_now_local::TIME;
+
+    -- Itera sobre todas as lojas que não estão em modo manual permanentemente
+    FOR store_record IN
+        SELECT
+            id AS store_id,
+            opening_hours_structured,
+            is_open AS current_status,
+            manual_override,
+            manual_override_until
+        FROM public.user_profiles
+        WHERE role = 'store_partner'
+    LOOP
+        -- Expira o controle manual caso o tempo limite tenha passado
+        IF store_record.manual_override = TRUE AND store_record.manual_override_until IS NOT NULL AND NOW() >= store_record.manual_override_until THEN
+            UPDATE public.user_profiles
+            SET manual_override = FALSE,
+                manual_override_until = NULL
+            WHERE id = store_record.store_id;
+
+            -- Recarrega variáveis locais para prosseguir com o fluxo automático
+            store_record.manual_override := FALSE;
+            store_record.manual_override_until := NULL;
+        END IF;
+
+        -- Ignora as lojas que estão sob controle manual ativo sem limite de expiração
+        IF store_record.manual_override = TRUE THEN
+            CONTINUE;
+        END IF;
+
+        is_currently_open := FALSE;
+
+        -- 1. Verificar expediente iniciado HOJE
+        opening_hours_today := store_record.opening_hours_structured -> day_of_week_pt;
+        IF opening_hours_today IS NOT NULL AND (opening_hours_today ->> 'enabled')::BOOLEAN = TRUE AND jsonb_typeof(opening_hours_today -> 'times') = 'array' AND jsonb_array_length(opening_hours_today -> 'times') > 0 THEN
+            FOR time_range IN SELECT * FROM jsonb_array_elements(opening_hours_today -> 'times')
+            LOOP
+                DECLARE
+                    v_start TIME := (time_range ->> 'start')::TIME;
+                    v_end TIME := (time_range ->> 'end')::TIME;
+                BEGIN
+                    IF v_start <= v_end THEN
+                        -- Horário normal
+                        IF current_time_local >= v_start AND current_time_local < v_end THEN
+                            is_currently_open := TRUE;
+                            EXIT;
+                        END IF;
+                    ELSE
+                        -- Cruza meia-noite (estamos na primeira parte, antes de 00:00)
+                        IF current_time_local >= v_start THEN
+                            is_currently_open := TRUE;
+                            EXIT;
+                        END IF;
+                    END IF;
+                END;
+            END LOOP;
+        END IF;
+
+        -- 2. Se ainda não estiver aberta, verificar expediente iniciado ONTEM que cruza a meia-noite e ainda está vigente hoje de madrugada
+        IF NOT is_currently_open THEN
+            opening_hours_prev := store_record.opening_hours_structured -> day_of_week_prev_pt;
+            IF opening_hours_prev IS NOT NULL AND (opening_hours_prev ->> 'enabled')::BOOLEAN = TRUE AND jsonb_typeof(opening_hours_prev -> 'times') = 'array' AND jsonb_array_length(opening_hours_prev -> 'times') > 0 THEN
+                FOR time_range IN SELECT * FROM jsonb_array_elements(opening_hours_prev -> 'times')
+                LOOP
+                    DECLARE
+                        v_start TIME := (time_range ->> 'start')::TIME;
+                        v_end TIME := (time_range ->> 'end')::TIME;
+                    BEGIN
+                        -- Só nos interessa se cruzar a meia-noite
+                        IF v_start > v_end THEN
+                            -- Estamos na segunda parte (depois de 00:00, hoje de madrugada)
+                            IF current_time_local < v_end THEN
+                                is_currently_open := TRUE;
+                                EXIT;
+                            END IF;
+                        END IF;
+                    END;
+                END LOOP;
+            END IF;
+        END IF;
+
+        -- Atualiza o status na tabela user_profiles APENAS se ele mudou
+        IF store_record.current_status IS DISTINCT FROM is_currently_open THEN
+            UPDATE public.user_profiles
+            SET is_open = is_currently_open
+            WHERE id = store_record.store_id;
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.update_shop_status_based_on_schedule() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_shop_status_based_on_schedule() TO service_role;
 
 

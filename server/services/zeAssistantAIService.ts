@@ -48,25 +48,33 @@ export class ZeAssistantAIService {
             // Lógica de Orquestração com Fallback
             try {
                 if (primaryProvider === 'groq' && groqEnabled) {
-                    console.log('[ZeAssistantAI] 🚀 Usando Groq como provedor principal');
+                    console.log('[ZeAssistantAI] 🚀 Usando Groq (Provedor Principal)');
                     response = await this.callGroqAPI(apiKeys.groq!, systemPrompt, userPrompt, history);
-                } else if (geminiEnabled) {
-                    console.log('[ZeAssistantAI] 🚀 Usando Gemini como provedor principal');
-                    response = await this.callGeminiAPI(apiKeys.gemini!, systemPrompt, userPrompt, history);
-                } else if (groqEnabled) {
-                    console.log('[ZeAssistantAI] 🔄 Gemini indisponível, usando Groq como fallback');
                     usedProvider = 'groq';
+                } else if (primaryProvider === 'google_gemini' && geminiEnabled) {
+                    console.log('[ZeAssistantAI] 🚀 Usando Gemini (Provedor Principal)');
+                    response = await this.callGeminiAPI(apiKeys.gemini!, systemPrompt, userPrompt, history);
+                    usedProvider = 'google_gemini';
+                } else if (groqEnabled) {
+                    console.log(`[ZeAssistantAI] 🔄 Provedor ${primaryProvider} indisponível, usando Groq como fallback`);
                     response = await this.callGroqAPI(apiKeys.groq!, systemPrompt, userPrompt, history);
+                    usedProvider = 'groq';
+                } else if (geminiEnabled) {
+                    console.log(`[ZeAssistantAI] 🔄 Provedor ${primaryProvider} indisponível, usando Gemini como fallback`);
+                    response = await this.callGeminiAPI(apiKeys.gemini!, systemPrompt, userPrompt, history);
+                    usedProvider = 'google_gemini';
+                } else {
+                    throw new Error('Nenhum provedor de IA com chaves disponíveis.');
                 }
             } catch (error) {
-                console.error(`[ZeAssistantAI] ❌ Erro no provedor principal (${primaryProvider}):`, error);
+                console.error(`[ZeAssistantAI] ❌ Erro na chamada do provedor ativo (${usedProvider}):`, error);
                 
-                // Tentar o provedor secundário em caso de falha do primeiro
-                if (primaryProvider === 'google_gemini' && groqEnabled) {
+                // Tentar o provedor secundário caso o primeiro que REALMENTE rodou tenha falhado
+                if (usedProvider === 'google_gemini' && groqEnabled) {
                     console.log('[ZeAssistantAI] 🔄 Fallback automático para Groq...');
                     usedProvider = 'groq';
                     response = await this.callGroqAPI(apiKeys.groq!, systemPrompt, userPrompt, history);
-                } else if (primaryProvider === 'groq' && geminiEnabled) {
+                } else if (usedProvider === 'groq' && geminiEnabled) {
                     console.log('[ZeAssistantAI] 🔄 Fallback automático para Gemini...');
                     usedProvider = 'google_gemini';
                     response = await this.callGeminiAPI(apiKeys.gemini!, systemPrompt, userPrompt, history);
@@ -130,9 +138,10 @@ ${knowledgeBase}
 
 REGRAS:
 1. Seja breve (2-4 linhas).
-2. Não use saudações formais repetitivas.
+2. Não use saudações formais repetitivas. Se você notar no histórico de mensagens que já cumprimentou o cliente anteriormente, é terminantemente proibido usar saudações como 'Olá', 'Seja bem-vindo', 'Que bom te ver', etc. Responda diretamente à dúvida.
 3. Se o cliente quiser falar com alguém humano, use a tag [FALAR_COM_HUMANO].
-4. Nunca invente informações. Se não souber, peça para aguardar um atendente.`;
+4. Nunca invente informações. Se não souber, peça para aguardar um atendente.
+5. Formate a resposta estruturando-a com quebras de linha elegantes (use \n) para separar ideias, tópicos ou saudações, tornando a leitura muito agradável na tela do celular e evitando parágrafos longos ou texto corrido grudado em uma linha só.`;
     }
 
     /**
@@ -208,7 +217,7 @@ REGRAS:
      * Implementação REST do Gemini com modelos em cascata
      */
     private async callAIAPI(apiKey: string, systemPrompt: string, userPrompt: string, history: any[]) {
-        const models = ['gemini-1.5-pro', 'gemini-1.5-flash'];
+        const models = ['gemini-3.1-pro-preview', 'gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.5-flash'];
         let lastError = null;
 
         for (const model of models) {
@@ -235,7 +244,8 @@ REGRAS:
                     tokens: data.usageMetadata?.totalTokenCount,
                     model
                 };
-            } catch (e) {
+            } catch (e: any) {
+                console.error(`[ZeAssistantAI] ❌ Falha no modelo Gemini ${model}:`, e.message || e);
                 lastError = e;
             }
         }

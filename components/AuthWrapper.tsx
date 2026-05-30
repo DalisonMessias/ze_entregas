@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TourProvider } from './Tour/TourContext';
 import * as cloud from '../services/cloud';
 import * as logger from '../services/logger';
@@ -21,6 +21,7 @@ import { CollaboratorModule } from './CollaboratorModule';
 import { formatPhoneNumber, formatCpf, formatCnpjCpf } from '../utils/mapHelpers';
 import { getTabFromUrl } from '../utils/routeMap';
 import { ActiveTab } from '../types/navigation';
+import { canAccessTabForRole } from '../utils/accessControl';
 
 type AuthView = 'landing' | 'login' | 'signup_city' | 'signup_form' | 'forgot_password' | 'signup_type_selection';
 
@@ -66,6 +67,11 @@ const getAuthViewFromUrl = (): AuthView => {
 export const AuthWrapper: React.FC = () => {
   const [session, setSession] = useState<any | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
+
   const [userRole, setUserRole] = useState<UserRole>('delivery_person');
   const [userStatus, setUserStatus] = useState<UserStatus>('active');
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -179,20 +185,42 @@ export const AuthWrapper: React.FC = () => {
 
   const redirectToRoleHome = (role: UserRole) => {
     try {
-      // Se já estamos em uma rota interna válida (via URL), não redirecionamos para a Home do cargo
       const currentTab = getTabFromUrl(window.location.pathname);
       const authTabs = ['login', 'signup', 'forgot_password'];
 
-      // Se a URL atual mapeia para uma aba que não seja de autenticação, mantemos ela
-      if (currentTab && !authTabs.includes(currentTab)) {
-        logger.info('REDIRECT_SKIPPED_EXISTING_PATH', { currentTab, path: window.location.pathname });
+      // Se a URL atual mapeia para uma aba de autenticação, redirecionar para home do cargo
+      if (currentTab && authTabs.includes(currentTab)) {
+        const tab = defaultTabByRole[role] || 'shop';
+        logger.info('ROLE_REDIRECT_FROM_AUTH_TAB', { role, tab });
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
+        }, 100);
         return;
       }
 
+      // Se a URL atual mapeia para uma aba válida MAS o usuário tem permissão para ela, mantemos
+      if (currentTab && !authTabs.includes(currentTab)) {
+        const hasPermission = canAccessTabForRole(role, currentTab);
+
+        if (hasPermission) {
+          // Tem permissão: mantém a aba atual (ex: admin acessando /loja/produtos)
+          logger.info('REDIRECT_SKIPPED_PERMITTED_PATH', { currentTab, role, path: window.location.pathname });
+          return;
+        } else {
+          // NÃO tem permissão: redireciona para o home do cargo
+          // Ex: usuário estava em /loja/colaborador, fez login como admin → vai para admin_dashboard
+          logger.info('REDIRECT_NO_PERMISSION_FORCING_HOME', { currentTab, role, path: window.location.pathname });
+          const tab = defaultTabByRole[role] || 'shop';
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
+          }, 100);
+          return;
+        }
+      }
+
+      // Sem aba na URL (ex: rota de auth /login): redireciona para home do cargo
       const tab = defaultTabByRole[role] || 'shop';
       logger.info('ROLE_REDIRECT', { role, tab });
-      
-      // Pequeno delay para garantir que o componente App.tsx esteja montado e ouvindo
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab } }));
       }, 100);
@@ -339,6 +367,13 @@ export const AuthWrapper: React.FC = () => {
 
         // Evitar loops: Se a sessão for idêntica à atual, ignorar
         if (currentSession?.access_token === session?.access_token && event === 'SIGNED_IN') {
+          return;
+        }
+
+        // Se for TOKEN_REFRESHED e o ID do usuário for o mesmo já ativo, apenas atualizamos a sessão
+        // localmente sem forçar re-checar tudo no banco e remontar o App
+        if (event === 'TOKEN_REFRESHED' && currentSession?.user?.id === userIdRef.current) {
+          setSession(currentSession);
           return;
         }
 
@@ -751,13 +786,13 @@ export const AuthWrapper: React.FC = () => {
 
   // PUBLIC PARTNER ROUTES (Permite ver sem estar logado)
   const currentTab = getTabFromUrl(currentPath);
-  const isPublicPartnerRoute = currentTab === 'partner_store' || currentTab === 'partner_delivery';
+  const isPublicPartnerRoute = currentTab === 'partner_store' || currentTab === 'partner_delivery' || currentTab === 'store_gestor';
   if (isPublicPartnerRoute) {
     return (
       <TourProvider>
         <App
           userId="guest"
-          userRole="delivery_person"
+          userRole={currentTab === 'store_gestor' ? 'store_partner' : 'delivery_person'}
           initialUserStatus="active"
         />
       </TourProvider>
@@ -775,7 +810,7 @@ export const AuthWrapper: React.FC = () => {
 
     // Se for uma rota interna válida mas não temos sessão, forçamos para login 
     // a menos que seja especificamente a home.
-    if (!isHome && isInternalRoute) {
+    if (!isHome && isInternalRoute && String(currentTab) !== 'store_gestor') {
       setView('login');
       return null; // O próximo ciclo de renderização mostrará o login
     }

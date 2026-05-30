@@ -18,6 +18,7 @@ import {
 import { Loading } from './Loading';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
+import { MobileTabsSelect } from './MobileTabsSelect';
 import { Claim, UserRole } from '../types';
 import * as cloud from '../services/cloud';
 import { ChatWindow } from './ChatWindow';

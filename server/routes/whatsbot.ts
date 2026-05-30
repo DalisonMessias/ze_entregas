@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getStatus, start, stop, updateConfig, logout, getCampaigns, createCampaign, stopCampaign, deleteCampaign, getAvailableContacts } from '../controllers/whatsBotController.js';
+import { getStatus, start, stop, updateConfig, logout, getCampaigns, createCampaign, stopCampaign, deleteCampaign, getAvailableContacts, clearCache } from '../controllers/whatsBotController.js';
 import { requireSuperStoreAuth } from '../middleware/supabaseAuth.js';
 
 const router = Router();
@@ -11,6 +11,7 @@ router.put('/config', updateConfig);
 router.post('/start', start);
 router.post('/stop', stop);
 router.post('/logout', logout);
+router.post('/clear-cache', clearCache);
 
 // Rotas de Campanhas
 router.get('/campaigns', getCampaigns);

@@ -16,6 +16,7 @@ import { ShippingRulesModal } from './ShippingRulesModal';
 import { AuthRequiredModal } from './AuthRequiredModal';
 import { MobileTabsSelect } from '../MobileTabsSelect';
 import { SelectPersonalizado } from '../SelectPersonalizado';
+import { getStoreOpenState } from '../../utils/storeHours';
 
 interface DigitalMenuProps {
     citySlug: string;
@@ -1157,10 +1158,11 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     const isStoreOpen = useMemo(() => {
         if (!store) return false;
-        const s = store as any;
-        if (typeof s.is_open === 'boolean') return s.is_open;
-        if (typeof s.is_currently_open === 'boolean') return s.is_currently_open;
-        return true;
+        return getStoreOpenState({
+            openingHours: store.opening_hours,
+            manualStatus: store.is_open,
+            manualOverride: store.manual_override
+        }).isOpen;
     }, [store]);
 
     // 1. All Categories

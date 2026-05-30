@@ -225,6 +225,7 @@ export const WhatsBot: React.FC = () => {
     const [newTriggerResponse, setNewTriggerResponse] = useState('');
     const [isAddingTrigger, setIsAddingTrigger] = useState(false);
     const [isSavingAi, setIsSavingAi] = useState(false);
+    const [clearingCache, setClearingCache] = useState(false);
 
     const getSaudacao = () => {
         const hora = new Date().getHours();
@@ -464,14 +465,53 @@ export const WhatsBot: React.FC = () => {
 
         setIsHarmonizing(true);
         try {
-            let apiKey = await cloud.getAPIKey('google_gemini', storeId || undefined);
-            
-            if (!apiKey) {
-                apiKey = (process as any)?.env?.GEMINI_API_KEY || (import.meta as any)?.env?.VITE_GEMINI_API_KEY || null;
+            // 1. Carrega provedor de IA preferencial (loja > global)
+            let primaryProvider = await cloud.getAPIKey('ai_primary_provider', storeId || undefined)
+                || await cloud.getAPIKey('ai_primary_provider')
+                || 'google_gemini';
+
+            // 2. Busca chave do Gemini: tenta loja específica primeiro, depois fallback global
+            let geminiKey: string | null = null;
+            if (storeId) {
+                geminiKey = await cloud.getAPIKey('google_gemini', storeId);
+            }
+            if (!geminiKey) {
+                // Fallback: chave global do admin (sem filtro de storeId)
+                geminiKey = await cloud.getAPIKey('google_gemini');
+            }
+            if (!geminiKey) {
+                geminiKey = (process as any)?.env?.GEMINI_API_KEY || (import.meta as any)?.env?.VITE_GEMINI_API_KEY || null;
             }
 
-            if (!apiKey) {
-                toast({ message: 'API do Gemini não configurada ou ativa.', type: 'error' });
+            // 3. Busca chave do Groq: tenta loja específica primeiro, depois fallback global
+            let groqKey: string | null = null;
+            if (storeId) {
+                groqKey = await cloud.getAPIKey('groq', storeId);
+            }
+            if (!groqKey) {
+                // Fallback: chave global do admin (sem filtro de storeId)
+                groqKey = await cloud.getAPIKey('groq');
+            }
+            if (!groqKey) {
+                groqKey = (process as any)?.env?.GROQ_API_KEY || (import.meta as any)?.env?.VITE_GROQ_API_KEY || null;
+            }
+
+            let selectedProvider = primaryProvider;
+            let finalApiKey = '';
+
+            if (primaryProvider === 'groq' && groqKey) {
+                selectedProvider = 'groq';
+                finalApiKey = groqKey;
+            } else if (geminiKey) {
+                selectedProvider = 'google_gemini';
+                finalApiKey = geminiKey;
+            } else if (groqKey) {
+                selectedProvider = 'groq';
+                finalApiKey = groqKey;
+            }
+
+            if (!finalApiKey) {
+                toast({ message: 'Chaves de API (Gemini ou Groq) não configuradas ou ativas. Por favor, configure-as na tela de integrações.', type: 'error' });
                 setIsHarmonizing(false);
                 return;
             }
@@ -497,10 +537,70 @@ export const WhatsBot: React.FC = () => {
             
             prompt += `\n\nMENSAGEM ORIGINAL:\n"${messageToHarmonize}"\n\nRETORNE APENAS O TEXTO DA MENSAGEM HARMONIZADA, SEM COMENTÁRIOS ADICIONAIS.`;
 
-            const response = await cloud.generateAIContent(prompt, apiKey);
+            let generatedText = '';
+            let usedProvider = selectedProvider;
+
+            try {
+                if (selectedProvider === 'groq') {
+                    console.log('[WhatsBot] Gerando conteúdo com Groq...');
+                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${finalApiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: 'llama-3.1-8b-instant',
+                            messages: [
+                                { role: 'user', content: prompt }
+                            ],
+                            temperature: 0.7
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(`Erro na API do Groq: ${response.status}`);
+                    const data = await response.json();
+                    generatedText = data.choices[0]?.message?.content || '';
+                } else {
+                    console.log('[WhatsBot] Gerando conteúdo com Gemini...');
+                    const response = await cloud.generateAIContent(prompt, finalApiKey);
+                    generatedText = (response as any)?.text || '';
+                }
+            } catch (apiError) {
+                console.warn('[WhatsBot] Erro no provedor principal de harmonização. Tentando fallback...', apiError);
+                
+                // Fallback automático se o principal falhar e houver outro configurado
+                if (selectedProvider === 'google_gemini' && groqKey) {
+                    usedProvider = 'groq';
+                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${groqKey}`
+                        },
+                        body: JSON.stringify({
+                            model: 'llama-3.1-8b-instant',
+                            messages: [
+                                { role: 'user', content: prompt }
+                            ],
+                            temperature: 0.7
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(`Erro na API do Groq (Fallback): ${response.status}`);
+                    const data = await response.json();
+                    generatedText = data.choices[0]?.message?.content || '';
+                } else if (selectedProvider === 'groq' && geminiKey) {
+                    usedProvider = 'google_gemini';
+                    const response = await cloud.generateAIContent(prompt, geminiKey);
+                    generatedText = (response as any)?.text || '';
+                } else {
+                    throw apiError;
+                }
+            }
             
-            if (response && (response as any).text) {
-                let text = (response as any).text.trim();
+            if (generatedText && generatedText.trim()) {
+                let text = generatedText.trim();
                 
                 // Filtro para evitar duplicidade de link em campanhas
                 if (type === 'campaign') {
@@ -521,7 +621,7 @@ export const WhatsBot: React.FC = () => {
                     setIsDirty(true);
                     isDirtyRef.current = true;
                 }
-                toast({ message: 'Mensagem harmonizada com sucesso!', type: 'success' });
+                toast({ message: `Mensagem harmonizada com sucesso! (IA: ${usedProvider === 'groq' ? 'Groq' : 'Gemini'})`, type: 'success' });
             } else {
                 throw new Error('Resposta da IA inválida');
             }
@@ -745,6 +845,29 @@ export const WhatsBot: React.FC = () => {
         }
     };
 
+    const handleClearCache = async () => {
+        const confirmed = await confirm({
+            title: 'Desbloquear Contatos (Anti-Spam)',
+            message: 'Tem certeza de que deseja liberar todos os números do cache de bloqueios e limpar o histórico de envios anti-spam de hoje? Isso fará com que o robô possa responder imediatamente a qualquer contato que esteja bloqueado.',
+            confirmButtonText: 'Sim, desbloquear',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!confirmed) return;
+
+        setClearingCache(true);
+        try {
+            await whatsbot.clearWhatsBotCache(undefined, requestOptions);
+            toast({ message: 'Todos os contatos e bloqueios de anti-spam foram liberados com sucesso!', type: 'success' });
+            void refreshStatus();
+        } catch (err: any) {
+            const message = err?.response?.data?.message || err?.message || 'Erro ao limpar cache do WhatsBot.';
+            toast({ message, type: 'error' });
+        } finally {
+            setClearingCache(false);
+        }
+    };
+
     const handleCopyLink = async () => {
         if (!status?.catalogUrl) return;
         try {
@@ -953,6 +1076,15 @@ export const WhatsBot: React.FC = () => {
                                         Desligar Bot
                                     </Button>
                                 )}
+                                <Button
+                                    variant="outline"
+                                    onClick={handleClearCache}
+                                    loading={clearingCache}
+                                    disabled={loadingAction !== null}
+                                    icon={<RefreshCcw className={`w-4 h-4 ${clearingCache ? 'animate-spin' : ''}`} />}
+                                >
+                                    Desbloquear Contatos
+                                </Button>
                                 <Button
                                     variant="danger"
                                     onClick={handleLogout}

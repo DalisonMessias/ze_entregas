@@ -189,3 +189,16 @@ export const deleteWhatsBotTrigger = async (
     if (error) throw error;
     return { success: true };
 };
+
+export const clearWhatsBotCache = async (
+    contactPhone?: string,
+    options?: WhatsBotRequestOptions
+): Promise<{ success: boolean }> => {
+    const headers = await getAuthHeaders(options);
+    const { data } = await axios.post<{ success: boolean }>(
+        `${getWhatsBotApiBaseUrl()}/clear-cache`, 
+        { contactPhone }, 
+        { headers }
+    );
+    return data;
+};

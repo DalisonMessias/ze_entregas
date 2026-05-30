@@ -7,6 +7,7 @@ import { Loading } from './Loading';
 import { StoreDailyReport, PartnerProfile } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { getStoreOpenState } from '../utils/storeHours';
+import { BaseModal } from './BaseModal';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -25,6 +26,11 @@ export const StoreStatus: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<StoreDailyReport[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const [showDurationModal, setShowDurationModal] = useState(false);
+  const [modalPendingState, setModalPendingState] = useState<boolean | null>(null);
+  const [customAmount, setCustomAmount] = useState<string>('30');
+  const [customUnit, setCustomUnit] = useState<'minutes' | 'hours'>('minutes');
 
   const showSuccess = (msg: string) => dialog.alert({ title: 'Sucesso', message: msg });
   const showError = (msg: string) => dialog.alert({ title: 'Erro', message: msg });
@@ -94,18 +100,28 @@ export const StoreStatus: React.FC = () => {
     }
   };
 
-  const handleToggleStore = async () => {
-    console.log('[StoreStatus] handleToggleStore called');
+  const handleToggleStore = () => {
+    const currentEffectiveState = openState?.isOpen ?? false;
+    const nextState = !currentEffectiveState;
+    setModalPendingState(nextState);
+    setShowDurationModal(true);
+  };
+
+  const applyToggleStoreStatus = async (
+    newManualState: boolean,
+    durationType: '1h' | '2h' | '3h' | '4h' | 'today' | 'indefinite' | 'custom',
+    customMinutes?: number
+  ) => {
+    setShowDurationModal(false);
+    
     if (!profile?.id) {
       showError('Erro: Perfil não carregado. Recarregue a página.');
       return;
     }
 
+    // Se estiver FECHANDO a loja, confirmamos e geramos um relatório diário.
     const currentEffectiveState = openState?.isOpen ?? false;
-    console.log('[StoreStatus] currentEffectiveState:', currentEffectiveState);
-
-    // If closing, confirm and generate a report.
-    if (currentEffectiveState) {
+    if (currentEffectiveState && !newManualState) {
       const confirmed = await dialog.confirm({
         title: 'Encerrar Expediente',
         message: 'Deseja realmente encerrar o expediente? Um relatório diário será gerado.',
@@ -113,69 +129,103 @@ export const StoreStatus: React.FC = () => {
         cancelButtonText: 'Não, continuar aberto'
       });
       if (!confirmed) {
-        console.log('[StoreStatus] User cancelled closing');
         return;
       }
     }
 
     setIsLoading(true);
-    console.log('[StoreStatus] Loading started');
 
     let success = false;
-    let newManualState = false;
+    let limitDate: Date | null = null;
+    
+    // Calcular manual_override_until com base no tipo de duração escolhido
+    if (durationType === '1h') {
+      limitDate = new Date(Date.now() + 60 * 60 * 1000);
+    } else if (durationType === '2h') {
+      limitDate = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    } else if (durationType === '3h') {
+      limitDate = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    } else if (durationType === '4h') {
+      limitDate = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    } else if (durationType === 'today') {
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      limitDate = endOfDay;
+    } else if (durationType === 'custom' && customMinutes) {
+      limitDate = new Date(Date.now() + customMinutes * 60 * 1000);
+    }
 
     try {
-      newManualState = !currentEffectiveState;
-      console.log('[StoreStatus] newManualState:', newManualState);
-
-      // When toggling, we enforce the new state AND set manual_override to TRUE
-      // to prevent the cron job from reverting it immediately if within schedule.
+      // Atualizar no banco de dados junto com a expiração do temporizador
       const { error: profileError } = await supabase
         .from('user_profiles')
         .update({
           is_open: newManualState,
-          manual_override: true
+          manual_override: true,
+          manual_override_until: limitDate ? limitDate.toISOString() : null
         })
         .eq('id', profile.id);
 
       if (profileError) {
-        console.error('[StoreStatus] Supabase error:', profileError);
         throw profileError;
       }
 
-      console.log('[StoreStatus] Database updated successfully');
-
-      // We manually calc effective state, but now we know manual override is ON.
-      // So the effective state IS the manual state.
-      const newEffectiveState = newManualState;
-
-      // Only generate report if the shop is effectively closing
-      if (!newEffectiveState) {
-        console.log('[StoreStatus] Generating daily report...');
+      // Se a loja foi efetivamente fechada, gera relatório diário
+      if (!newManualState) {
         await generateDailyReport();
       }
 
-      console.log('[StoreStatus] Updating profile state...');
-      setProfile(prev => (prev ? { ...prev, is_open: newManualState, manual_override: true } : null));
-      console.log('[StoreStatus] Profile state updated');
+      // Atualizar o perfil localmente
+      setProfile(prev => (prev ? {
+        ...prev,
+        is_open: newManualState,
+        manual_override: true,
+        manual_override_until: limitDate ? limitDate.toISOString() : null
+      } as any : null));
 
       success = true;
 
     } catch (e) {
-      console.error('[StoreStatus] Error in handleToggleStore:', e);
+      console.error('[StoreStatus] Error in applyToggleStoreStatus:', e);
       showError('Erro ao alterar status. Tente novamente.');
     } finally {
-      console.log('[StoreStatus] Finally block - setting loading to false');
       setIsLoading(false);
 
       if (success) {
-        const message = newManualState
-          ? 'Loja aberta manualmente. A automação foi pausada.'
-          : 'Loja encerrada manualmente. A automação foi pausada.';
-        console.log('[StoreStatus] Success message:', message);
-        showSuccess(message);
+        let msg = '';
+        if (newManualState) {
+          msg = durationType === 'indefinite'
+            ? 'Loja aberta manualmente por tempo indeterminado. A automação foi pausada.'
+            : `Loja aberta manualmente temporariamente. A automação será retomada em ${limitDate?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`;
+        } else {
+          msg = durationType === 'indefinite'
+            ? 'Loja encerrada manualmente por tempo indeterminado. A automação foi pausada.'
+            : `Loja encerrada manualmente temporariamente. A automação será retomada em ${limitDate?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`;
+        }
+        showSuccess(msg);
       }
     }
+  };
+
+  const handleCustomSubmit = () => {
+    const amount = parseInt(customAmount, 10);
+    if (isNaN(amount) || amount <= 0) {
+      showError('Por favor, insira um tempo válido maior que zero.');
+      return;
+    }
+    
+    if (customUnit === 'hours' && amount > 24) {
+      showError('O tempo máximo permitido é de 24 horas.');
+      return;
+    }
+    
+    if (customUnit === 'minutes' && amount > 1440) {
+      showError('O tempo máximo permitido é de 1440 minutos (24 horas).');
+      return;
+    }
+
+    const minutes = customUnit === 'hours' ? amount * 60 : amount;
+    applyToggleStoreStatus(modalPendingState ?? false, 'custom', minutes);
   };
 
   const openState = useMemo(() => {
@@ -326,9 +376,15 @@ export const StoreStatus: React.FC = () => {
                 <Clock className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-amber-800 dark:text-amber-200 text-sm">Controle Manual Ativo</h3>
+                <h3 className="font-bold text-amber-800 dark:text-amber-200 text-sm">
+                  {profile.manual_override_until ? 'Controle Manual Temporário' : 'Controle Manual Ativo'}
+                </h3>
                 <p className="text-xs text-amber-700 dark:text-amber-400">
-                  A automação está pausada. A loja permanecerá {openState.isOpen ? 'aberta' : 'fechada'} até que você retome o horário automático.
+                  {profile.manual_override_until ? (
+                    `A automação está pausada temporariamente. A loja voltará ao automático e será ${openState.isOpen ? 'fechada' : 'aberta'} às ${new Date(profile.manual_override_until).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} de hoje (${new Date(profile.manual_override_until).toLocaleDateString('pt-BR')}).`
+                  ) : (
+                    `A automação está pausada. A loja permanecerá ${openState.isOpen ? 'aberta' : 'fechada'} até que você retome o horário automático.`
+                  )}
                 </p>
               </div>
             </div>
@@ -439,6 +495,126 @@ export const StoreStatus: React.FC = () => {
           </div>
         </div>
       )}
+
+      <BaseModal
+        isOpen={showDurationModal}
+        onClose={() => setShowDurationModal(false)}
+        title={modalPendingState ? 'Definir Tempo de Abertura' : 'Definir Tempo de Fechamento'}
+        icon={<Clock className="w-6 h-6 text-amber-500" />}
+        maxWidth="md"
+      >
+        <div className="space-y-8 py-2">
+          <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed border-b border-gray-100 dark:border-gray-700/60 pb-6">
+            Escolha por quanto tempo deseja manter a loja{' '}
+            <strong className="text-gray-900 dark:text-white font-extrabold">
+              {modalPendingState ? 'aberta' : 'fechada'}
+            </strong>{' '}
+            manualmente antes de retornar ao horário de funcionamento automático configurado.
+          </p>
+
+          <div className="border-b border-gray-100 dark:border-gray-700/60 pb-8">
+            <h4 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4">
+              Opções Rápidas
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {[
+                { label: '1 Hora', value: '1h' },
+                { label: '2 Horas', value: '2h' },
+                { label: '3 Horas', value: '3h' },
+                { label: '4 Horas', value: '4h' },
+                { label: 'Até Fim do Dia', value: 'today' },
+                { label: 'Indeterminado', value: 'indefinite' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => applyToggleStoreStatus(modalPendingState ?? false, opt.value as any)}
+                  className="p-4 text-sm font-black rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 hover:bg-gray-100/80 dark:bg-gray-900/30 dark:hover:bg-gray-900/70 text-gray-700 dark:text-gray-200 transition-all hover:scale-[1.02] flex items-center justify-center text-center shadow-sm animate-in fade-in"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4">
+              Tempo Personalizado
+            </h4>
+            
+            <div className="flex flex-col sm:flex-row items-stretch gap-4">
+              {/* Input elegante */}
+              <div className="relative w-full sm:w-1/3">
+                <input
+                  type="number"
+                  min="1"
+                  max={customUnit === 'hours' ? 24 : 1440}
+                  placeholder={customUnit === 'hours' ? '2' : '30'}
+                  value={customAmount}
+                  onChange={e => setCustomAmount(e.target.value)}
+                  className="w-full h-full p-3.5 text-center rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white font-extrabold text-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+
+              {/* Botões seletores para evitar Select nativo (Premium UI) */}
+              <div className="flex w-full sm:w-2/3 bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomUnit('minutes');
+                    setCustomAmount('30');
+                  }}
+                  className={`flex-1 py-3.5 px-4 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                    customUnit === 'minutes'
+                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm border border-gray-100 dark:border-gray-750'
+                      : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Minutos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomUnit('hours');
+                    setCustomAmount('2');
+                  }}
+                  className={`flex-1 py-3.5 px-4 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                    customUnit === 'hours'
+                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm border border-gray-100 dark:border-gray-750'
+                      : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Horas
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-2.5 text-[10px] font-bold text-gray-400 dark:text-gray-500 flex items-center justify-between px-1 uppercase tracking-wider">
+              <span>Mínimo: 1 {customUnit === 'hours' ? 'hora' : 'minuto'}</span>
+              <span>Máximo: {customUnit === 'hours' ? '24 horas' : '1440 minutos'}</span>
+            </div>
+
+            <div className="mt-8 flex justify-end gap-3 border-t border-gray-100 dark:border-gray-700/60 pt-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDurationModal(false)}
+                className="rounded-2xl px-5 text-sm font-bold min-h-[44px] flex items-center justify-center"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="success"
+                onClick={handleCustomSubmit}
+                className="rounded-2xl px-6 text-sm font-bold min-h-[44px] flex items-center justify-center"
+              >
+                Aplicar Tempo
+              </Button>
+            </div>
+          </div>
+        </div>
+      </BaseModal>
     </div>
   );
 };

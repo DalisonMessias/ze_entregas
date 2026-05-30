@@ -153,3 +153,15 @@ export const getAvailableContacts = async (req: AuthenticatedRequest, res: Respo
         res.status(500).json({ success: false, message: error.message || 'Erro ao buscar contatos.' });
     }
 };
+
+export const clearCache = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const storeId = getStoreId(req);
+        const contactPhone = typeof req.body?.contactPhone === 'string' ? req.body.contactPhone : undefined;
+        const result = await whatsBotService.clearFallbackCache(storeId, contactPhone);
+        res.status(200).json(result);
+    } catch (error: any) {
+        console.error('[WhatsBotController] Erro ao limpar cache anti-spam:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao limpar cache anti-spam.' });
+    }
+};

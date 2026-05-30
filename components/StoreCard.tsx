@@ -11,8 +11,8 @@ interface StoreCardProps {
 export const StoreCard: React.FC<StoreCardProps> = ({ store, onClick }) => {
     const isOpen = getStoreOpenState({
         openingHours: store.opening_hours,
-        isOpen: store.is_open,
-        isCurrentlyOpen: store.is_currently_open
+        manualStatus: store.is_open,
+        manualOverride: store.manual_override
     }).isOpen;
 
     return (

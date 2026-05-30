@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award, Plus, Play } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Laptop, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award, Plus, Play } from 'lucide-react';
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
@@ -59,6 +59,8 @@ const AdminMercadoPagoConfig = React.lazy(() => import('./AdminMercadoPagoConfig
 const AdminPlatformCoupons = React.lazy(() => import('./AdminPlatformCoupons'));
 const StorePromotions = React.lazy(() => import('./StorePromotions').then(module => ({ default: module.StorePromotions })));
 const WhatsBot = React.lazy(() => import('./WhatsBot').then(module => ({ default: module.WhatsBot })));
+const DownloadGestor = React.lazy(() => import('./DownloadGestor').then(module => ({ default: module.DownloadGestor })));
+const StoreGestor = React.lazy(() => import('./StoreGestor').then(module => ({ default: module.StoreGestor })));
 
 const DriverMarketing = React.lazy(() => import('./DriverMarketing').then(module => ({ default: module.DriverMarketing })));
 const Reports = React.lazy(() => import('./Reports').then(module => ({ default: module.Reports })));
@@ -397,6 +399,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
     const storeTabTitles: Partial<Record<ActiveTab, string>> = {
         store_whatsbot: 'WhatsBot',
+        download_gestor: 'Baixar Gestor Desktop',
+        store_gestor: 'Gestor de Pedidos',
         wallet: 'Início',
         history: 'Pedidos',
         new_request: 'Nova Entrega',
@@ -437,7 +441,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const driverRidesTabs = new Set<ActiveTab>(['partner']);
     const driverFinanceTabs = new Set<ActiveTab>(['zebank']);
     const authTabs = ['login', 'signup', 'forgot_password'];
-    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq', 'delivery_navigation', 'referral_public'];
+    const publicTabs: ActiveTab[] = ['partner_store', 'partner_delivery', 'home', 'digital_menu', 'order_tracking', 'store_public_chat', 'faq', 'delivery_navigation', 'referral_public', 'store_gestor'];
     const isAuthenticated = userId && userId !== 'guest';
 
     // Shop Cart State
@@ -1031,6 +1035,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                 // Store Specific
                 case 'store_status': return <div className="max-w-4xl mx-auto"><StoreStatus /></div>;
+                case 'download_gestor': return <div className="max-w-6xl mx-auto"><DownloadGestor onNavigate={navigate} /></div>;
+                case 'store_gestor': return <StoreGestor onNavigate={navigate} userId={userId} userRole={effectiveRole} />;
                 case 'wallet': return <StoreWalletModule onNavigate={navigate} />;
                 case 'new_request': return <StoreRequest onNavigate={navigate} />;
                 case 'history': return <OrderHistory userRole={effectiveRole as 'store_partner'} />;
@@ -1229,6 +1235,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         {
             title: 'Operações',
             items: [
+                { label: 'Gestor de Pedidos (iFood)', tab: 'store_gestor', icon: Laptop },
                 { label: 'Solicitar Entrega', tab: 'new_request', icon: Truck },
                 { label: 'Comanda', tab: 'internal_orders_new', icon: FileText },
                 { label: 'Pedidos', tab: 'internal_orders', icon: ClipboardList, badge: pendingTicketsCount },
@@ -1262,7 +1269,8 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 { label: 'Integrações', tab: 'store_integrations', icon: Cloud },
                 { label: 'Docs API', tab: 'store_api_docs', icon: Key },
                 { label: 'Importar/Exportar', tab: 'store_product_import', icon: Download },
-                { label: 'Catálogo Impresso', tab: 'store_print_catalog', icon: ImageIcon }
+                { label: 'Catálogo Impresso', tab: 'store_print_catalog', icon: ImageIcon },
+                { label: 'Baixar Gestor Desktop', tab: 'download_gestor', icon: Laptop }
             ]
         },
         {
@@ -1606,6 +1614,14 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
         </div>
     );
 
+    if (activeTab === 'store_gestor') return (
+        <div className={theme === 'dark' ? 'dark' : ''}>
+            <Suspense fallback={<div className="h-screen bg-[#FAFBFD] dark:bg-[#0B0F19] flex items-center justify-center"><Loading variant="container" size="lg" message="Iniciando Gestor..." /></div>}>
+                <StoreGestor onNavigate={navigate} userId={userId} userRole={effectiveRole} />
+            </Suspense>
+        </div>
+    );
+
     if (isPublicTab) return (
         <div className={theme === 'dark' ? 'dark' : ''}>
             <ImpersonationBanner />
@@ -1794,6 +1810,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={TrendingUp} label="Desempenho" tab="store_performance" />
 
                                     <MenuSection title="Operação" />
+                                    <MenuButton icon={Laptop} label="Gestor de Pedidos" tab="store_gestor" />
                                     <MenuButton icon={Plus} label="Nova Entrega" tab="new_request" />
                                     <MenuButton icon={ClipboardList} label="Pedidos Ativos" tab="internal_orders" badge={pendingTicketsCount} />
                                     <MenuButton icon={History} label="Histórico Geral" tab="history" />
@@ -1826,6 +1843,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Key} label="Documentação API" tab="store_api_docs" />
                                     <MenuButton icon={Download} label="Importar/Exportar" tab="store_product_import" />
                                     <MenuButton icon={ImageIcon} label="Catálogo Impresso" tab="store_print_catalog" />
+                                    <MenuButton icon={Download} label="Baixar Gestor Desktop" tab="download_gestor" />
                                 </>
                             )}
 

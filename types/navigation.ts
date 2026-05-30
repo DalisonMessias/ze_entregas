@@ -122,4 +122,6 @@ export type ActiveTab =
     | 'referral_public'
     | 'admin_bonuses'
     | 'driver_bonuses'
+    | 'store_gestor'
+    | 'download_gestor'
     | 'not_found';

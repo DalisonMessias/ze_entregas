@@ -77,7 +77,7 @@ export class ZeAssistantService {
                     gemini: await this.getGeminiApiKey(payload.storeId) || undefined,
                     groq: await this.getGroqApiKey(payload.storeId) || undefined
                 };
-                const primaryProvider = await this.getPrimaryAIProvider();
+                const primaryProvider = await this.getPrimaryAIProvider(payload.storeId);
                 
                 response = await zeAssistantAIService.processMessage(
                     payload.messageText,
@@ -97,7 +97,7 @@ export class ZeAssistantService {
                         gemini: await this.getGeminiApiKey(payload.storeId) || undefined,
                         groq: await this.getGroqApiKey(payload.storeId) || undefined
                     };
-                    const primaryProvider = await this.getPrimaryAIProvider();
+                    const primaryProvider = await this.getPrimaryAIProvider(payload.storeId);
                     const history = await this.getConversationHistory(conversation.id);
 
                     response = await zeAssistantAIService.processMessage(
@@ -228,8 +228,8 @@ export class ZeAssistantService {
         return data?.is_active ? data.key : null;
     }
 
-    private async getPrimaryAIProvider() {
-        const provider = await cloud.getAPIKey('ai_primary_provider');
+    private async getPrimaryAIProvider(storeId?: string) {
+        const provider = await cloud.getAPIKey('ai_primary_provider', storeId);
         return provider || 'google_gemini';
     }
 

@@ -20,6 +20,11 @@ import { zeAssistantKnowledgeService } from './zeAssistantKnowledgeService.js';
 // Chave: "storeId:contactPhone:date"
 const aiFallbackCache = new Set<string>();
 
+// Cache de Histórico de Mensagens do WhatsBot para a IA (Memória de curto prazo)
+// Chave: "storeId:contactPhone"
+// Valor: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>
+const whatsBotHistoryCache = new Map<string, Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>>();
+
 // Instância global do serviço de IA
 const aiService = new ZeAssistantAIService();
 
@@ -94,6 +99,36 @@ const normalizePhone = (value?: string | null) => {
 const normalizeDirectJid = (value?: string | null) => {
     const phone = normalizePhone(value);
     return phone ? `${phone}@s.whatsapp.net` : '';
+};
+
+const formatMarkdownToWhatsApp = (text?: string | null): string => {
+    if (!text) return '';
+    // Converte negrito de markdown (**texto**) para negrito do WhatsApp (*texto*)
+    return text.replace(/\*\*(.*?)\*\*/g, '*$1*');
+};
+
+const removeRedundantGreetings = (text: string, hasHistory: boolean): string => {
+    if (!text || !hasHistory) return text;
+    
+    // Expressões regulares para mapear saudações iniciais repetidas
+    const patterns = [
+        /^\s*Olá!\s*(Que bom (te ver|ter você) por aqui!?\s*😊?\s*)?/i,
+        /^\s*(Bom dia|Boa tarde|Boa noite)!\s*(Que bom (te ver|ter você) por aqui!?\s*😊?\s*)?/i,
+        /^\s*Que bom (te ver|ter você) por aqui!?\s*😊?\s*/i
+    ];
+    
+    let cleanedText = text;
+    for (const pattern of patterns) {
+        cleanedText = cleanedText.replace(pattern, '');
+    }
+    
+    cleanedText = cleanedText.trim();
+    if (cleanedText.length > 0) {
+        // Garantir que a primeira letra da resposta após a saudação fique maiúscula
+        cleanedText = cleanedText.charAt(0).toUpperCase() + cleanedText.slice(1);
+    }
+    
+    return cleanedText;
 };
 
 const resolvePublicAppUrl = () => {
@@ -816,7 +851,7 @@ class WhatsBotInstance {
                 if (campaign.image_url) {
                     await this.sock.sendMessage(jid, { 
                         image: { url: campaign.image_url }, 
-                        caption: campaignMessageWithLink 
+                        caption: formatMarkdownToWhatsApp(campaignMessageWithLink) 
                     });
                 } else {
                     await this.sendText(jid, campaignMessageWithLink, campaign.link_url);
@@ -874,7 +909,7 @@ class WhatsBotInstance {
         }
 
         const contactPhone = normalizePhone(rawJid);
-        const contactJid = normalizeDirectJid(rawJid);
+        const contactJid = rawJid;
         if (!contactPhone || !contactJid) {
             return;
         }
@@ -954,17 +989,84 @@ class WhatsBotInstance {
             console.log(`\x1b[36m[WhatsBot ${this.storeId}] 🤖 Processando via Assistente de IA...\x1b[0m`);
             
             try {
-                // Busca API Key do Gemini
-                const { data: keyRow } = await supabaseAdmin
+                // 1. Busca se há um provedor de IA preferencial configurado para a loja
+                const { data: providerRow } = await supabaseAdmin
                     .from('api_keys')
-                    .select('key_value')
-                    .eq('provider', 'google_gemini')
+                    .select('key_token')
+                    .eq('service_name', 'ai_primary_provider')
+                    .eq('store_id', this.storeId)
+                    .maybeSingle();
+
+                let primaryProvider: 'google_gemini' | 'groq' = providerRow?.key_token as any;
+
+                // Caso não esteja configurado na loja, busca no global
+                if (primaryProvider !== 'google_gemini' && primaryProvider !== 'groq') {
+                    const { data: globalProviderRow } = await supabaseAdmin
+                        .from('api_keys')
+                        .select('key_token')
+                        .eq('service_name', 'ai_primary_provider')
+                        .is('store_id', null)
+                        .maybeSingle();
+                    primaryProvider = (globalProviderRow?.key_token as any) || 'google_gemini';
+                }
+
+                // 2. Busca API Key do Gemini (loja ou global ou .env)
+                const { data: geminiRow } = await supabaseAdmin
+                    .from('api_keys')
+                    .select('key_token, key_value')
+                    .eq('service_name', 'google_gemini')
+                    .eq('store_id', this.storeId)
                     .eq('is_active', true)
                     .maybeSingle();
 
-                const apiKey = keyRow?.key_value || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+                let geminiKey = geminiRow?.key_token || geminiRow?.key_value;
 
-                if (apiKey) {
+                if (!geminiKey) {
+                    const { data: globalGeminiRow } = await supabaseAdmin
+                        .from('api_keys')
+                        .select('key_token, key_value')
+                        .eq('service_name', 'google_gemini')
+                        .is('store_id', null)
+                        .eq('is_active', true)
+                        .maybeSingle();
+                    geminiKey = globalGeminiRow?.key_token || globalGeminiRow?.key_value;
+                }
+
+                if (!geminiKey) {
+                    geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+                }
+
+                // 3. Busca API Key do Groq (loja ou global ou .env)
+                const { data: groqRow } = await supabaseAdmin
+                    .from('api_keys')
+                    .select('key_token, key_value')
+                    .eq('service_name', 'groq')
+                    .eq('store_id', this.storeId)
+                    .eq('is_active', true)
+                    .maybeSingle();
+
+                let groqKey = groqRow?.key_token || groqRow?.key_value;
+
+                if (!groqKey) {
+                    const { data: globalGroqRow } = await supabaseAdmin
+                        .from('api_keys')
+                        .select('key_token, key_value')
+                        .eq('service_name', 'groq')
+                        .is('store_id', null)
+                        .eq('is_active', true)
+                        .maybeSingle();
+                    groqKey = globalGroqRow?.key_token || globalGroqRow?.key_value;
+                }
+
+                if (!groqKey) {
+                    groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+                }
+
+                console.log(`[WhatsBot ${this.storeId}] 🔑 Status das chaves: Gemini = ${geminiKey ? 'Disponível' : 'Ausente'} (De Loja: ${!!geminiRow}), Groq = ${groqKey ? 'Disponível' : 'Ausente'} (De Loja: ${!!groqRow})`);
+
+                const hasActiveAiKey = !!geminiKey || !!groqKey;
+
+                if (hasActiveAiKey) {
                     // 1. CARREGAR CONHECIMENTO DA LOJA (Produtos, Info, FAQ)
                     let knowledge = await zeAssistantKnowledgeService.listAll(this.storeId);
                     
@@ -983,8 +1085,12 @@ class WhatsBotInstance {
                     
                     const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
                     
-                    // 3. Montagem do pacote de dados para o Google Gemini
-                    console.log(`[WhatsBot ${this.storeId}] 📤 ENVIANDO AO GOOGLE: { Loja: "${store.store_name}", Conhecimento: ${knowledge.length} itens }`);
+                    // 3. Recuperação do Histórico de Conversa (Memória de curto prazo)
+                    const historyKey = `${this.storeId}:${contactPhone}`;
+                    let chatHistory = whatsBotHistoryCache.get(historyKey) || [];
+
+                    // Montagem do pacote de dados para o processamento de IA
+                    console.log(`[WhatsBot ${this.storeId}] 📤 ENVIANDO À IA (Provedor Principal: ${primaryProvider}): { Loja: "${store.store_name}", Conhecimento: ${knowledge.length} itens, Histórico: ${chatHistory.length / 2} turnos }`);
 
                     const aiResult = await aiService.processMessage(
                         messageText,
@@ -1006,10 +1112,26 @@ class WhatsBotInstance {
                                 storeId: this.storeId
                             }
                         },
-                        apiKey
+                        {
+                            gemini: geminiKey || undefined,
+                            groq: groqKey || undefined
+                        },
+                        primaryProvider,
+                        chatHistory
                     );
 
                     if (aiResult.success && aiResult.responseText) {
+                        const hasPriorHistory = chatHistory.length > 0;
+
+                        // Persistir histórico de mensagens trocadas com a IA
+                        chatHistory.push({ role: 'user', parts: [{ text: messageText }] });
+                        chatHistory.push({ role: 'model', parts: [{ text: aiResult.responseText }] });
+                        // Limitar memória a 10 mensagens de histórico para não estourar o tamanho do prompt
+                        if (chatHistory.length > 10) {
+                            chatHistory = chatHistory.slice(-10);
+                        }
+                        whatsBotHistoryCache.set(historyKey, chatHistory);
+
                         console.log(`[WhatsBot ${this.storeId}] 👤 CLIENTE: "${messageText}"`);
                         console.log(`[WhatsBot ${this.storeId}] 🤖 JULIA (IA): "${aiResult.responseText.substring(0, 80)}..."`);
                         
@@ -1048,8 +1170,10 @@ class WhatsBotInstance {
                             .replace(/\{\s*catalogUrl\s*\}/g, catalogUrl)
                             .trim();
 
+                        finalAiText = removeRedundantGreetings(finalAiText, hasPriorHistory);
+
                         await this.sendText(contactJid, finalAiText, catalogUrl);
-                        console.log(`\x1b[32m[WhatsBot ${this.storeId}] ✅ Resposta de IA enviada!\x1b[0m`);
+                        console.log(`[WhatsBot ${this.storeId}] ✅ Resposta de IA enviada!\x1b[0m`);
                         return;
                     } else {
                         // IA falhou mas tem mensagem de erro amigável — envia direto ao cliente
@@ -1068,60 +1192,67 @@ class WhatsBotInstance {
                         throw new Error(aiResult.handoffReason || 'IA falhou no processamento');
                     }
                 } else {
-                    console.warn(`[WhatsBot ${this.storeId}] IA ativa mas API Key não encontrada.`);
+                    console.warn(`[WhatsBot ${this.storeId}] IA ativa mas nenhuma API Key ativada (Gemini ou Groq). Redirecionando para o fallback de catálogo padrão da loja.`);
+                    throw new Error('Nenhuma chave de IA (Gemini ou Groq) ativada.');
                 }
             } catch (aiErr: any) {
-                console.error(`[WhatsBot ${this.storeId}] Iniciando fallback blindado para:`, aiErr.message);
+                console.error(`[WhatsBot ${this.storeId}] IA falhou (${aiErr.message}). Iniciando fallback padrão da loja com catálogo...`);
                 
-                // MENSAGEM DE FALLBACK UNIFICADA E PROTEGIDA
-                const fallbackMsg = "Nosso Assistente está conversando com muitas pessoas, peço que tente novamente mais tarde. 🙏";
+                const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
+                const replyMessage = buildWhatsBotReplyMessage({
+                    customMessage: settings.custom_message,
+                    customClosedMessage: settings.custom_closed_message,
+                    catalogUrl,
+                    storeName: store.store_name,
+                    isOpen: store.is_open
+                });
+
                 const sendDateLocal = getLocalDateString(settings.timezone || DEFAULT_TIMEZONE);
                 const memoryKey = `${this.storeId}:${contactPhone}:${sendDateLocal}`;
                 
                 try {
-                    // 1. Verificação de MEMÓRIA (Instantânea)
+                    // 1. Verificação de MEMÓRIA (Instantânea) para evitar loops se houver erro recorrente
                     if (aiFallbackCache.has(memoryKey)) {
                         console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO DE MEMÓRIA: Silêncio total mantido para ${contactPhone}.`);
                         return;
                     }
 
-                    // 2. Verificação de BANCO (Persistência)
-                    const { data: alreadySent } = await supabaseAdmin
-                        .from('whatsbot_send_history')
-                        .select('id')
-                        .eq('store_id', this.storeId)
-                        .eq('contact_phone', contactPhone)
-                        .eq('send_date', sendDateLocal)
-                        .ilike('message_body', '%conversando com muitas pessoas%')
-                        .maybeSingle();
+                    // 2. Verificação e reserva no Banco (Persistência) usando reserveDailySend para anti-spam
+                    const messageSource = settings.custom_message?.trim() ? 'custom' as const : 'catalog_default' as const;
+                    const isClosedMessage = store.is_open === false;
 
-                    if (!alreadySent) {
-                        const reservation = await reserveDailySend({
-                            storeId: this.storeId,
-                            contactPhone,
-                            contactJid,
-                            sendDateLocal,
-                            messageSource: 'custom', 
-                            messageBody: fallbackMsg,
-                            inboundMessageId: message.key.id || null,
-                            isClosedMessage: store.is_open === false
-                        });
+                    const reservation = await reserveDailySend({
+                        storeId: this.storeId,
+                        contactPhone,
+                        contactJid,
+                        sendDateLocal,
+                        messageSource,
+                        messageBody: replyMessage,
+                        inboundMessageId: message.key.id || null,
+                        isClosedMessage
+                    });
 
-                        if (reservation.allowed) {
-                            await this.sendText(contactJid, fallbackMsg);
-                            await markSendHistorySent(reservation.history_id);
-                            
-                            // Salva na memória RAM para os próximos eventos
-                            aiFallbackCache.add(memoryKey);
-                            console.log(`[WhatsBot ${this.storeId}] 🛡️ PRIMEIRO AVISO: Enviado e silenciado na memória para ${contactPhone}.`);
+                    if (reservation.allowed) {
+                        const targetImageUrl = isClosedMessage ? settings.closed_image_url : settings.image_url;
+
+                        if (targetImageUrl) {
+                            await this.sock.sendMessage(contactJid, { 
+                                image: { url: targetImageUrl }, 
+                                caption: formatMarkdownToWhatsApp(replyMessage) 
+                            });
+                        } else {
+                            await this.sendText(contactJid, replyMessage, catalogUrl);
                         }
-                    } else {
-                        // Se não estava no cache mas estava no banco, atualiza o cache
+
+                        await markSendHistorySent(reservation.history_id);
                         aiFallbackCache.add(memoryKey);
-                        console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO BANCO: Já avisado hoje. Silenciando ${contactPhone} na memória agora.`);
+                        console.log(`[WhatsBot ${this.storeId}] ✅ Fallback padrão com catálogo enviado com sucesso para ${contactPhone}!`);
+                    } else {
+                        aiFallbackCache.add(memoryKey);
+                        console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO ANTI-SPAM (Fallback): ${contactPhone} já recebeu esta mensagem hoje.`);
                     }
                 } catch (sendErr: any) {
-                    console.error(`[WhatsBot ${this.storeId}] Falha crítica na blindagem de fallback:`, sendErr.message);
+                    console.error(`[WhatsBot ${this.storeId}] Falha crítica no envio do fallback padrão:`, sendErr.message);
                 }
                 
                 return; // Bloqueia tudo no final
@@ -1171,7 +1302,7 @@ class WhatsBotInstance {
             if (targetImageUrl) {
                 await this.sock.sendMessage(contactJid, { 
                     image: { url: targetImageUrl }, 
-                    caption: replyMessage 
+                    caption: formatMarkdownToWhatsApp(replyMessage) 
                 });
             } else {
                 await this.sendText(contactJid, replyMessage, catalogUrl);
@@ -1192,6 +1323,8 @@ class WhatsBotInstance {
             throw new Error('WhatsBot não está conectado.');
         }
 
+        const formattedText = formatMarkdownToWhatsApp(text);
+
         // Apenas tenta gerar preview se a URL for pública (não é localhost)
         const isPublicUrl = linkUrl &&
             !linkUrl.includes('localhost') &&
@@ -1199,7 +1332,7 @@ class WhatsBotInstance {
             linkUrl.startsWith('http');
 
         await this.sock.sendMessage(to, {
-            text,
+            text: formattedText,
             ...(isPublicUrl ? {} : { linkPreview: undefined })
         });
     }
@@ -1413,6 +1546,48 @@ class WhatsBotServiceManager {
 
         if (error) throw error;
         return data;
+    }
+
+    public async clearFallbackCache(storeId: string, contactPhone?: string) {
+        if (contactPhone) {
+            const phone = contactPhone.replace(/\D/g, '');
+            for (const key of aiFallbackCache) {
+                if (key.includes(`:${phone}:`) || key.endsWith(`:${phone}`)) {
+                    aiFallbackCache.delete(key);
+                }
+            }
+            whatsBotHistoryCache.delete(`${storeId}:${phone}`);
+            console.log(`[WhatsBot ${storeId}] 🧹 Cache anti-spam e histórico limpos para o telefone ${contactPhone}.`);
+        } else {
+            for (const key of aiFallbackCache) {
+                if (key.startsWith(`${storeId}:`) || key.includes(`:${storeId}:`)) {
+                    aiFallbackCache.delete(key);
+                }
+            }
+            // Limpa todos os históricos de conversas da loja em memória
+            for (const key of whatsBotHistoryCache.keys()) {
+                if (key.startsWith(`${storeId}:`)) {
+                    whatsBotHistoryCache.delete(key);
+                }
+            }
+            console.log(`[WhatsBot ${storeId}] 🧹 Todo o cache anti-spam e históricos da loja foram limpos.`);
+        }
+
+        const query = supabaseAdmin
+            .from('whatsbot_send_history')
+            .delete()
+            .eq('store_id', storeId);
+
+        if (contactPhone) {
+            query.eq('contact_phone', contactPhone.replace(/\D/g, ''));
+        }
+
+        const { error } = await query;
+        if (error) {
+            console.warn(`[WhatsBot ${storeId}] Erro ao deletar histórico anti-spam do banco:`, error.message);
+        }
+
+        return { success: true };
     }
 }
 

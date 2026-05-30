@@ -782,6 +782,7 @@ export interface PartnerProfile {
     store_name?: string;
     is_open?: boolean;
     manual_override?: boolean;
+    manual_override_until?: string | null;
     preparation_time?: number;
     preparation_time_min?: number;
     preparation_time_max?: number;
