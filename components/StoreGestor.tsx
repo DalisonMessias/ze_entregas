@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, Suspense, useRef } from 'react';
-import { Play, Laptop, CheckCircle, Bell, ArrowRight, ShieldCheck, Sparkles, Zap, Globe, Store, Lock, ClipboardList, ShoppingBag, History, MessageSquare, Settings, Headphones, Search, SlidersHorizontal, Sun, Moon, LogOut, RefreshCw, Volume2, VolumeX, AlertCircle, ArrowLeft, MapPin, X } from 'lucide-react';
+import { Play, Laptop, CheckCircle, Bell, ArrowRight, ShieldCheck, Sparkles, Zap, Globe, Store, Lock, ClipboardList, ShoppingBag, History, MessageSquare, Settings, Headphones, Search, SlidersHorizontal, Sun, Moon, LogOut, RefreshCw, Volume2, VolumeX, AlertCircle, ArrowLeft, MapPin, X, Smartphone, MessageCircle } from 'lucide-react';
 import { supabase, getMyPartnerProfile } from '../services/cloud';
 import { UserRole } from '../types';
 
@@ -8,11 +8,14 @@ const StoreCatalog = React.lazy(() => import('./StoreCatalog').then(module => ({
 const OrderHistory = React.lazy(() => import('./OrderHistory'));
 const InternalChatContainer = React.lazy(() => import('./InternalChat/InternalChatContainer'));
 const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => ({ default: module.StoreSettings })));
+const InternalOrders = React.lazy(() => import('./InternalOrders'));
+const WhatsBot = React.lazy(() => import('./WhatsBot').then(module => ({ default: module.WhatsBot })));
 import { PartnerProfile } from '../types';
 import { ActiveTab } from '../types/navigation';
 import { Loading } from './Loading';
 import { useDialog } from '../utils/dialogService';
 import { getStoreOpenState } from '../utils/storeHours';
+import { ShieldAlert } from 'lucide-react';
 
 interface StoreGestorProps {
   onNavigate?: (tab: ActiveTab) => void;
@@ -45,7 +48,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
 
   const [profile, setProfile] = useState<PartnerProfile | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [activeMenu, setActiveMenu] = useState<'pedidos' | 'cardapio' | 'historico' | 'chat' | 'config'>('pedidos');
+  const [activeMenu, setActiveMenu] = useState<'pedidos' | 'nova_comanda' | 'cardapio' | 'historico' | 'chat' | 'whatsbot' | 'config'>('pedidos');
   const [activeSubTab, setActiveSubTab] = useState<'agora' | 'agendados'>('agora');
   const [searchQuery, setSearchQuery] = useState('');
   const [autoAccept, setAutoAccept] = useState(() => {
@@ -56,8 +59,39 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
-  const [audioAlert, setAudioAlert] = useState<HTMLAudioElement | null>(null);
   const [isAlerting, setIsAlerting] = useState(false);
+  const [audioAlert, setAudioAlert] = useState<HTMLAudioElement | null>(null);
+
+  const handleBlockCustomer = async (order: any) => {
+    if (!order.customer_phone) {
+      dialog.toast({ message: 'Este pedido não possui telefone para bloquear.', type: 'error' });
+      return;
+    }
+    const phone = order.customer_phone.replace(/\D/g, '');
+    const confirmed = await dialog.confirm({
+      title: 'Bloquear Cliente',
+      message: `Deseja bloquear o número ${order.customer_phone} para futuros pedidos na loja toda (App e WhatsApp)?`,
+      confirmButtonText: 'Sim, bloquear',
+      cancelButtonText: 'Cancelar'
+    });
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase.from('store_blocked_users').insert({
+        store_id: localUserId,
+        block_type: 'phone',
+        block_value: phone,
+        reason: 'Bloqueado a partir do pedido #' + order.id.slice(0,6)
+      });
+      if (error) {
+        if (error.code === '23505') throw new Error('Este cliente já está bloqueado.');
+        throw error;
+      }
+      dialog.toast({ message: 'Cliente bloqueado com sucesso.', type: 'success' });
+    } catch (err: any) {
+      dialog.toast({ message: err.message || 'Erro ao bloquear cliente.', type: 'error' });
+    }
+  };
   const [now, setNow] = useState(new Date());
   
   // Estado para armazenar o pedido atualmente selecionado pelo lojista
@@ -763,6 +797,21 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
             </button>
 
             <button
+              onClick={() => setActiveMenu('nova_comanda')}
+              title="Nova Comanda"
+              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                activeMenu === 'nova_comanda'
+                  ? 'bg-red-500/10 text-red-500 font-bold'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+              }`}
+            >
+              <span className="relative flex items-center justify-center">
+                <ClipboardList className="w-6 h-6" />
+                <span className="absolute -bottom-1 -right-1 bg-red-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[10px] font-bold border-2 border-[#1A1E29]">+</span>
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveMenu('cardapio')}
               title="Cardápio / Produtos"
               className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
@@ -788,7 +837,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
 
             <button
               onClick={() => setActiveMenu('chat')}
-              title="Conversas / Chats"
+              title="Conversas e Chamados"
               className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
                 activeMenu === 'chat'
                   ? 'bg-red-500/10 text-red-500 font-bold'
@@ -796,6 +845,18 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
               }`}
             >
               <MessageSquare className="w-6 h-6" />
+            </button>
+
+            <button
+              onClick={() => setActiveMenu('whatsbot')}
+              title="WhatsBot (Automação de WhatsApp)"
+              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                activeMenu === 'whatsbot'
+                  ? 'bg-green-500/10 text-green-500 font-bold'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+              }`}
+            >
+              <MessageCircle className="w-6 h-6" />
             </button>
 
             <button
@@ -835,6 +896,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
       </aside>
 
       {/* 2. Barra Operacional Lateral de Pedidos (Sidebar Central) */}
+      {activeMenu === 'pedidos' && (
       <section className="w-80 md:w-90 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex flex-col justify-between flex-shrink-0 z-20 shadow-md">
         
         {/* Topo: Seletores de abas Agora/Agendados */}
@@ -1008,6 +1070,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
           )}
         </div>
       </section>
+      )}
 
       {activeMenu === 'pedidos' && (
         <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-[#FAFBFD] dark:bg-[#0B0F19]">
@@ -1184,10 +1247,22 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
                 {/* 2. Detalhes de Cliente e Endereço */}
                 <div className="space-y-6">
                   {/* Informações do Cliente */}
-                  <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
-                    <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                      Dados do Cliente
-                    </h3>
+                  <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm space-y-4 relative">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                          Dados do Cliente
+                        </h3>
+                        {selectedOrder.customer_phone && (
+                            <button
+                                onClick={() => handleBlockCustomer(selectedOrder)}
+                                className="text-[10px] uppercase font-black tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-1 rounded-full transition-colors flex items-center gap-1"
+                                title="Bloquear este cliente de fazer novos pedidos"
+                            >
+                                <ShieldAlert className="w-3 h-3" />
+                                Bloquear
+                            </button>
+                        )}
+                    </div>
                     <div className="space-y-3.5">
                       <div>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Nome</span>
@@ -1398,6 +1473,15 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
         </main>
       )}
 
+      {/* Renderização da Nova Comanda Standalone */}
+      {activeMenu === 'nova_comanda' && (
+        <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#FAFBFD] dark:bg-[#0B0F19]">
+          <Suspense fallback={<div className="py-20 flex justify-center"><Loading variant="inline" size="md" message="Carregando comanda..." /></div>}>
+            <InternalOrders mode="new_order" />
+          </Suspense>
+        </main>
+      )}
+
       {/* Renderização do Histórico Standalone */}
       {activeMenu === 'historico' && (
         <main className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar bg-[#FAFBFD] dark:bg-[#0B0F19]">
@@ -1423,11 +1507,26 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
               <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
                 <MessageSquare className="w-6 h-6 text-red-500" /> Conversas & Chamados
               </h2>
-              <p className="text-xs text-gray-400">Atenda chamados e converse com seus clientes em tempo real.</p>
+              <p className="text-xs text-gray-400 mt-1">Atenda chamados e converse com seus clientes em tempo real no aplicativo.</p>
+              <div className="mt-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 p-3 rounded-xl text-xs flex items-start gap-2 shadow-sm">
+                <AlertCircle className="w-4.5 h-4.5 mt-0.5 shrink-0" />
+                <p className="leading-relaxed">
+                  Este é o chat <strong>interno do aplicativo</strong> Zé Entregas, utilizado exclusivamente para chamados e comunicação dentro da nossa plataforma. Ele <strong>não possui vínculo</strong> com o seu WhatsApp. Para visualizar os atendimentos do WhatsApp, acesse a aba <strong>WhatsBot</strong> no menu lateral.
+                </p>
+              </div>
             </div>
           </div>
           <Suspense fallback={<div className="py-20 flex justify-center"><Loading variant="inline" size="md" message="Iniciando chat..." /></div>}>
             {localUserId && <InternalChatContainer storeId={localUserId} attendantId={localUserId} filterType="customer" />}
+          </Suspense>
+        </main>
+      )}
+
+      {/* Renderização do WhatsBot Standalone */}
+      {activeMenu === 'whatsbot' && (
+        <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-[#FAFBFD] dark:bg-[#0B0F19]">
+          <Suspense fallback={<div className="py-20 flex justify-center"><Loading variant="inline" size="md" message="Carregando WhatsBot..." /></div>}>
+            <WhatsBot storeId={localUserId} />
           </Suspense>
         </main>
       )}

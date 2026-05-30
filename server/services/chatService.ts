@@ -443,6 +443,24 @@ export class ChatInstance extends EventEmitter {
       let contactName = message.pushName || conversationId.split('@')[0];
       const phoneNumber = conversationId.split('@')[0].split(':')[0].replace(/\D/g, '');
 
+      if (!isFromMe) {
+        const { data: blockedUser } = await supabaseAdmin
+          .from('store_blocked_users')
+          .select('id')
+          .eq('store_id', this.storeId)
+          .eq('block_type', 'phone')
+          .eq('block_value', phoneNumber)
+          .maybeSingle();
+
+        if (blockedUser) {
+          console.log(`[Loja ${this.storeId}] Mensagem recebida de contato bloqueado (${phoneNumber}).`);
+          try {
+             await this.sock?.sendMessage(message.key.remoteJid!, { text: 'Desculpe, nosso sistema de atendimento e pedidos está temporariamente indisponível para o seu contato.' });
+          } catch(e) {}
+          return; // Ignora o resto do processamento
+        }
+      }
+
       // 1. Atualiza conversa (onConflict: store_id,conversation_id para evitar colisões)
       const conversationUpsert = {
         store_id: this.storeId,
@@ -822,13 +840,21 @@ ChatInstance.prototype.processWithZeAssistant = async function (
     });
 
     // Se assistente gerou resposta, enviar
-    if (response.success && response.responseText && !response.shouldHandoff) {
+    if (response.success && response.responseText) {
       await this.sendMessage(conversationId, response.responseText);
     }
 
-    // Se deve transferir para humano, não fazer nada (atendente verá a mensagem)
+    // Se deve transferir para humano, marca a conversa como handoff
     if (response.shouldHandoff) {
       console.log(`[Loja ${this.storeId}] Zé Assistente transferiu conversa para humano: ${response.handoffReason}`);
+      try {
+        await supabaseAdmin.from('ze_assistant_conversations').update({
+            handoff_to_human: true,
+            handoff_reason: response.handoffReason || 'Solicitação via AI'
+        }).eq('conversation_id', conversationId);
+      } catch (err) {
+        console.error(`[Loja ${this.storeId}] Erro ao marcar handoff_to_human:`, err);
+      }
     }
 
   } catch (error) {

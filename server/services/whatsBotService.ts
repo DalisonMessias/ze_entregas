@@ -914,6 +914,20 @@ class WhatsBotInstance {
             return;
         }
 
+        // 0. Verifica se o usuário está bloqueado
+        const { data: blockedUser } = await supabaseAdmin
+            .from('store_blocked_users')
+            .select('id')
+            .eq('store_id', this.storeId)
+            .eq('block_type', 'phone')
+            .eq('block_value', contactPhone)
+            .maybeSingle();
+
+        if (blockedUser) {
+            console.log(`\x1b[33m[WhatsBot ${this.storeId}] 🛡️ Contato bloqueado (${contactPhone}) - Ignorando mensagem.\x1b[0m`);
+            return;
+        }
+
         console.log(`\x1b[35m[WhatsBot ${this.storeId}] 📩 Mensagem recebida de ${contactPhone}\x1b[0m`);
 
         // 1. Tenta extrair o texto da mensagem

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check, Crown, Lock, Megaphone, Users, Plus, Play, StopCircle, Loader2, Image as ImageIcon, Camera, Trash2, ExternalLink, Sparkles, Edit2, Save } from 'lucide-react';
+import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check, Crown, Lock, Megaphone, Users, Plus, Play, StopCircle, Loader2, Image as ImageIcon, Camera, Trash2, ExternalLink, Sparkles, Edit2, Save, Shield } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AccessDenied } from './AccessDenied';
 import { Button } from './Button';
@@ -11,6 +11,7 @@ import { WhatsBotStatus } from '../types';
 import { useDialog } from '../utils/dialogService';
 import { usePlanPermissions } from '../hooks/usePlanPermissions';
 import { CustomDateInput } from './CustomDateInput';
+import { StoreBlocklistModal } from './StoreBlocklistModal';
 
 const statusMap: Record<WhatsBotStatus['connectionStatus'], { label: string; badge: string }> = {
     CONNECTED: {
@@ -180,9 +181,9 @@ const ImageInput: React.FC<{
     );
 };
 
-export const WhatsBot: React.FC = () => {
+export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propStoreId }) => {
     const [status, setStatus] = useState<WhatsBotStatus | null>(null);
-    const [storeId, setStoreId] = useState<string | null>(null);
+    const [storeId, setStoreId] = useState<string | null>(propStoreId || null);
     const [loading, setLoading] = useState(true);
     const [loadingAction, setLoadingAction] = useState<'start' | 'stop' | 'save' | 'logout' | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -191,6 +192,7 @@ export const WhatsBot: React.FC = () => {
     const [draftImageUrl, setDraftImageUrl] = useState<string | null>(null);
     const [draftClosedImageUrl, setDraftClosedImageUrl] = useState<string | null>(null);
     const [isDirty, setIsDirty] = useState(false);
+    const [isBlocklistModalOpen, setIsBlocklistModalOpen] = useState(false);
     const isDirtyRef = useRef(false);
     const [copied, setCopied] = useState(false);
     const { toast, confirm } = useDialog();
@@ -282,12 +284,16 @@ export const WhatsBot: React.FC = () => {
 
         const load = async () => {
             try {
-                const profile = await cloud.getMyPartnerProfile();
-                if (!mounted) return;
-                setStoreId(profile?.id || null);
+                let idToUse = propStoreId;
+                if (!idToUse) {
+                    const profile = await cloud.getMyPartnerProfile();
+                    if (!mounted) return;
+                    idToUse = profile?.id || null;
+                    setStoreId(idToUse);
+                }
 
-                if (profile?.id) {
-                    await refreshStatus(true, profile?.id || null);
+                if (idToUse) {
+                    await refreshStatus(true, idToUse);
                 } else {
                     setLoading(false);
                 }
@@ -298,7 +304,12 @@ export const WhatsBot: React.FC = () => {
             }
         };
 
-        void load();
+        if (propStoreId) {
+            setStoreId(propStoreId);
+            void refreshStatus(true, propStoreId);
+        } else {
+            void load();
+        }
 
         return () => {
             mounted = false;
@@ -847,9 +858,9 @@ export const WhatsBot: React.FC = () => {
 
     const handleClearCache = async () => {
         const confirmed = await confirm({
-            title: 'Desbloquear Contatos (Anti-Spam)',
-            message: 'Tem certeza de que deseja liberar todos os números do cache de bloqueios e limpar o histórico de envios anti-spam de hoje? Isso fará com que o robô possa responder imediatamente a qualquer contato que esteja bloqueado.',
-            confirmButtonText: 'Sim, desbloquear',
+            title: 'Limpar Anti-Spam (Hoje)',
+            message: 'Tem certeza de que deseja limpar o histórico de envios anti-spam de hoje? Isso fará com que o robô possa enviar novas mensagens hoje para contatos que já receberam a mensagem.',
+            confirmButtonText: 'Sim, limpar',
             cancelButtonText: 'Cancelar'
         });
 
@@ -1082,8 +1093,18 @@ export const WhatsBot: React.FC = () => {
                                     loading={clearingCache}
                                     disabled={loadingAction !== null}
                                     icon={<RefreshCcw className={`w-4 h-4 ${clearingCache ? 'animate-spin' : ''}`} />}
+                                    title="Permite que o bot envie mensagens de boas vindas novamente hoje para quem já recebeu"
                                 >
-                                    Desbloquear Contatos
+                                    Zerar Anti-Spam Diário
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsBlocklistModalOpen(true)}
+                                    disabled={loadingAction !== null}
+                                    icon={<Shield className="w-4 h-4 text-red-500" />}
+                                    className="border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                >
+                                    Gerenciar Bloqueios
                                 </Button>
                                 <Button
                                     variant="danger"
@@ -1745,7 +1766,7 @@ export const WhatsBot: React.FC = () => {
                                             parts[parts.length - 1] = formatted;
                                             setManualPhones(parts.join(', '));
                                         }}
-                                        placeholder="(99) 99999-9999 (separe por vírgula)"
+                                        placeholder="35999123456 (separe por vírgula)"
                                         className="flex-1 px-5 py-3.5 bg-gray-50/50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
                                         onKeyDown={(e) => e.key === 'Enter' && handleAddManualPhones()}
                                     />
@@ -1858,6 +1879,12 @@ export const WhatsBot: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            <StoreBlocklistModal 
+                isOpen={isBlocklistModalOpen} 
+                onClose={() => setIsBlocklistModalOpen(false)} 
+                storeId={storeId || ''} 
+            />
         </div>
     );
 };

@@ -680,6 +680,18 @@ BEGIN
         END IF;
     END IF;
 
+    -- Verificar se o usuário está bloqueado
+    IF EXISTS (
+        SELECT 1 FROM public.store_blocked_users 
+        WHERE store_id = p_store_id 
+        AND (
+            (block_type = 'phone' AND block_value = regexp_replace(COALESCE(p_customer_phone, ''), '\D', '', 'g'))
+            OR (block_type = 'email' AND block_value = (SELECT email FROM auth.users WHERE id = auth.uid()))
+        )
+    ) THEN
+        RAISE EXCEPTION 'Não foi possível processar o pedido no momento.';
+    END IF;
+
     INSERT INTO public.orders (
         store_id, 
         user_id, 
@@ -1641,4 +1653,37 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION public.update_shop_status_based_on_schedule() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_shop_status_based_on_schedule() TO service_role;
 
+-- ==========================================
+-- TABELA: store_blocked_users (Anti-Spam / Blocklist)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.store_blocked_users (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    store_id uuid NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    block_type text NOT NULL CHECK (block_type IN ('phone', 'email', 'ip')),
+    block_value text NOT NULL,
+    reason text,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(store_id, block_type, block_value)
+);
 
+-- RLS para store_blocked_users
+ALTER TABLE public.store_blocked_users ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas podem ver seus bloqueios" ON public.store_blocked_users;
+CREATE POLICY "Lojistas podem ver seus bloqueios" ON public.store_blocked_users
+    FOR SELECT USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Lojistas podem criar bloqueios" ON public.store_blocked_users;
+CREATE POLICY "Lojistas podem criar bloqueios" ON public.store_blocked_users
+    FOR INSERT WITH CHECK (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Lojistas podem deletar bloqueios" ON public.store_blocked_users;
+CREATE POLICY "Lojistas podem deletar bloqueios" ON public.store_blocked_users
+    FOR DELETE USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Leitura pública para validação de checkout" ON public.store_blocked_users;
+CREATE POLICY "Leitura pública para validação de checkout" ON public.store_blocked_users
+    FOR SELECT USING (true);
+
+-- Permissões de tabela
+GRANT ALL ON TABLE public.store_blocked_users TO anon, authenticated, service_role;
