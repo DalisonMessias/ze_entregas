@@ -28,6 +28,16 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
+// Origens permitidas: localhost (dev) + domínio do Vercel (produção)
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:4000',
+  'http://127.0.0.1:3000',
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+  // Permite todos os previews do Vercel (ex: ze-entregas-git-main-xxx.vercel.app)
+  /^https:\/\/.*\.vercel\.app$/,
+];
+
 app.use(compression({
   level: 6,
   threshold: 1024,
@@ -36,9 +46,33 @@ app.use(compression({
     return compression.filter(req, res);
   }
 }));
-app.use(cors());
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permite requisições sem origem (ex: chamadas server-to-server, curl, Postman)
+    if (!origin) return callback(null, true);
+
+    const isAllowed = allowedOrigins.some((allowed) => {
+      if (allowed instanceof RegExp) return allowed.test(origin);
+      return allowed === origin;
+    });
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Origem bloqueada: ${origin}`);
+      callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
+
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 
 // Middleware de autenticação real é aplicado via rotas específicas ou herança de token
 

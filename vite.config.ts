@@ -5,6 +5,15 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+
+  // URL do backend — usa variável de ambiente ou fallback para localhost em dev
+  const backendUrl = env.VITE_API_BASE_URL || 'http://localhost:4000';
+
+  // URL do WebSocket derivada da URL do backend
+  const backendWsUrl = backendUrl
+    .replace(/^https:\/\//, 'wss://')
+    .replace(/^http:\/\//, 'ws://');
+
   return {
     server: {
       port: 3000,
@@ -15,22 +24,22 @@ export default defineConfig(({ mode }) => {
 
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:4000',
+          target: backendUrl,
           changeOrigin: true,
           secure: false,
         },
         '/socket.io': {
-          target: 'http://127.0.0.1:4000',
+          target: backendUrl,
           ws: true,
         },
-        // Configuração genérica para o WebSocket do WhatsApp
+        // WebSocket do Chat Interno
         '/ws-chat': {
-          target: 'ws://127.0.0.1:4000',
+          target: backendWsUrl,
           ws: true,
           rewrite: (path) => path.replace(/^\/ws-chat/, '')
         },
         '/pwa': {
-          target: 'http://127.0.0.1:4000',
+          target: backendUrl,
           changeOrigin: true
         }
       }
