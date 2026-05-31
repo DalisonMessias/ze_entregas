@@ -26,6 +26,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/indicacoes': 'admin_referrals',
     '/admin/institucional': 'admin_institutional',
     '/admin/novidades': 'admin_platform_news',
+    '/admin/novidades-beta': 'admin_beta_news',
     '/admin/financeiro-loja': 'admin_store_finance',
     '/admin/pedidos-loja': 'admin_store_orders',
     '/admin/controle-carteira': 'admin_wallet_control',

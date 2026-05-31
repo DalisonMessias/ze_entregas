@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, Suspense, useRef } from 'react';
-import { Play, Laptop, CheckCircle, Bell, ArrowRight, ShieldCheck, Sparkles, Zap, Globe, Store, Lock, ClipboardList, ShoppingBag, History, MessageSquare, Settings, Headphones, Search, SlidersHorizontal, Sun, Moon, LogOut, RefreshCw, Volume2, VolumeX, AlertCircle, ArrowLeft, MapPin, X, Smartphone, MessageCircle } from 'lucide-react';
-import { supabase, getMyPartnerProfile } from '../services/cloud';
+import { Play, Laptop, CheckCircle, Bell, ArrowRight, ShieldCheck, Sparkles, Zap, Globe, Store, Lock, ClipboardList, ShoppingBag, History, MessageSquare, Settings, Headphones, Search, SlidersHorizontal, Sun, Moon, LogOut, RefreshCw, Volume2, VolumeX, AlertCircle, ArrowLeft, MapPin, X, Smartphone, MessageCircle, Tag } from 'lucide-react';
+import { supabase, getMyPartnerProfile, getActiveAnnouncement, checkAnnouncementRead, markAnnouncementAsRead } from '../services/cloud';
 import { UserRole } from '../types';
 
 // Lazy loaded components para o sub-sistema autônomo e standalone
@@ -10,6 +10,8 @@ const InternalChatContainer = React.lazy(() => import('./InternalChat/InternalCh
 const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => ({ default: module.StoreSettings })));
 const InternalOrders = React.lazy(() => import('./InternalOrders'));
 const WhatsBot = React.lazy(() => import('./WhatsBot').then(module => ({ default: module.WhatsBot })));
+const StoreSupport = React.lazy(() => import('./StoreSupport').then(module => ({ default: module.StoreSupport })));
+const StorePromotions = React.lazy(() => import('./StorePromotions').then(module => ({ default: module.StorePromotions })));
 import { PartnerProfile } from '../types';
 import { ActiveTab } from '../types/navigation';
 import { Loading } from './Loading';
@@ -27,6 +29,42 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
   const dialog = useDialog();
 
   const [localUserId, setLocalUserId] = useState<string | null>(propUserId && propUserId !== 'guest' ? propUserId : null);
+
+  // Estados para novidades da versão Beta
+  const [activeAnnouncement, setActiveAnnouncement] = useState<any>(null);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [announcementChecked, setAnnouncementChecked] = useState(false);
+
+  const checkAnnouncements = async (storeId: string) => {
+    try {
+      const announcement = await getActiveAnnouncement();
+      if (announcement) {
+        const isRead = await checkAnnouncementRead(announcement.id);
+        if (!isRead) {
+          setActiveAnnouncement(announcement);
+          setShowAnnouncementModal(true);
+        }
+      }
+    } catch (e) {
+      console.error('[StoreGestor] Erro ao verificar novidades/anúncios:', e);
+    }
+  };
+
+  const handleConfirmAnnouncement = async () => {
+    if (!activeAnnouncement) return;
+    if (!announcementChecked) {
+      dialog.toast({ message: 'Por favor, marque como lido para confirmar.', type: 'warning' });
+      return;
+    }
+
+    try {
+      await markAnnouncementAsRead(activeAnnouncement.id);
+      setShowAnnouncementModal(false);
+      dialog.toast({ message: 'Entendido! Obrigado pelo feedback.', type: 'success' });
+    } catch (e) {
+      dialog.toast({ message: 'Erro ao registrar confirmação.', type: 'error' });
+    }
+  };
   const [localUserRole, setLocalUserRole] = useState<UserRole | null>(propUserRole && propUserId !== 'guest' ? propUserRole : null);
 
   const activeUserIdRef = useRef<string | null>(localUserId);
@@ -48,7 +86,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
 
   const [profile, setProfile] = useState<PartnerProfile | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [activeMenu, setActiveMenu] = useState<'pedidos' | 'nova_comanda' | 'cardapio' | 'historico' | 'chat' | 'whatsbot' | 'config'>('pedidos');
+  const [activeMenu, setActiveMenu] = useState<'pedidos' | 'nova_comanda' | 'cardapio' | 'historico' | 'chat' | 'whatsbot' | 'config' | 'suporte' | 'promocoes'>('pedidos');
   const [activeSubTab, setActiveSubTab] = useState<'agora' | 'agendados'>('agora');
   const [searchQuery, setSearchQuery] = useState('');
   const [autoAccept, setAutoAccept] = useState(() => {
@@ -117,7 +155,8 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
         setProfile(p);
         await Promise.all([
           loadOrders(p.id),
-          loadMetrics(p.id)
+          loadMetrics(p.id),
+          checkAnnouncements(p.id)
         ]);
       }
     } catch (e) {
@@ -207,7 +246,8 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
             setProfile(p);
             await Promise.all([
               loadOrders(p.id),
-              loadMetrics(p.id)
+              loadMetrics(p.id),
+              checkAnnouncements(p.id)
             ]);
           }
         } catch (e) {
@@ -870,6 +910,30 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
             >
               <Settings className="w-6 h-6" />
             </button>
+
+            <button
+              onClick={() => setActiveMenu('suporte')}
+              title="Central de Suporte"
+              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                activeMenu === 'suporte'
+                  ? 'bg-red-500/10 text-red-500 font-bold'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+              }`}
+            >
+              <Headphones className="w-6 h-6" />
+            </button>
+
+            <button
+              onClick={() => setActiveMenu('promocoes')}
+              title="Promoções & Cupons"
+              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                activeMenu === 'promocoes'
+                  ? 'bg-orange-500/10 text-orange-500 font-bold'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+              }`}
+            >
+              <Tag className="w-6 h-6" />
+            </button>
           </div>
         </div>
 
@@ -1353,7 +1417,10 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
 
               {/* Cards de Alerta/Novidades estilo iFood */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-shadow relative overflow-hidden flex flex-col justify-between h-36">
+                <div
+                  onClick={() => setActiveMenu('whatsbot')}
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-all hover:scale-[1.01] relative overflow-hidden flex flex-col justify-between h-36 cursor-pointer"
+                >
                   <div className="absolute top-0 right-0 p-4 opacity-10">
                     <MessageSquare className="w-24 h-24" />
                   </div>
@@ -1368,7 +1435,12 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-shadow relative overflow-hidden flex flex-col justify-between h-36">
+                <a
+                  href="/shop"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-all hover:scale-[1.01] relative overflow-hidden flex flex-col justify-between h-36 cursor-pointer block"
+                >
                   <div className="absolute top-0 right-0 p-4 opacity-10">
                     <ShoppingBag className="w-24 h-24" />
                   </div>
@@ -1377,11 +1449,11 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
                   </span>
                   <div>
                     <h3 className="font-black text-base leading-tight">Reposição de estoque rápida</h3>
-                    <p className="text-xs text-red-105 mt-1">
+                    <p className="text-xs text-red-100 mt-1">
                       Acesse a loja oficial e compre embalagens com desconto.
                     </p>
                   </div>
-                </div>
+                </a>
               </div>
 
               {/* Bloco de Métricas Operacionais */}
@@ -1548,6 +1620,32 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
         </main>
       )}
 
+      {/* Renderização do Suporte Standalone */}
+      {activeMenu === 'suporte' && (
+        <main className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar bg-[#FAFBFD] dark:bg-[#0B0F19]">
+          <Suspense fallback={<div className="py-20 flex justify-center"><Loading variant="inline" size="md" message="Carregando Suporte..." /></div>}>
+            <StoreSupport />
+          </Suspense>
+        </main>
+      )}
+
+      {/* Renderização de Promoções & Cupons Standalone */}
+      {activeMenu === 'promocoes' && (
+        <main className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar bg-[#FAFBFD] dark:bg-[#0B0F19]">
+          <div className="flex justify-between items-center border-b border-gray-150/10 pb-4">
+            <div>
+              <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+                <Tag className="w-6 h-6 text-orange-500" /> Promoções &amp; Cupons
+              </h2>
+              <p className="text-xs text-gray-400 mt-1">Crie promoções e cupons de desconto para atrair mais clientes.</p>
+            </div>
+          </div>
+          <Suspense fallback={<div className="py-20 flex justify-center"><Loading variant="inline" size="md" message="Carregando Promoções..." /></div>}>
+            {localUserId && <StorePromotions storeId={localUserId} />}
+          </Suspense>
+        </main>
+      )}
+
       {/* MODAL DE FILTROS AVANÇADOS PREMIUM (Estilo iFood Dark Mode) */}
       {showFilterModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 select-none font-sans animate-in fade-in duration-200">
@@ -1690,6 +1788,71 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Modal Premium de Novidades Beta / Changelog */}
+      {showAnnouncementModal && activeAnnouncement && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-[32px] w-full max-w-lg p-6 md:p-8 shadow-2xl border border-gray-150 dark:border-gray-700/60 relative overflow-hidden flex flex-col justify-between max-h-[90vh] animate-in zoom-in-95 duration-200">
+            {/* Elemento Decorativo Superior */}
+            <div className="absolute top-0 left-0 right-0 h-2.5 bg-gradient-to-r from-red-500 to-orange-500" />
+            
+            {/* Conteúdo */}
+            <div className="space-y-6 overflow-y-auto pr-2 no-scrollbar">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-900/10 flex items-center justify-center shrink-0 border border-orange-100 dark:border-orange-900/30">
+                  <Sparkles className="w-7 h-7 text-orange-500" />
+                </div>
+                <div>
+                  <span className="bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full w-fit">
+                    Versão Beta em Desenvolvimento
+                  </span>
+                  <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white mt-1 leading-tight">
+                    {activeAnnouncement.title}
+                  </h2>
+                </div>
+              </div>
+
+              {/* Corpo do Informativo */}
+              <div className="bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700/50 p-5 rounded-2xl text-xs md:text-sm text-gray-600 dark:text-gray-300 leading-relaxed font-normal whitespace-pre-wrap">
+                {activeAnnouncement.content}
+              </div>
+            </div>
+
+            {/* Ações e Confirmação */}
+            <div className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-700/50 space-y-4 shrink-0">
+              {/* Switch Customizado */}
+              <div 
+                onClick={() => setAnnouncementChecked(prev => !prev)}
+                className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-700/30 cursor-pointer select-none hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <div className="flex flex-col">
+                  <span className="text-xs font-black text-gray-700 dark:text-gray-300">Marcar como lido</span>
+                  <span className="text-[10px] text-gray-400">Entendi e não quero exibir novamente esta atualização</span>
+                </div>
+                
+                {/* O Switch real customizado */}
+                <div className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${announcementChecked ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform ${announcementChecked ? 'translate-x-6' : 'translate-x-0'}`} />
+                </div>
+              </div>
+
+              {/* Botão de Confirmação */}
+              <button
+                onClick={handleConfirmAnnouncement}
+                className={`w-full py-3.5 px-6 rounded-2xl text-xs font-black uppercase tracking-widest text-white shadow-md transition-all flex items-center justify-center gap-2 ${
+                  announcementChecked 
+                    ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] cursor-pointer' 
+                    : 'bg-gray-300 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                }`}
+                disabled={!announcementChecked}
+              >
+                <CheckCircle className="w-4 h-4" />
+                Confirmar Leitura
+              </button>
+            </div>
           </div>
         </div>
       )}

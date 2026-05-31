@@ -23,6 +23,7 @@ import { AdminBlacklist } from './AdminBlacklist';
 import { AdminReferrals } from './AdminReferrals';
 import { AdminInstitutionalContent } from './AdminInstitutionalContent';
 import { AdminPlatformNews } from './AdminPlatformNews';
+import { AdminBetaNews } from './AdminBetaNews';
 import { AdminStoreFinance } from './AdminStoreFinance';
 import { AdminStoreOrders } from './AdminStoreOrders';
 import { AdminWalletControl } from './AdminWalletControl';
@@ -388,6 +389,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'referrals': return <AdminReferrals />;
             case 'institutional': return <AdminInstitutionalContent />;
             case 'platform_news': return <AdminPlatformNews />;
+            case 'beta_news': return <AdminBetaNews />;
             case 'store_finance': return <AdminStoreFinance />;
             case 'store_orders': return <AdminStoreOrders />;
             case 'wallet_control': return <AdminWalletControl />;

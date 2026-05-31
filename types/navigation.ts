@@ -21,6 +21,7 @@ export type ActiveTab =
     | 'admin_referrals'
     | 'admin_institutional'
     | 'admin_platform_news'
+    | 'admin_beta_news'
     | 'admin_store_finance'
     | 'admin_store_orders'
     | 'admin_wallet_control'

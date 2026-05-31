@@ -11,6 +11,7 @@ import { Toast } from './Toast';
 import * as cloud from '../services/cloud';
 import { PartnerFeeSettings, StoreWallet, PlanStatus } from '../types';
 import { useDialog } from '../utils/dialogService';
+import { PixChargeModal } from './PixChargeModal';
 
 declare const QRious: any;
 
@@ -139,8 +140,32 @@ export const StorePlans: React.FC = () => {
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [confirmCancel, setConfirmCancel] = useState(false);
     const [toast, setToast] = useState<ToastState | null>(null);
+    const [showPixModal, setShowPixModal] = useState(false);
+    const [pixAmount, setPixAmount] = useState(0);
+    const [userId, setUserId] = useState<string | undefined>(undefined);
 
     const { confirm } = useDialog();
+
+    const handlePixSuccess = async () => {
+        try {
+            setProcessing(true);
+            const fee = fees?.super_store_monthly_fee || 0;
+            await cloud.subscribeToSuperStore(fee, 'MENSALIDADE');
+            setToast({
+                message: 'Recarga confirmada e plano Mensal ativado com sucesso!',
+                type: 'success'
+            });
+            setShowPixModal(false);
+            await loadData();
+        } catch (e: any) {
+            setToast({
+                message: e.message || 'Erro ao ativar o plano após recarga.',
+                type: 'error'
+            });
+        } finally {
+            setProcessing(false);
+        }
+    };
 
     const loadData = async () => {
         setLoading(true);
@@ -148,15 +173,19 @@ export const StorePlans: React.FC = () => {
             // Verifica downgrade de planos expirados antes de carregar
             await cloud.checkAndDowngradeExpiredPlan();
 
-            const [settings, walletData, planData] = await Promise.all([
+            const [settings, walletData, planData, userData] = await Promise.all([
                 cloud.adminGetFeeSettings(),
                 cloud.getMyWallet(),
-                cloud.getMyPlanStatus()
+                cloud.getMyPlanStatus(),
+                cloud.getClient().auth.getUser()
             ]);
 
             setFees(settings);
             setWallet(walletData);
             setPlanStatus(planData);
+            if (userData?.data?.user) {
+                setUserId(userData.data.user.id);
+            }
         } catch (e) {
             console.error('[StorePlans] Erro ao carregar dados:', e);
         } finally {
@@ -196,7 +225,10 @@ export const StorePlans: React.FC = () => {
             const currentBalance = wallet?.balance_decimal || 0;
 
             if (plan === 'MENSALIDADE' && currentBalance < fee) {
-                throw new Error('Saldo insuficiente na carteira. Por favor, faça uma recarga no menu Financeiro.');
+                setPixAmount(fee);
+                setShowPixModal(true);
+                setProcessing(false);
+                return;
             }
 
             await cloud.subscribeToSuperStore(fee, plan);
@@ -733,6 +765,20 @@ export const StorePlans: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* === MODAL DE RECARGA PIX === */}
+            {showPixModal && (
+                <PixChargeModal
+                    isOpen={showPixModal}
+                    onClose={() => setShowPixModal(false)}
+                    pixKey="SYSTEM"
+                    storeName="Zé Entregas"
+                    storeCity="Online"
+                    userId={userId}
+                    customTitle="Recarregar para Assinatura"
+                    onPaymentSuccess={handlePixSuccess}
+                />
             )}
 
             {/* === TOAST === */}

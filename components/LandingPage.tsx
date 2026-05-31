@@ -190,59 +190,52 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
 
     return (
         <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col font-sans">
-            {/* Header iFood Style */}
-            <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white shadow-md py-4' : 'bg-transparent py-6'}`}>
-                <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
-                    <Logo
-                        className="h-8 w-auto"
-                        variant={scrolled ? 'default' : 'full-white'}
-                        onClick={() => window.location.href = '/'}
-                    />
+            {/* Header Premium & Responsivo */}
+            <nav className={`fixed top-0 left-0 right-0 w-full z-50 transition-all duration-500 ease-in-out ${
+                scrolled 
+                    ? 'bg-white/80 dark:bg-gray-950/80 backdrop-blur-md shadow-lg shadow-gray-100/5 dark:shadow-black/20 border-b border-gray-100/50 dark:border-gray-800/50 py-3 md:py-4' 
+                    : 'bg-gradient-to-b from-black/55 to-transparent py-4 md:py-6'
+            }`}>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center gap-3 sm:gap-4 w-full">
+                    <div className="shrink-0 min-w-0 flex items-center">
+                        <Logo
+                            className="h-6 sm:h-7 md:h-8 w-auto shrink-0 transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                            variant={scrolled ? 'default' : 'full-white'}
+                            onClick={() => window.location.href = '/'}
+                        />
+                    </div>
                     {!isAuthenticated ? (
-                        <div className="flex items-center gap-2 sm:gap-4">
-                            {scrolled ? (
-                                <>
-                                    <Button
-                                        onClick={onLoginClick}
-                                        className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold text-xs sm:text-base px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all"
-                                    >
-                                        Entrar
-                                    </Button>
-                                    <Button
-                                        onClick={() => onSignupClick()}
-                                        className="bg-[#EA1D2C] text-white hover:bg-brand-700 font-bold text-xs sm:text-base px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl transition-all"
-                                    >
-                                        <span className="sm:hidden">Criar Conta</span>
-                                        <span className="hidden sm:inline">Cadastrar</span>
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <Button
-                                        onClick={onLoginClick}
-                                        variant="ghost"
-                                        className="text-white font-bold hover:bg-white/10 hover:text-white text-xs sm:text-base px-2 sm:px-4"
-                                    >
-                                        Entrar
-                                    </Button>
-                                    <Button
-                                        onClick={() => onSignupClick()}
-                                        variant="ghost"
-                                        className="text-white font-bold hover:bg-white/10 hover:text-white text-xs sm:text-base px-2 sm:px-4 border border-white/20 sm:border-none rounded-lg"
-                                    >
-                                        <span className="sm:hidden">Criar Conta</span>
-                                        <span className="hidden sm:inline">Cadastrar</span>
-                                    </Button>
-                                </>
-                            )}
+                        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+                            <Button
+                                onClick={onLoginClick}
+                                variant="ghost"
+                                className={`font-extrabold text-xs sm:text-sm md:text-base px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl transition-all ${
+                                    scrolled 
+                                        ? 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800' 
+                                        : 'text-white hover:bg-white/10 hover:text-white'
+                                }`}
+                            >
+                                Entrar
+                            </Button>
+                            <Button
+                                onClick={() => onSignupClick()}
+                                className="bg-[#EA1D2C] text-white hover:bg-[#c91825] font-extrabold text-xs sm:text-sm md:text-base px-3 py-1.5 sm:px-5 sm:py-2 rounded-lg sm:rounded-xl transition-all shadow-md hover:shadow-lg hover:shadow-brand-500/15"
+                            >
+                                <span className="sm:hidden">Cadastrar</span>
+                                <span className="hidden sm:inline">Cadastrar Grátis</span>
+                            </Button>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                             <Button
                                 onClick={onDashboardClick}
-                                className={`${scrolled ? 'bg-[#EA1D2C] text-white' : 'bg-white/20 text-white hover:bg-white/30'} font-bold px-3 sm:px-6 rounded-xl transition-all flex items-center gap-2`}
+                                className={`font-extrabold text-xs sm:text-sm md:text-base px-3 py-1.5 sm:px-5 sm:py-2 rounded-lg sm:rounded-xl transition-all flex items-center gap-2 ${
+                                    scrolled 
+                                        ? 'bg-[#EA1D2C] text-white hover:bg-[#c91825] shadow-md hover:shadow-lg hover:shadow-brand-500/15' 
+                                        : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm'
+                                }`}
                             >
-                                <Users className="w-5 h-5" />
+                                <Users className="w-4 h-4 sm:w-5 sm:h-5" />
                                 <span className="hidden sm:inline">Meu Painel</span>
                             </Button>
                         </div>
@@ -251,8 +244,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ isAuthenticated, onLog
             </nav>
 
             <main className="flex-1">
-                {/* Hero section redesigned with modern gradient and better typography */}
-                <section className="relative min-h-[600px] flex items-center justify-center">
+                {/* Hero section redesigned with modern gradient, better padding and typography */}
+                <section className="relative min-h-[600px] md:min-h-[700px] flex items-center justify-center pt-24 pb-16 sm:pt-32 sm:pb-20 md:pt-40 md:pb-28">
                     {/* Background layers */}
                     <div className="absolute inset-0 bg-gray-900 dark:bg-black z-0">
                         <img

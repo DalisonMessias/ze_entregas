@@ -942,6 +942,17 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
 
     if (!userData) return null;
 
+    let isSuperStore = !!userData.is_super_store;
+
+    // Validação robusta de expiração do plano Super Lojista em tempo real no frontend
+    if (isSuperStore && userData.super_store_plan_type === 'MENSALIDADE' && userData.super_store_expiration) {
+        const expirationDate = new Date(userData.super_store_expiration);
+        if (expirationDate < new Date()) {
+            console.log(`[Cloud Frontend] Plano Super Lojista do lojista ${userData.id} expirou em tempo real (${expirationDate.toISOString()}). Forcando visualizacao como plano gratuito.`);
+            isSuperStore = false;
+        }
+    }
+
     // Map user_profiles data to PartnerProfile interface
     const profile: PartnerProfile = {
         id: userData.id,
@@ -983,7 +994,7 @@ export const getMyPartnerProfile = async (): Promise<PartnerProfile | null> => {
         store_address_state: userData.store_address_state,
         store_address_complement: userData.store_address_complement,
 
-        is_super_store: userData.is_super_store,
+        is_super_store: isSuperStore,
         store_name: userData.store_name,
         is_open: userData.is_open,
         manual_override: userData.manual_override,
@@ -6949,24 +6960,134 @@ export const getStoreBySlug = async (citySlug: string, storeSlug: string) => {
     return data;
 };
 
+export const getProductPrice = (product: any, sizePrice?: number): number => {
+    const originalPrice = sizePrice !== undefined ? sizePrice : product.price;
+    
+    if (product.ativo && product.preco_promocional !== undefined && product.preco_promocional !== null) {
+        if (sizePrice !== undefined && product.promo_discount_type && product.promo_discount_value !== undefined) {
+            if (product.promo_discount_type === 'PERCENTAGE') {
+                return originalPrice * (1 - product.promo_discount_value / 100);
+            } else if (product.promo_discount_type === 'FIXED') {
+                return Math.max(0, originalPrice - product.promo_discount_value);
+            }
+        }
+        return product.preco_promocional;
+    }
+    
+    return originalPrice;
+};
+
 export const getPublicStoreProducts = async (storeId: string) => {
     const sb = getClient();
     if (!sb) return [];
 
-    const { data, error } = await sb
-        .from('products')
-        .select('*, categories(name)')
-        .eq('store_id', storeId)
-        .eq('is_active', true)
-        .order('name');
+    try {
+        const { data: products, error } = await sb
+            .from('products')
+            .select('*, categories(name)')
+            .eq('store_id', storeId)
+            .eq('is_active', true)
+            .order('name');
 
-    if (error) return [];
+        if (error) {
+            console.error('Error fetching public store products:', error);
+            return [];
+        }
 
-    // Map category name to legacy field if present
-    return data.map((p: any) => ({
-        ...p,
-        category: p.categories?.name || p.category || 'Outros'
-    }));
+        if (!products || products.length === 0) return [];
+
+        const { data: promos } = await sb
+            .from('store_promotions')
+            .select('*')
+            .eq('store_id', storeId)
+            .eq('is_active', true);
+
+        const activePromos = (promos || []).filter(promo => {
+            const start = new Date(promo.start_date);
+            const end = promo.end_date ? new Date(promo.end_date) : null;
+            const now = new Date();
+            return start <= now && (end === null || end >= now);
+        });
+
+        let promoRelations: any[] = [];
+        if (activePromos.length > 0) {
+            const { data: relations } = await sb
+                .from('promotion_products')
+                .select('*')
+                .in('promotion_id', activePromos.map(p => p.id));
+            promoRelations = relations || [];
+        }
+
+        return products.map((p: any) => {
+            const elegivelPromos = activePromos.filter(promo => {
+                if (promo.applies_to_all_products) return true;
+                return promoRelations.some(r => r.promotion_id === promo.id && r.product_id === p.id);
+            });
+
+            let melhorPromo: any = null;
+            let melhorDesconto = -1;
+
+            elegivelPromos.forEach(promo => {
+                let desconto = 0;
+                if (promo.discount_type === 'PERCENTAGE') {
+                    desconto = p.price * (promo.discount_value / 100);
+                } else if (promo.discount_type === 'FIXED') {
+                    desconto = Math.min(p.price, promo.discount_value);
+                } else if (promo.discount_type === 'FREE_SHIPPING') {
+                    desconto = 0;
+                }
+
+                if (desconto > melhorDesconto) {
+                    melhorDesconto = desconto;
+                    melhorPromo = promo;
+                } else if (desconto === melhorDesconto) {
+                    if (!melhorPromo || new Date(promo.created_at || 0) > new Date(melhorPromo.created_at || 0)) {
+                        melhorPromo = promo;
+                    }
+                }
+            });
+
+            let precoPromocional = null;
+            let ativo = false;
+            let dataInicio = null;
+            let dataFim = null;
+            let promoName = null;
+            let promoDiscountType = null;
+            let promoDiscountValue = null;
+
+            if (melhorPromo) {
+                ativo = true;
+                dataInicio = melhorPromo.start_date;
+                dataFim = melhorPromo.end_date || null;
+                promoName = melhorPromo.name;
+                promoDiscountType = melhorPromo.discount_type;
+                promoDiscountValue = melhorPromo.discount_value;
+
+                if (melhorPromo.discount_type === 'PERCENTAGE') {
+                    precoPromocional = p.price * (1 - melhorPromo.discount_value / 100);
+                } else if (melhorPromo.discount_type === 'FIXED') {
+                    precoPromocional = Math.max(0, p.price - melhorPromo.discount_value);
+                } else {
+                    precoPromocional = p.price;
+                }
+            }
+
+            return {
+                ...p,
+                category: p.categories?.name || p.category || 'Outros',
+                preco_promocional: precoPromocional,
+                ativo: ativo,
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+                promo_name: promoName,
+                promo_discount_type: promoDiscountType,
+                promo_discount_value: promoDiscountValue
+            };
+        });
+    } catch (e) {
+        console.error('Exception loading public store products:', e);
+        return [];
+    }
 };
 
 export const getPublicDeliverySettings = async (storeId: string) => {
@@ -9058,6 +9179,199 @@ export interface OrderCheckoutPayload {
 
 // Função antiga removida para evitar conflito com a nova implementação baseada em Edge Functions
 // export const createOrderCheckout = ...
+
+// ===================================
+// SISTEMA DE ANÚNCIOS BETA / CHANGELOG
+// ===================================
+
+export interface SystemAnnouncement {
+    id: string;
+    title: string;
+    content: string;
+    version: number;
+    created_at: string;
+    updated_at: string;
+}
+
+/**
+ * Busca o anúncio/novidade ativa mais recente.
+ */
+export const getActiveAnnouncement = async (): Promise<SystemAnnouncement | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    try {
+        const { data, error } = await sb
+            .from('system_announcements')
+            .select('*')
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (error) throw error;
+        return data as SystemAnnouncement | null;
+    } catch (e) {
+        console.error('Erro ao buscar anúncio ativo:', e);
+        return null;
+    }
+};
+
+/**
+ * Verifica se o lojista logado já leu um anúncio específico.
+ */
+export const checkAnnouncementRead = async (announcementId: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) return false;
+
+        const { data, error } = await sb
+            .from('user_announcement_reads')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('announcement_id', announcementId)
+            .maybeSingle();
+
+        if (error) throw error;
+        return !!data;
+    } catch (e) {
+        console.error('Erro ao verificar leitura do anúncio:', e);
+        return false;
+    }
+};
+
+/**
+ * Marca o anúncio como lido para o lojista logado.
+ */
+export const markAnnouncementAsRead = async (announcementId: string): Promise<boolean> => {
+    const sb = getClient();
+    if (!sb) return false;
+
+    try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) return false;
+
+        const { error } = await sb
+            .from('user_announcement_reads')
+            .insert({
+                user_id: user.id,
+                announcement_id: announcementId
+            })
+            .select();
+
+        if (error) throw error;
+        return true;
+    } catch (e) {
+        console.error('Erro ao marcar anúncio como lido:', e);
+        return false;
+    }
+};
+
+/**
+ * Busca todas as novidades (histórico completo).
+ */
+export const adminGetAllAnnouncements = async (): Promise<SystemAnnouncement[]> => {
+    const sb = getClient();
+    if (!sb) return [];
+
+    try {
+        const { data, error } = await sb
+            .from('system_announcements')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return (data || []) as SystemAnnouncement[];
+    } catch (e) {
+        console.error('Erro ao buscar lista de anúncios:', e);
+        return [];
+    }
+};
+
+/**
+ * Salva ou atualiza um anúncio (Admin). 
+ * Se for isNew (ou id for nulo), cria um novo registro independente no banco de dados.
+ * Se for uma edição de anúncio existente (isNew = false), atualiza o registro específico
+ * e deleta os registros de leituras desse anúncio em específico.
+ */
+export const adminSaveAnnouncement = async (
+    title: string, 
+    content: string, 
+    id?: string | null, 
+    isNew: boolean = false
+): Promise<{ success: boolean; error?: string }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, error: 'Client not ready' };
+
+    try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) return { success: false, error: 'Unauthorized' };
+
+        let announcementId = '';
+
+        if (isNew || !id) {
+            // Cria um novo registro de novidade beta
+            const { data: inserted, error } = await sb
+                .from('system_announcements')
+                .insert({
+                    title,
+                    content,
+                    version: 1
+                })
+                .select('id')
+                .single();
+
+            if (error) throw error;
+            announcementId = inserted.id;
+            // Para um anúncio novinho em folha, não existem leituras, logo todos visualizarão automaticamente por padrão.
+        } else {
+            announcementId = id;
+            
+            // Busca a versão atual do anúncio a ser editado
+            const { data: existing, error: fetchError } = await sb
+                .from('system_announcements')
+                .select('version')
+                .eq('id', id)
+                .maybeSingle();
+            
+            if (fetchError) throw fetchError;
+            
+            const nextVersion = existing ? existing.version + 1 : 1;
+
+            // Edita o registro de novidade existente
+            const { error: updateError } = await sb
+                .from('system_announcements')
+                .update({
+                    title,
+                    content,
+                    version: nextVersion,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', id);
+
+            if (updateError) throw updateError;
+
+            // Deleta todas as confirmações de leitura associadas para ESTE anúncio específico
+            // para forçar a reexibição dele aos lojistas que já o tinham marcado como lido
+            const { error: deleteError } = await sb
+                .from('user_announcement_reads')
+                .delete()
+                .eq('announcement_id', announcementId);
+
+            if (deleteError) {
+                console.error('Erro ao resetar leituras para o anúncio editado:', deleteError);
+            }
+        }
+
+        return { success: true };
+    } catch (e: any) {
+        console.error('Erro ao salvar anúncio de novidades:', e);
+        return { success: false, error: e.message };
+    }
+};
+
 
 
 

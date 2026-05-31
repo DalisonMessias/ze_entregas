@@ -44,9 +44,12 @@ export const ExclusiveLock: React.FC<ExclusiveLockProps> = ({ title, description
             onAction();
             return;
         }
-        // console.log('[ExclusiveLock] Dispatching navigateToTab event to: upgrade_to_partner');
-        const event = new CustomEvent('navigateToTab', { detail: { tab: 'upgrade_to_partner' } });
-        window.dispatchEvent(event);
+        if (window.location.pathname.includes('/gestor') || window.location.pathname.includes('/loja/gestor')) {
+            window.open(`${window.location.origin}/loja/planos`, '_blank');
+        } else {
+            const event = new CustomEvent('navigateToTab', { detail: { tab: 'upgrade_to_partner' } });
+            window.dispatchEvent(event);
+        }
     };
 
     const handleUpgradeClick = () => {

@@ -49,7 +49,7 @@ export const StorePromotions: React.FC<AdminPromotionsProps> = ({ storeId }) => 
             const [promos, cps, prods] = await Promise.all([
                 cloud.getPromotions(storeId),
                 cloud.getCoupons(storeId),
-                cloud.getPublicStoreProducts(storeId) // Using public endpoint or admin equivalent
+                cloud.getStoreProducts(storeId) // Using robust store-wide products query with category mapping
             ]);
             setPromotions(promos as Promotion[]);
             setCoupons(cps as Coupon[]);

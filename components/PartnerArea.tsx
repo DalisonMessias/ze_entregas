@@ -149,7 +149,44 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
     const watchIdRef = useRef<number | null>(null);
 
     const [bankDetails, setBankDetails] = useState<{ pixKey: string, pixType: string } | null>(null);
-    const { alert } = useDialog();
+    const dialog = useDialog();
+    const { alert } = dialog;
+
+    // Estados para novidades da versão Beta
+    const [activeAnnouncement, setActiveAnnouncement] = useState<any>(null);
+    const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+    const [announcementChecked, setAnnouncementChecked] = useState(false);
+
+    const checkAnnouncements = async () => {
+        try {
+            const announcement = await cloud.getActiveAnnouncement();
+            if (announcement) {
+                const isRead = await cloud.checkAnnouncementRead(announcement.id);
+                if (!isRead) {
+                    setActiveAnnouncement(announcement);
+                    setShowAnnouncementModal(true);
+                }
+            }
+        } catch (e) {
+            console.error('[PartnerArea] Erro ao verificar novidades/anúncios:', e);
+        }
+    };
+
+    const handleConfirmAnnouncement = async () => {
+        if (!activeAnnouncement) return;
+        if (!announcementChecked) {
+            dialog.toast({ message: 'Por favor, marque como lido para confirmar.', type: 'warning' });
+            return;
+        }
+
+        try {
+            await cloud.markAnnouncementAsRead(activeAnnouncement.id);
+            setShowAnnouncementModal(false);
+            dialog.toast({ message: 'Entendido! Obrigado pelo feedback.', type: 'success' });
+        } catch (e) {
+            dialog.toast({ message: 'Erro ao registrar confirmação.', type: 'error' });
+        }
+    };
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -175,10 +212,13 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                     pixKey: data.bank_details.pixKey,
                                     pixType: data.bank_details.pixType
                                 });
-                            }
+                             }
                         }
                     }
                 }
+
+                // Verifica novidades da versão Beta em todo o sistema
+                void checkAnnouncements();
             } catch (e: any) {
                 // console.error("Failed to load partner area:", e);
                 setError("Não foi possível carregar os dados do painel. Verifique sua conexão e tente novamente.");
@@ -881,11 +921,75 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 )
             }
 
-            {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
+                    {showFuelCalc && <FuelCalculator onClose={() => setShowFuelCalc(false)} />}
             {showRouteCalc && <RouteCalculator onClose={() => setShowRouteCalc(false)} />}
             {showMaintenance && <Maintenance onClose={() => setShowMaintenance(false)} />}
             {showNotifications && <NotificationCenter onClose={() => setShowNotifications(false)} />}
 
+            {/* Modal Premium de Novidades Beta / Changelog */}
+            {showAnnouncementModal && activeAnnouncement && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-gray-800 rounded-[32px] w-full max-w-lg p-6 md:p-8 shadow-2xl border border-gray-150 dark:border-gray-700/60 relative overflow-hidden flex flex-col justify-between max-h-[90vh] animate-in zoom-in-95 duration-200">
+                        {/* Elemento Decorativo Superior */}
+                        <div className="absolute top-0 left-0 right-0 h-2.5 bg-gradient-to-r from-red-500 to-orange-500" />
+                        
+                        {/* Conteúdo */}
+                        <div className="space-y-6 overflow-y-auto pr-2 no-scrollbar">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-900/10 flex items-center justify-center shrink-0 border border-orange-100 dark:border-orange-900/30">
+                                    <Sparkles className="w-7 h-7 text-orange-500" />
+                                </div>
+                                <div>
+                                    <span className="bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full w-fit">
+                                        Versão Beta em Desenvolvimento
+                                    </span>
+                                    <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white mt-1 leading-tight">
+                                        {activeAnnouncement.title}
+                                    </h2>
+                                </div>
+                            </div>
+
+                            {/* Corpo do Informativo */}
+                            <div className="bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700/50 p-5 rounded-2xl text-xs md:text-sm text-gray-600 dark:text-gray-300 leading-relaxed font-normal whitespace-pre-wrap">
+                                {activeAnnouncement.content}
+                            </div>
+                        </div>
+
+                        {/* Ações e Confirmação */}
+                        <div className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-700/50 space-y-4 shrink-0">
+                            {/* Switch Customizado */}
+                            <div 
+                                onClick={() => setAnnouncementChecked(prev => !prev)}
+                                className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-700/30 cursor-pointer select-none hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors"
+                            >
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-black text-gray-700 dark:text-gray-300">Marcar como lido</span>
+                                    <span className="text-[10px] text-gray-400">Entendi e não quero exibir novamente esta atualização</span>
+                                </div>
+                                
+                                {/* O Switch real customizado */}
+                                <div className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${announcementChecked ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                                    <div className={`w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform ${announcementChecked ? 'translate-x-6' : 'translate-x-0'}`} />
+                                </div>
+                            </div>
+
+                            {/* Botão de Confirmação */}
+                            <button
+                                onClick={handleConfirmAnnouncement}
+                                className={`w-full py-3.5 px-6 rounded-2xl text-xs font-black uppercase tracking-widest text-white shadow-md transition-all flex items-center justify-center gap-2 ${
+                                    announcementChecked 
+                                        ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] cursor-pointer' 
+                                        : 'bg-gray-300 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                }`}
+                                disabled={!announcementChecked}
+                            >
+                                <CheckCircle className="w-4 h-4" />
+                                Confirmar Leitura
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div >
     );

@@ -401,6 +401,13 @@ export interface StoreProduct {
     addon_group_id?: string | null;
     addon_options?: StoreAddonOption[] | null;
     excluded_addon_options?: string[] | null;
+    preco_promocional?: number | null;
+    ativo?: boolean;
+    data_inicio?: string | null;
+    data_fim?: string | null;
+    promo_name?: string | null;
+    promo_discount_type?: string | null;
+    promo_discount_value?: number | null;
 }
 
 export interface CatalogBaseProduct {
@@ -1079,7 +1086,7 @@ export interface FinancialTransaction {
     created_at: string;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'store_finance' | 'store_orders' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation' | 'bonuses' | 'store_ratings';
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'beta_news' | 'store_finance' | 'store_orders' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation' | 'bonuses' | 'store_ratings';
 
 export interface AppNotification {
     id: string;

@@ -23,9 +23,19 @@ interface DigitalMenuProps {
     storeSlug: string;
 }
 
+type LocalStoreProduct = StoreProduct & {
+    ativo?: boolean;
+    preco_promocional?: number | null;
+    data_inicio?: string | null;
+    data_fim?: string | null;
+    promo_name?: string | null;
+    promo_discount_type?: string | null;
+    promo_discount_value?: number | null;
+};
+
 interface CartItem {
     id: string; // unique ID for cart item
-    product: StoreProduct;
+    product: LocalStoreProduct;
     quantity: number;
     observation?: string;
     selectedAddons?: {
@@ -116,7 +126,7 @@ const CommentsList: React.FC<{ storeId: string, showComments?: boolean }> = ({ s
 export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug }) => {
     const [loading, setLoading] = useState(true);
     const [store, setStore] = useState<PartnerProfile | null>(null);
-    const [products, setProducts] = useState<StoreProduct[]>([]);
+    const [products, setProducts] = useState<LocalStoreProduct[]>([]);
     const [deliverySettings, setDeliverySettings] = useState<StoreDeliverySettings | null>(null);
     const [fees, setFees] = useState<StoreNeighborhoodFee[]>([]);
     const [shippingRules, setShippingRules] = useState<StoreShippingRule[]>([]);
@@ -129,7 +139,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
     const [cartRestored, setCartRestored] = useState(false);
 
     // Product Modal State
-    const [selectedProduct, setSelectedProduct] = useState<StoreProduct | null>(null);
+    const [selectedProduct, setSelectedProduct] = useState<LocalStoreProduct | null>(null);
     const [productQuantity, setProductQuantity] = useState(1);
     const [productObservation, setProductObservation] = useState('');
     const [orderObservation, setOrderObservation] = useState('');
@@ -557,7 +567,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
 
     const cartSubtotal = cart.reduce((sum, item) => {
         const addonsPrice = (item.selectedAddons || []).reduce((s, a) => Number(s) + (Number(a.optionPrice) * Number(a.quantity)), 0);
-        const basePrice = item.sizePrice !== undefined ? Number(item.sizePrice) : Number(item.product.price);
+        const basePrice = cloud.getProductPrice(item.product, item.sizePrice);
         return Number(sum) + ((basePrice + addonsPrice) * Number(item.quantity));
     }, 0);
 
@@ -800,7 +810,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                 // Prepare Items
                 const orderItems = cart.map(item => {
                     const addonsPriceValue = (item.selectedAddons || []).reduce((s, a) => Number(s) + (Number(a.optionPrice) * Number(a.quantity)), 0);
-                    const basePrice = item.sizePrice !== undefined ? Number(item.sizePrice) : Number(item.product.price);
+                    const basePrice = cloud.getProductPrice(item.product, item.sizePrice);
 
                     return {
                         product_id: item.product.id,
@@ -1077,7 +1087,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             msg += `*RESUMO DO PEDIDO:*\n`;
             cart.forEach(item => {
                 const addonsPriceValue = (item.selectedAddons || []).reduce((s, a) => Number(s) + (Number(a.optionPrice) * Number(a.quantity)), 0);
-                const basePrice = item.sizePrice !== undefined ? Number(item.sizePrice) : Number(item.product.price);
+                const basePrice = cloud.getProductPrice(item.product, item.sizePrice);
                 msg += `• ${item.quantity}x ${item.product.name}\n`;
                 if (item.selectedAddons && item.selectedAddons.length > 0) {
                     item.selectedAddons.forEach(addon => {
@@ -1164,6 +1174,16 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             manualOverride: store.manual_override
         }).isOpen;
     }, [store]);
+
+    const selectedProductPromoPrice = useMemo(() => {
+        if (!selectedProduct) return 0;
+        return cloud.getProductPrice(selectedProduct, currentPrice);
+    }, [selectedProduct, currentPrice]);
+
+    const selectedProductHasPromo = useMemo(() => {
+        if (!selectedProduct) return false;
+        return !!(selectedProduct.ativo && selectedProductPromoPrice !== currentPrice);
+    }, [selectedProduct, selectedProductPromoPrice, currentPrice]);
 
     // 1. All Categories
     const categories = useMemo(() => {
@@ -1453,7 +1473,19 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                 <div className="flex-1 py-1">
                                                     <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1 group-hover:text-brand-600 transition-colors line-clamp-2">{product.name}</h3>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">{product.description}</p>
-                                                    <span className="text-base font-semibold text-brand-600">R$ {product.price.toFixed(2).replace('.', ',')}</span>
+                                                    {product.ativo && product.preco_promocional !== null && product.preco_promocional !== undefined ? (
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className="text-xs text-gray-400 line-through">R$ {product.price.toFixed(2).replace('.', ',')}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-base font-black text-red-600 dark:text-red-400">R$ {product.preco_promocional.toFixed(2).replace('.', ',')}</span>
+                                                                <span className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-[10px] px-1.5 py-0.5 rounded-lg font-bold border border-red-100 dark:border-red-900/30 flex items-center gap-0.5">
+                                                                    <Zap className="w-2.5 h-2.5 fill-red-600 dark:fill-red-400" /> Promoção
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-base font-semibold text-brand-600 dark:text-brand-400">R$ {product.price.toFixed(2).replace('.', ',')}</span>
+                                                    )}
                                                 </div>
 
                                                 {product.image_url ? (
@@ -1535,13 +1567,25 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                             <div className="mb-6">
                                 <h3 className="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white leading-tight mb-2">{selectedProduct.name}</h3>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xl font-semibold text-brand-600">R$ {currentPrice.toFixed(2).replace('.', ',')}</span>
+                                    {selectedProductHasPromo ? (
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-xs text-gray-400 line-through">R$ {currentPrice.toFixed(2).replace('.', ',')}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xl font-black text-red-600 dark:text-red-400">R$ {selectedProductPromoPrice.toFixed(2).replace('.', ',')}</span>
+                                                <span className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-xs px-2 py-0.5 rounded-lg font-bold border border-red-100 dark:border-red-900/30 flex items-center gap-0.5">
+                                                    <Zap className="w-3 h-3 fill-red-600 dark:fill-red-400" /> Promoção
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xl font-semibold text-brand-600">R$ {currentPrice.toFixed(2).replace('.', ',')}</span>
+                                    )}
                                     {selectedProduct.category && <span className="bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider border border-gray-200/70 dark:border-gray-800">{selectedProduct.category}</span>}
                                 </div>
                             </div>
-
+ 
                             <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-6">{selectedProduct.description}</p>
-
+ 
                             {/* Size Selection */}
                             {selectedProduct.has_sizes && selectedProduct.available_sizes && selectedProduct.available_sizes.length > 0 && (
                                 <div className="mb-6">
@@ -1550,6 +1594,15 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                         {selectedProduct.available_sizes.map(size => {
                                             const isSelected = selectedSize === size;
                                             const price = selectedProduct.price_by_size?.[size];
+                                            
+                                            // Pré-cálculo da promoção para a variação de tamanho
+                                            const pPrice = price !== undefined ? cloud.getProductPrice(selectedProduct, price) : undefined;
+                                            const hasP = !!(selectedProduct.ativo && price !== undefined && pPrice !== price);
+ 
+                                            const buttonClass = isSelected
+                                                ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
+                                                : 'border-gray-200/70 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300';
+
                                             return (
                                                 <button
                                                     key={size}
@@ -1557,15 +1610,13 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                                         setSelectedSize(size);
                                                         if (price !== undefined) setCurrentPrice(price);
                                                     }}
-                                                    className={`px-4 py-2 rounded-xl border-2 transition-all text-sm font-bold flex items-center gap-2 ${isSelected
-                                                        ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
-                                                        : 'border-gray-200/70 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300'
-                                                        }`}
+                                                    className={`px-4 py-2 rounded-xl border-2 transition-all text-sm font-bold flex items-center gap-2 ${buttonClass}`}
                                                 >
-                                                    {size}
-                                                    {price !== undefined && (
-                                                        <span className={`text-xs font-normal ${isSelected ? 'text-brand-600' : 'text-gray-400'}`}>
-                                                            R$ {price.toFixed(2).replace('.', ',')}
+                                                    <span>{size}</span>
+                                                    {price !== undefined && pPrice !== undefined && (
+                                                        <span className={`text-xs font-normal ${isSelected ? 'text-brand-600' : 'text-gray-400'} flex flex-col items-end`}>
+                                                            {hasP && <span className="line-through text-[10px] text-gray-400">R$ {price.toFixed(2).replace('.', ',')}</span>}
+                                                            <span>R$ {pPrice.toFixed(2).replace('.', ',')}</span>
                                                         </span>
                                                     )}
                                                 </button>
@@ -1650,11 +1701,12 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex justify-between items-start">
-                                                    <h4 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">{item.product.name}</h4>
+                                                    <h4 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">{item.product.name}{item.selectedSize ? ` (${item.selectedSize})` : ''}</h4>
                                                     {(() => {
+                                                        const basePrice = cloud.getProductPrice(item.product, item.sizePrice);
                                                         const addonsPrice = (item.selectedAddons || []).reduce((s, a) => s + (a.optionPrice * a.quantity), 0);
                                                         return (
-                                                            <span className="font-semibold text-sm flex-shrink-0 ml-2">R$ {((item.product.price + addonsPrice) * item.quantity).toFixed(2).replace('.', ',')}</span>
+                                                            <span className="font-semibold text-sm flex-shrink-0 ml-2">R$ {((basePrice + addonsPrice) * item.quantity).toFixed(2).replace('.', ',')}</span>
                                                         );
                                                     })()}
                                                 </div>

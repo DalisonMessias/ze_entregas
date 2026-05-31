@@ -6,6 +6,7 @@ import { Button } from './Button';
 import * as cloud from '../services/cloud';
 import { PartnerFeeSettings, StoreWallet } from '../types';
 import { useDialog } from '../utils/dialogService'; // Import useDialog
+import { generatePaymentQRCode, getActiveGateways } from '../services/paymentGateway';
 
 declare const QRious: any;
 
@@ -76,7 +77,26 @@ export const SuperStoreModal: React.FC<SuperStoreModalProps> = ({ onClose, onSuc
             const currentBalance = wallet?.balance_decimal || 0;
 
             if (selectedPlan === 'MENSALIDADE' && currentBalance < fee) {
-                throw new Error("Saldo insuficiente. Por favor, recarregue sua carteira antes de assinar.");
+                const currentGateways = await getActiveGateways();
+                if (currentGateways.length === 0) {
+                    throw new Error('Nenhum método de pagamento disponível no momento.');
+                }
+                const gatewayToUse = currentGateways[0]?.gateway_name;
+
+                const sb = cloud.getClient();
+                const { data: { user } } = await sb.auth.getUser();
+                if (!user) throw new Error('Usuário não encontrado.');
+
+                const result = await generatePaymentQRCode(fee, {
+                    description: 'Assinatura Super Store (Mensalidade)',
+                    userId: user.id,
+                    type: 'wallet_recharge'
+                }, gatewayToUse);
+
+                setPixData({ copyPaste: result.qrCode });
+                setShowPix(true);
+                setProcessing(false);
+                return;
             }
 
             await cloud.subscribeToSuperStore(fee, selectedPlan);

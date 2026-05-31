@@ -499,9 +499,14 @@ export const StoreSettings: React.FC = () => {
                         </div>
                         {citySlug && storeSlug ? (
                             <div className="flex flex-col md:flex-row gap-3 items-center">
-                                <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm dark:text-gray-300 w-full truncate font-mono">
+                                <a
+                                    href={`${window.location.origin}/${citySlug}/${storeSlug}/produtos`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm dark:text-gray-300 w-full truncate font-mono hover:text-brand-600 hover:border-brand-500 transition-colors block cursor-pointer"
+                                >
                                     {window.location.origin}/{citySlug}/{storeSlug}/produtos
-                                </div>
+                                </a>
                                 <div className="flex gap-2 w-full md:w-auto">
                                     <Button variant="outline" onClick={handleCopyLink} className="flex-1"><Copy className="w-4 h-4 mr-2" /> Copiar</Button>
                                     <Button variant="outline" onClick={handleShareLink} className="flex-1"><Share2 className="w-4 h-4 mr-2" /> Compartilhar</Button>

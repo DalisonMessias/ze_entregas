@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Laptop, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award, Plus, Play } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Laptop, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award, Plus, Play, Sparkles } from 'lucide-react';
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
@@ -1797,6 +1797,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Lightbulb} label="Dicas do Dia" tab="admin_tips" />
                                     <MenuButton icon={Star} label="Avaliações" tab="admin_ratings" />
                                     <MenuButton icon={Layout} label="Banners/Slides" tab="admin_slides" />
+                                    <MenuButton icon={Sparkles} label="Novidades Beta" tab="admin_beta_news" />
                                 </>
                             )}
 

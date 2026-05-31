@@ -978,8 +978,12 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
                     </div>
                     <button
                         onClick={() => {
-                            const event = new CustomEvent('navigateToTab', { detail: { tab: 'store_plans' } });
-                            window.dispatchEvent(event);
+                            if (window.location.pathname.includes('/gestor') || window.location.pathname.includes('/loja/gestor')) {
+                                window.open(`${window.location.origin}/loja/planos`, '_blank');
+                            } else {
+                                const event = new CustomEvent('navigateToTab', { detail: { tab: 'store_plans' } });
+                                window.dispatchEvent(event);
+                            }
                         }}
                         className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md"
                     >

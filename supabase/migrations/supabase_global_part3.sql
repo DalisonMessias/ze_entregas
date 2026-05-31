@@ -1687,3 +1687,95 @@ CREATE POLICY "Leitura pública para validação de checkout" ON public.store_bl
 
 -- Permissões de tabela
 GRANT ALL ON TABLE public.store_blocked_users TO anon, authenticated, service_role;
+
+-- ==================================================================
+-- CORREÇÃO DE ASSINATURA: DEBITAR DE DRIVER_WALLETS (ZEBANK)
+-- ==================================================================
+CREATE OR REPLACE FUNCTION public.subscribe_to_super_store(fee NUMERIC, p_plan_type TEXT DEFAULT 'MENSALIDADE')
+RETURNS VOID AS $$
+DECLARE
+  v_user UUID := auth.uid()::uuid;
+BEGIN
+  -- Garante que a carteira exista (lazy creation)
+  INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal, updated_at)
+  VALUES (v_user, 0, 0, now())
+  ON CONFLICT (driver_id) DO NOTHING;
+
+  UPDATE public.user_profiles 
+  SET is_super_store = TRUE, 
+      super_store_plan_type = p_plan_type,
+      super_store_expiration = CASE 
+        WHEN p_plan_type = 'MENSALIDADE' THEN now() + interval '30 days' 
+        ELSE NULL 
+      END,
+      updated_at = now() 
+  WHERE id = v_user;
+  
+  -- Debita da carteira (apenas se for MENSALIDADE e houver taxa)
+  IF p_plan_type = 'MENSALIDADE' AND fee > 0 THEN
+      INSERT INTO public.driver_wallet_transactions(driver_id, amount, description, type, status)
+      VALUES (v_user, -ABS(fee), 'Assinatura Super Store (MENSALIDADE)', 'DEBIT', 'COMPLETED');
+      
+      UPDATE public.driver_wallets
+      SET balance_decimal = balance_decimal - ABS(fee),
+          updated_at = now()
+      WHERE driver_id = v_user;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.subscribe_to_super_store(NUMERIC, TEXT) TO authenticated, service_role;
+
+-- ==================================================================
+-- TABELA: system_announcements (Novidades Beta / Changelog)
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.system_announcements (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    title text NOT NULL,
+    content text NOT NULL,
+    version integer DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- RLS para system_announcements
+ALTER TABLE public.system_announcements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Leitura pública de anúncios para autenticados" ON public.system_announcements;
+CREATE POLICY "Leitura pública de anúncios para autenticados" ON public.system_announcements
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage system_announcements" ON public.system_announcements;
+CREATE POLICY "Admins can manage system_announcements" ON public.system_announcements
+    FOR ALL USING (public.is_admin());
+
+-- ==================================================================
+-- TABELA: user_announcement_reads (Sinalização de Lida do Lojista)
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS public.user_announcement_reads (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    announcement_id uuid NOT NULL REFERENCES public.system_announcements(id) ON DELETE CASCADE,
+    read_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, announcement_id)
+);
+
+-- RLS para user_announcement_reads
+ALTER TABLE public.user_announcement_reads ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Usuários podem ver suas próprias leituras" ON public.user_announcement_reads;
+CREATE POLICY "Usuários podem ver suas próprias leituras" ON public.user_announcement_reads
+    FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Usuários podem criar suas próprias leituras" ON public.user_announcement_reads;
+CREATE POLICY "Usuários podem criar suas próprias leituras" ON public.user_announcement_reads
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can manage all announcement reads" ON public.user_announcement_reads;
+CREATE POLICY "Admins can manage all announcement reads" ON public.user_announcement_reads
+    FOR ALL USING (public.is_admin());
+
+-- Permissões de tabela
+GRANT ALL ON TABLE public.system_announcements TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.user_announcement_reads TO anon, authenticated, service_role;
+

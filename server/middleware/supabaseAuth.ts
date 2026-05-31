@@ -81,7 +81,7 @@ export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res
 
         const { data: profile, error: profileError } = await supabaseAdmin
             .from('user_profiles')
-            .select('id, email, role, is_super_store, city_slug, store_slug, store_name')
+            .select('id, email, role, is_super_store, city_slug, store_slug, store_name, super_store_plan_type, super_store_expiration')
             .eq('id', targetUserId)
             .single();
 
@@ -93,11 +93,38 @@ export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res
             });
         }
 
+        let isSuperStore = !!profile.is_super_store;
+
+        // Validação robusta de expiração do plano Super Lojista em tempo real no backend
+        if (isSuperStore && profile.super_store_plan_type === 'MENSALIDADE' && profile.super_store_expiration) {
+            const expirationDate = new Date(profile.super_store_expiration);
+            if (expirationDate < new Date()) {
+                console.log(`[SupabaseAuth] Plano Super Lojista do usuario ${profile.id} expirou em tempo real (${expirationDate.toISOString()}). Forcando downgrade...`);
+                isSuperStore = false;
+
+                // Efetuar a persistencia da reclassificacao de plano em tempo real no banco de dados de forma nao-bloqueante
+                supabaseAdmin
+                    .from('user_profiles')
+                    .update({ 
+                        is_super_store: false, 
+                        plan_level: 'GRATUITO' 
+                    })
+                    .eq('id', profile.id)
+                    .then(({ error }) => {
+                        if (error) {
+                            console.error(`[SupabaseAuth] Erro ao aplicar downgrade no banco de dados para o usuario ${profile.id}:`, error);
+                        } else {
+                            console.log(`[SupabaseAuth] Downgrade de plano aplicado e persistido com sucesso no Supabase para o usuario ${profile.id}.`);
+                        }
+                    });
+            }
+        }
+
         req.user = {
             id: profile.id,
             email: profile.email || authData.user.email || null,
             role: normalizeRole(profile.role),
-            is_super_store: !!profile.is_super_store,
+            is_super_store: isSuperStore,
             city_slug: profile.city_slug || null,
             store_slug: profile.store_slug || null,
             store_name: profile.store_name || null
