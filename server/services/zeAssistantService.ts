@@ -2,6 +2,7 @@ import { supabaseAdmin } from './supabaseClient.js';
 import * as cloud from '../../services/cloud.js';
 import { zeAssistantRulesService } from './zeAssistantRulesService.js';
 import { zeAssistantAIService } from './zeAssistantAIService.js';
+import { zeAssistantKnowledgeService } from './zeAssistantKnowledgeService.js';
 import type {
     ProcessMessagePayload,
     ProcessMessageResponse,
@@ -42,7 +43,48 @@ export class ZeAssistantService {
         const startTime = Date.now();
 
         try {
-            // 1. Configuração e Contexto
+            // Tratamento especial para mensagens de teste (Simulador do WhatsBot)
+            const payloadAny = payload as any;
+            if (payloadAny.isTest) {
+                console.log(`[ZeAssistant] 🧪 Processando mensagem de TESTE para loja: ${payload.storeId}`);
+                
+                const storeContext = await this.getStoreContext(payload.storeId);
+                // Injetar o Nome e Contexto temporários passados pelo frontend para o teste em tempo real
+                storeContext.assistantName = payloadAny.aiName || storeContext.assistantName || 'Aurora';
+                storeContext.aiInstructions = payloadAny.aiContext || storeContext.aiInstructions || 'Você é um assistente virtual.';
+                
+                // Buscar conhecimento no banco (FAQ/Produtos sincronizados) para os testes funcionarem com o RAG real
+                const knowledge = await zeAssistantKnowledgeService.listAll(payload.storeId);
+                storeContext.knowledgeBase = knowledge;
+
+                const context: ConversationContext = {
+                    confusionCount: 0,
+                    variables: {
+                        contactPhone: payload.customerPhone || '553598393707',
+                        storeId: payload.storeId
+                    },
+                    currentFlow: null
+                };
+
+                const apiKeys = {
+                    gemini: await this.getGeminiApiKey(payload.storeId) || undefined,
+                    groq: await this.getGroqApiKey(payload.storeId) || undefined
+                };
+                const primaryProvider = await this.getPrimaryAIProvider(payload.storeId);
+
+                const response = await zeAssistantAIService.processMessage(
+                    payload.messageText,
+                    storeContext,
+                    context,
+                    apiKeys,
+                    primaryProvider as any,
+                    [] // Sem histórico de conversas do banco para o simulador ficar isolado
+                );
+
+                return response;
+            }
+
+            // 1. Configuração e Contexto (Fluxo de Produção Real)
             const config = await this.getConfig(payload.storeId);
             if (!config || !config.is_enabled) {
                 return { success: false, responseText: '', responseType: 'HUMAN', shouldHandoff: true };
@@ -219,18 +261,107 @@ export class ZeAssistantService {
         };
     }
 
-    private async getGeminiApiKey(storeId: string) {
-        return cloud.getAPIKey('google_gemini', storeId);
+    private async getGeminiApiKey(storeId: string): Promise<string | null> {
+        try {
+            const { data: geminiRow } = await supabaseAdmin
+                .from('api_keys')
+                .select('key_token, key_value')
+                .eq('service_name', 'google_gemini')
+                .eq('store_id', storeId)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            let geminiKey = geminiRow?.key_token || geminiRow?.key_value;
+
+            if (!geminiKey) {
+                const { data: globalGeminiRow } = await supabaseAdmin
+                    .from('api_keys')
+                    .select('key_token, key_value')
+                    .eq('service_name', 'google_gemini')
+                    .is('store_id', null)
+                    .eq('is_active', true)
+                    .maybeSingle();
+                geminiKey = globalGeminiRow?.key_token || globalGeminiRow?.key_value;
+            }
+
+            if (!geminiKey) {
+                geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+            }
+
+            return geminiKey || null;
+        } catch (error) {
+            console.error('[ZeAssistant] Erro ao buscar Gemini API Key:', error);
+            return null;
+        }
     }
 
-    private async getGroqApiKey(storeId: string) {
-        const data = await cloud.getApiKeyFullDetails('groq', storeId);
-        return data?.is_active ? data.key : null;
+    private async getGroqApiKey(storeId: string): Promise<string | null> {
+        try {
+            const { data: groqRow } = await supabaseAdmin
+                .from('api_keys')
+                .select('key_token, key_value')
+                .eq('service_name', 'groq')
+                .eq('store_id', storeId)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            let groqKey = groqRow?.key_token || groqRow?.key_value;
+
+            if (!groqKey) {
+                const { data: globalGroqRow } = await supabaseAdmin
+                    .from('api_keys')
+                    .select('key_token, key_value')
+                    .eq('service_name', 'groq')
+                    .is('store_id', null)
+                    .eq('is_active', true)
+                    .maybeSingle();
+                groqKey = globalGroqRow?.key_token || globalGroqRow?.key_value;
+            }
+
+            if (!groqKey) {
+                groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+            }
+
+            return groqKey || null;
+        } catch (error) {
+            console.error('[ZeAssistant] Erro ao buscar Groq API Key:', error);
+            return null;
+        }
     }
 
-    private async getPrimaryAIProvider(storeId?: string) {
-        const provider = await cloud.getAPIKey('ai_primary_provider', storeId);
-        return provider || 'google_gemini';
+    private async getPrimaryAIProvider(storeId?: string): Promise<string> {
+        try {
+            let primaryProvider = 'google_gemini';
+
+            if (storeId) {
+                const { data: providerRow } = await supabaseAdmin
+                    .from('api_keys')
+                    .select('key_token')
+                    .eq('service_name', 'ai_primary_provider')
+                    .eq('store_id', storeId)
+                    .maybeSingle();
+                if (providerRow?.key_token) {
+                    primaryProvider = providerRow.key_token;
+                }
+            }
+
+            if (primaryProvider !== 'google_gemini' && primaryProvider !== 'groq') {
+                const { data: globalProviderRow } = await supabaseAdmin
+                    .from('api_keys')
+                    .select('key_token')
+                    .eq('service_name', 'ai_primary_provider')
+                    .is('store_id', null)
+                    .maybeSingle();
+                if (globalProviderRow?.key_token) {
+                    primaryProvider = globalProviderRow.key_token;
+                }
+            }
+
+            return primaryProvider || 'google_gemini';
+        } catch (error) {
+            console.error('[ZeAssistant] Erro ao buscar Primary AI Provider:', error);
+            return 'google_gemini';
+        }
     }
 
     private async getConversationHistory(convId: string) {

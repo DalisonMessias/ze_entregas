@@ -18,6 +18,55 @@ import { supabaseAdmin } from './supabaseClient.js';
 import { saveMediaToStorage } from '../utils/mediaStorage.js';
 import { zeAssistantService } from './zeAssistantService.js';
 
+const normalizePhone = (value?: string | null) => {
+  if (!value) return '';
+  return value.split('@')[0].split(':')[0].replace(/\D/g, '');
+};
+
+const resolveRealPhoneNumber = (sock: any, message: any, rawJid: string): string => {
+  if (!rawJid) return '';
+  
+  // 1. Se o JID já for de número clássico de WhatsApp, apenas normaliza e retorna
+  if (rawJid.endsWith('@s.whatsapp.net')) {
+      return normalizePhone(rawJid);
+  }
+
+  // 2. Tenta obter diretamente do cache de contatos do socket
+  const contact = sock?.contacts?.[rawJid];
+  if (contact && contact.id && contact.id.endsWith('@s.whatsapp.net')) {
+      const pn = contact.id.split('@')[0];
+      if (pn) return pn;
+  }
+  
+  // 3. Tenta obter de propriedades comuns do Baileys na WAMessage
+  const keyAny = message?.key as any;
+  const msgAny = message as any;
+  
+  const possiblePn = keyAny?.senderPn || msgAny?.senderPn || keyAny?.participantPn || msgAny?.participantPn;
+  if (possiblePn && typeof possiblePn === 'string') {
+      const cleaned = possiblePn.replace(/\D/g, '');
+      if (cleaned) return cleaned;
+  }
+
+  // 4. Tenta inspecionar o participant (se presente e for número clássico)
+  if (message?.key?.participant && message.key.participant.endsWith('@s.whatsapp.net')) {
+      const pn = message.key.participant.split('@')[0];
+      if (pn) return pn;
+  }
+
+  // 5. Se nada funcionar e for LID, tenta buscar recursivamente na estrutura da mensagem do Baileys
+  try {
+      const str = JSON.stringify(message);
+      const matches = str.match(/"(\d{10,15})@s\.whatsapp\.net"/);
+      if (matches && matches[1]) {
+          return matches[1];
+      }
+  } catch {}
+
+  // Fallback padrão se não conseguir mapear
+  return normalizePhone(rawJid);
+};
+
 type ConnectionStatus = 'CONNECTED' | 'CONNECTING' | 'DISCONNECTED' | 'WAITING_QR';
 
 /**
@@ -204,10 +253,17 @@ export class ChatInstance extends EventEmitter {
       for (const contact of contacts) {
         try {
           if (contact.name || contact.notify) {
+            let phone = contact.id.split('@')[0];
+            if (contact.id.includes('@lid')) {
+                const resolved = resolveRealPhoneNumber(this.sock, null, contact.id);
+                if (resolved && resolved !== phone) {
+                    phone = resolved;
+                }
+            }
             await supabaseAdmin.from('chat_contacts').upsert({
               store_id: this.storeId,
-              phone_number: contact.id.split('@')[0],
-              name: contact.name || contact.notify || contact.id.split('@')[0],
+              phone_number: phone,
+              name: contact.name || contact.notify || phone,
               updated_at: new Date()
             }, { onConflict: 'store_id,phone_number' });
           }
@@ -223,14 +279,23 @@ export class ChatInstance extends EventEmitter {
       if (individualChats.length === 0) return;
 
       console.log(`[Loja ${this.storeId}] 🆕 ${individualChats.length} novas conversas individuais detectadas no aparelho.`);
-      const batch = individualChats.map(chat => ({
-        store_id: this.storeId,
-        conversation_id: chat.id,
-        phone_number: chat.id.split('@')[0].split(':')[0].replace(/\D/g, ''),
-        contact_name: chat.name || chat.id.split('@')[0],
-        unread_count: chat.unreadCount || 0,
-        last_message_timestamp: chat.conversationTimestamp ? new Date(Number(chat.conversationTimestamp) * 1000) : new Date(),
-      }));
+      const batch = individualChats.map(chat => {
+        let phone = chat.id.split('@')[0].split(':')[0].replace(/\D/g, '');
+        if (chat.id.includes('@lid')) {
+          const resolved = resolveRealPhoneNumber(this.sock, null, chat.id);
+          if (resolved && resolved !== phone) {
+            phone = resolved;
+          }
+        }
+        return {
+          store_id: this.storeId,
+          conversation_id: chat.id,
+          phone_number: phone,
+          contact_name: chat.name || chat.id.split('@')[0],
+          unread_count: chat.unreadCount || 0,
+          last_message_timestamp: chat.conversationTimestamp ? new Date(Number(chat.conversationTimestamp) * 1000) : new Date(),
+        };
+      });
 
       await supabaseAdmin.from('chat_conversations').upsert(batch, { onConflict: 'store_id,conversation_id' });
     });
@@ -269,7 +334,13 @@ export class ChatInstance extends EventEmitter {
 
       // 1. Bulk Upsert de Conversas
       const conversationBatch = chats.filter(c => !c.id.includes('@g.us') && c.id !== 'status@broadcast').map(chat => {
-        const phoneNumber = chat.id.split('@')[0].split(':')[0].replace(/\D/g, '');
+        let phoneNumber = chat.id.split('@')[0].split(':')[0].replace(/\D/g, '');
+        if (chat.id.includes('@lid')) {
+          const resolved = resolveRealPhoneNumber(this.sock, null, chat.id);
+          if (resolved && resolved !== phoneNumber) {
+            phoneNumber = resolved;
+          }
+        }
 
         // Tentar encontrar a última mensagem deste chat no pacote de histórico para preencher o last_message_content
         const chatMessages = messages.filter(m => m.key.remoteJid === chat.id);
@@ -316,9 +387,14 @@ export class ChatInstance extends EventEmitter {
 
         try {
           const rawJid = message.key.remoteJid!;
-          const conversationId = rawJid.includes('@g.us')
+          let conversationId = rawJid.includes('@g.us')
             ? rawJid
             : rawJid.split('@')[0].split(':')[0] + '@s.whatsapp.net';
+
+          if (rawJid.includes('@lid')) {
+            const resolved = resolveRealPhoneNumber(this.sock, message, rawJid);
+            conversationId = `${resolved}@s.whatsapp.net`;
+          }
 
           const isFromMe = message.key.fromMe || false;
           const messageType = getContentType(message.message!);
@@ -382,7 +458,9 @@ export class ChatInstance extends EventEmitter {
         return; // Filtro de Privacidade: Ignorar Grupos e Status
       }
 
-      const conversationId = rawJid.split('@')[0].split(':')[0] + '@s.whatsapp.net';
+      // Resolução de JID do tipo LID para número de telefone real
+      const realPhone = resolveRealPhoneNumber(this.sock, message, rawJid);
+      const conversationId = `${realPhone}@s.whatsapp.net`;
 
       const isFromMe = message.key.fromMe!;
       const messageType = getContentType(message.message!);
@@ -441,7 +519,7 @@ export class ChatInstance extends EventEmitter {
       else content = `[${messageType?.replace('Message', '') || 'Mídia'}]`;
 
       let contactName = message.pushName || conversationId.split('@')[0];
-      const phoneNumber = conversationId.split('@')[0].split(':')[0].replace(/\D/g, '');
+      const phoneNumber = realPhone;
 
       if (!isFromMe) {
         const { data: blockedUser } = await supabaseAdmin

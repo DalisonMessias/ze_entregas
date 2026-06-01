@@ -13,6 +13,7 @@ const router = Router();
 // Configurações
 router.get('/config/:storeId', zeAssistantController.getConfig);
 router.patch('/config/:storeId', zeAssistantController.updateConfig);
+router.post('/process-message', zeAssistantController.processMessage);
 
 // Regras
 router.get('/rules/:storeId', zeAssistantController.getRules);

@@ -4,6 +4,7 @@ import { Download, Check, CheckCheck, User, MapPin, Trash2, Edit2, MoreVertical,
 import ImageLightbox from './ImageLightbox';
 import { PollMessage } from './Messages/PollMessage';
 import { ContactMessage } from './Messages/ContactMessage';
+import { getApiRootUrl } from '../../utils/apiConfig';
 
 interface MessageAreaProps {
   messages: ChatMessage[];
@@ -127,7 +128,7 @@ const MessageArea: React.FC<MessageAreaProps> = ({ messages, onLoadMore, hasMore
       } catch (e) { /* fall through */ }
     }
 
-    const mediaUrl = message.media_url ? `http://localhost:3001${message.media_url}` : null;
+    const mediaUrl = message.media_url ? `${getApiRootUrl()}${message.media_url}` : null;
 
     if (!mediaUrl || !message.media_type) {
       return (

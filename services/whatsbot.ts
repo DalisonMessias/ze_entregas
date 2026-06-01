@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { WhatsBotConfigPayload, WhatsBotStatus } from '../types';
-import { getWhatsBotApiBaseUrl } from '../utils/apiConfig';
+import { getWhatsBotApiBaseUrl, getApiRootUrl } from '../utils/apiConfig';
 import { getClient } from './cloud';
 import { getImpersonationStoreId } from './impersonation';
 
@@ -202,3 +202,79 @@ export const clearWhatsBotCache = async (
     );
     return data;
 };
+
+export const getWhatsBotKnowledge = async (options?: WhatsBotRequestOptions): Promise<any[]> => {
+    const storeId = options?.storeId || getImpersonationStoreId();
+    if (!storeId) throw new Error('Store ID nao identificado.');
+    const headers = await getAuthHeaders(options);
+    const { data } = await axios.get<any[]>(`${getApiRootUrl()}/api/ze-assistant/knowledge/${storeId}`, { headers });
+    return data;
+};
+
+export const addWhatsBotKnowledge = async (
+    question: string,
+    answer: string,
+    options?: WhatsBotRequestOptions
+): Promise<any> => {
+    const storeId = options?.storeId || getImpersonationStoreId();
+    if (!storeId) throw new Error('Store ID nao identificado.');
+    const headers = await getAuthHeaders(options);
+    const { data } = await axios.post<any>(
+        `${getApiRootUrl()}/api/ze-assistant/knowledge/${storeId}`, 
+        { question, answer }, 
+        { headers }
+    );
+    return data;
+};
+
+export const deleteWhatsBotKnowledge = async (
+    id: string,
+    options?: WhatsBotRequestOptions
+): Promise<{ success: boolean }> => {
+    const headers = await getAuthHeaders(options);
+    const { data } = await axios.delete<{ success: boolean }>(
+        `${getApiRootUrl()}/api/ze-assistant/knowledge/${id}`, 
+        { headers }
+    );
+    return data;
+};
+
+export const syncWhatsBotKnowledge = async (options?: WhatsBotRequestOptions): Promise<any> => {
+    const storeId = options?.storeId || getImpersonationStoreId();
+    if (!storeId) throw new Error('Store ID nao identificado.');
+    const headers = await getAuthHeaders(options);
+    const { data } = await axios.post<any>(
+        `${getApiRootUrl()}/api/ze-assistant/knowledge/${storeId}/sync`, 
+        {}, 
+        { headers }
+    );
+    return data;
+};
+
+export const testWhatsBotAIMessage = async (
+    messageText: string,
+    customerPhone: string = '553598393707',
+    customerName: string = 'Cliente de Teste',
+    options?: WhatsBotRequestOptions
+): Promise<any> => {
+    const storeId = options?.storeId || getImpersonationStoreId();
+    if (!storeId) throw new Error('Store ID nao identificado.');
+    const headers = await getAuthHeaders(options);
+    const { data } = await axios.post<any>(
+        `${getApiRootUrl()}/api/ze-assistant/process-message`, 
+        {
+            storeId,
+            conversationId: `${customerPhone}@c.us`,
+            customerPhone,
+            customerName,
+            messageText,
+            isTest: true,
+            aiName: options?.ai_name,
+            aiContext: options?.ai_context
+        }, 
+        { headers }
+    );
+    return data;
+};
+
+

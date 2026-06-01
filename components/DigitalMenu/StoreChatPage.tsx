@@ -61,48 +61,45 @@ export const StoreChatPage: React.FC<StoreChatPageProps> = ({ citySlug, storeSlu
     const audioChunksRef = useRef<Blob[]>([]);
     const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Refs de controle do WebSocket (não causam re-render)
-    const wsRetryCountRef = useRef(0);
-    const wsRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const wsConnectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const wsHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const wsIsMountedRef = useRef(true);
-    const WS_MAX_RETRIES = 10;
-    const WS_HEARTBEAT_MS = 20000;
-    const WS_TIMEOUT_MS = 10000;
 
-    const clearWsTimers = () => {
-        if (wsRetryTimerRef.current) { clearTimeout(wsRetryTimerRef.current); wsRetryTimerRef.current = null; }
-        if (wsConnectionTimerRef.current) { clearTimeout(wsConnectionTimerRef.current); wsConnectionTimerRef.current = null; }
-        if (wsHeartbeatRef.current) { clearInterval(wsHeartbeatRef.current); wsHeartbeatRef.current = null; }
-    };
+    useEffect(() => {
+        // Close context menus on click outside
+        const handleClickOutside = () => setShowOptionsObj({});
+        document.addEventListener('click', handleClickOutside);
 
-    const silentCloseWs = (socket: WebSocket) => {
-        socket.onopen = null;
-        socket.onclose = null;
-        socket.onerror = null;
-        socket.onmessage = null;
-        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-            socket.close(1000, 'Cleanup');
-        }
-    };
+        // Check for logged user
+        const checkUser = async () => {
+            const { user } = await getUserWithCache();
+            if (user && user.user_metadata?.name) {
+                setCustomerName(user.user_metadata.name);
+                localStorage.setItem('ze_customer_name', user.user_metadata.name);
+                // If we have a user, we don't show the name modal
+                setShowNameModal(false);
+            } else {
+                // Se o nome não estiver salvo, mostrar modal após carregar loja
+                if (!localStorage.getItem('ze_customer_name')) {
+                    setShowNameModal(true);
+                }
+            }
+        };
+        checkUser();
+
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, []);
+
+    // LOAD STORE DATA
+    useEffect(() => {
+        loadStore();
+    }, [citySlug, storeSlug]);
 
     useEffect(() => {
         if (store?.id) {
-            wsIsMountedRef.current = true;
-            wsRetryCountRef.current = 0;
             loadLocalHistory();
             loadServerHistory();
             connectWebSocket();
         }
-        return () => {
-            wsIsMountedRef.current = false;
-            clearWsTimers();
-            if (ws.current) { silentCloseWs(ws.current); ws.current = null; }
-        };
+        return () => ws.current?.close();
     }, [store?.id]);
-
-
 
     useEffect(() => {
         scrollToBottom();

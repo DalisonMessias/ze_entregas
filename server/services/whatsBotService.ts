@@ -96,6 +96,51 @@ const normalizePhone = (value?: string | null) => {
     return value.split('@')[0].split(':')[0].replace(/\D/g, '');
 };
 
+const resolveRealPhoneNumber = (sock: any, message: any, rawJid: string): string => {
+    if (!rawJid) return '';
+    
+    // 1. Se o JID já for de número clássico de WhatsApp, apenas normaliza e retorna
+    if (rawJid.endsWith('@s.whatsapp.net')) {
+        return normalizePhone(rawJid);
+    }
+
+    // 2. Tenta obter diretamente do cache de contatos do socket
+    const contact = sock?.contacts?.[rawJid];
+    if (contact && contact.id && contact.id.endsWith('@s.whatsapp.net')) {
+        const pn = contact.id.split('@')[0];
+        if (pn) return pn;
+    }
+    
+    // 3. Tenta obter de propriedades comuns do Baileys na WAMessage
+    const keyAny = message?.key as any;
+    const msgAny = message as any;
+    
+    const possiblePn = keyAny?.senderPn || msgAny?.senderPn || keyAny?.participantPn || msgAny?.participantPn;
+    if (possiblePn && typeof possiblePn === 'string') {
+        const cleaned = possiblePn.replace(/\D/g, '');
+        if (cleaned) return cleaned;
+    }
+
+    // 4. Tenta inspecionar o participant (se presente e for número clássico)
+    if (message?.key?.participant && message.key.participant.endsWith('@s.whatsapp.net')) {
+        const pn = message.key.participant.split('@')[0];
+        if (pn) return pn;
+    }
+
+    // 5. Se nada funcionar e for LID, tenta buscar recursivamente na estrutura da mensagem do Baileys
+    try {
+        const str = JSON.stringify(message);
+        const matches = str.match(/"(\d{10,15})@s\.whatsapp\.net"/);
+        if (matches && matches[1]) {
+            return matches[1];
+        }
+    } catch {}
+
+    // Fallback padrão se não conseguir mapear
+    return normalizePhone(rawJid);
+};
+
+
 const normalizeDirectJid = (value?: string | null) => {
     const phone = normalizePhone(value);
     return phone ? `${phone}@s.whatsapp.net` : '';
@@ -615,7 +660,14 @@ class WhatsBotInstance {
 
         const contactData = contacts
             .map((c) => {
-                const phone = normalizePhone(c.id);
+                let phone = normalizePhone(c.id);
+                // Se for um JID de LID, tenta mapear para o número de telefone real
+                if (c.id && c.id.includes('@lid')) {
+                    const resolved = resolveRealPhoneNumber(this.sock, null, c.id);
+                    if (resolved && resolved !== phone) {
+                        phone = resolved;
+                    }
+                }
                 // Ignora grupos e números inválidos
                 if (!phone || c.id.includes('@g.us') || c.id.includes('@broadcast')) return null;
 
@@ -908,7 +960,8 @@ class WhatsBotInstance {
             return;
         }
 
-        const contactPhone = normalizePhone(rawJid);
+        // Resolução inteligente de LID para número de telefone real (evita JIDs mascarados no bot e bloqueios)
+        const contactPhone = resolveRealPhoneNumber(this.sock, message, rawJid);
         const contactJid = rawJid;
         if (!contactPhone || !contactJid) {
             return;
@@ -936,7 +989,75 @@ class WhatsBotInstance {
                            message.message?.imageMessage?.caption || 
                            '';
 
-        // 2. Busca Gatilhos de Resposta (Keywords)
+        // CARREGA AS CONFIGURAÇÕES E PERFIL DA LOJA IMEDIATAMENTE (Otimização e trava de Loja Fechada)
+        const [settings, store, session] = await Promise.all([
+            getSettings(this.storeId),
+            getStoreProfile(this.storeId),
+            getSessionRow(this.storeId)
+        ]);
+
+        const isClosed = store.is_open === false;
+
+        // Se a loja estiver fechada, não processa gatilhos nem IA! Vai direto para a mensagem de fechamento padrão da loja.
+        if (isClosed) {
+            console.log(`[WhatsBot ${this.storeId}] 🔒 Loja fechada. Disparando mensagem de fechamento padrão (respeitando limite diário).`);
+            
+            const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
+            const replyMessage = buildWhatsBotReplyMessage({
+                customMessage: settings.custom_message,
+                customClosedMessage: settings.custom_closed_message,
+                catalogUrl,
+                storeName: store.store_name,
+                isOpen: false
+            });
+
+            const sendDateLocal = getLocalDateString(settings.timezone || DEFAULT_TIMEZONE);
+            const memoryKey = `${this.storeId}:${contactPhone}:${sendDateLocal}`;
+
+            if (aiFallbackCache.has(memoryKey)) {
+                console.log(`[WhatsBot ${this.storeId}] 🛡️ BLOQUEIO DE MEMÓRIA (FECHADO): Silêncio total mantido para ${contactPhone}.`);
+                return;
+            }
+
+            try {
+                // Tenta reservar o envio diário
+                const reservation = await reserveDailySend({
+                    storeId: this.storeId,
+                    contactPhone,
+                    contactJid,
+                    sendDateLocal,
+                    messageSource: 'custom',
+                    messageBody: replyMessage,
+                    inboundMessageId: message.key.id || null,
+                    isClosedMessage: true
+                });
+
+                if (reservation.allowed) {
+                    aiFallbackCache.add(memoryKey);
+                    
+                    if (settings.closed_image_url) {
+                        await this.sock!.sendMessage(contactJid, {
+                            image: { url: settings.closed_image_url },
+                            caption: formatMarkdownToWhatsApp(replyMessage)
+                        });
+                    } else {
+                        await this.sock!.sendMessage(contactJid, {
+                            text: formatMarkdownToWhatsApp(replyMessage)
+                        });
+                    }
+                    
+                    await markSendHistorySent(reservation.history_id);
+                    console.log(`[WhatsBot ${this.storeId}] ✅ Mensagem de loja fechada enviada com sucesso para ${contactPhone}.`);
+                } else {
+                    console.log(`[WhatsBot ${this.storeId}] 🛡️ ENVIO DE MENSAGEM FECHADA BARRADO: Já enviado hoje para ${contactPhone}.`);
+                }
+            } catch (err: any) {
+                console.error(`[WhatsBot ${this.storeId}] Erro ao enviar mensagem de fechamento:`, err.message);
+            }
+            return;
+        }
+
+        // 2. Busca Gatilhos de Resposta (Keywords) - Apenas se a loja estiver aberta
         if (messageText.trim()) {
             const { data: triggers } = await supabaseAdmin
                 .from('whatsbot_triggers')
@@ -951,13 +1072,6 @@ class WhatsBotInstance {
 
                 if (matchedTrigger) {
                     console.log(`\x1b[32m[WhatsBot ${this.storeId}] 🎯 Gatilho detectado: "${matchedTrigger.keyword}"\x1b[0m`);
-                    
-                    const [settings, store, session] = await Promise.all([
-                        getSettings(this.storeId),
-                        getStoreProfile(this.storeId),
-                        getSessionRow(this.storeId)
-                    ]);
-                    
                     const catalogUrl = buildCatalogUrl(store, session?.last_known_public_url);
                     
                     // Processando Variáveis Inteligentes
@@ -982,13 +1096,7 @@ class WhatsBotInstance {
             }
         }
 
-        const [settings, store, session] = await Promise.all([
-            getSettings(this.storeId),
-            getStoreProfile(this.storeId),
-            getSessionRow(this.storeId)
-        ]);
-
-        // 3. Resposta via Assistente de IA (se ativo)
+        // 3. Resposta via Assistente de IA (se ativo) - Apenas se a loja estiver aberta
         if (settings.enabled && settings.ai_enabled && this.enabled) {
             // VERIFICAÇÃO DE BLOQUEIO (Anti-spam / Erro / Humano)
             const sendDateLocal = getLocalDateString(settings.timezone || DEFAULT_TIMEZONE);

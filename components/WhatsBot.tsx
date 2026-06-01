@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check, Crown, Lock, Megaphone, Users, Plus, Play, StopCircle, Loader2, Image as ImageIcon, Camera, Trash2, ExternalLink, Sparkles, Edit2, Save, Shield } from 'lucide-react';
+import { Bot, Link2, LogOut, MessageSquare, Power, PowerOff, QrCode, ShieldCheck, Smartphone, RefreshCcw, CheckCircle2, Copy, Share2, Check, Crown, Lock, Megaphone, Users, Plus, Play, StopCircle, Loader2, Image as ImageIcon, Camera, Trash2, ExternalLink, Sparkles, Edit2, Save, Shield, BookOpen, HelpCircle, Send } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AccessDenied } from './AccessDenied';
 import { Button } from './Button';
@@ -12,6 +12,7 @@ import { useDialog } from '../utils/dialogService';
 import { usePlanPermissions } from '../hooks/usePlanPermissions';
 import { CustomDateInput } from './CustomDateInput';
 import { StoreBlocklistModal } from './StoreBlocklistModal';
+import { Switch } from './Switch';
 
 const statusMap: Record<WhatsBotStatus['connectionStatus'], { label: string; badge: string }> = {
     CONNECTED: {
@@ -229,6 +230,26 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
     const [isSavingAi, setIsSavingAi] = useState(false);
     const [clearingCache, setClearingCache] = useState(false);
 
+    // Estados de Treinamento de IA / Base de Conhecimento
+    const [knowledgeCards, setKnowledgeCards] = useState<any[]>([]);
+    const [loadingKnowledge, setLoadingKnowledge] = useState(false);
+    const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
+    const [editingCard, setEditingCard] = useState<any>(null);
+    const [cardQuestion, setCardQuestion] = useState('');
+    const [cardAnswer, setCardAnswer] = useState('');
+    const [savingCard, setSavingCard] = useState(false);
+    const [knowledgeTab, setKnowledgeTab] = useState<'Tudo' | 'Aplicado' | 'Recomendado' | 'Expirado'>('Tudo');
+    const [knowledgeFilter, setKnowledgeFilter] = useState<'Tudo' | 'Geral'>('Tudo');
+
+    // Estados do Simulador de Chat
+    const [simulatedMessages, setSimulatedMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([
+        { role: 'assistant', content: 'Experimente o chat com IA!' }
+    ]);
+    const [testMessageText, setTestMessageText] = useState('');
+    const [sendingSimulated, setSendingSimulated] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+
+
     const getSaudacao = () => {
         const hora = new Date().getHours();
         if (hora >= 5 && hora < 12) return 'Bom dia';
@@ -294,6 +315,7 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
 
                 if (idToUse) {
                     await refreshStatus(true, idToUse);
+                    void loadKnowledge(idToUse);
                 } else {
                     setLoading(false);
                 }
@@ -307,6 +329,7 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
         if (propStoreId) {
             setStoreId(propStoreId);
             void refreshStatus(true, propStoreId);
+            void loadKnowledge(propStoreId);
         } else {
             void load();
         }
@@ -402,6 +425,241 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
         setAiEnabled(nextState);
         void handleSaveAI(nextState);
     };
+
+    const loadKnowledge = useCallback(async (storeIdOverride?: string | null) => {
+        const idToUse = storeIdOverride || storeId;
+        if (!idToUse) return;
+        setLoadingKnowledge(true);
+        try {
+            const data = await whatsbot.getWhatsBotKnowledge({ storeId: idToUse });
+            setKnowledgeCards(data || []);
+        } catch (err: any) {
+            console.error('Erro ao carregar base de conhecimento:', err);
+        } finally {
+            setLoadingKnowledge(false);
+        }
+    }, [storeId]);
+
+    const handleSaveKnowledgeCard = async () => {
+        if (!cardQuestion.trim() || !cardAnswer.trim()) {
+            toast({ message: 'Preencha a pergunta e a resposta.', type: 'error' });
+            return;
+        }
+
+        setSavingCard(true);
+        try {
+            if (editingCard?.id) {
+                // Editar cartão FAQ existente via Supabase diretamente
+                const client = cloud.getClient();
+                if (!client) throw new Error('Cliente Supabase não disponível.');
+                
+                const { error } = await client
+                    .from('ze_assistant_knowledge_base')
+                    .update({
+                        title: cardQuestion.trim(),
+                        content: cardAnswer.trim(),
+                        structured_data: { question: cardQuestion.trim(), answer: cardAnswer.trim() },
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', editingCard.id);
+
+                if (error) throw error;
+                toast({ message: 'Cartão de conhecimento atualizado com sucesso!', type: 'success' });
+            } else {
+                // Adicionar novo cartão FAQ customizado
+                await whatsbot.addWhatsBotKnowledge(cardQuestion.trim(), cardAnswer.trim(), requestOptions);
+                toast({ message: 'Cartão de conhecimento adicionado com sucesso!', type: 'success' });
+            }
+
+            setCardQuestion('');
+            setCardAnswer('');
+            setEditingCard(null);
+            setIsKnowledgeModalOpen(false);
+            void loadKnowledge();
+        } catch (err: any) {
+            console.error('Erro ao salvar cartão:', err);
+            toast({ message: 'Erro ao salvar cartão de conhecimento.', type: 'error' });
+        } finally {
+            setSavingCard(false);
+        }
+    };
+
+    const handleDeleteKnowledgeCard = async (card: any) => {
+        const ok = await confirm({
+            title: 'Excluir Cartão de Conhecimento',
+            message: `Tem certeza de que deseja excluir o cartão de conhecimento "${card.title}"? Esta ação não poderá ser desfeita.`
+        });
+        if (ok) {
+            try {
+                await whatsbot.deleteWhatsBotKnowledge(card.id, requestOptions);
+                toast({ message: 'Cartão de conhecimento excluído com sucesso.', type: 'success' });
+                void loadKnowledge();
+            } catch (err: any) {
+                console.error('Erro ao excluir:', err);
+                toast({ message: 'Erro ao excluir cartão de conhecimento.', type: 'error' });
+            }
+        }
+    };
+
+    const handleSyncKnowledge = async () => {
+        setLoadingKnowledge(true);
+        try {
+            await whatsbot.syncWhatsBotKnowledge(requestOptions);
+            toast({ message: 'Produtos e informações básicas sincronizados!', type: 'success' });
+            void loadKnowledge();
+        } catch (err: any) {
+            console.error('Erro ao sincronizar:', err);
+            toast({ message: 'Erro ao sincronizar dados da loja.', type: 'error' });
+        } finally {
+            setLoadingKnowledge(false);
+        }
+    };
+
+    const handleSendSimulatedMessage = async () => {
+        if (!testMessageText.trim()) return;
+
+        const userMsg = testMessageText.trim();
+        setSimulatedMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+        setTestMessageText('');
+        setSendingSimulated(true);
+
+        try {
+            const response = await whatsbot.testWhatsBotAIMessage(userMsg, '553598393707', 'Cliente de Teste', {
+                ...requestOptions,
+                ai_name: aiName,
+                ai_context: aiContext
+            });
+            if (response && response.success) {
+                setSimulatedMessages(prev => [...prev, { role: 'assistant', content: response.responseText }]);
+            } else {
+                setSimulatedMessages(prev => [...prev, { role: 'assistant', content: response?.responseText || 'Não consegui processar a resposta no momento.' }]);
+            }
+        } catch (err: any) {
+            console.error('Erro no simulador de IA:', err);
+            setSimulatedMessages(prev => [...prev, { role: 'assistant', content: 'Tive um problema ao processar sua resposta. Por favor, tente novamente!' }]);
+        } finally {
+            setSendingSimulated(false);
+            // Scroll para o fim após a resposta
+            setTimeout(() => {
+                chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+    };
+
+    const filteredKnowledgeCards = useMemo(() => {
+        // 1. Cartões do sistema (Sincronizados)
+        const systemCards = [
+            {
+                id: 'sys-offers',
+                title: 'Ofertas',
+                content: 'A IA sincronizou suas campanhas de marketing, itens promocionais e regras de frete grátis. Para editar, acesse sua página de Marketing.',
+                emoji: '🎁',
+                isSystem: true,
+                isRecommended: false,
+                category: 'Geral',
+                is_active: true
+            },
+            {
+                id: 'sys-menu',
+                title: 'Itens do cardápio',
+                content: 'A IA assimilou os itens e preços do seu cardápio. Para garantir a precisão das respostas, mantenha seus produtos atualizados na página do cardápio.',
+                emoji: '🍕',
+                isSystem: true,
+                isRecommended: false,
+                category: 'Geral',
+                is_active: true
+            },
+            {
+                id: 'sys-info',
+                title: 'Informações básicas da loja',
+                content: 'A IA foi configurada com os dados da sua loja, como horário, endereço, entregas, formas de pagamento e redes sociais. Você é responsável por manter essas informações atualizadas.',
+                emoji: 'ℹ️',
+                isSystem: true,
+                isRecommended: false,
+                category: 'Geral',
+                is_active: true
+            }
+        ];
+
+        // 2. Cartões personalizados vindos do banco de dados (com content_type === 'FAQ')
+        const faqCards = knowledgeCards
+            .filter(c => c.content_type === 'FAQ')
+            .map(c => ({
+                id: c.id,
+                title: c.title,
+                content: c.content,
+                emoji: '💬',
+                isSystem: false,
+                isRecommended: false,
+                category: 'Geral',
+                is_active: c.is_active
+            }));
+
+        // 3. Cenários recomendados padrão
+        const allRecommended = [
+            {
+                title: 'Como agendar uma entrega',
+                recommendedAnswer: 'Para agendar uma entrega, basta acessar o nosso cardápio digital, selecionar a opção \'Agendar\' na tela de sacola e escolher a data e o horário desejados! É super rápido e prático! 📅🛵',
+                content: 'Configure as regras para o agendamento de entregas de pedidos no catálogo digital.',
+                emoji: '📅',
+                isSystem: false,
+                isRecommended: true,
+                category: 'Geral'
+            },
+            {
+                title: 'Como fazer uma reserva',
+                recommendedAnswer: 'Sim, fazemos reservas de mesa! Para garantir o seu lugar, basta entrar em contato conosco pelo chat ou ligar informando o dia, horário e quantidade de pessoas. Teremos o prazer de te receber! 🍽️✨',
+                content: 'Configure as regras e orientações para reservas de mesas presenciais de clientes.',
+                emoji: '✨',
+                isSystem: false,
+                isRecommended: true,
+                category: 'Geral'
+            },
+            {
+                title: 'Formas de Pagamento',
+                recommendedAnswer: 'Aceitamos diversas formas de pagamento para facilitar para você! Você pode pagar via Pix, cartões de crédito e débito das principais bandeiras diretamente no checkout do nosso catálogo ou na entrega! 💳💵',
+                content: 'Esclareça dúvidas sobre cartões, Pix, troco ou pagamentos online no site.',
+                emoji: '💳',
+                isSystem: false,
+                isRecommended: true,
+                category: 'Geral'
+            },
+            {
+                title: 'Taxas de Entrega',
+                recommendedAnswer: 'Nossas taxas de entrega variam de acordo com o seu endereço e bairro! Ao digitar o seu CEP ou endereço no cardápio digital, o sistema calcula e te mostra o valor exato na hora! 🛵💨',
+                content: 'Esclareça dúvidas sobre valores de entrega por bairro ou retirada física na loja.',
+                emoji: '🛵',
+                isSystem: false,
+                isRecommended: true,
+                category: 'Geral'
+            }
+        ];
+
+        // Se um cenário recomendado já foi aplicado (ou seja, seu título existe em faqCards), remove da lista de recomendados!
+        const appliedTitles = faqCards.map(f => f.title.toLowerCase().trim());
+        const recommendedCards = allRecommended.filter(r => !appliedTitles.includes(r.title.toLowerCase().trim()));
+
+        // Combinar tudo
+        let allCards: any[] = [];
+
+        // Filtro por Abas: Tudo, Aplicado, Recomendado, Expirado
+        if (knowledgeTab === 'Tudo') {
+            allCards = [...systemCards, ...faqCards, ...recommendedCards];
+        } else if (knowledgeTab === 'Aplicado') {
+            allCards = [...systemCards, ...faqCards];
+        } else if (knowledgeTab === 'Recomendado') {
+            allCards = recommendedCards;
+        } else if (knowledgeTab === 'Expirado') {
+            allCards = []; // Sem cartões expirados simulados no momento
+        }
+
+        // Filtro por Pills: Tudo, Geral
+        if (knowledgeFilter === 'Geral') {
+            allCards = allCards.filter(c => c.category === 'Geral');
+        }
+
+        return allCards;
+    }, [knowledgeCards, knowledgeTab, knowledgeFilter]);
 
     const loadCampaigns = useCallback(async (quiet = false) => {
         if (!storeId) return;
@@ -1267,91 +1525,6 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
                         </div>
                     </div>
 
-                    {/* ASSISTENTE DE IA */}
-                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-700 mt-8 mb-8 animate-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-500">
-                                    <Sparkles className="w-6 h-6" />
-                                </div>
-                                <div>
-                                    <h2 className="text-xl font-black text-slate-900 dark:text-white">Assistente de IA</h2>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 italic">Deixe a inteligência artificial responder seus clientes.</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-2xl border border-slate-100 dark:border-slate-700">
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${aiEnabled ? 'text-indigo-500' : 'text-slate-400'}`}>
-                                    {aiEnabled ? 'Ativado' : 'Desativado'}
-                                </span>
-                                <button
-                                    onClick={handleToggleAI}
-                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${aiEnabled ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-                                >
-                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${aiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                                </button>
-                            </div>
-                        </div>
-
-                        {aiEnabled && (
-                            <div className="space-y-6 bg-indigo-50/50 dark:bg-indigo-900/10 p-6 rounded-[2rem] border border-indigo-100/50 dark:border-indigo-500/10 animate-in zoom-in-95 duration-300">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-                                    <div className="md:col-span-1 space-y-3">
-                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                            <Edit2 size={16} className="text-indigo-500" />
-                                            Nome do Assistente
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={aiName}
-                                            onChange={(e) => {
-                                                setAiName(e.target.value);
-                                                setIsDirty(true);
-                                                isDirtyRef.current = true;
-                                            }}
-                                            placeholder="Ex: Robô do Zé"
-                                            className="w-full px-4 py-3 rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-white/50 dark:bg-slate-900/50 focus:ring-2 focus:ring-indigo-500 transition-all text-sm outline-none"
-                                        />
-                                        <p className="text-[10px] text-slate-400 italic px-1">Como ele se apresentará aos clientes.</p>
-                                    </div>
-
-                                    <div className="md:col-span-3 space-y-3">
-                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                            <Bot size={16} className="text-indigo-500" />
-                                            Instruções do Assistente (Contexto)
-                                        </label>
-                                        <textarea
-                                            value={aiContext}
-                                            onChange={(e) => {
-                                                setAiContext(e.target.value);
-                                                setIsDirty(true);
-                                                isDirtyRef.current = true;
-                                            }}
-                                            placeholder="Ex: Você é um assistente de vendas da Pizzaria do Zé. Seja engraçado e use emojis. Foque em tirar dúvidas sobre o cardápio e preços."
-                                            className="w-full h-32 px-4 py-3 rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-white/50 dark:bg-slate-900/50 focus:ring-2 focus:ring-indigo-500 transition-all text-sm outline-none resize-none"
-                                        />
-                                        <div className="flex items-center gap-2 px-1">
-                                            <Sparkles className="w-4 h-4 text-amber-500" />
-                                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                                Dica: Quanto mais detalhes você der aqui, mais inteligente a resposta da IA será.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex justify-end pt-4 border-t border-indigo-100 dark:border-indigo-500/10">
-                                    <Button
-                                        onClick={() => handleSaveAI()}
-                                        loading={isSavingAi}
-                                        className="!py-2.5 !px-8 !text-xs !bg-indigo-500 hover:!bg-indigo-600 rounded-xl"
-                                        icon={<Save className="w-4 h-4" />}
-                                    >
-                                        Salvar Configurações de IA
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
                     {/* Bloco: Gatilhos de Auto-resposta */}
                     <div className="bg-white dark:bg-gray-800 p-8 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm space-y-8">
                         <div className="flex items-center justify-between">
@@ -1420,6 +1593,8 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
                     </div>
                 </div>
 
+
+                {/* Coluna Direita do Grid Superior */}
                 <div className="space-y-10">
                     {/* Bloco: QR Code */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
@@ -1518,8 +1693,84 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
                         </div>
                     </div>
 
+                    {/* Bloco: Assistente de IA */}
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                                    <Sparkles className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-black text-slate-900 dark:text-white">Assistente de IA</h2>
+                                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Configuração de IA</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2.5 bg-slate-50 dark:bg-slate-900/50 p-1.5 rounded-xl border border-slate-100 dark:border-slate-700">
+                                <span className={`text-[9px] font-black uppercase tracking-wider ${aiEnabled ? 'text-indigo-500' : 'text-slate-400'}`}>
+                                    {aiEnabled ? 'Ativo' : 'Inativo'}
+                                </span>
+                                <Switch
+                                    checked={aiEnabled}
+                                    onChange={handleToggleAI}
+                                    disabled={isSavingAi}
+                                />
+                            </div>
+                        </div>
+
+                        {aiEnabled && (
+                            <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-700/60 animate-in fade-in duration-300">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                                        <Edit2 size={12} className="text-indigo-500" />
+                                        Nome do Assistente
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={aiName}
+                                        onChange={(e) => {
+                                            setAiName(e.target.value);
+                                            setIsDirty(true);
+                                            isDirtyRef.current = true;
+                                        }}
+                                        placeholder="Ex: Robô do Zé"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 transition-all text-xs font-bold outline-none dark:text-white"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                                        <Bot size={12} className="text-indigo-500" />
+                                        Instruções do Assistente (Contexto)
+                                    </label>
+                                    <textarea
+                                        value={aiContext}
+                                        onChange={(e) => {
+                                            setAiContext(e.target.value);
+                                            setIsDirty(true);
+                                            isDirtyRef.current = true;
+                                        }}
+                                        placeholder="Ex: Você é um assistente de vendas da Pizzaria do Zé. Seja engraçado e use emojis. Foque em tirar dúvidas sobre o cardápio e preços."
+                                        className="w-full h-24 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 transition-all text-xs font-bold outline-none resize-none leading-relaxed dark:text-white"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end pt-2">
+                                    <Button
+                                        onClick={() => handleSaveAI()}
+                                        loading={isSavingAi}
+                                        className="!py-2 !px-5 !text-xs !bg-indigo-500 hover:!bg-indigo-600 rounded-xl w-full flex items-center justify-center gap-2"
+                                        icon={<Save className="w-3.5 h-3.5" />}
+                                    >
+                                        Salvar Configurações de IA
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+
                     {/* Bloco: Campanhas de Marketing */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6 mt-16">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6 mt-0">
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
@@ -1608,6 +1859,269 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
                     </div>
                 </div>
             </div>
+
+            {/* Bloco Central: Treinar IA para Atendimento ao Cliente (Largura Total da Página!) */}
+            {aiEnabled && (
+                <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-700 mt-10 mb-10 animate-in slide-in-from-bottom-4 duration-500">
+                    {/* SEÇÃO: Treinar IA para Atendimento ao Cliente + Simulador de Chat */}
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 pt-8 border-t border-indigo-100 dark:border-indigo-500/10 mt-8">
+                                    {/* Lado esquerdo: Treinar IA (FAQ e Cartões de Conhecimento) */}
+                                    <div className="xl:col-span-2 space-y-6">
+                                        <div className="flex items-start justify-between flex-wrap gap-4">
+                                            <div>
+                                                <h3 className="text-lg font-black text-slate-900 dark:text-white">Treinar IA para Atendimento ao Cliente</h3>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 italic">Adicione cenários de perguntas e respostas para treinar a IA para perguntas específicas de clientes.</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    onClick={() => void handleSyncKnowledge()}
+                                                    disabled={loadingKnowledge}
+                                                    variant="outline"
+                                                    className="!py-2 !px-4 !text-xs rounded-xl"
+                                                    icon={<RefreshCcw className={`w-3.5 h-3.5 ${loadingKnowledge ? 'animate-spin' : ''}`} />}
+                                                >
+                                                    Sincronizar Loja
+                                                </Button>
+                                                <Button
+                                                    onClick={() => {
+                                                        setEditingCard(null);
+                                                        setCardQuestion('');
+                                                        setCardAnswer('');
+                                                        setIsKnowledgeModalOpen(true);
+                                                    }}
+                                                    className="!py-2 !px-4 !text-xs !bg-orange-600 hover:!bg-orange-700 !text-white rounded-xl shadow-sm"
+                                                    icon={<Plus className="w-3.5 h-3.5" />}
+                                                >
+                                                    Criar seu cartão de conhecimento
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Filtros por abas e pills */}
+                                        <div className="flex flex-col gap-4 border-b pb-4 border-slate-100 dark:border-slate-800">
+                                            <div className="flex gap-1 overflow-x-auto thin-scrollbar pb-1">
+                                                {(['Tudo', 'Aplicado', 'Recomendado', 'Expirado'] as const).map(tab => (
+                                                    <button
+                                                        key={tab}
+                                                        onClick={() => setKnowledgeTab(tab)}
+                                                        className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                                            knowledgeTab === tab 
+                                                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm' 
+                                                            : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                        }`}
+                                                    >
+                                                        {tab}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <div className="flex gap-2 overflow-x-auto thin-scrollbar">
+                                                {(['Tudo', 'Geral'] as const).map(pill => (
+                                                    <button
+                                                        key={pill}
+                                                        onClick={() => setKnowledgeFilter(pill)}
+                                                        className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${
+                                                            knowledgeFilter === pill
+                                                            ? 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-white border border-slate-200 dark:border-slate-700'
+                                                            : 'bg-transparent text-slate-400 hover:text-slate-600 border border-transparent'
+                                                        }`}
+                                                    >
+                                                        {pill}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Grid de Cartões de Conhecimento */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {loadingKnowledge ? (
+                                                <div className="col-span-full py-12 text-center">
+                                                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-500 mb-2" />
+                                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Buscando base de conhecimento...</p>
+                                                </div>
+                                            ) : (
+                                                filteredKnowledgeCards.map((card, idx) => (
+                                                    <div 
+                                                        key={card.id || idx} 
+                                                        className={`p-5 rounded-3xl border transition-all flex flex-col justify-between min-h-[160px] ${
+                                                            card.isRecommended
+                                                            ? 'border-blue-100 dark:border-blue-900/30 bg-blue-50/10 dark:bg-blue-900/5'
+                                                            : 'border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10 hover:shadow-md'
+                                                        }`}
+                                                    >
+                                                        {/* Conteúdo do cartão de conhecimento */}
+                                                        <div>
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                                    card.isRecommended
+                                                                    ? 'bg-blue-500/10 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300'
+                                                                    : 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                                                }`}>
+                                                                    {card.isRecommended ? '+ Recomendado' : '✓ Aplicado'}
+                                                                </span>
+                                                            </div>
+                                                            <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                                                                <span>{card.emoji || '💡'}</span> {card.title}
+                                                            </h4>
+                                                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed line-clamp-3">
+                                                                {card.content}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex justify-end mt-4 pt-3 border-t border-slate-100/50 dark:border-slate-800/50">
+                                                            {card.isSystem ? (
+                                                                <div className="flex items-center gap-1 text-slate-400 text-xs font-bold">
+                                                                    <Lock className="w-3.5 h-3.5" />
+                                                                    <span className="text-[10px] uppercase tracking-wider">Automático</span>
+                                                                </div>
+                                                            ) : card.isRecommended ? (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setEditingCard(null);
+                                                                        setCardQuestion(card.title);
+                                                                        setCardAnswer(card.recommendedAnswer || '');
+                                                                        setIsKnowledgeModalOpen(true);
+                                                                    }}
+                                                                    className="text-xs font-black uppercase tracking-wider text-blue-600 hover:text-blue-750 transition-colors"
+                                                                >
+                                                                    Preencher
+                                                                </button>
+                                                            ) : (
+                                                                <div className="flex items-center gap-3">
+                                                                    <button
+                                                                        onClick={() => handleDeleteKnowledgeCard(card)}
+                                                                        className="text-xs font-black uppercase tracking-wider text-rose-500 hover:text-rose-600 transition-colors"
+                                                                    >
+                                                                        Excluir
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setEditingCard(card);
+                                                                            setCardQuestion(card.title);
+                                                                            setCardAnswer(card.content);
+                                                                            setIsKnowledgeModalOpen(true);
+                                                                        }}
+                                                                        className="text-xs font-black uppercase tracking-wider text-slate-700 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 transition-colors"
+                                                                    >
+                                                                        Editar
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                            
+                                            {!loadingKnowledge && filteredKnowledgeCards.length === 0 && (
+                                                <div className="col-span-full py-8 text-center border border-dashed rounded-3xl border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10">
+                                                    <BookOpen className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                                                    <p className="text-xs font-black uppercase tracking-widest text-slate-400">Nenhum cartão neste filtro</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Lado direito: Simulador de Chat com IA */}
+                                    <div className="xl:col-span-1 flex flex-col h-[520px] rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/15 overflow-hidden shadow-inner">
+                                        {/* Cabeçalho do Chat */}
+                                        <div className="p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0 shadow-sm">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-9 h-9 rounded-2xl bg-orange-500 flex items-center justify-center text-white font-black text-sm shadow-md shadow-orange-500/20">
+                                                    {aiName.substring(0, 2).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-sm font-black text-slate-800 dark:text-slate-100 leading-none">{aiName}</h4>
+                                                    <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1 mt-0.5 animate-pulse">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setSimulatedMessages([{ role: 'assistant', content: 'Experimente o chat com IA!' }])}
+                                                className="text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                            >
+                                                Limpar
+                                            </button>
+                                        </div>
+
+                                        {/* Corpo do Chat */}
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-4 thin-scrollbar bg-slate-150/40 dark:bg-slate-900/5 select-text">
+                                            {simulatedMessages.map((msg, index) => (
+                                                <div 
+                                                    key={index}
+                                                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-200`}
+                                                >
+                                                    <div 
+                                                        className={`max-w-[85%] rounded-[1.25rem] px-4 py-3 text-xs leading-relaxed font-bold shadow-sm whitespace-pre-wrap ${
+                                                            msg.role === 'user'
+                                                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 rounded-tr-none'
+                                                            : 'bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-slate-700'
+                                                        }`}
+                                                    >
+                                                        {msg.content}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {sendingSimulated && (
+                                                <div className="flex justify-start">
+                                                    <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[1.25rem] rounded-tl-none px-4 py-3 flex items-center gap-1 shadow-sm">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce delay-75"></span>
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce delay-150"></span>
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce delay-225"></span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div ref={chatEndRef} />
+                                        </div>
+
+                                        {/* Rodapé do Chat */}
+                                        <div className="p-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex-shrink-0">
+                                            {simulatedMessages.length <= 1 && (
+                                                <div className="flex flex-col gap-1.5 mb-2.5 animate-in slide-in-from-bottom-2">
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-1">Perguntas simuladas:</p>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {[
+                                                            'Tem como pagar com Pix?',
+                                                            'Queria fazer um pedido para entrega',
+                                                            'Qual o horário de funcionamento?'
+                                                        ].map((qText, qIdx) => (
+                                                            <button
+                                                                key={qIdx}
+                                                                onClick={() => {
+                                                                    setTestMessageText(qText);
+                                                                }}
+                                                                className="text-[11px] font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/50 dark:hover:bg-slate-700 px-3 py-1.5 rounded-full border border-slate-150 dark:border-slate-800 transition-all text-left shadow-sm"
+                                                            >
+                                                                {qText}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            <div className="relative flex items-center">
+                                                <input
+                                                    type="text"
+                                                    value={testMessageText}
+                                                    onChange={(e) => setTestMessageText(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') void handleSendSimulatedMessage();
+                                                    }}
+                                                    disabled={sendingSimulated}
+                                                    placeholder="Digite uma mensagem"
+                                                    className="w-full pl-4 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 transition-all text-xs font-bold text-slate-800 dark:text-slate-100 outline-none placeholder-slate-400"
+                                                />
+                                                <button
+                                                    onClick={() => void handleSendSimulatedMessage()}
+                                                    disabled={sendingSimulated || !testMessageText.trim()}
+                                                    className="absolute right-2 p-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white transition-all disabled:opacity-50"
+                                                >
+                                                    <Send className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
             {/* Modal de Nova Campanha */}
             {showNewCampaignModal && (
@@ -1889,8 +2403,84 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
                 onClose={() => setIsBlocklistModalOpen(false)} 
                 storeId={storeId || ''} 
             />
+
+            {/* Modal de Cartão de Conhecimento (FAQ) */}
+            {isKnowledgeModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200 select-text">
+                        {/* Cabeçalho */}
+                        <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-850 dark:text-slate-100">
+                                    {editingCard ? 'Editar Cartão de Conhecimento' : 'Criar seu Cartão de Conhecimento'}
+                                </h3>
+                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Treinar assistente de IA</p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setIsKnowledgeModalOpen(false);
+                                    setEditingCard(null);
+                                    setCardQuestion('');
+                                    setCardAnswer('');
+                                }}
+                                className="p-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 hover:text-slate-750 transition-colors"
+                            >
+                                <PowerOff className="w-4 h-4 text-rose-500" />
+                            </button>
+                        </div>
+
+                        {/* Corpo / Inputs */}
+                        <div className="p-6 space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pergunta do Cliente (Gatilho)</label>
+                                <input
+                                    type="text"
+                                    value={cardQuestion}
+                                    onChange={(e) => setCardQuestion(e.target.value)}
+                                    placeholder="Ex: Como agendar uma entrega?"
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 transition-all text-xs font-bold outline-none dark:text-white"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Resposta da IA (Treinamento)</label>
+                                <textarea
+                                    value={cardAnswer}
+                                    onChange={(e) => setCardAnswer(e.target.value)}
+                                    placeholder="Ex: Para agendar uma entrega, basta acessar o nosso cardápio digital, selecionar a opção 'Agendar' na tela de sacola e escolher a data..."
+                                    className="w-full h-36 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 transition-all text-xs font-bold outline-none resize-none leading-relaxed dark:text-white"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Rodapé / Ações */}
+                        <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setIsKnowledgeModalOpen(false);
+                                    setEditingCard(null);
+                                    setCardQuestion('');
+                                    setCardAnswer('');
+                                }}
+                                className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <Button
+                                onClick={() => void handleSaveKnowledgeCard()}
+                                loading={savingCard}
+                                className="!py-2.5 !px-6 !text-xs !bg-indigo-500 hover:!bg-indigo-600 rounded-xl"
+                                icon={<Save className="w-3.5 h-3.5" />}
+                            >
+                                Salvar Cartão
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default WhatsBot;
+
