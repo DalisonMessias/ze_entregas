@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "start": "npx tsx server/server.ts",
     "dev": "node scripts/dev-runner.js",
     "build": "vite build",
     "preview": "vite preview",
