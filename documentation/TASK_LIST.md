@@ -1,4 +1,3 @@
 - [x] Adicionar o script `start` no `package.json` para automatizar a inicialização do backend no Railway
 - [x] Atualizar o `checklist.txt` com a correção
-- [x] Solicitar ao usuário o envio das alterações via Git Push e verificação dos logs do Railway
-- [ ] Analisar os logs do Railway para identificar a causa raiz da falha no start do servidor
+- [/] Solicitar ao usuário o envio das alterações via Git Push e verificação dos logs do Railway
