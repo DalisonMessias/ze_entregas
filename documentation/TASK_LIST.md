@@ -1,2 +1,0 @@
-- [x] Analisar o erro de parada do serviço esbuild no Vite.
-- [x] Gerar instruções para o usuário limpar o cache e reiniciar o servidor, já que não tenho permissão para executar comandos no terminal.
