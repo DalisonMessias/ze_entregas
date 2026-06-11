@@ -395,6 +395,48 @@ export class ZeAssistantService {
             .update({ context_data: context })
             .eq('id', id);
     }
+
+    /**
+     * Transfere a conversa para atendimento humano
+     */
+    public async handoffToHuman(conversationId: string, reason?: string): Promise<void> {
+        const { error } = await supabaseAdmin
+            .from('ze_assistant_conversations')
+            .update({
+                handoff_to_human: true,
+                handoff_at: new Date().toISOString(),
+                handoff_reason: reason || null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('conversation_id', conversationId);
+
+        if (error) {
+            console.error(`[ZeAssistant] Erro ao fazer handoff para conversa ${conversationId}:`, error);
+            throw error;
+        }
+        console.log(`[ZeAssistant] Conversa ${conversationId} transferida para humano. Motivo: ${reason || 'Não informado'}`);
+    }
+
+    /**
+     * Retorna o controle da conversa para o assistente virtual
+     */
+    public async returnToAssistant(conversationId: string): Promise<void> {
+        const { error } = await supabaseAdmin
+            .from('ze_assistant_conversations')
+            .update({
+                handoff_to_human: false,
+                handoff_at: null,
+                handoff_reason: null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('conversation_id', conversationId);
+
+        if (error) {
+            console.error(`[ZeAssistant] Erro ao retornar para assistente a conversa ${conversationId}:`, error);
+            throw error;
+        }
+        console.log(`[ZeAssistant] Conversa ${conversationId} retornou para o assistente.`);
+    }
 }
 
 export const zeAssistantService = new ZeAssistantService();
