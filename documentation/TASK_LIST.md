@@ -1,3 +1,3 @@
-- [x] Adicionar o script `start` no `package.json` para automatizar a inicialização do backend no Railway
-- [x] Atualizar o `checklist.txt` com a correção
-- [/] Solicitar ao usuário o envio das alterações via Git Push e verificação dos logs do Railway
+- [x] Mover `tsx` e `typescript` para `dependencies` no `package.json` para permitir execução com `NODE_ENV=production` no Railway
+- [x] Atualizar o `checklist.txt` com o log da nova correção
+- [/] Solicitar ao usuário que envie o commit para reprocessar o build no Railway
