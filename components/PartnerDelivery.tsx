@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bike, Zap, Shield, Map, History, ArrowRight, CheckCircle, Navigation, Wallet, Clock, TrendingUp, Smartphone, Star, Crown, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 import { Logo } from './Logo';
+import { PartnerDeliveryEarningsCalculator } from './PartnerDeliveryEarningsCalculator';
 import { getPublicFeeSettings, getPlatformStats } from '../services/cloud';
 import { PartnerFeeSettings } from '../types';
 
@@ -264,6 +265,8 @@ export const PartnerDelivery = () => {
                     </div>
                 </div>
             </section>
+
+            <PartnerDeliveryEarningsCalculator feeSettings={feeSettings} />
 
             {/* Stats Section Simplified */}
             <section className="py-20 bg-white dark:bg-gray-950 px-4">

@@ -13,6 +13,7 @@ import { usePlanPermissions } from '../hooks/usePlanPermissions';
 import { CustomDateInput } from './CustomDateInput';
 import { StoreBlocklistModal } from './StoreBlocklistModal';
 import { Switch } from './Switch';
+import { getImpersonationStoreId } from '../services/impersonation';
 
 const statusMap: Record<WhatsBotStatus['connectionStatus'], { label: string; badge: string }> = {
     CONNECTED: {
@@ -305,13 +306,16 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
 
         const load = async () => {
             try {
-                let idToUse = propStoreId;
+                const impersonatedStoreId = getImpersonationStoreId();
+                let idToUse = impersonatedStoreId || propStoreId;
+                
                 if (!idToUse) {
                     const profile = await cloud.getMyPartnerProfile();
                     if (!mounted) return;
                     idToUse = profile?.id || null;
-                    setStoreId(idToUse);
                 }
+                
+                setStoreId(idToUse);
 
                 if (idToUse) {
                     await refreshStatus(true, idToUse);
@@ -326,7 +330,12 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
             }
         };
 
-        if (propStoreId) {
+        const impersonatedStoreId = getImpersonationStoreId();
+        if (impersonatedStoreId) {
+            setStoreId(impersonatedStoreId);
+            void refreshStatus(true, impersonatedStoreId);
+            void loadKnowledge(impersonatedStoreId);
+        } else if (propStoreId) {
             setStoreId(propStoreId);
             void refreshStatus(true, propStoreId);
             void loadKnowledge(propStoreId);
@@ -337,7 +346,7 @@ export const WhatsBot: React.FC<{ storeId?: string | null }> = ({ storeId: propS
         return () => {
             mounted = false;
         };
-    }, [refreshStatus]);
+    }, [refreshStatus, propStoreId]);
 
     useEffect(() => {
         if (!status) return;

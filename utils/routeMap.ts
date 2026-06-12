@@ -50,6 +50,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/zepoint': 'zepoint',
     '/admin/cupons': 'admin_global_coupons',
     '/admin/bonus': 'admin_bonuses',
+    '/admin/descanso-entregadores': 'admin_delivery_breaks',
 
     // Shared / Core Routes
     '/perfil': 'profile',
@@ -145,6 +146,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/entregador/pedidos': 'associate_orders',
     '/entregador/pontuacao': 'score',
     '/entregador/zepoint': 'zepoint',
+    '/entregador/lojas-fixas': 'driver_fixed_stores',
     '/entregador/navegacao': 'delivery_navigation',
     '/entregador/bonus': 'driver_bonuses',
 
@@ -278,3 +280,4 @@ export const syncUrlWithTab = (tab: ActiveTab, role?: UserRole) => {
         window.history.pushState({ tab }, '', path);
     }
 };
+

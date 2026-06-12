@@ -1779,3 +1779,601 @@ CREATE POLICY "Admins can manage all announcement reads" ON public.user_announce
 GRANT ALL ON TABLE public.system_announcements TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.user_announcement_reads TO anon, authenticated, service_role;
 
+
+-- ==================================================================
+-- SISTEMA DE DESCANSO PARA ENTREGADORES (12/06/2026)
+-- ==================================================================
+
+-- 1. Colunas adicionais em public.user_profiles
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'delivery_status') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN delivery_status TEXT NOT NULL DEFAULT 'available';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_profiles' AND column_name = 'last_break_time') THEN
+        ALTER TABLE public.user_profiles ADD COLUMN last_break_time TIMESTAMPTZ;
+    END IF;
+END $$;
+
+-- 2. Tabela de Configurações de Pausa (Regras administrativas)
+CREATE TABLE IF NOT EXISTS public.delivery_break_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    city_slug TEXT,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    max_duration_minutes INTEGER NOT NULL DEFAULT 30,
+    max_breaks_per_day INTEGER NOT NULL DEFAULT 3,
+    min_interval_minutes INTEGER NOT NULL DEFAULT 120,
+    allowed_hours_start TIME NOT NULL DEFAULT '00:00:00',
+    allowed_hours_end TIME NOT NULL DEFAULT '23:59:59',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(city_slug, store_id)
+);
+
+-- RLS para Configurações de Pausa
+ALTER TABLE public.delivery_break_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view break settings" ON public.delivery_break_settings;
+CREATE POLICY "Public can view break settings" ON public.delivery_break_settings FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage break settings" ON public.delivery_break_settings;
+CREATE POLICY "Admins can manage break settings" ON public.delivery_break_settings FOR ALL USING (public.is_admin());
+
+-- 3. Tabela de Histórico de Descansos
+CREATE TABLE IF NOT EXISTS public.delivery_breaks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    partner_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    start_time TIMESTAMPTZ NOT NULL DEFAULT now(),
+    end_time TIMESTAMPTZ,
+    expected_return TIMESTAMPTZ NOT NULL,
+    reason TEXT,
+    is_auto_returned BOOLEAN DEFAULT FALSE,
+    store_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RLS para Histórico de Descansos
+ALTER TABLE public.delivery_breaks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Partners can manage own breaks" ON public.delivery_breaks;
+CREATE POLICY "Partners can manage own breaks" ON public.delivery_breaks FOR ALL USING (auth.uid() = partner_id);
+DROP POLICY IF EXISTS "Stores can read their partner breaks" ON public.delivery_breaks;
+CREATE POLICY "Stores can read their partner breaks" ON public.delivery_breaks FOR SELECT USING (auth.uid() = store_id);
+DROP POLICY IF EXISTS "Admins can manage all breaks" ON public.delivery_breaks;
+CREATE POLICY "Admins can manage all breaks" ON public.delivery_breaks FOR ALL USING (public.is_admin());
+
+CREATE INDEX IF NOT EXISTS idx_delivery_breaks_partner ON public.delivery_breaks(partner_id, start_time DESC);
+
+-- Grants
+GRANT ALL ON TABLE public.delivery_break_settings TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.delivery_breaks TO anon, authenticated, service_role;
+
+-- 4. RPC: Iniciar Descanso
+CREATE OR REPLACE FUNCTION public.start_delivery_break(
+    p_reason TEXT,
+    p_store_id UUID DEFAULT NULL,
+    p_lat DOUBLE PRECISION DEFAULT NULL,
+    p_lng DOUBLE PRECISION DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_partner_id UUID := auth.uid();
+    v_shift RECORD;
+    v_settings RECORD;
+    v_city_slug TEXT;
+    v_active_deliveries INTEGER;
+    v_breaks_today INTEGER;
+    v_last_break_end TIMESTAMPTZ;
+    v_max_duration INTEGER;
+    v_expected_return TIMESTAMPTZ;
+    v_new_break_id UUID;
+    v_current_time TIME := current_time;
+BEGIN
+    -- Obter cidade do parceiro
+    SELECT city_slug INTO v_city_slug FROM public.user_profiles WHERE id = v_partner_id;
+
+    -- Obter configurações aplicáveis (específicas por loja, depois cidade, ou globais)
+    SELECT * INTO v_settings 
+    FROM public.delivery_break_settings
+    WHERE (store_id = p_store_id OR (store_id IS NULL AND city_slug = v_city_slug) OR (store_id IS NULL AND city_slug IS NULL))
+    ORDER BY store_id NULLS LAST, city_slug NULLS LAST
+    LIMIT 1;
+
+    -- Fallback de configurações globais se não houver registro
+    IF v_settings.id IS NULL THEN
+        v_max_duration := 30;
+    ELSE
+        v_max_duration := v_settings.max_duration_minutes;
+        
+        -- Validar horários permitidos
+        IF v_current_time < v_settings.allowed_hours_start OR v_current_time > v_settings.allowed_hours_end THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Não é permitido iniciar pausas de descanso neste horário.');
+        END IF;
+    END IF;
+
+    -- 1. Validar se tem turno ativo
+    SELECT * INTO v_shift FROM public.work_shifts WHERE partner_id = v_partner_id AND status = 'ACTIVE' LIMIT 1;
+    IF v_shift.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Você precisa estar com o turno de trabalho iniciado para pausar.');
+    END IF;
+
+    -- 2. Validar se tem entregas em andamento
+    SELECT COUNT(*) INTO v_active_deliveries
+    FROM public.partner_requests
+    WHERE partner_id = v_partner_id 
+      AND status IN ('ACCEPTED', 'PICKUP', 'IN_TRANSIT');
+
+    IF v_active_deliveries > 0 THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Não é permitido entrar em descanso enquanto houver entregas ativas ou pendentes de coleta.');
+    END IF;
+
+    -- 3. Validar limite de pausas diárias
+    SELECT COUNT(*) INTO v_breaks_today
+    FROM public.delivery_breaks
+    WHERE partner_id = v_partner_id
+      AND start_time::date = current_date;
+
+    IF v_settings.id IS NOT NULL AND v_breaks_today >= v_settings.max_breaks_per_day THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Limite máximo de pausas diárias atingido (' || v_settings.max_breaks_per_day || ').');
+    END IF;
+
+    -- 4. Validar intervalo mínimo
+    SELECT MAX(end_time) INTO v_last_break_end
+    FROM public.delivery_breaks
+    WHERE partner_id = v_partner_id;
+
+    IF v_settings.id IS NOT NULL AND v_last_break_end IS NOT NULL THEN
+        IF v_last_break_end + (v_settings.min_interval_minutes * interval '1 minute') > now() THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Intervalo mínimo entre descansos ainda não respeitado. Tente mais tarde.');
+        END IF;
+    END IF;
+
+    v_expected_return := now() + (v_max_duration * interval '1 minute');
+
+    -- Inserir descanso
+    INSERT INTO public.delivery_breaks (
+        partner_id,
+        start_time,
+        expected_return,
+        reason,
+        store_id,
+        lat,
+        lng
+    ) VALUES (
+        v_partner_id,
+        now(),
+        v_expected_return,
+        p_reason,
+        p_store_id,
+        p_lat,
+        p_lng
+    ) RETURNING id INTO v_new_break_id;
+
+    -- Atualizar status do entregador
+    UPDATE public.user_profiles
+    SET delivery_status = 'resting',
+        is_available = FALSE
+    WHERE id = v_partner_id;
+
+    -- Sincronizar com breaks do work_shift para manter histórico unificado
+    UPDATE public.work_shifts
+    SET breaks = array_append(breaks, jsonb_build_object('start', now()::text, 'end', null, 'break_id', v_new_break_id::text)),
+        status = 'PAUSED',
+        updated_at = now()
+    WHERE id = v_shift.id;
+
+    -- Notificar admins/loja
+    INSERT INTO public.user_notifications (user_id, title, message, type)
+    SELECT id, 'Entregador em Descanso', (SELECT name FROM public.user_profiles WHERE id = v_partner_id) || ' iniciou pausa de descanso de ' || v_max_duration || ' min.', 'info'
+    FROM public.user_profiles
+    WHERE role = 'admin' OR id = p_store_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'break_id', v_new_break_id,
+        'start_time', now(),
+        'expected_return', v_expected_return,
+        'max_duration_minutes', v_max_duration
+    );
+END;
+$$;
+
+-- 5. RPC: Finalizar Descanso
+CREATE OR REPLACE FUNCTION public.end_delivery_break(
+    p_manual_reason TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_partner_id UUID := auth.uid();
+    v_active_break RECORD;
+    v_shift RECORD;
+    v_updated_breaks JSONB[];
+    v_elem JSONB;
+BEGIN
+    -- Obter pausa ativa
+    SELECT * INTO v_active_break 
+    FROM public.delivery_breaks
+    WHERE partner_id = v_partner_id AND end_time IS NULL
+    LIMIT 1;
+
+    IF v_active_break.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Nenhum descanso ativo encontrado para finalizar.');
+    END IF;
+
+    -- Atualizar pausa
+    UPDATE public.delivery_breaks
+    SET end_time = now(),
+        is_auto_returned = (p_manual_reason IS NULL),
+        reason = COALESCE(reason, '') || CASE WHEN p_manual_reason IS NOT NULL THEN ' [Manual: ' || p_manual_reason || ']' ELSE '' END
+    WHERE id = v_active_break.id;
+
+    -- Atualizar perfil
+    UPDATE public.user_profiles
+    SET delivery_status = 'available',
+        is_available = TRUE,
+        last_break_time = now()
+    WHERE id = v_partner_id;
+
+    -- Atualizar breaks do turno
+    SELECT * INTO v_shift FROM public.work_shifts WHERE partner_id = v_partner_id AND status = 'PAUSED' LIMIT 1;
+    IF v_shift.id IS NOT NULL THEN
+        v_updated_breaks := ARRAY[]::JSONB[];
+        FOREACH v_elem IN ARRAY v_shift.breaks LOOP
+            IF v_elem->>'break_id' = v_active_break.id::text THEN
+                v_elem := jsonb_set(v_elem, '{end}', to_jsonb(now()::text));
+            END IF;
+            v_updated_breaks := array_append(v_updated_breaks, v_elem);
+        END LOOP;
+
+        UPDATE public.work_shifts
+        SET breaks = v_updated_breaks,
+            status = 'ACTIVE',
+            updated_at = now()
+        WHERE id = v_shift.id;
+    END IF;
+
+    -- Notificar
+    INSERT INTO public.user_notifications (user_id, title, message, type)
+    SELECT id, 'Entregador de Volta', (SELECT name FROM public.user_profiles WHERE id = v_partner_id) || ' retornou do descanso.', 'success'
+    FROM public.user_profiles
+    WHERE role = 'admin' OR id = v_active_break.store_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'end_time', now(),
+        'duration_seconds', extract(epoch from (now() - v_active_break.start_time))
+    );
+END;
+$$;
+
+-- 6. RPC: Obter status do descanso ativo
+CREATE OR REPLACE FUNCTION public.get_active_delivery_break()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_partner_id UUID := auth.uid();
+    v_break RECORD;
+    v_settings RECORD;
+    v_city_slug TEXT;
+    v_breaks_today INTEGER;
+    v_max_breaks INTEGER := 3;
+BEGIN
+    SELECT * INTO v_break 
+    FROM public.delivery_breaks
+    WHERE partner_id = v_partner_id AND end_time IS NULL
+    LIMIT 1;
+
+    SELECT city_slug INTO v_city_slug FROM public.user_profiles WHERE id = v_partner_id;
+
+    SELECT * INTO v_settings 
+    FROM public.delivery_break_settings
+    WHERE (store_id = v_break.store_id OR (store_id IS NULL AND city_slug = v_city_slug) OR (store_id IS NULL AND city_slug IS NULL))
+    ORDER BY store_id NULLS LAST, city_slug NULLS LAST
+    LIMIT 1;
+
+    IF v_settings.id IS NOT NULL THEN
+        v_max_breaks := v_settings.max_breaks_per_day;
+    END IF;
+
+    SELECT COUNT(*) INTO v_breaks_today
+    FROM public.delivery_breaks
+    WHERE partner_id = v_partner_id
+      AND start_time::date = current_date;
+
+    IF v_break.id IS NULL THEN
+        RETURN jsonb_build_object(
+            'active', false,
+            'breaks_left', GREATEST(0, v_max_breaks - v_breaks_today),
+            'max_breaks', v_max_breaks
+        );
+    END IF;
+
+    RETURN jsonb_build_object(
+        'active', true,
+        'break_id', v_break.id,
+        'start_time', v_break.start_time,
+        'expected_return', v_break.expected_return,
+        'seconds_remaining', GREATEST(0, extract(epoch from (v_break.expected_return - now()))),
+        'reason', v_break.reason,
+        'breaks_left', GREATEST(0, v_max_breaks - v_breaks_today),
+        'max_breaks', v_max_breaks
+    );
+END;
+$$;
+
+-- 7. RPC: Verificar e auto-retornar pausas expiradas
+CREATE OR REPLACE FUNCTION public.auto_check_expired_breaks()
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_count INTEGER := 0;
+    v_record RECORD;
+BEGIN
+    -- Seleciona pausas onde já passou o tempo previsto de retorno e ainda não terminou
+    FOR v_record IN 
+        SELECT id FROM public.delivery_breaks
+        WHERE end_time IS NULL AND expected_return <= now()
+    LOOP
+        -- Usar end_delivery_break simulando retorno automático
+        -- Executa como o partner correspondente
+        UPDATE public.delivery_breaks
+        SET end_time = now(),
+            is_auto_returned = TRUE
+        WHERE id = v_record.id;
+        
+        -- Atualizar perfil do entregador associado a esta pausa
+        UPDATE public.user_profiles
+        SET delivery_status = 'available',
+            is_available = TRUE,
+            last_break_time = now()
+        WHERE id = (SELECT partner_id FROM public.delivery_breaks WHERE id = v_record.id);
+
+        v_count := v_count + 1;
+    END LOOP;
+    
+    RETURN v_count;
+END;
+$$;
+
+-- 8. RPC: Estatísticas de descansos (Relatório Admin)
+CREATE OR REPLACE FUNCTION public.get_delivery_break_stats()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_total_breaks INTEGER;
+    v_total_duration_minutes NUMERIC;
+    v_avg_duration_minutes NUMERIC;
+    v_ranking JSONB;
+BEGIN
+    SELECT COUNT(*), COALESCE(SUM(extract(epoch from (end_time - start_time))/60), 0)
+    INTO v_total_breaks, v_total_duration_minutes
+    FROM public.delivery_breaks
+    WHERE end_time IS NOT NULL;
+
+    IF v_total_breaks > 0 THEN
+        v_avg_duration_minutes := (v_total_duration_minutes / v_total_breaks)::NUMERIC(10,2);
+    ELSE
+        v_avg_duration_minutes := 0;
+    END IF;
+
+    -- Top 5 entregadores com mais tempo em descanso
+    SELECT jsonb_agg(t) INTO v_ranking FROM (
+        SELECT 
+            up.name,
+            COUNT(db.id) as break_count,
+            ROUND(SUM(extract(epoch from (db.end_time - db.start_time))/60)::numeric, 1) as total_minutes
+        FROM public.delivery_breaks db
+        JOIN public.user_profiles up ON up.id = db.partner_id
+        WHERE db.end_time IS NOT NULL
+        GROUP BY up.name
+        ORDER BY total_minutes DESC
+        LIMIT 5
+    ) t;
+
+    RETURN jsonb_build_object(
+        'total_breaks', v_total_breaks,
+        'total_duration_minutes', ROUND(v_total_duration_minutes, 1),
+        'avg_duration_minutes', v_avg_duration_minutes,
+        'ranking', COALESCE(v_ranking, '[]'::jsonb)
+    );
+END;
+$$;
+
+-- Permitir que autenticados executem as RPCs
+GRANT EXECUTE ON FUNCTION public.start_delivery_break(TEXT, UUID, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.end_delivery_break(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_active_delivery_break() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.auto_check_expired_breaks() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_delivery_break_stats() TO authenticated, service_role;
+
+-- ==================================================================
+-- ENTREGADOR FIXO (FIXED DRIVER ASSIGNMENTS)
+-- ==================================================================
+
+-- 1. delivery_fixed_assignments
+CREATE TABLE IF NOT EXISTS public.delivery_fixed_assignments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    driver_id UUID NOT NULL,
+    store_id UUID NOT NULL,
+    assignment_type TEXT NOT NULL CHECK (assignment_type IN ('EXCLUSIVE', 'PRIORITY', 'SHARED')),
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'REMOVED')),
+    priority_level INTEGER DEFAULT 1,
+    max_simultaneous_deliveries INTEGER DEFAULT 3,
+    custom_delivery_fee NUMERIC(10, 2),
+    start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    end_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_by UUID,
+    CONSTRAINT unique_driver_store_assignment UNIQUE (driver_id, store_id)
+);
+
+-- Trigger for updated_at on delivery_fixed_assignments
+DROP TRIGGER IF EXISTS trigger_delivery_fixed_assignments_updated_at ON public.delivery_fixed_assignments;
+CREATE TRIGGER trigger_delivery_fixed_assignments_updated_at
+BEFORE UPDATE ON public.delivery_fixed_assignments
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS
+ALTER TABLE public.delivery_fixed_assignments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_assignments" ON public.delivery_fixed_assignments;
+CREATE POLICY "Public can view delivery_fixed_assignments" ON public.delivery_fixed_assignments FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_assignments" ON public.delivery_fixed_assignments;
+CREATE POLICY "Admins can manage delivery_fixed_assignments" ON public.delivery_fixed_assignments FOR ALL USING (true);
+
+
+-- 2. delivery_fixed_schedules
+CREATE TABLE IF NOT EXISTS public.delivery_fixed_schedules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    assignment_id UUID NOT NULL REFERENCES public.delivery_fixed_assignments(id) ON DELETE CASCADE,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    is_holiday BOOLEAN DEFAULT FALSE,
+    is_special_shift BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Trigger for updated_at
+DROP TRIGGER IF EXISTS trigger_delivery_fixed_schedules_updated_at ON public.delivery_fixed_schedules;
+CREATE TRIGGER trigger_delivery_fixed_schedules_updated_at
+BEFORE UPDATE ON public.delivery_fixed_schedules
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS
+ALTER TABLE public.delivery_fixed_schedules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_schedules" ON public.delivery_fixed_schedules;
+CREATE POLICY "Public can view delivery_fixed_schedules" ON public.delivery_fixed_schedules FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_schedules" ON public.delivery_fixed_schedules;
+CREATE POLICY "Admins can manage delivery_fixed_schedules" ON public.delivery_fixed_schedules FOR ALL USING (true);
+
+
+-- 3. delivery_fixed_logs
+CREATE TABLE IF NOT EXISTS public.delivery_fixed_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    assignment_id UUID NOT NULL REFERENCES public.delivery_fixed_assignments(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    description TEXT,
+    created_by UUID,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- RLS
+ALTER TABLE public.delivery_fixed_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_logs" ON public.delivery_fixed_logs;
+CREATE POLICY "Public can view delivery_fixed_logs" ON public.delivery_fixed_logs FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can insert delivery_fixed_logs" ON public.delivery_fixed_logs;
+CREATE POLICY "Admins can insert delivery_fixed_logs" ON public.delivery_fixed_logs FOR INSERT WITH CHECK (true);
+
+
+-- 4. delivery_fixed_priorities
+CREATE TABLE IF NOT EXISTS public.delivery_fixed_priorities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    assignment_id UUID NOT NULL REFERENCES public.delivery_fixed_assignments(id) ON DELETE CASCADE,
+    store_id UUID NOT NULL,
+    priority_score INTEGER NOT NULL DEFAULT 100,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT unique_priority_assignment_store UNIQUE (assignment_id, store_id)
+);
+
+-- Trigger for updated_at
+DROP TRIGGER IF EXISTS trigger_delivery_fixed_priorities_updated_at ON public.delivery_fixed_priorities;
+CREATE TRIGGER trigger_delivery_fixed_priorities_updated_at
+BEFORE UPDATE ON public.delivery_fixed_priorities
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS
+ALTER TABLE public.delivery_fixed_priorities ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_priorities" ON public.delivery_fixed_priorities;
+CREATE POLICY "Public can view delivery_fixed_priorities" ON public.delivery_fixed_priorities FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_priorities" ON public.delivery_fixed_priorities;
+CREATE POLICY "Admins can manage delivery_fixed_priorities" ON public.delivery_fixed_priorities FOR ALL USING (true);
+
+
+-- 5. delivery_fixed_bonuses
+CREATE TABLE IF NOT EXISTS public.delivery_fixed_bonuses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    assignment_id UUID NOT NULL REFERENCES public.delivery_fixed_assignments(id) ON DELETE CASCADE,
+    bonus_type TEXT NOT NULL CHECK (bonus_type IN ('FIXED_FEE', 'PER_KM', 'PRODUCTIVITY', 'PEAK_HOUR', 'RAIN', 'WEEKEND', 'GOALS')),
+    amount NUMERIC(10, 2) NOT NULL,
+    conditions JSONB,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Trigger for updated_at
+DROP TRIGGER IF EXISTS trigger_delivery_fixed_bonuses_updated_at ON public.delivery_fixed_bonuses;
+CREATE TRIGGER trigger_delivery_fixed_bonuses_updated_at
+BEFORE UPDATE ON public.delivery_fixed_bonuses
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS
+ALTER TABLE public.delivery_fixed_bonuses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_bonuses" ON public.delivery_fixed_bonuses;
+CREATE POLICY "Public can view delivery_fixed_bonuses" ON public.delivery_fixed_bonuses FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_bonuses" ON public.delivery_fixed_bonuses;
+CREATE POLICY "Admins can manage delivery_fixed_bonuses" ON public.delivery_fixed_bonuses FOR ALL USING (true);
+
+
+-- 6. delivery_fixed_statistics
+CREATE TABLE IF NOT EXISTS public.delivery_fixed_statistics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    assignment_id UUID NOT NULL REFERENCES public.delivery_fixed_assignments(id) ON DELETE CASCADE UNIQUE,
+    total_deliveries INTEGER DEFAULT 0,
+    total_earnings NUMERIC(15, 2) DEFAULT 0.00,
+    acceptance_rate NUMERIC(5, 2) DEFAULT 0.00,
+    cancellation_rate NUMERIC(5, 2) DEFAULT 0.00,
+    average_pickup_time INTEGER DEFAULT 0, -- em segundos
+    average_delivery_time INTEGER DEFAULT 0, -- em segundos
+    hours_worked NUMERIC(10, 2) DEFAULT 0.00,
+    last_activity TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Trigger for updated_at
+DROP TRIGGER IF EXISTS trigger_delivery_fixed_statistics_updated_at ON public.delivery_fixed_statistics;
+CREATE TRIGGER trigger_delivery_fixed_statistics_updated_at
+BEFORE UPDATE ON public.delivery_fixed_statistics
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- RLS
+ALTER TABLE public.delivery_fixed_statistics ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_statistics" ON public.delivery_fixed_statistics;
+CREATE POLICY "Public can view delivery_fixed_statistics" ON public.delivery_fixed_statistics FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_statistics" ON public.delivery_fixed_statistics;
+CREATE POLICY "Admins can manage delivery_fixed_statistics" ON public.delivery_fixed_statistics FOR ALL USING (true);
+
+
+-- 7. delivery_fixed_history
+CREATE TABLE IF NOT EXISTS public.delivery_fixed_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    driver_id UUID NOT NULL,
+    store_id UUID NOT NULL,
+    action TEXT NOT NULL,
+    reason TEXT,
+    created_by UUID,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- RLS
+ALTER TABLE public.delivery_fixed_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_history" ON public.delivery_fixed_history;
+CREATE POLICY "Public can view delivery_fixed_history" ON public.delivery_fixed_history FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can insert delivery_fixed_history" ON public.delivery_fixed_history;
+CREATE POLICY "Admins can insert delivery_fixed_history" ON public.delivery_fixed_history FOR INSERT WITH CHECK (true);
+
+
+

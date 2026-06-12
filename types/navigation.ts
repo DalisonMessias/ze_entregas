@@ -1,5 +1,6 @@
 export type ActiveTab =
     | 'admin_dashboard'
+    | 'admin_delivery_breaks'
     | 'admin_users'
     | 'admin_lojas'
     | 'admin_validation'
@@ -125,4 +126,7 @@ export type ActiveTab =
     | 'driver_bonuses'
     | 'store_gestor'
     | 'download_gestor'
+    | 'admin_fixed_drivers'
+    | 'store_fixed_drivers'
+    | 'driver_fixed_stores'
     | 'not_found';

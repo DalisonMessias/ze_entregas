@@ -18,7 +18,7 @@
   "dependencies": {
     "@google/genai": "1.30.0",
     "@google/generative-ai": "0.24.1",
-    "@list-labs/react-joyride": "0.3.2",
+    "react-joyride": "^2.9.3",
     "@supabase/supabase-js": "2.86.0",
     "@tailwindcss/vite": "4.1.17",
     "@tanstack/react-virtual": "3.13.18",
@@ -27,9 +27,9 @@
     "@types/express": "5.0.6",
     "@types/multer": "2.0.0",
     "@types/xlsx": "0.0.35",
-    "@whiskeysockets/baileys": "6.7.4",
+    "@whiskeysockets/baileys": "^6.7.23",
     "autoprefixer": "10.4.22",
-    "axios": "1.13.2",
+    "axios": "^1.17.0",
     "compression": "1.8.1",
     "cors": "2.8.5",
     "date-fns": "4.1.0",
@@ -37,22 +37,24 @@
     "express": "5.2.1",
     "html2canvas": "1.4.1",
     "html5-qrcode": "2.3.8",
+    "i18next": "23.11.5",
     "jsbarcode": "3.12.1",
-    "jspdf": "4.0.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "0.555.0",
-    "multer": "2.0.2",
+    "multer": "^2.1.1",
     "pino": "9.3.1",
-    "postcss": "8.5.6",
+    "postcss": "^8.5.15",
     "qrcode": "1.5.3",
     "qrcode.react": "4.2.0",
     "qrious": "4.0.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "react-i18next": "14.1.2",
     "tailwindcss": "4.1.17",
-    "ws": "8.18.0",
-    "xlsx": "0.18.5",
     "tsx": "4.21.0",
-    "typescript": "5.8.2"
+    "typescript": "5.8.2",
+    "ws": "^8.21.0",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
@@ -69,7 +71,7 @@
     "eslint": "9.39.1",
     "jsdom": "24.0.0",
     "terser": "5.46.0",
-    "vite": "6.2.0",
-    "vitest": "3.2.4"
+    "vite": "^6.4.3",
+    "vitest": "^3.2.6"
   }
 }

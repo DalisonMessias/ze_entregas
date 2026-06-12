@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Users, FileCheck, Edit2, Save } from 'lucide-react';
 import { AdminSubTab } from '../types';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
@@ -44,6 +45,7 @@ import { AdminStoreCategories } from './AdminStoreCategories';
 import { AdminMediation } from './AdminMediation';
 import { AdminStoreRatings } from './AdminStoreRatings';
 import { AdminBonusCampaigns } from './AdminBonusCampaigns';
+import { AdminDeliveryBreaks } from './AdminDeliveryBreaks';
 
 // Imports com caminhos específicos corrigidos
 import { MapaLocalizacao } from '../pages/admin/MapaLocalizacao';
@@ -67,6 +69,7 @@ const getRoleLabel = (role: string) => {
 };
 
 const UserManagement: React.FC = () => {
+    const { t } = useTranslation();
     const [users, setUsers] = React.useState<any[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [search, setSearch] = React.useState('');
@@ -126,12 +129,12 @@ const UserManagement: React.FC = () => {
         u.phone_number?.includes(search)
     );
 
-    if (loading) return <div className="p-10 text-center"><div className="animate-spin w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full mx-auto mb-4"></div>Carregando usuários...</div>;
+    if (loading) return <div className="p-10 text-center"><div className="animate-spin w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full mx-auto mb-4"></div>{t('admin.loadingUsers')}</div>;
 
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
-                <h2 className="text-xl font-black text-gray-900 dark:text-white">Todos os Usuários</h2>
+                <h2 className="text-xl font-black text-gray-900 dark:text-white">{t('admin.allUsers')}</h2>
                 <div className="flex gap-2">
                    <div className="relative">
                         <input
@@ -151,11 +154,11 @@ const UserManagement: React.FC = () => {
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 text-xs font-bold uppercase">
                             <tr>
-                                <th className="px-6 py-4">Usuário</th>
-                                <th className="px-6 py-4">Contato</th>
-                                <th className="px-6 py-4">Perfil</th>
-                                <th className="px-6 py-4">Status</th>
-                                <th className="px-6 py-4">Cadastro</th>
+                                <th className="px-6 py-4">{t('admin.user')}</th>
+                                <th className="px-6 py-4">{t('admin.contact')}</th>
+                                <th className="px-6 py-4">{t('admin.profile')}</th>
+                                <th className="px-6 py-4">{t('admin.status')}</th>
+                                <th className="px-6 py-4">{t('admin.registration')}</th>
                                 <th className="px-6 py-4 text-center">Ações</th>
                             </tr>
                         </thead>
@@ -168,38 +171,37 @@ const UserManagement: React.FC = () => {
                                                 {user.name?.charAt(0).toUpperCase()}
                                             </div>
                                             <div>
-                                                <p className="font-bold text-gray-900 dark:text-white">{user.name || 'Sem nome'}</p>
-                                                <p className="text-xs text-gray-400">{user.email}</p>
+                                                <p className="font-bold text-gray-900 dark:text-white line-clamp-1">{user.name}</p>
+                                                <p className="text-xs text-gray-400 font-medium">CPF: {user.cpf || '-'}</p>
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <p className="text-sm text-gray-600 dark:text-gray-300">{user.phone_number || '-'}</p>
-                                        <p className="text-[10px] text-gray-400">{user.cpf || '-'}</p>
+                                        <p className="text-sm text-gray-900 dark:text-white font-medium">{user.phone_number}</p>
+                                        <p className="text-xs text-gray-400 font-medium">{user.email}</p>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
-                                            user.role === 'admin' ? 'bg-purple-100 text-purple-600' :
-                                            user.role === 'store_partner' ? 'bg-blue-100 text-blue-600' :
-                                            'bg-green-100 text-green-600'
-                                        }`}>
+                                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-full uppercase">
                                             {getRoleLabel(user.role)}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full ${user.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                            <span className="text-sm dark:text-gray-200">{user.status === 'active' ? 'Ativo' : 'Bloqueado'}</span>
-                                        </div>
+                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase ${
+                                            user.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                            user.status === 'blocked' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                                            user.status === 'suspended' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                                            'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                        }`}>
+                                            {user.status === 'active' ? 'Ativo' : user.status === 'blocked' ? 'Bloqueado' : user.status === 'suspended' ? 'Suspenso' : user.status}
+                                        </span>
                                     </td>
-                                    <td className="px-6 py-4 text-xs text-gray-400">
-                                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
+                                    <td className="px-6 py-4 text-xs font-medium text-gray-500 dark:text-gray-400">
+                                        {user.created_at ? new Date(user.created_at).toLocaleDateString('pt-BR') : '-'}
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <button
-                                            onClick={() => setEditingUser({ ...user })}
-                                            className="p-2 bg-gray-100 dark:bg-gray-700/50 hover:bg-brand-50 dark:hover:bg-brand-900/40 text-gray-500 hover:text-brand-600 rounded-lg transition-colors"
-                                            title="Editar Usuário"
+                                            onClick={() => setEditingUser(user)}
+                                            className="p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition"
                                         >
                                             <Edit2 className="w-4 h-4" />
                                         </button>
@@ -211,40 +213,38 @@ const UserManagement: React.FC = () => {
                 </div>
             </div>
 
-            <BaseModal isOpen={!!editingUser} onClose={() => setEditingUser(null)} title="Editar Usuário" icon={<Edit2 className="w-5 h-5 text-brand-600" />} maxWidth="2xl" disableScroll={true}>
+            {/* Modal de Edição */}
+            <BaseModal isOpen={!!editingUser} onClose={() => setEditingUser(null)} title="Editar Cadastro de Usuário">
                 {editingUser && (
-                    <form onSubmit={handleSaveUser} className="space-y-4 pb-24">
+                    <form onSubmit={handleSaveUser} className="space-y-[15px] p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <CustomInput
-                                label="Nome"
-                                type="text"
+                                label="Nome Completo"
                                 value={editingUser.name || ''}
-                                onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
-                                placeholder="Nome completo do usuário"
+                                onChange={val => setEditingUser({ ...editingUser, name: val })}
+                                required
                             />
                             <CustomInput
-                                label="E-mail"
+                                label="Endereço de Email"
                                 type="email"
                                 value={editingUser.email || ''}
-                                onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
-                                placeholder="E-mail de acesso"
+                                onChange={val => setEditingUser({ ...editingUser, email: val })}
+                                required
                             />
                             <CustomInput
-                                label="Telefone / Contato"
-                                type="text"
-                                mask="phone"
+                                label="Telefone de Contato"
                                 value={editingUser.phone_number || ''}
-                                onChange={e => setEditingUser({ ...editingUser, phone_number: e.target.value })}
-                                placeholder="(00) 00000-0000"
+                                onChange={val => setEditingUser({ ...editingUser, phone_number: val })}
+                                required
                             />
                             <CustomInput
-                                label="CPF"
-                                type="text"
-                                mask="cpf"
+                                label="Número de CPF"
                                 value={editingUser.cpf || ''}
-                                onChange={e => setEditingUser({ ...editingUser, cpf: e.target.value })}
-                                placeholder="Insira o CPF"
+                                onChange={val => setEditingUser({ ...editingUser, cpf: val })}
                             />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                             <CustomSelect
                                 label="Função (Perfil)"
                                 value={editingUser.role || 'user'}
@@ -278,7 +278,7 @@ const UserManagement: React.FC = () => {
                                 onClick={() => setEditingUser(null)}
                                 className="px-6 py-2 rounded-xl text-gray-500 dark:text-gray-300 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                             >
-                                Cancelar e Fechar
+                                {t('admin.cancelAndClose')}
                             </button>
                             <button
                                 type="submit"
@@ -288,12 +288,12 @@ const UserManagement: React.FC = () => {
                                 {saving ? (
                                     <>
                                         <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
-                                        <span>Processando...</span>
+                                        <span>{t('admin.processing')}</span>
                                     </>
                                 ) : (
                                     <>
                                         <Save className="w-4 h-4" />
-                                        <span>Confirmar Edição</span>
+                                        <span>{t('admin.confirmEdit')}</span>
                                     </>
                                 )}
                             </button>
@@ -306,6 +306,7 @@ const UserManagement: React.FC = () => {
 };
 
 const PartnerVerification: React.FC = () => {
+    const { t } = useTranslation();
     const [pending, setPending] = React.useState<any[]>([]);
     const [loading, setLoading] = React.useState(true);
 
@@ -326,18 +327,18 @@ const PartnerVerification: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="p-10 text-center">Carregando solicitações...</div>;
+    if (loading) return <div className="p-10 text-center">{t('admin.loadingRequests')}</div>;
 
     return (
         <div className="p-6">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-6">Validação de Parceiros</h2>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-6">{t('admin.partnerValidation')}</h2>
             {pending.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 p-12 rounded-3xl text-center shadow-sm">
                     <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
                         <FileCheck className="w-8 h-8" />
                     </div>
-                    <h3 className="text-lg font-bold dark:text-white">Tudo em dia!</h3>
-                    <p className="text-gray-500">Nenhuma solicitação pendente de validação.</p>
+                    <h3 className="text-lg font-bold dark:text-white">{t('admin.allUpToDate')}</h3>
+                    <p className="text-gray-500">{t('admin.noPendingRequests')}</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -348,10 +349,10 @@ const PartnerVerification: React.FC = () => {
                                     <p className="font-bold text-gray-900 dark:text-white">{req.name}</p>
                                     <p className="text-xs text-gray-400">{req.city}</p>
                                 </div>
-                                <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Pendente</span>
+                                <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{t('admin.pending')}</span>
                             </div>
                             <button className="w-full py-2 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-colors">
-                                Analisar Documentos
+                                {t('admin.analyzeDocuments')}
                             </button>
                         </div>
                     ))}
@@ -368,6 +369,7 @@ interface AdminPanelProps {
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
+    const { t } = useTranslation();
     const renderContent = () => {
         switch (activeSubTab) {
             case 'dashboard': return <AdminDashboard />;
@@ -413,8 +415,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'mediation': return <AdminMediation />;
             case 'store_ratings': return <AdminStoreRatings />;
             case 'bonuses': return <AdminBonusCampaigns />;
+            case 'delivery_breaks': return <AdminDeliveryBreaks />;
 
-            default: return <div className="p-10 text-center text-gray-500">Selecione uma opção no menu.</div>;
+            default: return <div className="p-10 text-center text-gray-500">{t('admin.selectOptionMenu')}</div>;
         }
     };
 

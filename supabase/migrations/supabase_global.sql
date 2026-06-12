@@ -1,7 +1,7 @@
--- RPC para Dashboard de Desempenho do Lojista
+﻿-- RPC para Dashboard de Desempenho do Lojista
 -- Copie e execute este comando no SQL Editor do Supabase
 
--- Adicionando colunas necessárias na tabela de pedidos
+-- Adicionando colunas necessÃ¡rias na tabela de pedidos
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES public.user_profiles(id);
 CREATE INDEX IF NOT EXISTS idx_orders_store_id ON public.orders(store_id);
 
@@ -20,12 +20,12 @@ DECLARE
     v_previous_start TIMESTAMPTZ;
     v_previous_end TIMESTAMPTZ;
 BEGIN
-    -- Determinar período anterior para comparação (mesma duração)
+    -- Determinar perÃ­odo anterior para comparaÃ§Ã£o (mesma duraÃ§Ã£o)
     v_previous_end := p_start_date - interval '1 second';
     v_previous_start := v_previous_end - (p_end_date - p_start_date);
 
     WITH 
-    -- 1. Dados do Período Atual
+    -- 1. Dados do PerÃ­odo Atual
     current_period AS (
         SELECT 
             COUNT(*) AS total_orders,
@@ -33,13 +33,13 @@ BEGIN
             COALESCE(AVG(total_price), 0) AS avg_ticket,
             COUNT(*) FILTER (WHERE status = 'CANCELLED') AS cancelled_count,
             COUNT(*) FILTER (WHERE status = 'DELIVERED') AS completed_count,
-            -- Tempo médio em minutos (apenas pedidos entregues)
+            -- Tempo mÃ©dio em minutos (apenas pedidos entregues)
             COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) FILTER (WHERE status = 'DELIVERED'), 0) / 60 AS avg_delivery_time_min
         FROM public.orders
         WHERE store_id = p_store_id
           AND created_at BETWEEN p_start_date AND p_end_date
     ),
-    -- 2. Dados do Período Anterior
+    -- 2. Dados do PerÃ­odo Anterior
     previous_period AS (
         SELECT 
             COUNT(*) AS total_orders,
@@ -49,7 +49,7 @@ BEGIN
         WHERE store_id = p_store_id
           AND created_at BETWEEN v_previous_start AND v_previous_end
     ),
-    -- 3. Gráficos Temporal (Evolução de Vendas)
+    -- 3. GrÃ¡ficos Temporal (EvoluÃ§Ã£o de Vendas)
     graphs_data AS (
         SELECT 
             to_char(date_trunc(p_granularity, created_at), 'YYYY-MM-DD"T"HH24:MI:SS') as date_str,
@@ -69,7 +69,7 @@ BEGIN
             'count', count
         )), '[]'::jsonb) AS timeline FROM graphs_data
     ),
-    -- 4. Top Produtos (Extraído do array JSONB 'items')
+    -- 4. Top Produtos (ExtraÃ­do do array JSONB 'items')
     products_data AS (
         SELECT 
             item->>'name' as p_name,
@@ -91,7 +91,7 @@ BEGIN
             'total', p_total
         )), '[]'::jsonb) AS top_items FROM products_data
     ),
-    -- 5. Horários de Pico
+    -- 5. HorÃ¡rios de Pico
     peaks_data AS (
         SELECT 
             EXTRACT(HOUR FROM created_at) as p_hour,
@@ -121,12 +121,12 @@ BEGIN
 END;
 $$;
 
--- Permissões
+-- PermissÃµes
 GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_store_performance_dashboard(UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT) TO service_role;
 
--- Tabela de Chaves de API (Segurança e Isolamento por Loja)
--- Se a tabela não existir, cria o básico. Se existir, adicionamos as colunas necessárias abaixo.
+-- Tabela de Chaves de API (SeguranÃ§a e Isolamento por Loja)
+-- Se a tabela nÃ£o existir, cria o bÃ¡sico. Se existir, adicionamos as colunas necessÃ¡rias abaixo.
 CREATE TABLE IF NOT EXISTS public.api_keys (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     provider TEXT NOT NULL,
@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Adicionando colunas de forma não destrutiva
+-- Adicionando colunas de forma nÃ£o destrutiva
 ALTER TABLE public.api_keys ADD COLUMN IF NOT EXISTS provider TEXT;
 ALTER TABLE public.api_keys ADD COLUMN IF NOT EXISTS key_value TEXT;
 ALTER TABLE public.api_keys ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES public.user_profiles(id);
@@ -146,7 +146,7 @@ ALTER TABLE public.api_keys ADD COLUMN IF NOT EXISTS encrypted_key TEXT;
 ALTER TABLE public.api_keys ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '{}';
 ALTER TABLE public.api_keys ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 
--- Remover restrições NOT NULL caso as colunas tenham sido criadas anteriormente como obrigatórias
+-- Remover restriÃ§Ãµes NOT NULL caso as colunas tenham sido criadas anteriormente como obrigatÃ³rias
 ALTER TABLE public.api_keys ALTER COLUMN provider DROP NOT NULL;
 ALTER TABLE public.api_keys ALTER COLUMN key_value DROP NOT NULL;
 ALTER TABLE public.api_keys ALTER COLUMN service_name DROP NOT NULL;
@@ -164,30 +164,30 @@ END $$;
 
 ALTER TABLE public.api_keys ALTER COLUMN service_name SET NOT NULL;
 
--- Atualizar restrição de unicidade (Remover antiga se houver e adicionar nova)
+-- Atualizar restriÃ§Ã£o de unicidade (Remover antiga se houver e adicionar nova)
 ALTER TABLE public.api_keys DROP CONSTRAINT IF EXISTS api_keys_provider_key;
 ALTER TABLE public.api_keys DROP CONSTRAINT IF EXISTS api_keys_store_id_service_name_key;
 ALTER TABLE public.api_keys ADD CONSTRAINT api_keys_store_id_service_name_key UNIQUE (store_id, service_name);
 
--- Índices para performance
+-- Ãndices para performance
 CREATE INDEX IF NOT EXISTS idx_api_keys_store_id ON public.api_keys(store_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_service_name ON public.api_keys(service_name);
 
 -- RLS para api_keys
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 
--- Remover regras antigas para garantir idempotência
+-- Remover regras antigas para garantir idempotÃªncia
 DROP POLICY IF EXISTS "Authenticated users can view keys" ON public.api_keys;
 DROP POLICY IF EXISTS "Service Role can manage keys" ON public.api_keys;
 DROP POLICY IF EXISTS "Users can view their own store keys" ON public.api_keys;
 DROP POLICY IF EXISTS "Admins can manage all keys" ON public.api_keys;
 
--- Novas políticas
--- Políticas de Segurança para api_keys
+-- Novas polÃ­ticas
+-- PolÃ­ticas de SeguranÃ§a para api_keys
 CREATE POLICY "Users can view their own store keys" ON public.api_keys
     FOR SELECT USING (
         auth.role() = 'authenticated' AND (
-            store_id = auth.uid() OR -- Loja vê sua chave
+            store_id = auth.uid() OR -- Loja vÃª sua chave
             store_id IS NULL -- Todos veem chaves globais
         )
     );
@@ -205,20 +205,20 @@ CREATE POLICY "Service Role can manage keys" ON public.api_keys
 
 
 -- ==================================================================
--- CONFIGURAÇÕES DE AVALIAÇÕES E ESTATÍSTICAS
+-- CONFIGURAÃ‡Ã•ES DE AVALIAÃ‡Ã•ES E ESTATÃSTICAS
 -- ==================================================================
 
--- Adicionando colunas de configuração e estatística em user_profiles de forma não destrutiva
+-- Adicionando colunas de configuraÃ§Ã£o e estatÃ­stica em user_profiles de forma nÃ£o destrutiva
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS show_comments_on_menu BOOLEAN DEFAULT false;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS ratings_count INT DEFAULT 0;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS ratings_sum INT DEFAULT 0;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS average_rating NUMERIC(3,2) DEFAULT 0.00;
 
--- Função para atualizar automaticamente média e contagem de avaliações
+-- FunÃ§Ã£o para atualizar automaticamente mÃ©dia e contagem de avaliaÃ§Ãµes
 CREATE OR REPLACE FUNCTION public.handle_new_rating()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Apenas processa se for uma avaliação direcionada a um parceiro/loja
+    -- Apenas processa se for uma avaliaÃ§Ã£o direcionada a um parceiro/loja
     IF NEW.direction = 'PARTNER_TO_STORE' THEN
         UPDATE public.user_profiles
         SET 
@@ -232,13 +232,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger para novas avaliações
+-- Trigger para novas avaliaÃ§Ãµes
 DROP TRIGGER IF EXISTS on_rating_inserted ON public.partner_ratings;
 CREATE TRIGGER on_rating_inserted
     AFTER INSERT ON public.partner_ratings
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_rating();
 
--- Script de Sincronização Retroativa (Executa uma vez para corrigir dados legados)
+-- Script de SincronizaÃ§Ã£o Retroativa (Executa uma vez para corrigir dados legados)
 DO $$
 BEGIN
     UPDATE public.user_profiles up
@@ -258,27 +258,27 @@ BEGIN
     WHERE up.id = sub.evaluated_id;
 END $$;
 
--- Comentários para documentação
-COMMENT ON COLUMN public.user_profiles.show_comments_on_menu IS 'Define se os comentários das avaliações ficam visíveis no Menu Digital';
-COMMENT ON COLUMN public.user_profiles.ratings_count IS 'Total de avaliações recebidas pela loja';
-COMMENT ON COLUMN public.user_profiles.average_rating IS 'Média aritmética das avaliações (1-5)';
+-- ComentÃ¡rios para documentaÃ§Ã£o
+COMMENT ON COLUMN public.user_profiles.show_comments_on_menu IS 'Define se os comentÃ¡rios das avaliaÃ§Ãµes ficam visÃ­veis no Menu Digital';
+COMMENT ON COLUMN public.user_profiles.ratings_count IS 'Total de avaliaÃ§Ãµes recebidas pela loja';
+COMMENT ON COLUMN public.user_profiles.average_rating IS 'MÃ©dia aritmÃ©tica das avaliaÃ§Ãµes (1-5)';
 
 
 -- ==================================================================
--- POLÍTICAS DE RLS PARA AVALIAÇÕES (partner_ratings)
+-- POLÃTICAS DE RLS PARA AVALIAÃ‡Ã•ES (partner_ratings)
 -- ==================================================================
 
--- Habilitar RLS na tabela de avaliações
+-- Habilitar RLS na tabela de avaliaÃ§Ãµes
 ALTER TABLE public.partner_ratings ENABLE ROW LEVEL SECURITY;
 
--- Remover políticas antigas para garantir idempotência
+-- Remover polÃ­ticas antigas para garantir idempotÃªncia
 DROP POLICY IF EXISTS "Public can view ratings" ON public.partner_ratings;
 DROP POLICY IF EXISTS "Authenticated users can insert ratings" ON public.partner_ratings;
 DROP POLICY IF EXISTS "Admins can manage ratings" ON public.partner_ratings;
 
--- Novas políticas
+-- Novas polÃ­ticas
 CREATE POLICY "Public can view ratings" ON public.partner_ratings
-    FOR SELECT USING (true); -- Visualização pública
+    FOR SELECT USING (true); -- VisualizaÃ§Ã£o pÃºblica
 
 CREATE POLICY "Authenticated users can insert ratings" ON public.partner_ratings
     FOR INSERT WITH CHECK (
@@ -301,7 +301,7 @@ CREATE POLICY "Stores can reply to ratings" ON public.partner_ratings
         auth.uid() = evaluated_id
     );
 
--- Garantir permissões de acesso às roles do Supabase
+-- Garantir permissÃµes de acesso Ã s roles do Supabase
 GRANT SELECT, INSERT, UPDATE ON public.partner_ratings TO authenticated;
 GRANT SELECT ON public.partner_ratings TO anon;
 GRANT ALL ON public.partner_ratings TO service_role;
@@ -309,7 +309,7 @@ GRANT ALL ON public.partner_ratings TO service_role;
 
 
 -- ==================================================================
--- ATUALIZAÇÃO DO RPC DE BUSCA DE LOJA (Incluindo Avaliações)
+-- ATUALIZAÃ‡ÃƒO DO RPC DE BUSCA DE LOJA (Incluindo AvaliaÃ§Ãµes)
 -- ==================================================================
 
 DROP FUNCTION IF EXISTS public.public_get_store_by_slug(text, text);
@@ -330,7 +330,7 @@ BEGIN
         receive_orders_via_chat, receive_orders_via_platform,
         city, store_address_state AS state, store_address_zip,
         store_slug, city_slug,
-        show_comments_on_menu, ratings_count, average_rating -- Novos campos incluídos
+        show_comments_on_menu, ratings_count, average_rating -- Novos campos incluÃ­dos
     INTO v_store
     FROM user_profiles
     WHERE city_slug = p_city_slug 
@@ -344,10 +344,10 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.public_get_store_by_slug(text, text) TO anon, authenticated, service_role;
 
--- Adicionar coluna de anonimato para avaliações
+-- Adicionar coluna de anonimato para avaliaÃ§Ãµes
 ALTER TABLE public.partner_ratings ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT FALSE;
 
--- Limpeza de duplicatas: manter apenas a avaliação mais recente de cada perfil para cada loja e direção
+-- Limpeza de duplicatas: manter apenas a avaliaÃ§Ã£o mais recente de cada perfil para cada loja e direÃ§Ã£o
 DELETE FROM public.partner_ratings a
 USING public.partner_ratings b
 WHERE a.created_at < b.created_at
@@ -355,7 +355,7 @@ AND a.evaluator_id = b.evaluator_id
 AND a.evaluated_id = b.evaluated_id
 AND a.direction = b.direction;
 
--- Garantir apenas uma avaliação por pessoa por loja/parceiro
+-- Garantir apenas uma avaliaÃ§Ã£o por pessoa por loja/parceiro
 CREATE UNIQUE INDEX IF NOT EXISTS partner_ratings_unique_eval_idx ON public.partner_ratings (evaluator_id, evaluated_id, direction);
 
 -- Adicionar colunas para resposta do lojista
@@ -363,7 +363,7 @@ ALTER TABLE public.partner_ratings ADD COLUMN IF NOT EXISTS store_response TEXT;
 ALTER TABLE public.partner_ratings ADD COLUMN IF NOT EXISTS store_response_at TIMESTAMPTZ;
 
 -- ==================================================================
--- SISTEMA DE SOLICITAÇÃO DE ALTERAÇÃO DE AVALIAÇÃO (PROTOCOLO + TAXAS)
+-- SISTEMA DE SOLICITAÃ‡ÃƒO DE ALTERAÃ‡ÃƒO DE AVALIAÃ‡ÃƒO (PROTOCOLO + TAXAS)
 -- ==================================================================
 
 -- 1. Tabela de Taxas do Sistema
@@ -375,14 +375,14 @@ CREATE TABLE IF NOT EXISTS public.system_fees (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Inserir taxas padrão se não existirem
+-- Inserir taxas padrÃ£o se nÃ£o existirem
 INSERT INTO public.system_fees (key, value, description)
 VALUES 
-    ('rating_edit_fee', 10.00, 'Taxa para editar comentário de avaliação'),
-    ('rating_delete_fee', 20.00, 'Taxa para excluir avaliação')
+    ('rating_edit_fee', 10.00, 'Taxa para editar comentÃ¡rio de avaliaÃ§Ã£o'),
+    ('rating_delete_fee', 20.00, 'Taxa para excluir avaliaÃ§Ã£o')
 ON CONFLICT (key) DO NOTHING;
 
--- Função auxiliar para verificar admin (SECURITY DEFINER para evitar RLS recursion/bloqueio)
+-- FunÃ§Ã£o auxiliar para verificar admin (SECURITY DEFINER para evitar RLS recursion/bloqueio)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -412,9 +412,9 @@ GRANT UPDATE ON public.system_fees TO authenticated;
 GRANT ALL ON public.system_fees TO service_role;
 
     -- 2. Coluna Super Lojista
-    -- (Já existe is_super_store em user_profiles, linha 312 do part1)
+    -- (JÃ¡ existe is_super_store em user_profiles, linha 312 do part1)
 
-    -- 3. Tabela de Solicitações (Protocolos)
+    -- 3. Tabela de SolicitaÃ§Ãµes (Protocolos)
     CREATE TABLE IF NOT EXISTS public.rating_change_requests (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         protocol TEXT UNIQUE NOT NULL,
@@ -423,7 +423,7 @@ GRANT ALL ON public.system_fees TO service_role;
         request_types TEXT[] NOT NULL, -- ['EDIT_COMMENT', 'DELETE_RATING']
         status TEXT NOT NULL DEFAULT 'OPEN', -- OPEN, IN_ANALYSIS, COMPLETED, REJECTED, CANCELLED
         reason TEXT NOT NULL,
-        new_comment TEXT, -- Obrigatório se EDIT_COMMENT
+        new_comment TEXT, -- ObrigatÃ³rio se EDIT_COMMENT
         fee_charged NUMERIC NOT NULL DEFAULT 0,
         admin_notes TEXT,
         executed_by UUID REFERENCES public.user_profiles(id),
@@ -442,14 +442,14 @@ GRANT ALL ON public.system_fees TO service_role;
         EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
     );
 
-    -- 4. Função RPC para criar solicitação com pagamento atômico
-    -- 4. Função RPC para criar solicitação com pagamento atômico (Atualizada para Combo)
+    -- 4. FunÃ§Ã£o RPC para criar solicitaÃ§Ã£o com pagamento atÃ´mico
+    -- 4. FunÃ§Ã£o RPC para criar solicitaÃ§Ã£o com pagamento atÃ´mico (Atualizada para Combo)
 
-    -- Adicionando colunas para configuração de Desconto Combo (não destrutivo)
+    -- Adicionando colunas para configuraÃ§Ã£o de Desconto Combo (nÃ£o destrutivo)
     ALTER TABLE public.partner_fee_settings ADD COLUMN IF NOT EXISTS combo_discount_percent NUMERIC DEFAULT 10;
     ALTER TABLE public.partner_fee_settings ADD COLUMN IF NOT EXISTS combo_discount_enabled BOOLEAN DEFAULT false;
 
-    -- Adicionando colunas de rastreamento financeiro na tabela de solicitações
+    -- Adicionando colunas de rastreamento financeiro na tabela de solicitaÃ§Ãµes
     ALTER TABLE public.rating_change_requests ADD COLUMN IF NOT EXISTS base_value NUMERIC DEFAULT 0;
     ALTER TABLE public.rating_change_requests ADD COLUMN IF NOT EXISTS discount_percent_applied NUMERIC DEFAULT 0;
     ALTER TABLE public.rating_change_requests ADD COLUMN IF NOT EXISTS discount_value NUMERIC DEFAULT 0;
@@ -479,14 +479,14 @@ DECLARE
     v_protocol TEXT;
     v_request_id UUID;
 BEGIN
-        -- Verificar Autorização
+        -- Verificar AutorizaÃ§Ã£o
         IF auth.uid() IS NULL THEN
-            RAISE EXCEPTION 'Não autorizado';
+            RAISE EXCEPTION 'NÃ£o autorizado';
         END IF;
 
         v_store_id := auth.uid();
 
-        -- Verificar se é Super Lojista
+        -- Verificar se Ã© Super Lojista
         SELECT is_super_store INTO v_is_super_store
         FROM public.user_profiles WHERE id = v_store_id;
 
@@ -494,7 +494,7 @@ BEGIN
         SELECT value INTO v_edit_fee FROM public.system_fees WHERE key = 'rating_edit_fee';
         SELECT value INTO v_delete_fee FROM public.system_fees WHERE key = 'rating_delete_fee';
 
-        -- Obter Configuração de Desconto Combo
+        -- Obter ConfiguraÃ§Ã£o de Desconto Combo
         SELECT combo_discount_percent, combo_discount_enabled 
         INTO v_discount_percent, v_combo_enabled
         FROM public.partner_fee_settings LIMIT 1;
@@ -522,12 +522,12 @@ BEGIN
             v_discount_value := 0;
         END IF;
 
-        -- Se for Super Store, valor final é zero
+        -- Se for Super Store, valor final Ã© zero
         IF v_is_super_store THEN
             v_total_fee := 0;
-            -- Mantemos registro do valor base e desconto para estatística, 
-            -- mas o final cobrado é 0. O desconto aqui é 100% "técnico" do super store,
-            -- mas para manter a lógica do combo separada, vamos zerar o final.
+            -- Mantemos registro do valor base e desconto para estatÃ­stica, 
+            -- mas o final cobrado Ã© 0. O desconto aqui Ã© 100% "tÃ©cnico" do super store,
+            -- mas para manter a lÃ³gica do combo separada, vamos zerar o final.
             v_discount_value := v_base_value; 
             v_discount_percent := 100;
         END IF;
@@ -538,14 +538,14 @@ BEGIN
                 v_store_id, 
                 v_total_fee, 
                 'TAXA_SOLICITACAO_AVALIACAO', 
-                'Taxa de solicitação de alteração de avaliação'
+                'Taxa de solicitaÃ§Ã£o de alteraÃ§Ã£o de avaliaÃ§Ã£o'
             );
         END IF;
 
         -- Gerar Protocolo: AVA-YYYYMMDD-HEX
         v_protocol := 'AVA-' || to_char(NOW(), 'YYYYMMDD') || '-' || upper(substring(md5(random()::text) from 1 for 6));
 
-        -- Criar Solicitação
+        -- Criar SolicitaÃ§Ã£o
         INSERT INTO public.rating_change_requests (
             protocol, store_id, rating_id, request_types, status, reason, new_comment, 
             fee_charged, base_value, discount_percent_applied, discount_value, final_value
@@ -561,11 +561,11 @@ $$;
 GRANT EXECUTE ON FUNCTION public.create_rating_request_with_payment(UUID, TEXT[], TEXT, TEXT) TO authenticated;
 
 -- ============================================================================
--- SISTEMA DE ADICIONAIS - CATÁLOGO BASE (ADMIN)
+-- SISTEMA DE ADICIONAIS - CATÃLOGO BASE (ADMIN)
 -- ============================================================================
 
 -- Tabela: base_addon_groups
--- Descrição: Grupos de adicionais criados pelo admin no catálogo base
+-- DescriÃ§Ã£o: Grupos de adicionais criados pelo admin no catÃ¡logo base
 CREATE TABLE IF NOT EXISTS public.base_addon_groups (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
@@ -578,7 +578,7 @@ CREATE TABLE IF NOT EXISTS public.base_addon_groups (
 );
 
 -- Tabela: base_addon_options
--- Descrição: Opções (itens) de cada grupo de adicionais base
+-- DescriÃ§Ã£o: OpÃ§Ãµes (itens) de cada grupo de adicionais base
 CREATE TABLE IF NOT EXISTS public.base_addon_options (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     group_id UUID NOT NULL REFERENCES public.base_addon_groups(id) ON DELETE CASCADE,
@@ -588,7 +588,7 @@ CREATE TABLE IF NOT EXISTS public.base_addon_options (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Índices para performance
+-- Ãndices para performance
 CREATE INDEX IF NOT EXISTS idx_base_addon_options_group ON public.base_addon_options(group_id);
 CREATE INDEX IF NOT EXISTS idx_base_addon_groups_active ON public.base_addon_groups(is_active);
 
@@ -617,7 +617,7 @@ CREATE POLICY admin_all_base_addon_options ON public.base_addon_options FOR ALL 
     )
 );
 
--- Lojistas podem apenas ler (para importação)
+-- Lojistas podem apenas ler (para importaÃ§Ã£o)
 DROP POLICY IF EXISTS store_read_base_addon_groups ON public.base_addon_groups;
 CREATE POLICY store_read_base_addon_groups ON public.base_addon_groups FOR SELECT USING (
     EXISTS (
@@ -635,7 +635,7 @@ CREATE POLICY store_read_base_addon_options ON public.base_addon_options FOR SEL
 );
 
 -- ============================================================================
--- VARIAÇÕES DE TAMANHO DO PRODUTO (ADDITIONAL COLUMNS)
+-- VARIAÃ‡Ã•ES DE TAMANHO DO PRODUTO (ADDITIONAL COLUMNS)
 -- ============================================================================
 -- Adicionando colunas de tamanho na tabela products (corrigido de store_products)
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS has_sizes BOOLEAN DEFAULT false;
@@ -644,11 +644,11 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price_by_size JSONB DEFAULT
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS default_size TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS excluded_addon_options JSONB DEFAULT '[]'::jsonb;
 
--- Comentários
-COMMENT ON COLUMN public.products.has_sizes IS 'Indica se o produto possui variações de tamanho';
-COMMENT ON COLUMN public.products.available_sizes IS 'Lista de tamanhos habilitados ["Pequeno", "Médio", "Grande"]';
-COMMENT ON COLUMN public.products.price_by_size IS 'Preços por tamanho {"Pequeno": 10.00, "Médio": 12.00}';
-COMMENT ON COLUMN public.products.default_size IS 'Tamanho pré-selecionado';
+-- ComentÃ¡rios
+COMMENT ON COLUMN public.products.has_sizes IS 'Indica se o produto possui variaÃ§Ãµes de tamanho';
+COMMENT ON COLUMN public.products.available_sizes IS 'Lista de tamanhos habilitados ["Pequeno", "MÃ©dio", "Grande"]';
+COMMENT ON COLUMN public.products.price_by_size IS 'PreÃ§os por tamanho {"Pequeno": 10.00, "MÃ©dio": 12.00}';
+COMMENT ON COLUMN public.products.default_size IS 'Tamanho prÃ©-selecionado';
 
 -- Tabela de API Keys - Adicionar coluna para Voice ID (ElevenLabs)
 ALTER TABLE public.api_keys ADD COLUMN IF NOT EXISTS voice_id TEXT;
@@ -659,15 +659,15 @@ COMMENT ON COLUMN public.api_keys.voice_id IS 'ID da voz personalizada (apenas p
 -- SISTEMA DE INDIQUE E GANHE (PONTOS)
 -- ============================================================================
 
--- 1. Alterações na tabela de perfis (user_profiles)
+-- 1. AlteraÃ§Ãµes na tabela de perfis (user_profiles)
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES public.user_profiles(id);
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS referral_points_balance INTEGER DEFAULT 0;
 
--- Index para busca rápida por código
+-- Index para busca rÃ¡pida por cÃ³digo
 CREATE INDEX IF NOT EXISTS idx_user_profiles_referral_code ON public.user_profiles(referral_code);
 
--- 2. Tabela de Configuração Geral do Programa
+-- 2. Tabela de ConfiguraÃ§Ã£o Geral do Programa
 CREATE TABLE IF NOT EXISTS public.referral_config (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     is_active BOOLEAN DEFAULT true,
@@ -675,13 +675,13 @@ CREATE TABLE IF NOT EXISTS public.referral_config (
     points_per_referral_store INTEGER DEFAULT 500,
     points_per_referral_courier INTEGER DEFAULT 200,
     reward_validity_days INTEGER DEFAULT 180,
-    min_order_value_for_credit NUMERIC DEFAULT 0, -- Se 0, credita no cadastro. Se > 0, credita na 1ª compra acima desse valor.
+    min_order_value_for_credit NUMERIC DEFAULT 0, -- Se 0, credita no cadastro. Se > 0, credita na 1Âª compra acima desse valor.
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     updated_by UUID REFERENCES public.user_profiles(id)
 );
 
--- Inserir configuração padrão se não existir
+-- Inserir configuraÃ§Ã£o padrÃ£o se nÃ£o existir
 INSERT INTO public.referral_config (is_active)
 SELECT true WHERE NOT EXISTS (SELECT 1 FROM public.referral_config);
 
@@ -694,12 +694,12 @@ CREATE POLICY "Admin manage config" ON public.referral_config FOR ALL USING (
     EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
--- Permissões básicas (GRANTs)
+-- PermissÃµes bÃ¡sicas (GRANTs)
 GRANT SELECT ON public.referral_config TO authenticated, anon;
 GRANT ALL ON public.referral_config TO service_role;
 GRANT ALL ON public.referral_config TO authenticated; -- Admin usa essa role no client
 
--- 3. Catálogo de Recompensas (Troca de Pontos)
+-- 3. CatÃ¡logo de Recompensas (Troca de Pontos)
 CREATE TABLE IF NOT EXISTS public.referral_rewards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
@@ -722,12 +722,12 @@ CREATE POLICY "Admin manage rewards" ON public.referral_rewards FOR ALL USING (
     EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
--- Permissões básicas (GRANTs)
+-- PermissÃµes bÃ¡sicas (GRANTs)
 GRANT SELECT ON public.referral_rewards TO authenticated, anon;
 GRANT ALL ON public.referral_rewards TO service_role;
 GRANT ALL ON public.referral_rewards TO authenticated;
 
--- 3.1 Prêmios Resgatados (Claimed Rewards)
+-- 3.1 PrÃªmios Resgatados (Claimed Rewards)
 CREATE TABLE IF NOT EXISTS public.claimed_rewards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES public.user_profiles(id),
@@ -747,7 +747,7 @@ CREATE POLICY "Admin manage claimed rewards" ON public.claimed_rewards FOR ALL U
     EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
--- Permissões básicas (GRANTs)
+-- PermissÃµes bÃ¡sicas (GRANTs)
 GRANT SELECT ON public.claimed_rewards TO authenticated;
 GRANT ALL ON public.claimed_rewards TO service_role;
 GRANT ALL ON public.claimed_rewards TO authenticated;
@@ -760,7 +760,7 @@ CREATE TABLE IF NOT EXISTS public.referral_points_ledger (
     amount INTEGER NOT NULL,
     balance_after INTEGER NOT NULL,
     description TEXT,
-    reference_id UUID, -- ID do usuário indicado ou ID da recompensa/pedido
+    reference_id UUID, -- ID do usuÃ¡rio indicado ou ID da recompensa/pedido
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -773,12 +773,12 @@ CREATE POLICY "Admin view ledger" ON public.referral_points_ledger FOR SELECT US
     EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
--- Permissões básicas (GRANTs)
+-- PermissÃµes bÃ¡sicas (GRANTs)
 GRANT SELECT ON public.referral_points_ledger TO authenticated;
 GRANT ALL ON public.referral_points_ledger TO service_role;
 GRANT ALL ON public.referral_points_ledger TO authenticated;
 
--- 5. Função para Gerar Código de Indicação Único
+-- 5. FunÃ§Ã£o para Gerar CÃ³digo de IndicaÃ§Ã£o Ãšnico
 CREATE OR REPLACE FUNCTION public.generate_referral_code()
 RETURNS TEXT
 LANGUAGE plpgsql
@@ -788,10 +788,10 @@ DECLARE
     exists_code BOOLEAN;
 BEGIN
     LOOP
-        -- Gera código formato REF-XXXXXX (6 caracteres hex aleatórios)
+        -- Gera cÃ³digo formato REF-XXXXXX (6 caracteres hex aleatÃ³rios)
         new_code := 'REF-' || upper(substring(md5(random()::text) from 1 for 6));
         
-        -- Verifica colisão
+        -- Verifica colisÃ£o
         SELECT EXISTS (SELECT 1 FROM public.user_profiles WHERE referral_code = new_code) INTO exists_code;
         
         EXIT WHEN NOT exists_code;
@@ -800,7 +800,7 @@ BEGIN
 END;
 $$;
 
--- 6. Trigger para criar código ao inserir usuário (se não vier preenchido)
+-- 6. Trigger para criar cÃ³digo ao inserir usuÃ¡rio (se nÃ£o vier preenchido)
 CREATE OR REPLACE FUNCTION public.trigger_ensure_referral_code()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -816,7 +816,7 @@ CREATE TRIGGER on_user_created_gen_code
     BEFORE INSERT ON public.user_profiles
     FOR EACH ROW EXECUTE FUNCTION public.trigger_ensure_referral_code();
 
--- Tentar preencher códigos para usuários antigos que não tenham
+-- Tentar preencher cÃ³digos para usuÃ¡rios antigos que nÃ£o tenham
 DO $$
 DECLARE 
     r RECORD;
@@ -829,7 +829,7 @@ BEGIN
 END $$;
 
 
--- 7. RPC: Validar Código de Indicação (para o frontend do cadastro)
+-- 7. RPC: Validar CÃ³digo de IndicaÃ§Ã£o (para o frontend do cadastro)
 CREATE OR REPLACE FUNCTION public.validate_referral_code(p_code TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -844,12 +844,12 @@ BEGIN
     INTO v_referrer;
 
     IF v_referrer.id IS NULL THEN
-        RETURN jsonb_build_object('valid', false, 'message', 'Código não encontrado');
+        RETURN jsonb_build_object('valid', false, 'message', 'CÃ³digo nÃ£o encontrado');
     END IF;
 
-    -- Não permitir indicar a si mesmo
+    -- NÃ£o permitir indicar a si mesmo
     IF v_referrer.id = auth.uid() THEN
-         RETURN jsonb_build_object('valid', false, 'message', 'Auto-indicação não permitida');
+         RETURN jsonb_build_object('valid', false, 'message', 'Auto-indicaÃ§Ã£o nÃ£o permitida');
     END IF;
 
     RETURN jsonb_build_object(
@@ -878,13 +878,13 @@ DECLARE
 BEGIN
     v_user_id := auth.uid();
     IF v_user_id IS NULL THEN
-        RAISE EXCEPTION 'Não autorizado';
+        RAISE EXCEPTION 'NÃ£o autorizado';
     END IF;
 
     -- Buscar recompensa
     SELECT * INTO v_reward FROM public.referral_rewards WHERE id = p_reward_id AND is_active = true;
     IF v_reward.id IS NULL THEN
-        RAISE EXCEPTION 'Recompensa indisponível';
+        RAISE EXCEPTION 'Recompensa indisponÃ­vel';
     END IF;
 
     -- Verificar saldo
@@ -895,7 +895,7 @@ BEGIN
 
     -- Gerar Cupom
     -- Assumindo que a tabela coupons existe (baseada no types.ts e contexto geral)
-    -- Vamos criar um código único para o cupom: PROMO-XXXX
+    -- Vamos criar um cÃ³digo Ãºnico para o cupom: PROMO-XXXX
     v_coupon_code := 'RESGATE-' || upper(substring(md5(random()::text) from 1 for 6));
     
     INSERT INTO public.claimed_rewards (user_id, reward_id, coupon_code, expires_at)
@@ -921,7 +921,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.redeem_referral_points(UUID) TO authenticated;
 
 
--- 9. RPC: Obter Resumo do Painel (Saldo + Histórico + Recompensas)
+-- 9. RPC: Obter Resumo do Painel (Saldo + HistÃ³rico + Recompensas)
 CREATE OR REPLACE FUNCTION public.get_referral_dashboard_data()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -938,11 +938,11 @@ BEGIN
     v_user_id := auth.uid();
     IF v_user_id IS NULL THEN RETURN '{}'::jsonb; END IF;
 
-    -- Dados do Usuário
+    -- Dados do UsuÃ¡rio
     SELECT referral_points_balance, referral_code INTO v_balance, v_code 
     FROM public.user_profiles WHERE id = v_user_id;
 
-    -- Extrato (Últimos 20)
+    -- Extrato (Ãšltimos 20)
     SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) INTO v_ledger
     FROM (
         SELECT * FROM public.referral_points_ledger 
@@ -950,7 +950,7 @@ BEGIN
         ORDER BY created_at DESC LIMIT 20
     ) t;
 
-    -- Recompensas Disponíveis
+    -- Recompensas DisponÃ­veis
     SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) INTO v_rewards
     FROM (
         SELECT * FROM public.referral_rewards WHERE is_active = true ORDER BY cost_points ASC
@@ -974,7 +974,7 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.get_referral_dashboard_data() TO authenticated;
 
--- 10. RPC: Administração - Obter Histórico Global com Joins
+-- 10. RPC: AdministraÃ§Ã£o - Obter HistÃ³rico Global com Joins
 DROP FUNCTION IF EXISTS public.admin_get_referral_ledger();
 CREATE OR REPLACE FUNCTION public.admin_get_referral_ledger()
 RETURNS TABLE (
@@ -994,7 +994,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-    -- Verifica se é admin
+    -- Verifica se Ã© admin
     IF NOT EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND role = 'admin') THEN
         RAISE EXCEPTION 'Acesso negado';
     END IF;
@@ -1090,7 +1090,7 @@ BEGIN
             'CREDIT_REFERRAL', 
             v_points, 
             v_referrer_balance, 
-            'Indicação de novo usuário (Cadastro): ' || NEW.name || ' (' || NEW.role || ')', 
+            'IndicaÃ§Ã£o de novo usuÃ¡rio (Cadastro): ' || NEW.name || ' (' || NEW.role || ')', 
             NEW.id
         );
     END IF;
@@ -1105,7 +1105,7 @@ CREATE TRIGGER on_user_profile_created_reward
     FOR EACH ROW EXECUTE FUNCTION public.process_referral_reward_on_signup();
 
 -- ==================================================================
--- MELHORIAS PÁGINA DE DESTAQUES (METRICAS E REALTIME) - 2026-02-09
+-- MELHORIAS PÃGINA DE DESTAQUES (METRICAS E REALTIME) - 2026-02-09
 -- ==================================================================
 
 -- 1. Habilitar Realtime para mensagens de banner
@@ -1120,22 +1120,22 @@ BEGIN
         BEGIN
             ALTER PUBLICATION supabase_realtime ADD TABLE public.city_store_banner_request_messages;
         EXCEPTION WHEN OTHERS THEN
-            RAISE NOTICE 'Não foi possível adicionar à publicação supabase_realtime automaticamente.';
+            RAISE NOTICE 'NÃ£o foi possÃ­vel adicionar Ã  publicaÃ§Ã£o supabase_realtime automaticamente.';
         END;
     END IF;
 END $$;
 
 ALTER TABLE public.city_store_banner_request_messages REPLICA IDENTITY FULL;
 
--- 2. Métricas para Destaques
+-- 2. MÃ©tricas para Destaques
 ALTER TABLE public.city_store_highlight_orders ADD COLUMN IF NOT EXISTS views_count INTEGER DEFAULT 0;
 ALTER TABLE public.city_store_highlight_orders ADD COLUMN IF NOT EXISTS clicks_count INTEGER DEFAULT 0;
 
--- 3. Métricas para Banners (Solicitações)
+-- 3. MÃ©tricas para Banners (SolicitaÃ§Ãµes)
 ALTER TABLE public.city_promotion_orders ADD COLUMN IF NOT EXISTS views_count INTEGER DEFAULT 0;
 ALTER TABLE public.city_promotion_orders ADD COLUMN IF NOT EXISTS clicks_count INTEGER DEFAULT 0;
 
--- 4. RPC para incrementar métricas de forma atômica
+-- 4. RPC para incrementar mÃ©tricas de forma atÃ´mica
 CREATE OR REPLACE FUNCTION public.increment_promotion_metric(
     p_promo_id UUID,
     p_promo_type TEXT, -- 'HIGHLIGHT' ou 'BANNER'
@@ -1164,11 +1164,11 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.increment_promotion_metric(UUID, TEXT, TEXT) TO anon, authenticated;
 
--- Comentários para documentação
-COMMENT ON COLUMN public.city_store_highlight_orders.views_count IS 'Número total de visualizações do destaque da loja';
-COMMENT ON COLUMN public.city_store_highlight_orders.clicks_count IS 'Número total de cliques no destaque da loja';
-COMMENT ON COLUMN public.city_promotion_orders.views_count IS 'Número total de visualizações do banner da cidade';
-COMMENT ON COLUMN public.city_promotion_orders.clicks_count IS 'Número total de cliques no banner da cidade';
+-- ComentÃ¡rios para documentaÃ§Ã£o
+COMMENT ON COLUMN public.city_store_highlight_orders.views_count IS 'NÃºmero total de visualizaÃ§Ãµes do destaque da loja';
+COMMENT ON COLUMN public.city_store_highlight_orders.clicks_count IS 'NÃºmero total de cliques no destaque da loja';
+COMMENT ON COLUMN public.city_promotion_orders.views_count IS 'NÃºmero total de visualizaÃ§Ãµes do banner da cidade';
+COMMENT ON COLUMN public.city_promotion_orders.clicks_count IS 'NÃºmero total de cliques no banner da cidade';
 
 -- Super Lojista Plan Expansion (09/02/2026)
 DO $$
@@ -1193,7 +1193,7 @@ BEGIN
     END IF;
 END $$;
 
--- Tabela de Comissões da Plataforma
+-- Tabela de ComissÃµes da Plataforma
 CREATE TABLE IF NOT EXISTS public.platform_commissions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID NOT NULL REFERENCES public.orders(id),
@@ -1245,7 +1245,7 @@ BEGIN
     END IF;
 END $$;
 
--- 2. RPC: Validar Cupom (Global, Loja ou Indicação)
+-- 2. RPC: Validar Cupom (Global, Loja ou IndicaÃ§Ã£o)
 CREATE OR REPLACE FUNCTION public.validate_coupon(
     p_code TEXT,
     p_store_id UUID
@@ -1278,7 +1278,7 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- 2. Verificar em claimed_rewards (Cupons de Indicação/Recompensas)
+    -- 2. Verificar em claimed_rewards (Cupons de IndicaÃ§Ã£o/Recompensas)
     SELECT cr.*, rr.reward_type, rr.reward_value, rr.min_order_value 
     INTO v_claimed_reward
     FROM public.claimed_rewards cr
@@ -1315,15 +1315,15 @@ BEGIN
         END LOOP;
     END IF;
 
-    RETURN jsonb_build_object('valid', false, 'message', 'Cupom inválido ou expirado');
+    RETURN jsonb_build_object('valid', false, 'message', 'Cupom invÃ¡lido ou expirado');
 END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.validate_coupon(TEXT, UUID) TO anon, authenticated;
 
--- 3. Tabela de Configurações de Fidelidade por Loja
+-- 3. Tabela de ConfiguraÃ§Ãµes de Fidelidade por Loja
 
--- 2. Tabela de Configurações de Fidelidade por Loja
+-- 2. Tabela de ConfiguraÃ§Ãµes de Fidelidade por Loja
 CREATE TABLE IF NOT EXISTS public.loyalty_settings (
     store_id UUID PRIMARY KEY REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     is_active BOOLEAN DEFAULT FALSE,
@@ -1347,7 +1347,7 @@ CREATE TABLE IF NOT EXISTS public.loyalty_points (
     UNIQUE(store_id, user_id)
 );
 
--- 4. Tabela de Histórico de Pontos
+-- 4. Tabela de HistÃ³rico de Pontos
 CREATE TABLE IF NOT EXISTS public.loyalty_history (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
@@ -1359,7 +1359,7 @@ CREATE TABLE IF NOT EXISTS public.loyalty_history (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 5. Índices para Performance
+-- 5. Ãndices para Performance
 CREATE INDEX IF NOT EXISTS idx_loyalty_points_user ON public.loyalty_points(user_id);
 CREATE INDEX IF NOT EXISTS idx_loyalty_points_store ON public.loyalty_points(store_id);
 CREATE INDEX IF NOT EXISTS idx_loyalty_history_user_store ON public.loyalty_history(user_id, store_id);
@@ -1394,7 +1394,7 @@ GRANT ALL ON public.loyalty_settings TO service_role;
 GRANT ALL ON public.loyalty_points TO service_role;
 GRANT ALL ON public.loyalty_history TO service_role;
 
--- 7. Função para Calcular e Processar Pontos (Trigger)
+-- 7. FunÃ§Ã£o para Calcular e Processar Pontos (Trigger)
 CREATE OR REPLACE FUNCTION public.handle_loyalty_on_order_update()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1402,19 +1402,19 @@ DECLARE
     v_points INTEGER;
     v_base_value NUMERIC;
 BEGIN
-    -- Obter configurações da loja
+    -- Obter configuraÃ§Ãµes da loja
     SELECT * INTO v_settings FROM public.loyalty_settings WHERE store_id = NEW.store_id;
     
-    -- Se fidelidade não estiver ativa, ignorar
+    -- Se fidelidade nÃ£o estiver ativa, ignorar
     IF v_settings IS NULL OR v_settings.is_active = FALSE THEN
         RETURN NEW;
     END IF;
 
-    -- CRÉDITO DE PONTOS
-    -- Quando status muda para 'DELIVERED' e origem é 'MENU_DIGITAL'
+    -- CRÃ‰DITO DE PONTOS
+    -- Quando status muda para 'DELIVERED' e origem Ã© 'MENU_DIGITAL'
     IF NEW.status = 'DELIVERED' AND OLD.status != 'DELIVERED' AND NEW.origin = 'MENU_DIGITAL' AND NEW.user_id IS NOT NULL THEN
         
-        -- Definir base de cálculo
+        -- Definir base de cÃ¡lculo
         IF v_settings.calculation_base = 'PAID' THEN
             v_base_value := NEW.total_price;
         ELSE
@@ -1422,7 +1422,7 @@ BEGIN
             v_base_value := NEW.total_price - COALESCE(NEW.shipping_cost, 0);
         END IF;
 
-        -- Cálculo de pontos
+        -- CÃ¡lculo de pontos
         v_points := v_base_value * v_settings.conversion_factor;
         
         IF v_settings.rounding_rule = 'ROUND' THEN
@@ -1432,7 +1432,7 @@ BEGIN
         END IF;
 
         IF v_points > 0 THEN
-            -- Registrar no histórico
+            -- Registrar no histÃ³rico
             INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
             VALUES (NEW.store_id, NEW.user_id, NEW.id, v_points, 'CREDIT', 'Pontos ganhos no pedido #' || SUBSTRING(NEW.id::text, 1, 8));
 
@@ -1447,9 +1447,9 @@ BEGIN
     END IF;
 
     -- ESTORNO DE PONTOS
-    -- Quando pedido é CANCELADO e já tinha gerado pontos
+    -- Quando pedido Ã© CANCELADO e jÃ¡ tinha gerado pontos
     IF NEW.status = 'CANCELLED' AND OLD.status = 'DELIVERED' AND OLD.points_earned > 0 AND NEW.user_id IS NOT NULL THEN
-        -- Registrar no histórico
+        -- Registrar no histÃ³rico
         INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
         VALUES (NEW.store_id, NEW.user_id, NEW.id, -OLD.points_earned, 'REVERSAL', 'Estorno de pontos do pedido cancelado #' || SUBSTRING(NEW.id::text, 1, 8));
 
@@ -1470,7 +1470,7 @@ AFTER UPDATE ON public.orders
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_loyalty_on_order_update();
 
--- 9. Função para Resgate de Pontos (Chamada via RPC/Frontend)
+-- 9. FunÃ§Ã£o para Resgate de Pontos (Chamada via RPC/Frontend)
 CREATE OR REPLACE FUNCTION public.redeem_loyalty_points(
     p_store_id UUID,
     p_points_to_redeem INTEGER,
@@ -1486,7 +1486,7 @@ DECLARE
 BEGIN
     v_user_id := auth.uid();
     IF v_user_id IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Usuário não autenticado.');
+        RETURN jsonb_build_object('success', false, 'message', 'UsuÃ¡rio nÃ£o autenticado.');
     END IF;
 
     -- Verificar saldo
@@ -1497,7 +1497,7 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Saldo de pontos insuficiente.');
     END IF;
 
-    -- Registrar débito no histórico
+    -- Registrar dÃ©bito no histÃ³rico
     INSERT INTO public.loyalty_history (store_id, user_id, points, type, description)
     VALUES (p_store_id, v_user_id, -p_points_to_redeem, 'DEBIT', 'Resgate de pontos por desconto no valor de R$ ' || p_discount_value);
 
@@ -1512,7 +1512,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.redeem_loyalty_points(UUID, INTEGER, NUMERIC) TO authenticated;
 
--- 10. Função para Validar Cupom (Chamada via RPC/Frontend)
+-- 10. FunÃ§Ã£o para Validar Cupom (Chamada via RPC/Frontend)
 CREATE OR REPLACE FUNCTION public.validate_coupon(
     p_store_id UUID,
     p_coupon_code TEXT,
@@ -1540,7 +1540,7 @@ BEGIN
         v_user_phone := p_customer_phone;
     END IF;
 
-    -- 1. Buscar nas configurações da loja (Cupons Globais da Loja)
+    -- 1. Buscar nas configuraÃ§Ãµes da loja (Cupons Globais da Loja)
     SELECT * INTO v_store_record FROM public.shop_settings WHERE id = p_store_id;
     
     -- Localizar cupom no JSONB da loja
@@ -1549,9 +1549,9 @@ BEGIN
     WHERE x.code = UPPER(p_coupon_code) AND (x.is_active IS NULL OR x.is_active = TRUE);
 
     IF v_coupon_record.code IS NOT NULL THEN
-        -- Validar valor mínimo
+        -- Validar valor mÃ­nimo
         IF p_cart_total < COALESCE(v_coupon_record.min_purchase, 0) THEN
-            RETURN jsonb_build_object('success', false, 'message', 'Valor mínimo para este cupom é R$ ' || v_coupon_record.min_purchase);
+            RETURN jsonb_build_object('success', false, 'message', 'Valor mÃ­nimo para este cupom Ã© R$ ' || v_coupon_record.min_purchase);
         END IF;
 
         IF v_coupon_record.discount_percent > 0 THEN
@@ -1563,18 +1563,18 @@ BEGIN
         RETURN jsonb_build_object('success', true, 'discount_value', LEAST(v_discount_value, p_cart_total), 'message', 'Cupom aplicado!');
     END IF;
 
-    -- 2. Buscar nos Recompensas de Indicação (Cupons de Usuário)
-    -- Se o cupom for um código de indicação que virou recompensa (Claimed Rewards)
+    -- 2. Buscar nos Recompensas de IndicaÃ§Ã£o (Cupons de UsuÃ¡rio)
+    -- Se o cupom for um cÃ³digo de indicaÃ§Ã£o que virou recompensa (Claimed Rewards)
     SELECT * INTO v_coupon_record 
     FROM public.claimed_rewards 
     WHERE coupon_code = UPPER(p_coupon_code) AND status = 'AVAILABLE' AND (user_id = v_user_id OR v_user_id IS NULL);
 
     IF v_coupon_record.id IS NOT NULL THEN
         v_discount_value := v_coupon_record.reward_value;
-        RETURN jsonb_build_object('success', true, 'discount_value', LEAST(v_discount_value, p_cart_total), 'message', 'Cupom de indicação aplicado!');
+        RETURN jsonb_build_object('success', true, 'discount_value', LEAST(v_discount_value, p_cart_total), 'message', 'Cupom de indicaÃ§Ã£o aplicado!');
     END IF;
 
-    RETURN jsonb_build_object('success', false, 'message', 'Cupom inválido ou expirado.');
+    RETURN jsonb_build_object('success', false, 'message', 'Cupom invÃ¡lido ou expirado.');
 END;
 $$;
 
@@ -1608,7 +1608,7 @@ DECLARE
     v_order_id UUID;
     v_status public.order_status := 'pending';
 BEGIN
-    -- Definir status baseado na ativação do PIX
+    -- Definir status baseado na ativaÃ§Ã£o do PIX
     IF p_payment_method = 'PIX' THEN
         IF p_pix_active THEN
             v_status := 'Aguardando pagamento (PIX)';
@@ -1661,7 +1661,7 @@ BEGIN
 
     -- DEDUZIR PONTOS (Se houver resgate)
     IF p_points_redeemed > 0 THEN
-        -- Registrar no histórico
+        -- Registrar no histÃ³rico
         INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
         VALUES (p_store_id, auth.uid(), v_order_id, -p_points_redeemed, 'DEBIT', 'Uso de pontos no pedido #' || SUBSTRING(v_order_id::text, 1, 8));
 
@@ -1671,7 +1671,7 @@ BEGIN
         WHERE store_id = p_store_id AND user_id = auth.uid();
     END IF;
 
-    -- MARCAR CUPOM COMO USADO (Se for de indicação/recompensa)
+    -- MARCAR CUPOM COMO USADO (Se for de indicaÃ§Ã£o/recompensa)
     IF p_coupon_code IS NOT NULL THEN
         UPDATE public.claimed_rewards 
         SET status = 'USED' 
@@ -1687,7 +1687,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC) TO anon, authenticated;
 
 -- ==================================================================
--- CORREÇÃO getStoreBySlug (2026-02-09)
+-- CORREÃ‡ÃƒO getStoreBySlug (2026-02-09)
 -- ==================================================================
 
 DROP FUNCTION IF EXISTS public.public_get_store_by_slug(text, text);
@@ -1761,7 +1761,7 @@ CREATE TABLE IF NOT EXISTS public.whatsbot_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Adicionando colunas de IA de forma não destrutiva
+-- Adicionando colunas de IA de forma nÃ£o destrutiva
 DO $$ 
 BEGIN 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_enabled') THEN
@@ -1769,7 +1769,7 @@ BEGIN
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_context') THEN
-        ALTER TABLE public.whatsbot_settings ADD COLUMN ai_context TEXT DEFAULT 'Você é o assistente virtual da nossa loja. Seu objetivo é ser educado, tirar dúvidas dos clientes e incentivá-los a clicar no link do nosso catálogo digital para fazer o pedido.';
+        ALTER TABLE public.whatsbot_settings ADD COLUMN ai_context TEXT DEFAULT 'VocÃª Ã© o assistente virtual da nossa loja. Seu objetivo Ã© ser educado, tirar dÃºvidas dos clientes e incentivÃ¡-los a clicar no link do nosso catÃ¡logo digital para fazer o pedido.';
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsbot_settings' AND column_name = 'ai_name') THEN
@@ -1777,13 +1777,13 @@ BEGIN
     END IF;
 END $$;
 
-COMMENT ON TABLE public.whatsbot_settings IS 'Configurações do Robô de WhatsApp e Assistente de IA';
-COMMENT ON COLUMN public.whatsbot_settings.ai_enabled IS 'Indica se o Assistente de IA (Gemini) está ativo';
-COMMENT ON COLUMN public.whatsbot_settings.ai_context IS 'Instruções e contexto para a Inteligência Artificial';
+COMMENT ON TABLE public.whatsbot_settings IS 'ConfiguraÃ§Ãµes do RobÃ´ de WhatsApp e Assistente de IA';
+COMMENT ON COLUMN public.whatsbot_settings.ai_enabled IS 'Indica se o Assistente de IA (Gemini) estÃ¡ ativo';
+COMMENT ON COLUMN public.whatsbot_settings.ai_context IS 'InstruÃ§Ãµes e contexto para a InteligÃªncia Artificial';
 COMMENT ON COLUMN public.whatsbot_settings.ai_name IS 'Nome personalizado do assistente de IA';
 
 -- ==================================================================
--- 11. FUNÇÕES DE CHECKOUT E PEDIDOS
+-- 11. FUNÃ‡Ã•ES DE CHECKOUT E PEDIDOS
 -- ==================================================================
 
 DROP FUNCTION IF EXISTS public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC);
@@ -1812,7 +1812,7 @@ DECLARE
     v_status TEXT;
     v_order_id UUID;
 BEGIN
-    -- Definir status baseado na ativação do PIX
+    -- Definir status baseado na ativaÃ§Ã£o do PIX
     IF p_payment_method = 'PIX' THEN
         IF p_pix_active THEN
             v_status := 'Aguardando pagamento (PIX)';
@@ -1821,7 +1821,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- Verificar se o usuário está bloqueado
+    -- Verificar se o usuÃ¡rio estÃ¡ bloqueado
     IF EXISTS (
         SELECT 1 FROM public.store_blocked_users 
         WHERE store_id = p_store_id 
@@ -1830,7 +1830,7 @@ BEGIN
             OR (block_type = 'email' AND block_value = (SELECT email FROM auth.users WHERE id = auth.uid()))
         )
     ) THEN
-        RAISE EXCEPTION 'Não foi possível processar o pedido no momento.';
+        RAISE EXCEPTION 'NÃ£o foi possÃ­vel processar o pedido no momento.';
     END IF;
 
     INSERT INTO public.orders (
@@ -1877,7 +1877,7 @@ BEGIN
 
     -- DEDUZIR PONTOS (Se houver resgate)
     IF p_points_redeemed > 0 THEN
-        -- Registrar no histórico
+        -- Registrar no histÃ³rico
         INSERT INTO public.loyalty_history (store_id, user_id, order_id, points, type, description)
         VALUES (p_store_id, auth.uid(), v_order_id, -p_points_redeemed, 'DEBIT', 'Uso de pontos no pedido #' || SUBSTRING(v_order_id::text, 1, 8));
 
@@ -1887,7 +1887,7 @@ BEGIN
         WHERE store_id = p_store_id AND user_id = auth.uid();
     END IF;
 
-    -- MARCAR CUPOM COMO USADO (Se for de indicação/recompensa)
+    -- MARCAR CUPOM COMO USADO (Se for de indicaÃ§Ã£o/recompensa)
     IF p_coupon_code IS NOT NULL THEN
         UPDATE public.claimed_rewards 
         SET status = 'USED' 
@@ -1903,7 +1903,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION public.create_public_order(UUID, JSONB, NUMERIC, TEXT, JSONB, TEXT, TEXT, TEXT, BOOLEAN, TEXT, BOOLEAN, NUMERIC, INTEGER, NUMERIC, TEXT, NUMERIC) TO anon, authenticated;
 
 -- ==================================================================
--- 12. BASE DE CONHECIMENTO DO ZÉ ASSISTENTE (WhatsBot AI)
+-- 12. BASE DE CONHECIMENTO DO ZÃ‰ ASSISTENTE (WhatsBot AI)
 -- ==================================================================
 
 CREATE TABLE IF NOT EXISTS public.ze_assistant_knowledge_base (
@@ -1918,14 +1918,14 @@ CREATE TABLE IF NOT EXISTS public.ze_assistant_knowledge_base (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Índices para performance
+-- Ãndices para performance
 CREATE INDEX IF NOT EXISTS idx_knowledge_base_store_type ON public.ze_assistant_knowledge_base(store_id, content_type);
 CREATE INDEX IF NOT EXISTS idx_knowledge_base_active ON public.ze_assistant_knowledge_base(is_active);
 
 -- Habilitar RLS
 ALTER TABLE public.ze_assistant_knowledge_base ENABLE ROW LEVEL SECURITY;
 
--- Políticas de Acesso
+-- PolÃ­ticas de Acesso
 DROP POLICY IF EXISTS "Store manages own knowledge base" ON public.ze_assistant_knowledge_base;
 CREATE POLICY "Store manages own knowledge base"
 ON public.ze_assistant_knowledge_base
@@ -1933,7 +1933,7 @@ FOR ALL
 USING (auth.uid() = store_id)
 WITH CHECK (auth.uid() = store_id);
 
--- Permissões Administrativas
+-- PermissÃµes Administrativas
 GRANT ALL ON public.ze_assistant_knowledge_base TO authenticated, service_role;
 
 
@@ -1968,12 +1968,12 @@ DROP POLICY IF EXISTS "Lojistas podem deletar bloqueios" ON public.store_blocked
 CREATE POLICY "Lojistas podem deletar bloqueios" ON public.store_blocked_users
     FOR DELETE USING (auth.uid() = store_id);
 
-DROP POLICY IF EXISTS "Leitura pública para validação de checkout" ON public.store_blocked_users;
-CREATE POLICY "Leitura pública para validação de checkout" ON public.store_blocked_users
+DROP POLICY IF EXISTS "Leitura pÃºblica para validaÃ§Ã£o de checkout" ON public.store_blocked_users;
+CREATE POLICY "Leitura pÃºblica para validaÃ§Ã£o de checkout" ON public.store_blocked_users
     FOR SELECT USING (true);
 
 -- ==================================================================
--- CORREÇÃO DE ASSINATURA: DEBITAR DE DRIVER_WALLETS (ZEBANK)
+-- CORREÃ‡ÃƒO DE ASSINATURA: DEBITAR DE DRIVER_WALLETS (ZEBANK)
 -- ==================================================================
 CREATE OR REPLACE FUNCTION public.subscribe_to_super_store(fee NUMERIC, p_plan_type TEXT DEFAULT 'MENSALIDADE')
 RETURNS VOID AS $$
@@ -2025,7 +2025,7 @@ CREATE TABLE IF NOT EXISTS public.system_announcements (
 -- RLS para system_announcements
 ALTER TABLE public.system_announcements ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Leitura pública de anúncios para autenticados" ON public.system_announcements
+CREATE POLICY "Leitura pÃºblica de anÃºncios para autenticados" ON public.system_announcements
     FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Admins can manage system_announcements" ON public.system_announcements;
@@ -2033,7 +2033,7 @@ CREATE POLICY "Admins can manage system_announcements" ON public.system_announce
     FOR ALL USING (public.is_admin());
 
 -- ==================================================================
--- TABELA: user_announcement_reads (Sinalização de Lida do Lojista)
+-- TABELA: user_announcement_reads (SinalizaÃ§Ã£o de Lida do Lojista)
 -- ==================================================================
 CREATE TABLE IF NOT EXISTS public.user_announcement_reads (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -2046,19 +2046,446 @@ CREATE TABLE IF NOT EXISTS public.user_announcement_reads (
 -- RLS para user_announcement_reads
 ALTER TABLE public.user_announcement_reads ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Usuários podem ver suas próprias leituras" ON public.user_announcement_reads;
-CREATE POLICY "Usuários podem ver suas próprias leituras" ON public.user_announcement_reads
+DROP POLICY IF EXISTS "UsuÃ¡rios podem ver suas prÃ³prias leituras" ON public.user_announcement_reads;
+CREATE POLICY "UsuÃ¡rios podem ver suas prÃ³prias leituras" ON public.user_announcement_reads
     FOR SELECT USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Usuários podem criar suas próprias leituras" ON public.user_announcement_reads;
-CREATE POLICY "Usuários podem criar suas próprias leituras" ON public.user_announcement_reads
+DROP POLICY IF EXISTS "UsuÃ¡rios podem criar suas prÃ³prias leituras" ON public.user_announcement_reads;
+CREATE POLICY "UsuÃ¡rios podem criar suas prÃ³prias leituras" ON public.user_announcement_reads
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can manage all announcement reads" ON public.user_announcement_reads;
 CREATE POLICY "Admins can manage all announcement reads" ON public.user_announcement_reads
     FOR ALL USING (public.is_admin());
 
--- Permissões de tabela
+-- PermissÃµes de tabela
 GRANT ALL ON TABLE public.system_announcements TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.user_announcement_reads TO anon, authenticated, service_role;
 
+
+-- ==================================================================
+-- SCRIPTS UNIFICADOS: PWA, PERMISSIONS E PARTNER DOCUMENTS
+-- ==================================================================
+
+-- [fix_pwa_column_manual.sql]
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pwa_settings' AND column_name = 'display') THEN
+        ALTER TABLE public.pwa_settings ADD COLUMN display VARCHAR(20) DEFAULT 'standalone';
+    END IF;
+    GRANT SELECT ON public.pwa_settings TO anon, authenticated;
+    GRANT INSERT, UPDATE, DELETE ON public.pwa_settings TO authenticated;
+END $$;
+
+INSERT INTO public.pwa_settings (id, display_name) 
+VALUES ('1', 'ZÃ© Entregas') 
+ON CONFLICT (id) DO NOTHING;
+
+-- [fix_permissions_manual.sql]
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.partner_requests TO authenticated;
+GRANT SELECT, INSERT ON public.client_error_logs TO authenticated;
+
+DROP POLICY IF EXISTS "Store owners can view and manage their own wallet" ON public.store_wallets;
+CREATE POLICY "Store owners can view and manage their own wallet" ON public.store_wallets FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Allow authenticated access to client_error_logs" ON public.client_error_logs;
+CREATE POLICY "Allow authenticated access to client_error_logs" ON public.client_error_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.role() = 'authenticated');
+
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT id FROM public.user_profiles WHERE role = 'store_partner'
+    LOOP
+        INSERT INTO public.store_wallets (store_id, balance_decimal)
+        VALUES (r.id, 0)
+        ON CONFLICT (store_id) DO NOTHING;
+    END LOOP;
+END $$;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_delivery_partners TO authenticated;
+GRANT SELECT, UPDATE ON public.user_notifications TO authenticated;
+GRANT SELECT ON public.partner_fee_settings TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.orders TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_partner_financial_summary()
+RETURNS TABLE (total_earnings NUMERIC, available_balance NUMERIC, max_emergency_value NUMERIC, emergency_message TEXT) AS $$ 
+DECLARE
+  v_role public.user_role;
+  v_user UUID := auth.uid();
+  v_emergency_msg TEXT;
+BEGIN
+  SELECT role INTO v_role FROM public.user_profiles WHERE id = v_user;
+  SELECT p.emergency_message INTO v_emergency_msg FROM public.partner_fee_settings p ORDER BY p.updated_at DESC LIMIT 1;
+
+  IF v_role = 'store_partner' THEN
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(CASE WHEN t.status ILIKE '%APPROVED%' OR t.status ILIKE '%COMPLETED%' THEN t.amount ELSE 0 END)
+                  FROM public.user_terminal_transactions t WHERE t.merchant_user_id = v_user), 0)::NUMERIC AS total_earnings,
+        COALESCE((SELECT w.balance_decimal FROM public.store_wallets w WHERE w.store_id = v_user), 0)::NUMERIC AS available_balance,
+        0::NUMERIC AS max_emergency_value,
+        v_emergency_msg::TEXT AS emergency_message;
+  ELSE
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(pr.net_value_partner) FROM public.partner_requests pr WHERE pr.partner_id = v_user AND pr.status = 'COMPLETED'), 0)::NUMERIC,
+        0::NUMERIC,
+        0::NUMERIC,
+        v_emergency_msg::TEXT AS emergency_message;
+  END IF;
+END;
+ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- [fix_partner_documents_permissions.sql]
+ALTER TABLE partner_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can insert their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can update their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can delete their own documents" ON partner_documents;
+
+CREATE POLICY "Users can view their own documents" ON partner_documents FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own documents" ON partner_documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own documents" ON partner_documents FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own documents" ON partner_documents FOR DELETE USING (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON partner_documents TO authenticated;
+
+-- ==================================================================
+-- SCRIPTS UNIFICADOS: PWA, PERMISSIONS E PARTNER DOCUMENTS
+-- ==================================================================
+
+-- [fix_pwa_column_manual.sql]
+DO 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pwa_settings' AND column_name = 'display') THEN
+        ALTER TABLE public.pwa_settings ADD COLUMN display VARCHAR(20) DEFAULT 'standalone';
+    END IF;
+    GRANT SELECT ON public.pwa_settings TO anon, authenticated;
+    GRANT INSERT, UPDATE, DELETE ON public.pwa_settings TO authenticated;
+END ;
+
+INSERT INTO public.pwa_settings (id, display_name) 
+VALUES ('1', 'ZÃ© Entregas') 
+ON CONFLICT (id) DO NOTHING;
+
+-- [fix_permissions_manual.sql]
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.partner_requests TO authenticated;
+GRANT SELECT, INSERT ON public.client_error_logs TO authenticated;
+
+DROP POLICY IF EXISTS "Store owners can view and manage their own wallet" ON public.store_wallets;
+CREATE POLICY "Store owners can view and manage their own wallet" ON public.store_wallets FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Allow authenticated access to client_error_logs" ON public.client_error_logs;
+CREATE POLICY "Allow authenticated access to client_error_logs" ON public.client_error_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.role() = 'authenticated');
+
+DO 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT id FROM public.user_profiles WHERE role = 'store_partner'
+    LOOP
+        INSERT INTO public.store_wallets (store_id, balance_decimal)
+        VALUES (r.id, 0)
+        ON CONFLICT (store_id) DO NOTHING;
+    END LOOP;
+END ;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_delivery_partners TO authenticated;
+GRANT SELECT, UPDATE ON public.user_notifications TO authenticated;
+GRANT SELECT ON public.partner_fee_settings TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.orders TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_partner_financial_summary()
+RETURNS TABLE (total_earnings NUMERIC, available_balance NUMERIC, max_emergency_value NUMERIC, emergency_message TEXT) AS $$ 
+DECLARE
+  v_role public.user_role;
+  v_user UUID := auth.uid();
+  v_emergency_msg TEXT;
+BEGIN
+  SELECT role INTO v_role FROM public.user_profiles WHERE id = v_user;
+  SELECT p.emergency_message INTO v_emergency_msg FROM public.partner_fee_settings p ORDER BY p.updated_at DESC LIMIT 1;
+
+  IF v_role = 'store_partner' THEN
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(CASE WHEN t.status ILIKE '%APPROVED%' OR t.status ILIKE '%COMPLETED%' THEN t.amount ELSE 0 END)
+                  FROM public.user_terminal_transactions t WHERE t.merchant_user_id = v_user), 0)::NUMERIC AS total_earnings,
+        COALESCE((SELECT w.balance_decimal FROM public.store_wallets w WHERE w.store_id = v_user), 0)::NUMERIC AS available_balance,
+        0::NUMERIC AS max_emergency_value,
+        v_emergency_msg::TEXT AS emergency_message;
+  ELSE
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(pr.net_value_partner) FROM public.partner_requests pr WHERE pr.partner_id = v_user AND pr.status = 'COMPLETED'), 0)::NUMERIC,
+        0::NUMERIC,
+        0::NUMERIC,
+        v_emergency_msg::TEXT AS emergency_message;
+  END IF;
+END;
+ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- [fix_partner_documents_permissions.sql]
+ALTER TABLE partner_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can insert their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can update their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can delete their own documents" ON partner_documents;
+
+CREATE POLICY "Users can view their own documents" ON partner_documents FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own documents" ON partner_documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own documents" ON partner_documents FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own documents" ON partner_documents FOR DELETE USING (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON partner_documents TO authenticated;
+
+-- [fix_permissions_manual.sql]
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.partner_requests TO authenticated;
+GRANT SELECT, INSERT ON public.client_error_logs TO authenticated;
+
+DROP POLICY IF EXISTS "Store owners can view and manage their own wallet" ON public.store_wallets;
+CREATE POLICY "Store owners can view and manage their own wallet" ON public.store_wallets FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Allow authenticated access to client_error_logs" ON public.client_error_logs;
+CREATE POLICY "Allow authenticated access to client_error_logs" ON public.client_error_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.role() = 'authenticated');
+
+DO 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT id FROM public.user_profiles WHERE role = 'store_partner'
+    LOOP
+        INSERT INTO public.store_wallets (store_id, balance_decimal)
+        VALUES (r.id, 0)
+        ON CONFLICT (store_id) DO NOTHING;
+    END LOOP;
+END ;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_delivery_partners TO authenticated;
+GRANT SELECT, UPDATE ON public.user_notifications TO authenticated;
+GRANT SELECT ON public.partner_fee_settings TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.orders TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_partner_financial_summary()
+RETURNS TABLE (total_earnings NUMERIC, available_balance NUMERIC, max_emergency_value NUMERIC, emergency_message TEXT) AS 
+DECLARE
+  v_role public.user_role;
+  v_user UUID := auth.uid();
+  v_emergency_msg TEXT;
+BEGIN
+  SELECT role INTO v_role FROM public.user_profiles WHERE id = v_user;
+  SELECT p.emergency_message INTO v_emergency_msg FROM public.partner_fee_settings p ORDER BY p.updated_at DESC LIMIT 1;
+
+  IF v_role = 'store_partner' THEN
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(CASE WHEN t.status ILIKE '%APPROVED%' OR t.status ILIKE '%COMPLETED%' THEN t.amount ELSE 0 END)
+                  FROM public.user_terminal_transactions t WHERE t.merchant_user_id = v_user), 0)::NUMERIC AS total_earnings,
+        COALESCE((SELECT w.balance_decimal FROM public.store_wallets w WHERE w.store_id = v_user), 0)::NUMERIC AS available_balance,
+        0::NUMERIC AS max_emergency_value,
+        v_emergency_msg::TEXT AS emergency_message;
+  ELSE
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(pr.net_value_partner) FROM public.partner_requests pr WHERE pr.partner_id = v_user AND pr.status = 'COMPLETED'), 0)::NUMERIC,
+        0::NUMERIC,
+        0::NUMERIC,
+        v_emergency_msg::TEXT AS emergency_message;
+  END IF;
+END;
+ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- [fix_partner_documents_permissions.sql]
+ALTER TABLE partner_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can insert their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can update their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can delete their own documents" ON partner_documents;
+
+CREATE POLICY "Users can view their own documents" ON partner_documents FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own documents" ON partner_documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own documents" ON partner_documents FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own documents" ON partner_documents FOR DELETE USING (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON partner_documents TO authenticated;
+
+-- ==================================================================
+-- SCRIPTS UNIFICADOS: PWA, PERMISSIONS E PARTNER DOCUMENTS
+-- ==================================================================
+
+-- [fix_pwa_column_manual.sql]
+DO 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pwa_settings' AND column_name = 'display') THEN
+        ALTER TABLE public.pwa_settings ADD COLUMN display VARCHAR(20) DEFAULT 'standalone';
+    END IF;
+    GRANT SELECT ON public.pwa_settings TO anon, authenticated;
+    GRANT INSERT, UPDATE, DELETE ON public.pwa_settings TO authenticated;
+END ;
+
+INSERT INTO public.pwa_settings (id, display_name) 
+VALUES ('1', 'ZÃ© Entregas') 
+ON CONFLICT (id) DO NOTHING;
+
+-- [fix_permissions_manual.sql]
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.partner_requests TO authenticated;
+GRANT SELECT, INSERT ON public.client_error_logs TO authenticated;
+
+DROP POLICY IF EXISTS "Store owners can view and manage their own wallet" ON public.store_wallets;
+CREATE POLICY "Store owners can view and manage their own wallet" ON public.store_wallets FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Allow authenticated access to client_error_logs" ON public.client_error_logs;
+CREATE POLICY "Allow authenticated access to client_error_logs" ON public.client_error_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.role() = 'authenticated');
+
+DO 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT id FROM public.user_profiles WHERE role = 'store_partner'
+    LOOP
+        INSERT INTO public.store_wallets (store_id, balance_decimal)
+        VALUES (r.id, 0)
+        ON CONFLICT (store_id) DO NOTHING;
+    END LOOP;
+END ;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_delivery_partners TO authenticated;
+GRANT SELECT, UPDATE ON public.user_notifications TO authenticated;
+GRANT SELECT ON public.partner_fee_settings TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.orders TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_partner_financial_summary()
+RETURNS TABLE (total_earnings NUMERIC, available_balance NUMERIC, max_emergency_value NUMERIC, emergency_message TEXT) AS 
+DECLARE
+  v_role public.user_role;
+  v_user UUID := auth.uid();
+  v_emergency_msg TEXT;
+BEGIN
+  SELECT role INTO v_role FROM public.user_profiles WHERE id = v_user;
+  SELECT p.emergency_message INTO v_emergency_msg FROM public.partner_fee_settings p ORDER BY p.updated_at DESC LIMIT 1;
+
+  IF v_role = 'store_partner' THEN
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(CASE WHEN t.status ILIKE '%APPROVED%' OR t.status ILIKE '%COMPLETED%' THEN t.amount ELSE 0 END)
+                  FROM public.user_terminal_transactions t WHERE t.merchant_user_id = v_user), 0)::NUMERIC AS total_earnings,
+        COALESCE((SELECT w.balance_decimal FROM public.store_wallets w WHERE w.store_id = v_user), 0)::NUMERIC AS available_balance,
+        0::NUMERIC AS max_emergency_value,
+        v_emergency_msg::TEXT AS emergency_message;
+  ELSE
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(pr.net_value_partner) FROM public.partner_requests pr WHERE pr.partner_id = v_user AND pr.status = 'COMPLETED'), 0)::NUMERIC,
+        0::NUMERIC,
+        0::NUMERIC,
+        v_emergency_msg::TEXT AS emergency_message;
+  END IF;
+END;
+ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- [fix_partner_documents_permissions.sql]
+ALTER TABLE partner_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can insert their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can update their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can delete their own documents" ON partner_documents;
+
+CREATE POLICY "Users can view their own documents" ON partner_documents FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own documents" ON partner_documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own documents" ON partner_documents FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own documents" ON partner_documents FOR DELETE USING (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON partner_documents TO authenticated;
+
+-- ==================================================================
+-- SCRIPTS UNIFICADOS: PWA, PERMISSIONS E PARTNER DOCUMENTS
+-- ==================================================================
+
+-- [fix_pwa_column_manual.sql]
+DO 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pwa_settings' AND column_name = 'display') THEN
+        ALTER TABLE public.pwa_settings ADD COLUMN display VARCHAR(20) DEFAULT 'standalone';
+    END IF;
+    GRANT SELECT ON public.pwa_settings TO anon, authenticated;
+    GRANT INSERT, UPDATE, DELETE ON public.pwa_settings TO authenticated;
+END ;
+
+INSERT INTO public.pwa_settings (id, display_name) 
+VALUES ('1', 'ZÃ© Entregas') 
+ON CONFLICT (id) DO NOTHING;
+
+-- [fix_permissions_manual.sql]
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_wallets TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.partner_requests TO authenticated;
+GRANT SELECT, INSERT ON public.client_error_logs TO authenticated;
+
+DROP POLICY IF EXISTS "Store owners can view and manage their own wallet" ON public.store_wallets;
+CREATE POLICY "Store owners can view and manage their own wallet" ON public.store_wallets FOR ALL USING (auth.uid() = store_id);
+
+DROP POLICY IF EXISTS "Allow authenticated access to client_error_logs" ON public.client_error_logs;
+CREATE POLICY "Allow authenticated access to client_error_logs" ON public.client_error_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.role() = 'authenticated');
+
+DO 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT id FROM public.user_profiles WHERE role = 'store_partner'
+    LOOP
+        INSERT INTO public.store_wallets (store_id, balance_decimal)
+        VALUES (r.id, 0)
+        ON CONFLICT (store_id) DO NOTHING;
+    END LOOP;
+END ;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.store_delivery_partners TO authenticated;
+GRANT SELECT, UPDATE ON public.user_notifications TO authenticated;
+GRANT SELECT ON public.partner_fee_settings TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.orders TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_partner_financial_summary()
+RETURNS TABLE (total_earnings NUMERIC, available_balance NUMERIC, max_emergency_value NUMERIC, emergency_message TEXT) AS 
+DECLARE
+  v_role public.user_role;
+  v_user UUID := auth.uid();
+  v_emergency_msg TEXT;
+BEGIN
+  SELECT role INTO v_role FROM public.user_profiles WHERE id = v_user;
+  SELECT p.emergency_message INTO v_emergency_msg FROM public.partner_fee_settings p ORDER BY p.updated_at DESC LIMIT 1;
+
+  IF v_role = 'store_partner' THEN
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(CASE WHEN t.status ILIKE '%APPROVED%' OR t.status ILIKE '%COMPLETED%' THEN t.amount ELSE 0 END)
+                  FROM public.user_terminal_transactions t WHERE t.merchant_user_id = v_user), 0)::NUMERIC AS total_earnings,
+        COALESCE((SELECT w.balance_decimal FROM public.store_wallets w WHERE w.store_id = v_user), 0)::NUMERIC AS available_balance,
+        0::NUMERIC AS max_emergency_value,
+        v_emergency_msg::TEXT AS emergency_message;
+  ELSE
+    RETURN QUERY
+      SELECT
+        COALESCE((SELECT SUM(pr.net_value_partner) FROM public.partner_requests pr WHERE pr.partner_id = v_user AND pr.status = 'COMPLETED'), 0)::NUMERIC,
+        0::NUMERIC,
+        0::NUMERIC,
+        v_emergency_msg::TEXT AS emergency_message;
+  END IF;
+END;
+ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- [fix_partner_documents_permissions.sql]
+ALTER TABLE partner_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can insert their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can update their own documents" ON partner_documents;
+DROP POLICY IF EXISTS "Users can delete their own documents" ON partner_documents;
+
+CREATE POLICY "Users can view their own documents" ON partner_documents FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own documents" ON partner_documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own documents" ON partner_documents FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own documents" ON partner_documents FOR DELETE USING (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON partner_documents TO authenticated;

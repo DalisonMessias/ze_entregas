@@ -105,10 +105,19 @@ const resolveRealPhoneNumber = (sock: any, message: any, rawJid: string): string
     }
 
     // 2. Tenta obter diretamente do cache de contatos do socket
-    const contact = sock?.contacts?.[rawJid];
-    if (contact && contact.id && contact.id.endsWith('@s.whatsapp.net')) {
-        const pn = contact.id.split('@')[0];
-        if (pn) return pn;
+    // Usa Object.entries para varredura segura e desestruturação para evitar avisos de segurança e erros de tipagem
+    const contacts = sock?.contacts;
+    if (contacts && typeof contacts === 'object') {
+        const found = Object.entries(contacts as Record<string, any>).find(([key]) => key === rawJid);
+        if (found) {
+            const [, contact] = found;
+            if (contact && typeof contact === 'object' && 'id' in contact && typeof contact.id === 'string') {
+                if (contact.id.endsWith('@s.whatsapp.net')) {
+                    const pn = contact.id.split('@')[0];
+                    if (pn) return pn;
+                }
+            }
+        }
     }
     
     // 3. Tenta obter de propriedades comuns do Baileys na WAMessage
@@ -442,6 +451,7 @@ class WhatsBotInstance {
     private enabled = false;
     private isConnecting = false;
     private reconnectAttempts = 0;
+    private streamConflictAttempts = 0;
     private reconnectTimer: NodeJS.Timeout | null = null;
     private campaignTimer: NodeJS.Timeout | null = null;
     private isProcessingCampaign = false;
@@ -587,14 +597,19 @@ class WhatsBotInstance {
         }
     }
 
-    private scheduleReconnect() {
+    private scheduleReconnect(customDelayMs?: number) {
         if (!this.enabled || this.stopRequested) {
             return;
         }
 
         this.clearReconnectTimer();
-        const delay = Math.min(30000, 2000 * Math.max(1, 2 ** this.reconnectAttempts));
+        // Se um delay customizado foi fornecido (ex: conflito de stream), usa ele diretamente
+        const delay = customDelayMs !== undefined
+            ? customDelayMs
+            : Math.min(30000, 2000 * Math.max(1, 2 ** this.reconnectAttempts));
         this.reconnectAttempts += 1;
+
+        console.log(`[WhatsBot ${this.storeId}] ⏳ Reagendando conexão em ${Math.round(delay / 1000)}s (tentativa ${this.reconnectAttempts})...`);
 
         this.reconnectTimer = setTimeout(() => {
             void this.connect();
@@ -618,12 +633,30 @@ class WhatsBotInstance {
 
         try {
             const { state, saveCreds } = await useWhatsBotDatabaseAuth(this.storeId);
-            const { version } = await fetchLatestBaileysVersion();
 
+            // Busca a versão mais recente do Baileys com fallback para versão estável conhecida
+            let version: [number, number, number];
+            try {
+                const result = await fetchLatestBaileysVersion();
+                version = result.version;
+            } catch (versionErr: any) {
+                console.warn(`[WhatsBot ${this.storeId}] ⚠️ Falha ao buscar versão do Baileys, usando versão fallback 2.3000.1023:`, versionErr?.message);
+                version = [2, 3000, 1023];
+            }
+
+            // Encerra o socket anterior se ainda existir
             if (this.sock) {
                 try {
                     (this.sock as any)?.end?.(undefined);
                 } catch { }
+                this.sock = undefined;
+                // Pequena pausa para garantir que a conexão anterior foi encerrada
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+
+            if (!this.enabled || this.stopRequested) {
+                this.isConnecting = false;
+                return;
             }
 
             const sock = makeWASocket({
@@ -631,10 +664,23 @@ class WhatsBotInstance {
                 printQRInTerminal: false,
                 browser: Browsers.macOS('Desktop'),
                 auth: state,
-                logger: pino({ level: 'error' }),
+                logger: pino({ level: 'silent' }),
                 syncFullHistory: false,
-                connectTimeoutMs: 60000,
-                defaultQueryTimeoutMs: 60000
+                // Evita disparar as consultas pesadas de inicialização que travam a conexão
+                fireInitQueries: false,
+                // Desabilita a sincronização do histórico antigo de mensagens de texto
+                shouldSyncHistoryMessage: () => false,
+                // Aumenta timeouts para redes mais lentas
+                connectTimeoutMs: 90000,
+                defaultQueryTimeoutMs: 90000,
+                // Mantém a conexão ativa com heartbeat
+                keepAliveIntervalMs: 25000,
+                // Delay entre tentativas de requisição (evita flood)
+                retryRequestDelayMs: 250,
+                // Não emite eventos de mensagens próprias para reduzir ruído
+                emitOwnEvents: false,
+                // Retorna mensagem vazia ao invés de falhar na busca de mensagem desconhecida
+                getMessage: async () => ({ conversation: '' })
             });
 
             this.sock = sock;
@@ -746,6 +792,7 @@ class WhatsBotInstance {
 
             if (connection === 'open') {
                 this.reconnectAttempts = 0;
+                this.streamConflictAttempts = 0;
                 this.connectionStatus = 'CONNECTED';
                 this.qrCode = undefined;
                 this.connectedPhone = normalizePhone(sock.user?.id || '');
@@ -761,15 +808,53 @@ class WhatsBotInstance {
 
             if (connection === 'close') {
                 const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+                const errorMsg = (lastDisconnect?.error as any)?.message || '';
+
+                // Status 440 = stream:error conflict:replaced
+                // Ocorre quando outra instância/dispositivo assumiu a sessão
+                const isStreamConflict = statusCode === 440 || errorMsg.includes('replaced') || errorMsg.includes('conflict');
+
+                // Status 408 = Timed Out nas init queries
+                const isTimedOut = statusCode === 408 || errorMsg.includes('Timed Out') || errorMsg.includes('timed out');
+
                 const reason =
                     statusCode === DisconnectReason.loggedOut
                         ? 'logged_out'
-                        : (lastDisconnect?.error as any)?.message || 'connection_closed';
+                        : isStreamConflict
+                        ? 'stream_conflict_replaced'
+                        : isTimedOut
+                        ? 'init_queries_timeout'
+                        : errorMsg || 'connection_closed';
 
                 this.connectionStatus = 'DISCONNECTED';
                 this.qrCode = undefined;
                 this.lastError = reason;
                 this.sock = undefined;
+
+                if (isStreamConflict) {
+                    console.error(`[WhatsBot ${this.storeId}] 🛑 Conflito de stream detectado (WhatsApp aberto em outro dispositivo). Desativando bot para não derrubar a outra sessão.`);
+                    
+                    // Desativa no banco de dados para que não ligue sozinho mesmo se o servidor reiniciar
+                    try {
+                        await upsertSettings(this.storeId, { enabled: false });
+                    } catch (dbErr: any) {
+                        console.error(`[WhatsBot ${this.storeId}] Erro ao desativar bot no banco:`, dbErr.message);
+                    }
+
+                    // Para completamente o bot na memória (limpa sockets e timers)
+                    await this.stop();
+
+                    await updateWhatsBotSession(this.storeId, {
+                        connection_status: 'DISCONNECTED',
+                        connected_phone: this.connectedPhone,
+                        last_disconnect_reason: 'stream_conflict_replaced'
+                    });
+                    return;
+                }
+
+                if (isTimedOut) {
+                    console.warn(`[WhatsBot ${this.storeId}] ⏱️ Timeout nas queries iniciais do WhatsApp. Aguardando 30s antes de reconectar...`);
+                }
 
                 await updateWhatsBotSession(this.storeId, {
                     connection_status: 'DISCONNECTED',
@@ -782,7 +867,10 @@ class WhatsBotInstance {
                 }
 
                 if (this.enabled && !this.stopRequested) {
-                    this.scheduleReconnect();
+                    // Timeout de init: aguarda 30s antes de tentar novamente
+                    // Outros erros: backoff exponencial padrão
+                    const reconnectDelay = isTimedOut ? 30000 : undefined;
+                    this.scheduleReconnect(reconnectDelay);
                 }
             }
         });

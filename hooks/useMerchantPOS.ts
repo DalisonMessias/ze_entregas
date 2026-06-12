@@ -7,7 +7,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { generatePaymentQRCode, checkPaymentStatus } from '../services/paymentGateway';
 import { generatePixPayload } from '../utils/pixPayloadGenerator';
 
-import ReactJoyride, { Step as JoyrideStep } from '@list-labs/react-joyride';
+import ReactJoyride, { Step as JoyrideStep } from 'react-joyride';
 
 export type POSStep = 'loading' | 'activation_intro' | 'activating_animation_1' | 'create_pin' | 'confirm_pin' | 'pin_lock' | 'home' | 'amount' | 'split_config' | 'payment_list' | 'processing' | 'success' | 'error' | 'history' | 'settings' | 'inactive' | 'sales_simulator' | 'choose_sale_type' | 'select_associated_store' | 'select_order_for_store' | 'activating_animation_2';
 

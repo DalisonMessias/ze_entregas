@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Step, CallBackProps, STATUS } from '@list-labs/react-joyride';
+import { Step, CallBackProps, STATUS } from 'react-joyride';
 
 // Define o formato do estado do tour e as ações
 interface TourContextType {

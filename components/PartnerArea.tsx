@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2, Navigation, CheckCircle, DollarSign, ToggleLeft, ToggleRight, Wallet, AlertTriangle, History, MapPin, Store, Copy, Play, Pause, Square, Clock, MessageCircle, Map, Gift, UserX, UserCheck, Share2, Sparkles, ChevronRight, Fuel, Calculator, Wrench, Zap, Edit2, Smartphone, Bell, Star, Landmark, User, History as HistoryIcon, Award, Plus } from 'lucide-react';
 import { Button } from './Button';
 import { BaseModal } from './BaseModal';
@@ -82,6 +83,7 @@ interface PartnerAreaProps {
 }
 
 export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }) => {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'deliveries' | 'financial' | 'history' | 'stores'>('deliveries');
     const [profile, setProfile] = useState<PartnerProfile | null>(null);
     const [requests, setRequests] = useState<PartnerRequest[]>([]);
@@ -157,6 +159,20 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
     const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
     const [announcementChecked, setAnnouncementChecked] = useState(false);
 
+    // Estados do Sistema de Descanso de Entregadores
+    const [activeBreak, setActiveBreak] = useState<any>(null);
+    const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
+    const [breaksLeft, setBreaksLeft] = useState<number>(3);
+    const [maxBreaks, setMaxBreaks] = useState<number>(3);
+    const [showStartBreakModal, setShowStartBreakModal] = useState(false);
+    const [breakReason, setBreakReason] = useState('');
+    const [showEndBreakModal, setShowEndBreakModal] = useState(false);
+    const [endBreakReason, setEndBreakReason] = useState('');
+    const [breakLoading, setBreakLoading] = useState(false);
+
+    const notified5Min = useRef(false);
+    const notified1Min = useRef(false);
+
     const checkAnnouncements = async () => {
         try {
             const announcement = await cloud.getActiveAnnouncement();
@@ -193,12 +209,21 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             setLoading(true);
             setError(null);
             try {
-                const [p, shift] = await Promise.all([
+                const [p, shift, activeBreakData] = await Promise.all([
                     cloud.getMyPartnerProfile(),
-                    cloud.getCurrentShift()
+                    cloud.getCurrentShift(),
+                    cloud.getActiveDeliveryBreak()
                 ]);
                 setProfile(p);
                 setCurrentShift(shift);
+                if (activeBreakData) {
+                    setActiveBreak(activeBreakData.active ? activeBreakData : null);
+                    setSecondsRemaining(activeBreakData.seconds_remaining || 0);
+                    setBreaksLeft(activeBreakData.breaks_left);
+                    setMaxBreaks(activeBreakData.max_breaks);
+                    notified5Min.current = false;
+                    notified1Min.current = false;
+                }
 
                 // Fetch bank details (can be done in parallel but depends on profile/user)
                 if (p) {
@@ -244,6 +269,182 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
         }
         return () => clearInterval(interval);
     }, [currentShift]);
+
+    // Cronômetro do Descanso Ativo (Regressivo)
+    useEffect(() => {
+        let interval: any;
+        if (activeBreak && secondsRemaining > 0) {
+            interval = setInterval(() => {
+                setSecondsRemaining(prev => {
+                    const next = prev - 1;
+                    if (next <= 0) {
+                        clearInterval(interval);
+                        handleAutoEndBreak();
+                        return 0;
+                    }
+
+                    // Notificações em tempo real
+                    if (next === 300 && !notified5Min.current) {
+                        notified5Min.current = true;
+                        dialog.toast({ message: 'Atenção: Restam 5 minutos de descanso!', type: 'info' });
+                    }
+                    if (next === 60 && !notified1Min.current) {
+                        notified1Min.current = true;
+                        dialog.toast({ message: 'Atenção: Resta apenas 1 minuto de descanso! Prepare-se para retornar.', type: 'warning' });
+                    }
+
+                    return next;
+                });
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [activeBreak, secondsRemaining]);
+
+    // Sincronização periódica com o servidor para auto-expiração de descansos
+    useEffect(() => {
+        let interval: any;
+        if (activeBreak) {
+            interval = setInterval(async () => {
+                const expiredCount = await cloud.autoCheckExpiredBreaks();
+                if (expiredCount > 0) {
+                    const activeBreakData = await cloud.getActiveDeliveryBreak();
+                    if (activeBreakData) {
+                        setActiveBreak(activeBreakData.active ? activeBreakData : null);
+                        setSecondsRemaining(activeBreakData.seconds_remaining || 0);
+                        setBreaksLeft(activeBreakData.breaks_left);
+                        setMaxBreaks(activeBreakData.max_breaks);
+                    }
+                    const [p, shift] = await Promise.all([
+                        cloud.getMyPartnerProfile(),
+                        cloud.getCurrentShift()
+                    ]);
+                    setProfile(p);
+                    setCurrentShift(shift);
+                    dialog.toast({ message: 'Seu período de descanso acabou. Você está de volta ao trabalho!', type: 'success' });
+                }
+            }, 15000);
+        }
+        return () => clearInterval(interval);
+    }, [activeBreak]);
+
+    const handleAutoEndBreak = async () => {
+        setBreakLoading(true);
+        try {
+            const res = await cloud.endDeliveryBreak(null);
+            if (res && res.success) {
+                dialog.toast({ message: 'Seu período de descanso acabou. Você está de volta ao trabalho!', type: 'success' });
+                setActiveBreak(null);
+                setSecondsRemaining(0);
+                const [p, shift] = await Promise.all([
+                    cloud.getMyPartnerProfile(),
+                    cloud.getCurrentShift()
+                ]);
+                setProfile(p);
+                setCurrentShift(shift);
+            }
+        } catch (err: any) {
+            console.error('Erro ao encerrar descanso automaticamente:', err);
+        } finally {
+            setBreakLoading(false);
+        }
+    };
+
+    const handleStartBreak = async () => {
+        if (activeDelivery) {
+            dialog.toast({ message: 'Não é permitido entrar em descanso enquanto houver entrega em andamento.', type: 'error' });
+            return;
+        }
+
+        if (currentShift?.status !== 'ACTIVE') {
+            dialog.toast({ message: 'Você precisa estar com o turno de trabalho iniciado para pausar.', type: 'error' });
+            return;
+        }
+
+        if (!breakReason.trim()) {
+            dialog.toast({ message: 'Por favor, informe uma justificativa para o descanso.', type: 'warning' });
+            return;
+        }
+
+        setBreakLoading(true);
+        try {
+            let lat: number | null = null;
+            let lng: number | null = null;
+            
+            try {
+                const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+                });
+                lat = pos.coords.latitude;
+                lng = pos.coords.longitude;
+            } catch (posErr) {
+                console.log('Não foi possível obter geolocalização exata:', posErr);
+            }
+
+            const res = await cloud.startDeliveryBreak(breakReason, null, lat, lng);
+
+            if (res && res.success) {
+                dialog.toast({ message: 'Pausa de descanso iniciada com sucesso!', type: 'success' });
+                setShowStartBreakModal(false);
+                setBreakReason('');
+                
+                const activeBreakData = await cloud.getActiveDeliveryBreak();
+                if (activeBreakData) {
+                    setActiveBreak(activeBreakData.active ? activeBreakData : null);
+                    setSecondsRemaining(activeBreakData.seconds_remaining || 0);
+                    setBreaksLeft(activeBreakData.breaks_left);
+                    setMaxBreaks(activeBreakData.max_breaks);
+                }
+
+                const [p, shift] = await Promise.all([
+                    cloud.getMyPartnerProfile(),
+                    cloud.getCurrentShift()
+                ]);
+                setProfile(p);
+                setCurrentShift(shift);
+
+                notified5Min.current = false;
+                notified1Min.current = false;
+            } else {
+                dialog.toast({ message: res?.message || 'Erro ao iniciar descanso.', type: 'error' });
+            }
+        } catch (err: any) {
+            dialog.toast({ message: 'Erro ao iniciar descanso: ' + err.message, type: 'error' });
+        } finally {
+            setBreakLoading(false);
+        }
+    };
+
+    const handleEndBreakManual = async () => {
+        if (!endBreakReason.trim()) {
+            dialog.toast({ message: 'Por favor, informe a justificativa para encerrar antecipadamente.', type: 'warning' });
+            return;
+        }
+
+        setBreakLoading(true);
+        try {
+            const res = await cloud.endDeliveryBreak(endBreakReason);
+            if (res && res.success) {
+                dialog.toast({ message: 'Descanso encerrado. Você está disponível para receber novos pedidos!', type: 'success' });
+                setShowEndBreakModal(false);
+                setEndBreakReason('');
+                setActiveBreak(null);
+                setSecondsRemaining(0);
+
+                const [p, shift] = await Promise.all([
+                    cloud.getMyPartnerProfile(),
+                    cloud.getCurrentShift()
+                ]);
+                setProfile(p);
+                setCurrentShift(shift);
+            } else {
+                dialog.toast({ message: res?.message || 'Erro ao encerrar descanso.', type: 'error' });
+            }
+        } catch (err: any) {
+            dialog.toast({ message: 'Erro ao encerrar descanso: ' + err.message, type: 'error' });
+        } finally {
+            setBreakLoading(false);
+        }
+    };
 
     // Check Requests (Only if ACTIVE shift)
     const loadRequests = async () => {
@@ -415,7 +616,8 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             await cloud.resumeWorkShift(currentShift.id);
             // Optimistic update for UI speed
             const newBreaks = [...(currentShift.breaks || [])];
-            if (newBreaks.length > 0) newBreaks[newBreaks.length - 1].end = new Date().toISOString();
+            const lastBreak = newBreaks.slice(-1)[0];
+            if (lastBreak) lastBreak.end = new Date().toISOString();
             setCurrentShift({ ...currentShift, status: 'ACTIVE', breaks: newBreaks });
         } catch (e: any) { await alert({ title: "Erro ao Retomar Turno", message: "Erro ao retomar: " + e.message }); }
         setShiftLoading(false);
@@ -440,7 +642,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
         return (
             <div className="flex flex-col items-center justify-center p-10 text-center bg-red-50 dark:bg-red-900/20 rounded-2xl">
                 <AlertTriangle className="w-8 h-8 text-red-500 mb-2" />
-                <p className="font-bold text-red-600 dark:text-red-300 mb-1">Ocorreu um Erro</p>
+                <p className="font-bold text-red-600 dark:text-red-300 mb-1">{t('partner.occurredError')}</p>
                 <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
             </div>
         );
@@ -450,7 +652,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
         return (
             <div className="flex flex-col items-center justify-center p-10 text-center bg-gray-100 dark:bg-gray-800 rounded-2xl">
                 <UserX className="w-8 h-8 text-gray-400 mb-2" />
-                <p className="font-bold text-gray-700 dark:text-gray-300">Perfil de Parceiro não Encontrado</p>
+                <p className="font-bold text-gray-700 dark:text-gray-300">{t('partner.profileNotFound')}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Não foi possível carregar seu perfil de parceiro.</p>
             </div>
         );
@@ -495,8 +697,8 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             return (
                 <div className="bg-gray-900 dark:bg-gray-800 text-white p-6 rounded-3xl flex flex-col items-center text-center">
                     <div className="mb-4">
-                        <h2 className="text-2xl font-black">Você está Offline</h2>
-                        <p className="text-gray-400 text-sm">Inicie seu turno para receber entregas.</p>
+                        <h2 className="text-2xl font-black">{t('partner.youAreOffline')}</h2>
+                        <p className="text-gray-400 text-sm">{t('partner.startShiftDesc')}</p>
                     </div>
                     <Button onClick={handleStartShiftClick} disabled={shiftLoading} className="w-full py-4 text-lg bg-green-600 hover:bg-green-500">
                         {shiftLoading ? <Loader2 className="animate-spin" /> : <><Play className="w-5 h-5 mr-2 fill-current" /> Iniciar Turno</>}
@@ -507,15 +709,69 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
 
         const isPaused = currentShift.status === 'PAUSED';
 
+        // Renderizar a UI Premium do "Em Descanso"
+        if (activeBreak) {
+            const minutesRemaining = Math.floor(secondsRemaining / 60);
+            const secsRemaining = secondsRemaining % 60;
+            const formattedTimeRemaining = `${minutesRemaining.toString().padStart(2, '0')}:${secsRemaining.toString().padStart(2, '0')}`;
+            const startTimeStr = new Date(activeBreak.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const expectedReturnStr = new Date(activeBreak.expected_return).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+            return (
+                <div className="bg-gradient-to-br from-amber-500 via-orange-600 to-red-600 text-white p-6 rounded-[32px] shadow-lg animate-in fade-in duration-300">
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="w-3 h-3 rounded-full bg-white animate-pulse"></span>
+                                <h2 className="text-xl font-black uppercase tracking-wider">{t('partner.inBreak')}</h2>
+                            </div>
+                            <p className="text-white/80 text-xs font-bold">{t('partner.remainingBreakTime')}</p>
+                            <p className="text-5xl font-mono font-black tracking-tight mt-1 animate-pulse">{formattedTimeRemaining}</p>
+                        </div>
+                        <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md">
+                            <Clock className="w-6 h-6 animate-spin" style={{ animationDuration: '6s' }} />
+                        </div>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl space-y-2 mb-6 text-xs border border-white/10">
+                        <div className="flex justify-between">
+                            <span className="opacity-80">{t('partner.startTime')}</span>
+                            <span className="font-bold">{startTimeStr}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="opacity-80">{t('partner.expectedReturn')}</span>
+                            <span className="font-bold">{expectedReturnStr}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-white/10 pt-2 mt-1">
+                            <span className="opacity-80">{t('partner.breaksToday')}</span>
+                            <span className="font-bold">{maxBreaks - breaksLeft} de {maxBreaks} utilizadas</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="opacity-80">{t('partner.remainingToday')}</span>
+                            <span className="font-bold">{breaksLeft} pausas</span>
+                        </div>
+                    </div>
+
+                    <Button
+                        onClick={() => setShowEndBreakModal(true)}
+                        disabled={breakLoading}
+                        className="w-full !bg-white !text-orange-600 !hover:bg-white/90 font-black uppercase tracking-widest text-xs py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98]"
+                    >
+                        {breakLoading ? <Loader2 className="animate-spin" /> : <><Play className="w-4 h-4 mr-1 fill-current" /> Retornar ao Trabalho</>}
+                    </Button>
+                </div>
+            );
+        }
+
         return (
-            <div className={`p-6 rounded-3xl transition-all duration-500 ${isPaused ? 'bg-yellow-500 text-white' : 'bg-green-600 text-white'}`}>
+            <div className={`p-6 rounded-3xl transition-all duration-500 ${isPaused ? 'bg-amber-500 text-white' : 'bg-green-600 text-white'}`}>
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <span className={`w-3 h-3 rounded-full ${isPaused ? 'bg-white' : 'bg-white animate-pulse'}`}></span>
                             <h2 className="text-xl font-black uppercase tracking-wide">{isPaused ? 'EM PAUSA' : 'EM TURNO'}</h2>
                         </div>
-                        <p className="text-white/80 text-xs font-bold">Tempo Ativo</p>
+                        <p className="text-white/80 text-xs font-bold">{t('partner.activeTime')}</p>
                         <p className="text-4xl font-mono font-black tracking-tighter mt-1">{formatDuration(elapsedTime)}</p>
                     </div>
                     <div className="bg-white/20 p-2 rounded-full backdrop-blur-sm">
@@ -528,24 +784,24 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                         <Button
                             onClick={handleResumeShift}
                             disabled={shiftLoading}
-                            className="!bg-white !text-yellow-600 !hover:bg-white"
+                            className="!bg-white !text-amber-600 !hover:bg-white"
                         >
                             {shiftLoading ? <Loader2 className="animate-spin" /> : <><Play className="w-4 h-4 mr-2 fill-current" /> Retomar</>}
                         </Button>
                     ) : (
                         <Button
-                            onClick={handlePauseShift}
+                            onClick={() => setShowStartBreakModal(true)}
                             disabled={shiftLoading}
-                            className="!bg-white !text-green-600 !hover:bg-white border-none shadow-sm"
+                            className="!bg-white !text-green-600 !hover:bg-white border-none shadow-sm font-bold uppercase tracking-wider text-xs"
                         >
-                            {shiftLoading ? <Loader2 className="animate-spin" /> : <><Pause className="w-4 h-4 mr-2 fill-current" /> Pausar</>}
+                            {shiftLoading ? <Loader2 className="animate-spin" /> : <><Pause className="w-4 h-4 mr-2 fill-current" /> Pausar (Descanso)</>}
                         </Button>
                     )}
 
                     <Button
                         onClick={handleEndShift}
                         disabled={shiftLoading}
-                        className="!bg-white !text-red-600 !hover:bg-white border-none shadow-sm"
+                        className="!bg-white !text-red-600 !hover:bg-white border-none shadow-sm font-bold uppercase tracking-wider text-xs"
                     >
                         {shiftLoading ? <Loader2 className="animate-spin" /> : <><Square className="w-4 h-4 mr-2 fill-current" /> Encerrar</>}
                     </Button>
@@ -567,7 +823,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             )}
 
             <div className="flex justify-between items-center px-1">
-                <h1 className="text-xl font-bold dark:text-white">Painel do Parceiro</h1>
+                <h1 className="text-xl font-bold dark:text-white">{t('partner.partnerPanel')}</h1>
                 <button
                     onClick={() => setShowNotifications(true)}
                     className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -583,10 +839,10 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 value={activeTab}
                 onChange={(val) => setActiveTab(val as 'deliveries' | 'financial' | 'history' | 'stores')}
                 options={[
-                    { value: 'deliveries', label: 'Entregas' },
-                    { value: 'financial', label: 'Financeiro' },
-                    { value: 'history', label: 'Histórico' },
-                    { value: 'stores', label: 'Lojas' }
+                    { value: 'deliveries', label: t('partner.deliveries') },
+                    { value: 'financial', label: t('partner.financial') },
+                    { value: 'history', label: t('partner.history') },
+                    { value: 'stores', label: t('partner.stores') }
                 ]}
                 label="Seção do Parceiro"
                 className="md:hidden"
@@ -598,7 +854,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'deliveries' ? '!bg-brand-600 !text-white shadow-md' : '!text-gray-700 dark:!text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
                 >
                     <MapPin className="w-5 h-5" />
-                    <span className="text-[10px] uppercase font-bold">Entregas</span>
+                    <span className="text-[10px] uppercase font-bold">{t('partner.deliveries')}</span>
                 </Button>
                 <Button
                     variant="ghost"
@@ -606,7 +862,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'financial' ? '!bg-brand-600 !text-white shadow-md' : '!text-gray-700 dark:!text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
                 >
                     <DollarSign className="w-5 h-5" />
-                    <span className="text-[10px] uppercase font-bold">Financeiro</span>
+                    <span className="text-[10px] uppercase font-bold">{t('partner.financial')}</span>
                 </Button>
                 <Button
                     variant="ghost"
@@ -614,7 +870,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'history' ? '!bg-brand-600 !text-white shadow-md' : '!text-gray-700 dark:!text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
                 >
                     <History className="w-5 h-5" />
-                    <span className="text-[10px] uppercase font-bold">Histórico</span>
+                    <span className="text-[10px] uppercase font-bold">{t('partner.history')}</span>
                 </Button>
                 <Button
                     variant="ghost"
@@ -622,7 +878,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     className={`flex-1 flex flex-row items-center justify-center gap-2 h-auto py-3 rounded-xl transition-all ${activeTab === 'stores' ? '!bg-brand-600 !text-white shadow-md' : '!text-gray-700 dark:!text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}
                 >
                     <Store className="w-5 h-5" />
-                    <span className="text-[10px] uppercase font-bold">Lojas</span>
+                    <span className="text-[10px] uppercase font-bold">{t('partner.stores')}</span>
                 </Button>
             </div>
 
@@ -635,37 +891,37 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
 
                     {/* Quick Access & Tools Sections for Partners */}
                     <div>
-                        <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2 mt-6">Acessos Rápidos</h3>
+                        <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2 mt-6">{t('partner.quickAccess')}</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
                             <Button onClick={() => setActiveTab('financial')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
                                     <Wallet className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Ganhos</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.earnings')}</span>
                             </Button>
                             <Button onClick={() => onNavigate('driver_bonuses')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
                                     <Award className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Metas e Bônus</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.goalsAndBonuses')}</span>
                             </Button>
                             <Button onClick={() => setActiveTab('history')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                                     <HistoryIcon className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Histórico</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.history')}</span>
                             </Button>
                             <Button onClick={() => setActiveTab('stores')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-full text-pink-600 dark:text-pink-400">
                                     <Store className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Minhas Lojas</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.myStores')}</span>
                             </Button>
                             <Button onClick={() => setShowNotifications(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-full text-yellow-600 dark:text-yellow-400">
                                     <Bell className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Avisos</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.notices')}</span>
                             </Button>
                             <Button onClick={() => onNavigate('zebank')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
@@ -677,41 +933,41 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600 dark:text-indigo-400">
                                     <Gift className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Indicações</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.referrals')}</span>
                             </Button>
                             <Button onClick={() => onNavigate('score')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-full text-brand-600 dark:text-brand-400">
                                     <Star className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Meu Score</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.myScore')}</span>
                             </Button>
                             <Button onClick={() => onNavigate('delivery_navigation')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
                                     <Navigation className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">GPS Navegador</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.gpsNavigator')}</span>
                             </Button>
                         </div>
 
-                        <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2">Ferramentas</h3>
+                        <h3 className="font-bold text-gray-800 dark:text-white mb-3 text-sm px-2">{t('partner.tools')}</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                             <Button onClick={() => setShowFuelCalc(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600 dark:text-orange-400">
                                     <Fuel className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Combustível</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.fuel')}</span>
                             </Button>
                             <Button onClick={() => setShowRouteCalc(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
                                     <Calculator className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Calc. Rota</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.calcRoute')}</span>
                             </Button>
                             <Button onClick={() => setShowMaintenance(true)} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300">
                                     <Wrench className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Manutenção</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.maintenance')}</span>
                             </Button>
                             <Button onClick={() => onNavigate('zepoint')} variant="outline" className="flex-col gap-1 p-3 bg-white dark:bg-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all h-auto">
                                 <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
@@ -723,7 +979,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300">
                                     <User className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">Perfil</span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{t('partner.profile')}</span>
                             </Button>
                         </div>
                     </div>
@@ -731,7 +987,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                     {activeDelivery && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl  border-2 border-brand-500 animate-in zoom-in-95 mt-6">
                             <div className="flex justify-between items-start mb-4"><span className="bg-brand-100 text-brand-700 px-3 py-1 rounded-full text-xs font-bold uppercase">{activeDelivery.status === 'ACCEPTED' ? 'Vá para Coleta' : activeDelivery.status === 'IN_TRANSIT' ? 'Em Rota' : activeDelivery.status === 'AWAITING_STORE_DECISION' ? 'Aguardando Loja' : activeDelivery.status === 'RETURNING' ? 'Retornando à Loja' : activeDelivery.status}</span><p className="font-black text-xl text-green-600">{formatCurrency(activeDelivery.net_value_partner)}</p></div>
-                            <div className="space-y-4 mb-6"><div className="flex items-start gap-3"><div className="mt-1"><MapPin className="w-5 h-5 text-blue-500" /></div><div><p className="text-xs text-gray-400 font-bold uppercase">Coleta</p><p className="font-medium dark:text-white text-sm">{activeDelivery.pickup_address}</p></div></div><div className="flex items-start gap-3"><div className="mt-1"><MapPin className="w-5 h-5 text-brand-500" /></div><div><p className="text-xs text-gray-400 font-bold uppercase">Entrega</p><p className="font-medium dark:text-white text-sm">{activeDelivery.delivery_address}</p></div></div></div>
+                            <div className="space-y-4 mb-6"><div className="flex items-start gap-3"><div className="mt-1"><MapPin className="w-5 h-5 text-blue-500" /></div><div><p className="text-xs text-gray-400 font-bold uppercase">{t('partner.collection')}</p><p className="font-medium dark:text-white text-sm">{activeDelivery.pickup_address}</p></div></div><div className="flex items-start gap-3"><div className="mt-1"><MapPin className="w-5 h-5 text-brand-500" /></div><div><p className="text-xs text-gray-400 font-bold uppercase">{t('partner.delivery')}</p><p className="font-medium dark:text-white text-sm">{activeDelivery.delivery_address}</p></div></div></div>
                             <div className="space-y-3">
                                 {activeDelivery.status === 'ACCEPTED' && (
                                     <>
@@ -747,7 +1003,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 )}
                                 {activeDelivery.status === 'IN_TRANSIT' && (
                                     <>
-                                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-center text-xs text-blue-600 mb-2 font-bold animate-pulse">Sua localização está sendo compartilhada com a loja.</div>
+                                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-center text-xs text-blue-600 mb-2 font-bold animate-pulse">{t('partner.locationSharedDesc')}</div>
                                         <Button variant="outline" fullWidth onClick={() => handleOpenGps(activeDelivery.delivery_address, { label: `Pedido #${activeDelivery.id.slice(0, 8)}` })}><Navigation className="w-4 h-4 mr-2" /> Navegar</Button>
                                         <div className="flex gap-2">
                                             <Button variant="outline" className="flex-1" onClick={() => setShowChat(true)}><MessageCircle className="w-4 h-4 mr-2" /> Chat</Button>
@@ -766,8 +1022,8 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                         <div className="flex gap-2"><Button fullWidth onClick={handleConfirmDelivery} disabled={processingAction || deliveryCodeInput.length !== 6} variant="success">{processingAction ? <Loader2 className="animate-spin" /> : 'Finalizar Entrega'}</Button><Button onClick={() => setShowFailureModal(true)} variant="danger" className="px-3"><AlertTriangle className="w-5 h-5" /></Button></div>
                                     </>
                                 )}
-                                {activeDelivery.status === 'AWAITING_STORE_DECISION' && (<div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl"><Loader2 className="w-8 h-8 animate-spin mx-auto text-yellow-600 mb-2" /><p className="text-sm font-bold text-yellow-700">Aguardando decisão da loja...</p><button onClick={handleCheckDecision} className="text-xs text-blue-500 underline mt-2">Verificar</button><button onClick={() => setShowChat(true)} className="text-xs text-brand-600 underline mt-2 block mx-auto">Chat com Loja</button></div>)}
-                                {activeDelivery.status === 'RETURNING' && (<><div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl mb-2 text-center"><p className="text-sm font-bold text-red-600">Devolução Solicitada!</p><p className="text-xs text-gray-500">Volte para a coleta.</p></div><Button fullWidth onClick={handleConfirmReturn} disabled={processingAction}>{processingAction ? <Loader2 className="animate-spin" /> : 'Confirmar Devolução'}</Button></>)}
+                                {activeDelivery.status === 'AWAITING_STORE_DECISION' && (<div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl"><Loader2 className="w-8 h-8 animate-spin mx-auto text-yellow-600 mb-2" /><p className="text-sm font-bold text-yellow-700">{t('partner.waitingStoreDecision')}</p><button onClick={handleCheckDecision} className="text-xs text-blue-500 underline mt-2">Verificar</button><button onClick={() => setShowChat(true)} className="text-xs text-brand-600 underline mt-2 block mx-auto">Chat com Loja</button></div>)}
+                                {activeDelivery.status === 'RETURNING' && (<><div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl mb-2 text-center"><p className="text-sm font-bold text-red-600">{t('partner.returnRequested')}</p><p className="text-xs text-gray-500">Volte para a coleta.</p></div><Button fullWidth onClick={handleConfirmReturn} disabled={processingAction}>{processingAction ? <Loader2 className="animate-spin" /> : 'Confirmar Devolução'}</Button></>)}
                             </div>
                         </div>
                     )}
@@ -784,8 +1040,8 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                     <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3">
                                         <UserX className="w-8 h-8 text-gray-400" />
                                     </div>
-                                    <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma entrega disponível no momento.</p>
-                                    <p className="text-xs text-gray-400 mt-1 max-w-[200px]">Aguarde, assim que uma loja solicitar, aparecerá aqui automaticamente.</p>
+                                    <p className="text-gray-500 dark:text-gray-400 font-medium">{t('partner.noDeliveriesAvailable')}</p>
+                                    <p className="text-xs text-gray-400 mt-1 max-w-[200px]">{t('partner.waitForStoreRequest')}</p>
                                 </div>
                             ) : (
                                 <div className="space-y-4">{requests.map(req => {
@@ -805,7 +1061,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                             </div>
                                             <div className="space-y-2 mb-4">
                                                 <p className="text-sm line-clamp-1"><span className="text-blue-500 font-bold">De:</span> {req.pickup_address}</p>
-                                                <p className="text-sm line-clamp-1"><span className="text-brand-500 font-bold">Para:</span> {req.delivery_address}</p>
+                                                <p className="text-sm line-clamp-1"><span className="text-brand-500 font-bold">{t('partner.to')}</span> {req.delivery_address}</p>
                                             </div>
                                             <Button fullWidth onClick={() => handleAccept(req)} disabled={processingAction} className={isDirect ? '!bg-purple-600 !hover:bg-purple-500' : ''}>
                                                 {processingAction ? <Loader2 className="animate-spin" /> : 'Aceitar'}
@@ -846,7 +1102,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                 showWithdrawConfirm && summary && summary.settings && (
                     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
                         <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6  text-center">
-                            <h3 className="text-xl font-bold dark:text-white mb-2">Saque Emergencial</h3>
+                            <h3 className="text-xl font-bold dark:text-white mb-2">{t('partner.emergencyWithdrawal')}</h3>
                             <p className="text-sm text-gray-500 mb-4">{summary.settings.emergency_message}<br />Receba <strong>{formatCurrency(summary.max_emergency_value)}</strong> agora.</p>
 
                             {!bankDetails?.pixKey ? (
@@ -864,7 +1120,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                             )}
 
                             <div className="flex gap-3">
-                                <Button variant="outline" onClick={() => setShowWithdrawConfirm(false)} fullWidth>Cancelar</Button>
+                                <Button variant="outline" onClick={() => setShowWithdrawConfirm(false)} fullWidth>{t('partner.cancel')}</Button>
                                 <Button onClick={handleRequestEmergency} disabled={processingWithdraw || !bankDetails?.pixKey} fullWidth>
                                     {processingWithdraw ? <Loader2 className="animate-spin" /> : 'Confirmar'}
                                 </Button>
@@ -876,7 +1132,7 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
             }
             {
                 showFailureModal && (
-                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6"><h3 className="font-bold dark:text-white mb-4">Relatar Problema</h3><textarea className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl h-24 mb-4 resize-none" placeholder="Motivo..." value={failureReason} onChange={e => setFailureReason(e.target.value)} /><div className="flex gap-2"><Button variant="outline" onClick={() => setShowFailureModal(false)} fullWidth>Cancelar</Button><Button onClick={handleReportFailure} disabled={!failureReason} fullWidth>Enviar</Button></div></div></div>
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6"><h3 className="font-bold dark:text-white mb-4">{t('partner.reportProblem')}</h3><textarea className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl h-24 mb-4 resize-none" placeholder="Motivo..." value={failureReason} onChange={e => setFailureReason(e.target.value)} /><div className="flex gap-2"><Button variant="outline" onClick={() => setShowFailureModal(false)} fullWidth>{t('partner.cancel')}</Button><Button onClick={handleReportFailure} disabled={!failureReason} fullWidth>Enviar</Button></div></div></div>
                 )
             }
 
@@ -963,8 +1219,8 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-700/30 cursor-pointer select-none hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors"
                             >
                                 <div className="flex flex-col">
-                                    <span className="text-xs font-black text-gray-700 dark:text-gray-300">Marcar como lido</span>
-                                    <span className="text-[10px] text-gray-400">Entendi e não quero exibir novamente esta atualização</span>
+                                    <span className="text-xs font-black text-gray-700 dark:text-gray-300">{t('partner.markAsRead')}</span>
+                                    <span className="text-[10px] text-gray-400">{t('partner.dismissUpdateForever')}</span>
                                 </div>
                                 
                                 {/* O Switch real customizado */}
@@ -986,6 +1242,94 @@ export const PartnerArea: React.FC<PartnerAreaProps> = ({ userRole, onNavigate }
                                 <CheckCircle className="w-4 h-4" />
                                 Confirmar Leitura
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Customizado: Iniciar Descanso */}
+            {showStartBreakModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-gray-800 rounded-[32px] w-full max-w-md p-6 shadow-2xl border border-gray-150 dark:border-gray-700/60 relative overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-500 to-orange-500" />
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-orange-500" />
+                            Iniciar Pausa de Descanso
+                        </h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 font-bold">
+                            Você não receberá novos pedidos durante a pausa. Limite diário: {maxBreaks} pausas. Restantes hoje: {breaksLeft}.
+                        </p>
+                        
+                        <div className="space-y-3 mb-6">
+                            <label className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">{t('partner.justificationReason')}</label>
+                            <textarea
+                                value={breakReason}
+                                onChange={(e) => setBreakReason(e.target.value)}
+                                placeholder="Ex: Almoço, Abastecer, Descanso rápido..."
+                                className="w-full min-h-[100px] p-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 dark:text-white resize-none"
+                                maxLength={250}
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1 py-3 text-xs font-bold uppercase tracking-wider" 
+                                onClick={() => { setShowStartBreakModal(false); setBreakReason(''); }}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button 
+                                className="flex-1 py-3 text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white" 
+                                onClick={handleStartBreak}
+                                disabled={breakLoading}
+                            >
+                                {breakLoading ? <Loader2 className="animate-spin" /> : 'Confirmar Pausa'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Customizado: Retorno Antecipado (Manual) */}
+            {showEndBreakModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-gray-800 rounded-[32px] w-full max-w-md p-6 shadow-2xl border border-gray-150 dark:border-gray-700/60 relative overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 to-emerald-600" />
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                            Retornar ao Trabalho
+                        </h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 font-bold">
+                            Deseja encerrar seu descanso antes do tempo previsto? Para retornar, justifique o motivo abaixo.
+                        </p>
+                        
+                        <div className="space-y-3 mb-6">
+                            <label className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">{t('partner.earlyReturnReason')}</label>
+                            <textarea
+                                value={endBreakReason}
+                                onChange={(e) => setEndBreakReason(e.target.value)}
+                                placeholder="Ex: Terminei de almoçar, Alta demanda..."
+                                className="w-full min-h-[100px] p-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:text-white resize-none"
+                                maxLength={250}
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1 py-3 text-xs font-bold uppercase tracking-wider" 
+                                onClick={() => { setShowEndBreakModal(false); setEndBreakReason(''); }}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button 
+                                className="flex-1 py-3 text-xs font-bold uppercase tracking-wider bg-green-600 hover:bg-green-500 text-white" 
+                                onClick={handleEndBreakManual}
+                                disabled={breakLoading}
+                            >
+                                {breakLoading ? <Loader2 className="animate-spin" /> : 'Confirmar Retorno'}
+                            </Button>
                         </div>
                     </div>
                 </div>

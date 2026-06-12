@@ -1,4 +1,4 @@
-import { Step } from '@list-labs/react-joyride';
+import { Step } from 'react-joyride';
 
 /*
   ================================================================================

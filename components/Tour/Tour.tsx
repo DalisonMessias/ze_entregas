@@ -1,5 +1,5 @@
 import React from 'react';
-import Joyride, { Step } from '@list-labs/react-joyride';
+import Joyride, { Step } from 'react-joyride';
 import { useTour } from './TourContext';
 
 /**

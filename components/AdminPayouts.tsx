@@ -7,6 +7,7 @@ import { Loader2, CheckCircle, AlertTriangle, Clock, CalendarDays, Settings, His
 import { Switch } from './Switch';
 import { MobileTabsSelect } from './MobileTabsSelect';
 import { CustomSelect } from './CustomSelect';
+import { useDialog } from '../utils/dialogService';
 // --- TOAST COMPONENT (copied from AdminPanel.tsx for consistency) ---
 
 export const AdminPayouts: React.FC = () => {

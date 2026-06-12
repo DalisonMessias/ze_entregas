@@ -1,21 +1,42 @@
-# Lista de Tarefas — Correção de Versões do package.json
+# Plano de Tarefas: Implementação de Entregadores Fixos
 
-**Data:** 11/06/2026  
-**Solicitação:** Corrigir avisos de segurança do IDE sobre dependências com versões variantes (`^`, `~`, `latest`) no `package.json`.
+## Banco de Dados (Supabase)
+- [x] Criar tabela `delivery_fixed_assignments` em `supabase_global_part3.sql`.
+- [x] Criar tabela `delivery_fixed_schedules` em `supabase_global_part3.sql`.
+- [x] Criar tabela `delivery_fixed_logs` em `supabase_global_part3.sql`.
+- [x] Criar tabela `delivery_fixed_priorities` em `supabase_global_part3.sql`.
+- [x] Criar tabela `delivery_fixed_bonuses` em `supabase_global_part3.sql`.
+- [x] Criar tabela `delivery_fixed_statistics` em `supabase_global_part3.sql`.
+- [x] Criar tabela `delivery_fixed_history` em `supabase_global_part3.sql`.
 
----
+## Backend / API (Funções Supabase RPC / API Server)
+- [x] Criar endpoints para gerenciar vínculos (criar, atualizar, remover, suspender, reativar).
+- [x] Criar endpoints para gerenciar escalas e horários.
+- [x] Criar lógica de Distribuição Inteligente (fallback para modo geral caso não haja fixo disponível).
+- [x] Criar rotas para estatísticas e relatórios.
 
-## Tarefas
+## Painel Administrativo
+- [x] Criar página/componente `AdminFixedDrivers` para gerenciamento completo.
+- [x] Adicionar filtros (loja, cidade, região, entregador, status, tipo).
+- [x] Adicionar funcionalidade para definição de ganhos/bônus personalizados por vínculo.
+- [x] Integrar no menu lateral do painel de administração.
 
-- [x] Analisar o `package.json` e identificar todas as dependências com versões variantes
-- [x] Fixar todas as versões de `dependencies` para valores exatos (remoção de `^` e `~`)
-- [x] Substituir `"latest"` por versão exata (`0.3.2`) em `@list-labs/react-joyride`
-- [x] Fixar todas as versões de `devDependencies` para valores exatos
-- [x] Atualizar `checklist.txt` com o registro da correção
-- [x] Atualizar `documentation/TASK_LIST.md`
+## Painel da Loja
+- [x] Criar área/componente "Meus Entregadores Fixos" (`StoreFixedDrivers`).
+- [x] Exibir listagem e status atual de cada entregador (online/offline/entregando).
+- [x] Permitir solicitação de novo entregador ou substituição.
 
----
+## Aplicativo do Entregador
+- [x] Criar área/componente "Minhas Lojas Vinculadas" (`DriverFixedStores`).
+- [x] Exibir aviso visual de "Entregador Fixo" para os pedidos elegíveis.
+- [x] Adicionar visualização de ganhos, escalas e histórico de entregas por loja.
 
-## Resumo
+## Notificações e Regras de Negócio
+- [x] Implementar Modo Escala com alertas de faltas/atrasos.
+- [x] Implementar Modo Descanso (pausa no vínculo).
+- [x] Configurar notificações em tempo real (push / database) para admin, lojas e entregadores.
 
-Todas as 9 ocorrências de avisos de segurança do IDE foram corrigidas. O `package.json` agora usa versões exatas em todas as 54 dependências (38 em `dependencies` + 16 em `devDependencies`), eliminando riscos de **dependency hijack** e **confusion attacks**.
+## Validação e Testes
+- [x] Testar distribuição inteligente de pedidos com diferentes tipos de vínculo (exclusivo, prioritário, compartilhado).
+- [x] Validar compatibilidade com a distribuição geral (fallback).
+- [x] Confirmar registros de auditoria e logs.

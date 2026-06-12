@@ -501,7 +501,7 @@ export interface Order {
     customer_name?: string;
     customer_phone?: string;
     observation?: string;
-    origin?: 'APP' | 'INTERNAL';
+    origin?: 'APP' | 'INTERNAL' | 'DIGITAL_MENU';
     amount_paid?: number;
     change_amount?: number;
     custom_payment_label?: string;
@@ -509,6 +509,9 @@ export interface Order {
     delivery_mode?: 'OWN' | 'PLATFORM' | 'ASSOCIATE';
     delivery_location_reference?: string;
     driver_id?: string;
+    assignment_strategy?: 'REGIONAL' | 'FIXED_FIRST' | 'DIRECT_FIXED' | string;
+    fixed_partner_priority_applied?: boolean;
+    fixed_partner_candidate_ids?: string[];
     payment_status?: string;
     is_location_delivery?: boolean;
 
@@ -572,6 +575,12 @@ export interface PartnerRequest {
     fee_fixed: number;
     fee_percent_value: number;
     status: PartnerRequestStatus;
+    request_type?: 'PLATFORM' | 'ASSOCIATE' | string;
+    assignment_strategy?: 'REGIONAL' | 'FIXED_FIRST' | 'DIRECT_FIXED' | string;
+    preferred_partner_ids?: string[];
+    preferred_until?: string | null;
+    fixed_partner_priority_applied?: boolean;
+    assignment_note?: string;
     created_at: string;
     updated_at: string;
     store?: { name: string; phone_number: string };
@@ -970,7 +979,15 @@ export interface StoreDeliveryPartner {
     partner_phone: string;
     partner_vehicle: string;
     partner_avatar?: string | null;
+    is_available?: boolean;
+    city?: string;
+    association_status?: string;
+    fixed_priority?: boolean;
+    priority_order?: number;
+    max_distance_km?: number | null;
+    notes?: string | null;
     created_at: string;
+    updated_at?: string;
 }
 
 export interface PartnerRating {
@@ -1086,7 +1103,7 @@ export interface FinancialTransaction {
     created_at: string;
 }
 
-export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'beta_news' | 'store_finance' | 'store_orders' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation' | 'bonuses' | 'store_ratings';
+export type AdminSubTab = 'dashboard' | 'users' | 'lojas' | 'validation' | 'notifications' | 'payment_gateways' | 'shop' | 'support' | 'claims' | 'ai_config' | 'fees' | 'pwa' | 'payouts' | 'cities' | 'infinitepay' | 'levels' | 'ratings' | 'security' | 'blacklist' | 'referrals' | 'institutional' | 'platform_news' | 'beta_news' | 'store_finance' | 'store_orders' | 'wallet_control' | 'maintenance' | 'routing' | 'api_keys' | 'loan_config' | 'investments' | 'slides' | 'city_banners' | 'tips' | 'chat' | 'score_config' | 'mercadopago' | 'location_map' | 'base_catalog' | 'store_categories' | 'image_gallery' | 'pix_config' | 'global_coupons' | 'insurance' | 'street_requests' | 'street_catalog' | 'mediation' | 'bonuses' | 'store_ratings' | 'delivery_breaks';
 
 export interface AppNotification {
     id: string;
@@ -1489,6 +1506,12 @@ export interface ZebankCard {
 export interface AssociatedStore {
     id: string;
     name: string;
+    city?: string;
+    avatar_url?: string;
+    fixed_priority?: boolean;
+    priority_order?: number;
+    association_status?: string;
+    linked_at?: string;
     // Adicionar outros campos relevantes se necessário, como terminal_id da loja
     // ou informações de contato do lojista.
 }

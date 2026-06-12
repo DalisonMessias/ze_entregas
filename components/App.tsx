@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Laptop, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award, Plus, Play, Sparkles } from 'lucide-react';
+import { Menu, X, LogOut, Sun, Moon, Bell, ShieldAlert, User, UserX, Cloud, Info, ShoppingBag, LayoutDashboard, Layout, Users, FileCheck, Wallet, Store, Headphones, DollarSign, Settings, MapPin, Share2, FileText, Smartphone, Bot, Lock, Megaphone, Truck, BarChart3, Map, History, Flame, Star, MessageCircle, AlertTriangle, Newspaper, UserCheck, ArrowLeft, ClipboardList, Link2, Briefcase, Handshake, Shield, Monitor, Laptop, Construction, CreditCard, Route, Key, Banknote, TrendingUp, HelpCircle, FileSpreadsheet, Zap, Globe, ListPlus, Lightbulb, RefreshCw, Power, MessageSquare, Landmark, Package, Download, Navigation, LayoutGrid, ChevronUp, Home, Search, Image as ImageIcon, Gift, Crown, Award, Plus, Play, Sparkles, Coffee } from 'lucide-react';
 import { Loading } from './Loading';
 
 import { UserRole, AppNotification, MaintenanceSettings, PartnerProfile, UserStatus } from '../types';
@@ -47,6 +47,9 @@ const StoreReports = React.lazy(() => import('./StoreReports').then(module => ({
 const StorePerformance = React.lazy(() => import('./StorePerformance').then(module => ({ default: module.StorePerformance })));
 const StoreMarketing = React.lazy(() => import('./StoreMarketing').then(module => ({ default: module.StoreMarketing })));
 const AdminStoreRatings = React.lazy(() => import('./AdminStoreRatings').then(module => ({ default: module.AdminStoreRatings })));
+const AdminFixedDrivers = React.lazy(() => import('./AdminFixedDrivers').then(m => ({ default: m.AdminFixedDrivers })));
+const StoreFixedDrivers = React.lazy(() => import('./StoreFixedDrivers').then(m => ({ default: m.StoreFixedDrivers })));
+const DriverFixedStores = React.lazy(() => import('./DriverFixedStores').then(m => ({ default: m.DriverFixedStores })));
 const StoreIntegrations = React.lazy(() => import('./StoreIntegrations').then(module => ({ default: module.StoreIntegrations })));
 const PrintCatalogGenerator = React.lazy(() => import('./PrintCatalogGenerator').then(module => ({ default: module.PrintCatalogGenerator })));
 const StoreSettings = React.lazy(() => import('./StoreSettings').then(module => ({ default: module.StoreSettings })));
@@ -1775,6 +1778,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={Wallet} label="Controle de Saldos" tab="admin_wallet_control" />
                                     <MenuButton icon={ShieldAlert} label="Segurança & Fraude" tab="admin_security" />
                                     <MenuButton icon={UserX} label="Lista Negra" tab="admin_blacklist" />
+                                    <MenuButton icon={Coffee} label="Descanso de Entregadores" tab="admin_delivery_breaks" />
 
                                     <MenuSection title="Operacional" />
                                     <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />

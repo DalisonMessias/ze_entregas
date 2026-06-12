@@ -68,6 +68,62 @@ export const getUserWithCache = async () => {
     return { user, error };
 };
 
+const normalizeIdArray = (value: any): string[] => {
+    if (Array.isArray(value)) return value.filter(Boolean).map(String);
+    if (typeof value === 'string') {
+        return value
+            .replace(/[{}"]/g, '')
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean);
+    }
+    return [];
+};
+
+const getDeliveryCoordinates = (shippingAddress: any): { lat?: number; lng?: number } => {
+    const lat = Number(shippingAddress?.latitude ?? shippingAddress?.lat);
+    const lng = Number(shippingAddress?.longitude ?? shippingAddress?.lng);
+    return {
+        lat: Number.isFinite(lat) ? lat : undefined,
+        lng: Number.isFinite(lng) ? lng : undefined
+    };
+};
+
+const generateNextDeliveryCode = async (sb: SupabaseClient): Promise<string> => {
+    const { data } = await sb
+        .from('partner_requests')
+        .select('delivery_code')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    const lastCode = Array.isArray(data) ? data[0]?.delivery_code : null;
+    const lastNumber = Number(String(lastCode || '').replace(/\D/g, ''));
+    const nextNumber = Number.isFinite(lastNumber) ? (lastNumber + 1) % 10000 : Math.floor(Math.random() * 10000);
+    return `#${String(nextNumber).padStart(4, '0')}`;
+};
+
+const selectAvailableFixedPartner = async (
+    storeId: string,
+    coords?: { lat?: number; lng?: number },
+    maxDistanceKm?: number | null
+): Promise<{ partner_id: string; distance_km?: number | null; priority_order?: number } | null> => {
+    const sb = getClient();
+    if (!sb || !storeId) return null;
+
+    const { data, error } = await sb.rpc('find_available_fixed_partner', {
+        p_store_id: storeId,
+        p_delivery_lat: coords?.lat ?? null,
+        p_delivery_lng: coords?.lng ?? null,
+        p_max_distance_km: maxDistanceKm ?? null
+    });
+
+    if (error) {
+        return null;
+    }
+
+    return Array.isArray(data) && data.length > 0 ? data[0] : null;
+};
+
 export const cancelSuperStoreSubscription = async (): Promise<{ success: boolean; error?: any }> => {
     const sb = getClient();
     if (!sb) return { success: false, error: 'Client not initialized' };
@@ -1348,8 +1404,10 @@ export const updateUserLocation = async (lat: number, lng: number) => {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
 
-    // Upsert live location
-    await sb.from('live_locations').upsert({ user_id: user.id, lat, lng, updated_at: new Date().toISOString() });
+    const payload = { user_id: user.id, lat, lng, updated_at: new Date().toISOString() };
+
+    await sb.from('user_locations').upsert(payload, { onConflict: 'user_id' });
+    await sb.from('live_locations').upsert(payload as any, { onConflict: 'user_id' });
 };
 
 export const getOnlineDrivers = async (lat: number, lng: number, radiusKm: number = 10): Promise<any[]> => {
@@ -9350,16 +9408,15 @@ export const adminSaveAnnouncement = async (
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', id);
-
+            
             if (updateError) throw updateError;
 
-            // Deleta todas as confirmações de leitura associadas para ESTE anúncio específico
-            // para forçar a reexibição dele aos lojistas que já o tinham marcado como lido
+            // Deleta registros de leitura para que todos sejam notificados novamente da atualização
             const { error: deleteError } = await sb
                 .from('user_announcement_reads')
                 .delete()
-                .eq('announcement_id', announcementId);
-
+                .eq('announcement_id', id);
+                
             if (deleteError) {
                 console.error('Erro ao resetar leituras para o anúncio editado:', deleteError);
             }
@@ -9369,6 +9426,121 @@ export const adminSaveAnnouncement = async (
     } catch (e: any) {
         console.error('Erro ao salvar anúncio de novidades:', e);
         return { success: false, error: e.message };
+    }
+};
+
+/**
+ * Inicia o descanso de um entregador.
+ */
+export const startDeliveryBreak = async (
+    reason: string,
+    storeId?: string | null,
+    lat?: number | null,
+    lng?: number | null
+): Promise<{ success: boolean; message?: string; break_id?: string; expected_return?: string; start_time?: string; max_duration_minutes?: number }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, message: 'Supabase client not initialized' };
+
+    try {
+        const { data, error } = await sb.rpc('start_delivery_break', {
+            p_reason: reason,
+            p_store_id: storeId || null,
+            p_lat: lat || null,
+            p_lng: lng || null
+        });
+
+        if (error) throw error;
+        return data;
+    } catch (e: any) {
+        console.error('Erro ao iniciar descanso:', e);
+        return { success: false, message: e.message || 'Erro de conexão ao banco de dados.' };
+    }
+};
+
+/**
+ * Finaliza o descanso ativo.
+ */
+export const endDeliveryBreak = async (
+    manualReason?: string | null
+): Promise<{ success: boolean; message?: string; end_time?: string; duration_seconds?: number }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, message: 'Supabase client not initialized' };
+
+    try {
+        const { data, error } = await sb.rpc('end_delivery_break', {
+            p_manual_reason: manualReason || null
+        });
+
+        if (error) throw error;
+        return data;
+    } catch (e: any) {
+        console.error('Erro ao finalizar descanso:', e);
+        return { success: false, message: e.message || 'Erro de conexão ao banco de dados.' };
+    }
+};
+
+/**
+ * Obtém informações sobre o descanso ativo do entregador logado.
+ */
+export const getActiveDeliveryBreak = async (): Promise<{
+    active: boolean;
+    break_id?: string;
+    start_time?: string;
+    expected_return?: string;
+    seconds_remaining?: number;
+    reason?: string;
+    breaks_left: number;
+    max_breaks: number;
+} | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    try {
+        const { data, error } = await sb.rpc('get_active_delivery_break');
+        if (error) throw error;
+        return data;
+    } catch (e) {
+        console.error('Erro ao buscar descanso ativo:', e);
+        return null;
+    }
+};
+
+/**
+ * Executa rotina de retorno automático para pausas expiradas.
+ */
+export const autoCheckExpiredBreaks = async (): Promise<number> => {
+    const sb = getClient();
+    if (!sb) return 0;
+
+    try {
+        const { data, error } = await sb.rpc('auto_check_expired_breaks');
+        if (error) throw error;
+        return data || 0;
+    } catch (e) {
+        console.error('Erro ao processar pausas expiradas:', e);
+        return 0;
+    }
+};
+
+/**
+ * Obtém estatísticas completas de descanso para exibição no painel administrativo.
+ */
+export const getDeliveryBreakStats = async (): Promise<{
+    total_breaks: number;
+    total_duration_minutes: number;
+    avg_duration_minutes: number;
+    ranking: Array<{ name: string; break_count: number; total_minutes: number }>;
+} | null> => {
+    const sb = getClient();
+    if (!sb) return null;
+
+    try {
+        const { data, error } = await sb.rpc('get_delivery_break_stats');
+        if (error) throw error;
+        return data;
+    } catch (e) {
+        console.error('Erro ao buscar estatísticas de descanso:', e);
+        return null;
     }
 };
 

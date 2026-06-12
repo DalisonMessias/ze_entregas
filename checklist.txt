@@ -97,3 +97,14 @@
 [11/06/2026] Adicionado o script "start" no package.json mapeado para "npx tsx server/server.ts", permitindo que o Railway/Nixpacks inicialize o backend Express do WhatsBot automaticamente sem precisar de configurações adicionais.
 [11/06/2026] Movidas as dependências "tsx" e "typescript" de devDependencies para dependencies no package.json, garantindo que o Railway instale-as mesmo no modo de produção (NODE_ENV=production) e a aplicação Express consiga inicializar corretamente sem crashar por falta de executável tsx.
 [11/06/2026] Fixadas todas as versões de dependências do package.json para versões exatas, removendo os prefixos ^ (caret) e ~ (tilde) e substituindo "latest" por versão específica (0.3.2 do @list-labs/react-joyride). Correção aplicada em todas as 38 entradas de dependencies e 16 de devDependencies, eliminando os avisos de segurança do IDE sobre dependency hijack e confusion attacks.
+[12/06/2026] Implementada a Calculadora de Ganhos na página /partner-delivery. Criado o componente isolado `PartnerDeliveryEarningsCalculator` integrado de forma transparente e em tempo real com as definições administrativas de `partner_fee_settings` da plataforma, incluindo modificadores simuladores para Noturno, Chuva e Pico e predefinições de jornada. Atualizada a importação e o alocamento do componente na landing page respectiva, entregando uma solução elegante e de valor agregado a quem busca fazer entregas.[12/06/2026] Implementada a modalidade de Entregador Fixo. Criadas as tabelas de gerenciamento (delivery_fixed_assignments, etc) e os componentes AdminFixedDrivers, StoreFixedDrivers e DriverFixedStores. Lógica de distribuição inteligente implementada em deliveryFixed.ts para priorização e bônus.
+
+- UnificaÃ§Ã£o completa dos scripts SQL (PWA, PermissÃµes, Documentos) no arquivo supabase_global.sql e remoÃ§Ã£o de caminhos locais e arquivos redundantes.
+
+- UnificaÃ§Ã£o completa dos scripts SQL (PWA, PermissÃµes, Documentos) no arquivo supabase_global.sql e remoÃ§Ã£o de caminhos locais e arquivos redundantes.
+
+- UnificaÃ§Ã£o completa dos scripts SQL (PWA, PermissÃµes, Documentos) no arquivo supabase_global.sql e remoÃ§Ã£o de caminhos locais e arquivos redundantes.
+
+- UnificaÃ§Ã£o completa dos scripts SQL (PWA, PermissÃµes, Documentos) no arquivo supabase_global.sql e remoÃ§Ã£o de caminhos locais e arquivos redundantes.
+
+- UnificaÃ§Ã£o completa dos scripts SQL (PWA, PermissÃµes, Documentos) no arquivo supabase_global.sql e remoÃ§Ã£o de caminhos locais e arquivos redundantes.

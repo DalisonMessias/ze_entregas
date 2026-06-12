@@ -4,6 +4,7 @@ import { App } from './components/App';
 import { AuthWrapper } from './components/AuthWrapper';
 import { DialogProvider } from './utils/dialogService'; // Import DialogProvider
 import { initURLPolicy, validateEnvConfig } from './src/policy/urlPolicy';
+import './src/i18n';
 
 import ErrorBoundary from './components/ErrorBoundary'; // Import ErrorBoundary
 

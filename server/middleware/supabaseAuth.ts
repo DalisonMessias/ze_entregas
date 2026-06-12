@@ -16,15 +16,36 @@ export interface AuthenticatedRequest extends Request {
 }
 
 const getBearerToken = (req: Request): string | null => {
+    // 1. Tenta obter o cabeçalho Authorization padrão
     const authHeader = req.header('authorization') || req.header('Authorization');
-    if (!authHeader) return null;
-
-    const [scheme, token] = authHeader.split(' ');
-    if (scheme?.toLowerCase() !== 'bearer' || !token) {
-        return null;
+    if (authHeader) {
+        const [scheme, token] = authHeader.split(' ');
+        if (scheme?.toLowerCase() === 'bearer' && token) {
+            return token.trim();
+        }
+        // Se o cabeçalho contiver apenas o token bruto
+        if (authHeader.trim() && !authHeader.includes(' ')) {
+            return authHeader.trim();
+        }
     }
 
-    return token.trim();
+    // 2. Tenta cabeçalhos alternativos
+    const xApiKey = req.header('x-api-key') || req.header('X-Api-Key');
+    if (xApiKey) return xApiKey.trim();
+
+    const accessTokenHeader = req.header('access_token') || req.header('access-token') || req.header('Access-Token');
+    if (accessTokenHeader) return accessTokenHeader.trim();
+
+    const tokenHeader = req.header('token') || req.header('Token');
+    if (tokenHeader) return tokenHeader.trim();
+
+    // 3. Tenta parâmetros de URL (query string)
+    const tokenQuery = req.query.token || req.query.access_token || req.query.apiKey;
+    if (typeof tokenQuery === 'string') {
+        return tokenQuery.trim();
+    }
+
+    return null;
 };
 
 const getImpersonationStoreId = (req: Request): string | null => {
@@ -106,7 +127,7 @@ export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res
                 supabaseAdmin
                     .from('user_profiles')
                     .update({ 
-                        is_super_store: false, 
+                       is_super_store: false, 
                         plan_level: 'GRATUITO' 
                     })
                     .eq('id', profile.id)
@@ -139,10 +160,13 @@ export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res
 
 export const requireSuperStoreAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     await authenticateSupabaseRequest(req, res, async () => {
-        if (req.user?.role !== 'store_partner' || !req.user.is_super_store) {
+        const isSuperStorePartner = req.user?.role === 'store_partner' && req.user.is_super_store;
+        const isAdmin = req.user?.role === 'admin';
+
+        if (!isSuperStorePartner && !isAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Acesso permitido apenas para super lojistas.'
+                message: 'Acesso permitido apenas para super lojistas ou administradores.'
             });
         }
 

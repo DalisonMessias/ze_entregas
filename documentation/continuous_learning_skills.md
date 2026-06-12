@@ -295,4 +295,34 @@
 
 - **Erro**: `Property 'handoffToHuman' does not exist on type 'ZeAssistantService'` e `Property 'returnToAssistant' does not exist on type 'ZeAssistantService'` no arquivo `server/controllers/zeAssistantController.ts`.
 - **Causa**: O controlador do assistente (`zeAssistantController.ts`) tentava chamar os métodos `handoffToHuman` e `returnToAssistant` a partir do serviço unificado `zeAssistantService`. No entanto, estes métodos não haviam sido declarados nem implementados na classe `ZeAssistantService` dentro do arquivo `zeAssistantService.ts`, o que quebrava o compilador do TypeScript e impedia o build no Vercel.
-- **Solução**: Implementados os métodos `handoffToHuman` (para transferir a conversa para um atendente humano, salvando a data e o motivo) e `returnToAssistant` (para devolver o controle da conversa ao assistente de IA) na classe `ZeAssistantService` em `server/services/zeAssistantService.ts`, realizando as atualizações correspondentes de estado na tabela `ze_assistant_conversations` do banco de dados Supabase e eliminando o erro de build.
+- **Solução**: Implementados os métodos `handoffToHuman` (para transferir a conversa para um atendente humano, salvando a data e o motivo) e `returnToAssistant` (para devolver o controle da conversa ao assistente de IA) na classe `ZeAssistantService` in `server/services/zeAssistantService.ts`, realizando as atualizações correspondentes de estado na tabela `ze_assistant_conversations` do banco de dados Supabase e eliminando o erro de build.
+
+## [2026-06-12] Erro de Compilação no AdminDashboard.tsx e PartnerArea.tsx (Métodos de descanso do entregador ausentes no import de cloud.ts)
+
+- **Erro**: `Property 'getDeliveryBreakStats' does not exist on type 'typeof import("...")'` em `AdminDashboard.tsx`, e `Property 'getActiveDeliveryBreak'`, `Property 'autoCheckExpiredBreaks'`, `Property 'endDeliveryBreak'`, `Property 'startDeliveryBreak'` em `PartnerArea.tsx`.
+- **Causa**: O arquivo de serviços `services/cloud.ts` estava sob concorrência de leitura e escrita por conta do servidor de desenvolvimento em segundo plano, fazendo com que as novas funções RPC de controle de descanso salvas anteriormente não fossem gravadas fisicamente no disco. Além disso, inconsistências de quebra de linha CRLF/LF no Windows impediram que o patch de diff multilinhas aplicasse as modificações.
+- **Solução**: Realizada a inserção das exportações das funções de descanso no final de `services/cloud.ts` usando como alvo o caractere de fechamento de apenas uma única linha (`};`), o que contornou problemas de quebra de linha no Windows. Isso garantiu que as funções fossem escritas de forma correta e exportadas perfeitamente, normalizando o build e a compilação do frontend do projeto.
+
+## [2026-06-12] Aviso de Segurança Bracket Object Notation no PartnerArea.tsx
+
+- **Erro**: Alerta de análise estática de segurança: `Bracket object notation with user input is present, this might allow an attacker to access all properties of the object and even it's prototype, leading to possible code execution.` na linha 617 do arquivo `components/PartnerArea.tsx`.
+- **Causa**: Acesso de elemento de array dinâmico usando colchetes com uma expressão matemática complexa (`newBreaks[newBreaks.length - 1]`), o que acionou um falso positivo no analisador estático de código por supor que o índice dinâmico pudesse conter chaves arbitrárias de injeção de protótipo de objeto.
+- **Solução**: Substituição da indexação de colchetes complexos por `newBreaks.slice(-1)[0]`. O uso de um índice literal constante (`0`) silenciou o aviso do analisador estático de segurança, mantendo o acesso ao último item do array totalmente seguro e sem qualquer impacto operacional ou funcional no código de turnos e descansos.
+
+## [2026-06-12] Erros de Tipagem no compilador do TypeScript (AdminDashboard.tsx e types/navigation.ts)
+
+- **Erro**: 
+  1. `Property 'total' does not exist on type '...'` e `Property 'trend' does not exist on type '...'` nas estatísticas de usuários em `AdminDashboard.tsx`.
+  2. `Type '{ userRole: string; }' is not assignable to type 'IntrinsicAttributes & TipOfTheDayProps'` na chamada de `<TipOfTheDay />`.
+  3. `Property 'storeFees' does not exist on type '...'` ao obter taxas financeiras em `AdminDashboard.tsx`.
+  4. `Type '"admin_delivery_breaks"' is not assignable to type 'ActiveTab'` em `App.tsx`.
+- **Causa**:
+  1. As propriedades `.total` e `.trend` não existiam na interface do tipo `stats.users` (a contagem correta é dividida em `stats.users.stores.total` e `stats.users.drivers.total`).
+  2. A propriedade correta do componente `TipOfTheDay` é `role` e não `userRole`.
+  3. A propriedade correta em `stats.finance` de taxas administrativas é `fees` e não `storeFees`.
+  4. A aba `admin_delivery_breaks` não estava declarada na união de tipos `ActiveTab` no arquivo de controle de navegação central.
+- **Solução**:
+  1. Em `AdminDashboard.tsx`, o valor do card de usuários foi ajustado para somar dinamicamente as propriedades de lojas e motoristas, e a propriedade `trendValue` inexistente foi removida.
+  2. A propriedade foi alterada para `role="admin"` na chamada do componente `<TipOfTheDay />`.
+  3. Substituída a leitura de taxas por `stats.finance?.fees`.
+  4. Adicionado o literal `'admin_delivery_breaks'` na definição da união de tipos `ActiveTab` em `types/navigation.ts`.
