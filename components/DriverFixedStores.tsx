@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Store, Clock, Award, Activity, Banknote, Navigation } from 'lucide-react';
 import { Button } from './Button';
-import { toast } from 'react-hot-toast';
+import { useDialog } from '../utils/dialogService';
 import * as deliveryFixed from '../services/deliveryFixed';
 import { Skeleton } from './Skeleton';
 
@@ -22,6 +22,7 @@ export const DriverFixedStores = ({ driverId }: { driverId?: string }) => {
     const { t } = useTranslation();
     const [stores, setStores] = useState<DriverFixedStore[]>([]);
     const [loading, setLoading] = useState(true);
+    const dialog = useDialog();
 
     useEffect(() => {
         if (driverId) {
@@ -49,7 +50,7 @@ export const DriverFixedStores = ({ driverId }: { driverId?: string }) => {
             setStores(mappedStores);
         } catch (error) {
             console.error('Error loading fixed stores:', error);
-            toast.error('Erro ao carregar suas lojas vinculadas.');
+            dialog.toast('Erro ao carregar suas lojas vinculadas.', 'error');
         } finally {
             setLoading(false);
         }

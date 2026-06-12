@@ -5,7 +5,6 @@ import { Button } from './Button';
 import { CustomInput } from './CustomInput';
 import { CustomSelect } from './CustomSelect';
 import { useDialog } from '../utils/dialogService';
-import { toast } from 'react-hot-toast';
 import * as deliveryFixed from '../services/deliveryFixed';
 import { Skeleton } from './Skeleton';
 
@@ -27,14 +26,14 @@ export const AdminFixedDrivers = () => {
             setAssignments(data);
         } catch (error) {
             console.error('Error loading assignments:', error);
-            toast.error('Erro ao carregar entregadores fixos.');
+            dialog.toast('Erro ao carregar entregadores fixos.', 'error');
         } finally {
             setLoading(false);
         }
     };
 
     const handleAdd = () => {
-        toast('Funcionalidade de adicionar em desenvolvimento');
+        dialog.toast('Funcionalidade de adicionar em desenvolvimento', 'info');
     };
 
     const handleSuspend = async (assignment: deliveryFixed.DeliveryFixedAssignment) => {
@@ -49,10 +48,10 @@ export const AdminFixedDrivers = () => {
             onConfirm: async () => {
                 try {
                     await deliveryFixed.updateFixedAssignment(assignment.id!, { status: newStatus });
-                    toast.success(`Vínculo ${action.toLowerCase()}do com sucesso.`);
+                    dialog.toast(`Vínculo ${action.toLowerCase()}do com sucesso.`, 'success');
                     loadAssignments();
                 } catch (error) {
-                    toast.error(`Erro ao ${action.toLowerCase()} vínculo.`);
+                    dialog.toast(`Erro ao ${action.toLowerCase()} vínculo.`, 'error');
                 }
             }
         });
@@ -67,10 +66,10 @@ export const AdminFixedDrivers = () => {
             onConfirm: async () => {
                 try {
                     await deliveryFixed.updateFixedAssignment(assignment.id!, { status: 'REMOVED' });
-                    toast.success('Vínculo removido com sucesso.');
+                    dialog.toast('Vínculo removido com sucesso.', 'success');
                     loadAssignments();
                 } catch (error) {
-                    toast.error('Erro ao remover vínculo.');
+                    dialog.toast('Erro ao remover vínculo.', 'error');
                 }
             }
         });

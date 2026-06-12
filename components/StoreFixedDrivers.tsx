@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Users, Search, UserPlus, Clock, Star, Activity } from 'lucide-react';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
-import { toast } from 'react-hot-toast';
 import * as deliveryFixed from '../services/deliveryFixed';
 import { Skeleton } from './Skeleton';
 
@@ -53,7 +52,7 @@ export const StoreFixedDrivers = ({ storeId }: { storeId?: string }) => {
             setDrivers(mappedDrivers);
         } catch (error) {
             console.error('Error loading store fixed drivers:', error);
-            toast.error('Erro ao carregar seus entregadores fixos.');
+            dialog.toast('Erro ao carregar seus entregadores fixos.', 'error');
         } finally {
             setLoading(false);
         }
@@ -66,7 +65,7 @@ export const StoreFixedDrivers = ({ storeId }: { storeId?: string }) => {
             confirmLabel: 'Solicitar',
             cancelLabel: 'Cancelar',
             onConfirm: async () => {
-                toast.success('Solicitação enviada com sucesso! Em breve entraremos em contato.');
+                dialog.toast('Solicitação enviada com sucesso! Em breve entraremos em contato.', 'success');
             }
         });
     };
@@ -78,7 +77,7 @@ export const StoreFixedDrivers = ({ storeId }: { storeId?: string }) => {
             confirmLabel: 'Solicitar',
             cancelLabel: 'Cancelar',
             onConfirm: async () => {
-                toast.success('Solicitação de substituição enviada para análise.');
+                dialog.toast('Solicitação de substituição enviada para análise.', 'success');
             }
         });
     };
