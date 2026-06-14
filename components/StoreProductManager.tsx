@@ -5,7 +5,7 @@ import * as cloud from '../services/cloud';
 import { Product, StoreProduct, Category } from '../types';
 import { Button } from './Button';
 import { ProductModal } from './ProductModal';
-import { ProductImportExport } from './ProductImportExport';
+const ProductImportExport = React.lazy(() => import('./ProductImportExport').then(module => ({ default: module.ProductImportExport })));
 import { useDialog } from '../utils/dialogService';
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
