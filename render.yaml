@@ -3,7 +3,7 @@
 
 services:
   - type: web
-    name: ze-entregas-api
+    name: ze-entregas
     runtime: node
     region: oregon  # Região mais próxima do Brasil com plano gratuito
     plan: free      # Mude para "starter" ($7/mês) para não dormir após inatividade

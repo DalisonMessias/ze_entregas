@@ -34,7 +34,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 // CORS — em produção com servidor unificado (mesmo origin) não é necessário.
 // Em desenvolvimento (Vite na 3000 + backend na 4000) precisa permitir localhost.
 // ─────────────────────────────────────────────────────────────────────────────
-const allowedOrigins = [
+const allowedOrigins: (string | RegExp)[] = [
   'http://localhost:3000',
   'http://localhost:4000',
   'http://127.0.0.1:3000',
