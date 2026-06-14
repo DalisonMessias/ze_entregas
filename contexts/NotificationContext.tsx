@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { AppNotification, NotificationSettings } from '../types';
+import { playNotificationSound } from '../utils/audio';
 
 type NotificationType = 'success' | 'error' | 'warning' | 'info';
 
@@ -33,18 +34,9 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     const playSound = useCallback((type: NotificationType) => {
         if (!settings.enableSound) return;
 
-        try {
-            // Usando um som de alerta padrão do sistema/web para "info" e outros, focado no novo pedido
-            // O ideal seria um arquivo fixo no projeto, mas usaremos uma URL estável de notificação
-            const audioUrl = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
-            const audio = new Audio(audioUrl);
-            audio.volume = 0.5;
-            audio.play().catch(err => {
-                console.warn('[Sound] Autoplay blocked or failed:', err);
-            });
-        } catch (error) {
-            console.error('[Sound] Error playing sound:', error);
-        }
+        // Mapeia o tipo da notificação visual para o tom sintetizado correspondente
+        const soundType = type === 'success' ? 'success' : (type === 'error' || type === 'warning' ? 'alert' : 'default');
+        playNotificationSound(soundType);
     }, [settings.enableSound]);
 
     const vibrate = useCallback(() => {

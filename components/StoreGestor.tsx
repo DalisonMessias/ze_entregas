@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState, Suspense, useRef } from 'react';
-import { Play, Laptop, CheckCircle, Bell, ArrowRight, ShieldCheck, Sparkles, Zap, Globe, Store, Lock, ClipboardList, ShoppingBag, History, MessageSquare, Settings, Headphones, Search, SlidersHorizontal, Sun, Moon, LogOut, RefreshCw, Volume2, VolumeX, AlertCircle, ArrowLeft, MapPin, X, Smartphone, MessageCircle, Tag } from 'lucide-react';
+import { Play, Laptop, CheckCircle, Bell, ArrowRight, ShieldCheck, Sparkles, Zap, Globe, Store, Lock, ClipboardList, ShoppingBag, History, MessageSquare, Settings, Headphones, Search, SlidersHorizontal, Sun, Moon, LogOut, RefreshCw, Volume2, VolumeX, AlertCircle, ArrowLeft, MapPin, X, Smartphone, MessageCircle, Tag, Users, Printer } from 'lucide-react';
 import { supabase, getMyPartnerProfile, getActiveAnnouncement, checkAnnouncementRead, markAnnouncementAsRead } from '../services/cloud';
+import { CustomDateInput } from './CustomDateInput';
 import { UserRole } from '../types';
+import { playNotificationSound } from '../utils/audio';
 
 // Lazy loaded components para o sub-sistema autônomo e standalone
 const StoreCatalog = React.lazy(() => import('./StoreCatalog').then(module => ({ default: module.StoreCatalog })));
@@ -84,6 +86,48 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
   const [filterDeliveryType, setFilterDeliveryType] = useState<'ALL' | 'DELIVERY' | 'PICKUP'>('ALL');
   const [orderBy, setOrderBy] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
 
+  // Filtros de data oficiais e temporários para o Supabase
+  const [filterDateType, setFilterDateType] = useState<'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'ALL' | 'CUSTOM'>('TODAY');
+  const [filterStartDate, setFilterStartDate] = useState<string | null>(null);
+  const [filterEndDate, setFilterEndDate] = useState<string | null>(null);
+
+  const [tempDateType, setTempDateType] = useState<'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'ALL' | 'CUSTOM'>('TODAY');
+  const [tempStartDate, setTempStartDate] = useState<string | null>(null);
+  const [tempEndDate, setTempEndDate] = useState<string | null>(null);
+
+  const handleOpenFilterModal = () => {
+    setTempDateType(filterDateType);
+    setTempStartDate(filterStartDate);
+    setTempEndDate(filterEndDate);
+    setShowFilterModal(true);
+  };
+
+  const handleApplyFilters = () => {
+    setFilterDateType(tempDateType);
+    setFilterStartDate(tempStartDate);
+    setFilterEndDate(tempEndDate);
+    setShowFilterModal(false);
+    
+    if (profile?.id) {
+      loadOrders(profile.id, tempDateType, tempStartDate, tempEndDate);
+    }
+  };
+
+  const handleClearFilters = () => {
+    setFilterStatus('ALL');
+    setFilterDeliveryType('ALL');
+    setOrderBy('NEWEST');
+    setFilterDateType('TODAY');
+    setFilterStartDate(null);
+    setFilterEndDate(null);
+    setShowFilterModal(false);
+    
+    if (profile?.id) {
+      loadOrders(profile.id, 'TODAY', null, null);
+    }
+    dialog.toast({ message: 'Todos os filtros foram limpos.', type: 'success' });
+  };
+
   const [profile, setProfile] = useState<PartnerProfile | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<'pedidos' | 'nova_comanda' | 'cardapio' | 'historico' | 'chat' | 'whatsbot' | 'config' | 'suporte' | 'promocoes'>('pedidos');
@@ -98,7 +142,6 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [isAlerting, setIsAlerting] = useState(false);
-  const [audioAlert, setAudioAlert] = useState<HTMLAudioElement | null>(null);
 
   const handleBlockCustomer = async (order: any) => {
     if (!order.customer_phone) {
@@ -136,6 +179,287 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
 
+  // Configurações da impressora térmica
+  const [printerSettings, setPrinterSettings] = useState<any | null>(null);
+
+  const loadPrinterSettings = async (storeId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('printer_settings')
+        .select('*')
+        .eq('store_id', storeId)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('[StoreGestor] Erro de banco ao carregar impressora:', error);
+      }
+
+      if (data) {
+        setPrinterSettings({
+          printer_width: data.printer_width || 80,
+          paper_type: data.paper_type || 'thermal',
+          margin_top: data.margin_top ?? 0,
+          margin_bottom: data.margin_bottom ?? 0,
+          margin_left: data.margin_left ?? 2,
+          margin_right: data.margin_right ?? 2,
+          font_size_base: data.font_size_base || 12,
+          use_printer: data.use_printer || false
+        });
+      } else {
+        setPrinterSettings({
+          printer_width: 80,
+          paper_type: 'thermal',
+          margin_top: 0,
+          margin_bottom: 0,
+          margin_left: 2,
+          margin_right: 2,
+          font_size_base: 12,
+          use_printer: false
+        });
+      }
+    } catch (error) {
+      console.error('[StoreGestor] Erro ao carregar configurações de impressora:', error);
+    }
+  };
+
+  // Função para imprimir cupom térmico de forma automatizada via iframe oculto
+  const handlePrintOrder = (order: any) => {
+    if (!order) return;
+    const width = printerSettings?.printer_width || 80;
+    const fontSize = printerSettings?.font_size_base || 12;
+    const marginTop = printerSettings?.margin_top ?? 0;
+    const marginBottom = printerSettings?.margin_bottom ?? 0;
+    const marginLeft = printerSettings?.margin_left ?? 2;
+    const marginRight = printerSettings?.margin_right ?? 2;
+    const paperType = printerSettings?.paper_type || 'thermal';
+
+    // Obter itens de forma segura
+    const items = Array.isArray(order.items)
+      ? order.items
+      : typeof order.items === 'string'
+      ? JSON.parse(order.items)
+      : [];
+
+    const formatCurrency = (val: number) => {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    };
+
+    const storeName = profile?.store_name || profile?.name || 'Loja';
+    
+    // Construir o cupom com HTML
+    const ticketHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Pedido #${String(order.id).slice(-6)}</title>
+        <style>
+          body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: ${fontSize}pt;
+            line-height: 1.3;
+            color: #000;
+          }
+          .container {
+            width: ${width}mm;
+            max-width: ${width}mm;
+            padding: ${marginTop}mm ${marginRight}mm ${marginBottom}mm ${marginLeft}mm;
+            box-sizing: border-box;
+          }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .font-bold { font-weight: bold; }
+          .divider {
+            border-top: 1px dashed #000;
+            margin: 5px 0;
+          }
+          .header {
+            margin-bottom: 8px;
+          }
+          .store-name {
+            font-size: ${fontSize + 2}pt;
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          .order-title {
+            font-size: ${fontSize + 4}pt;
+            font-weight: bold;
+            margin: 5px 0;
+          }
+          .section {
+            margin: 8px 0;
+          }
+          .section-title {
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: ${fontSize - 1}pt;
+            margin-bottom: 3px;
+          }
+          .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+          }
+          .item-qty {
+            width: 30px;
+            flex-shrink: 0;
+          }
+          .item-details {
+            flex-grow: 1;
+          }
+          .item-options {
+            font-size: ${fontSize - 2}pt;
+            margin-left: 5px;
+            font-style: italic;
+          }
+          .item-price {
+            flex-shrink: 0;
+            text-align: right;
+            width: 80px;
+          }
+          .totals-table {
+            width: 100%;
+            margin-top: 5px;
+          }
+          .totals-table td {
+            padding: 1px 0;
+          }
+          .total-row {
+            font-size: ${fontSize + 1}pt;
+            font-weight: bold;
+          }
+          .footer {
+            margin-top: 15px;
+            font-size: ${fontSize - 2}pt;
+          }
+          @media print {
+            body {
+              margin: 0;
+              padding: 0;
+            }
+            @page {
+              size: ${paperType === 'a4' ? 'A4' : `${width}mm auto`};
+              margin: 0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header text-center">
+            <div class="store-name">${storeName}</div>
+            <div class="divider"></div>
+            <div class="order-title">PEDIDO #${String(order.id).slice(-6)}</div>
+            <div>${new Date(order.created_at).toLocaleString('pt-BR')}</div>
+            <div class="divider"></div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Cliente</div>
+            <div><span class="font-bold">Nome:</span> ${order.customer_name || 'Cliente Geral'}</div>
+            ${order.customer_phone ? `<div><span class="font-bold">Tel:</span> ${order.customer_phone}</div>` : ''}
+            <div><span class="font-bold">Pagamento:</span> ${order.payment_method || 'Cartão (Online)'}</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section">
+            <div class="section-title">Entrega</div>
+            <div>${order.delivery_address || 'Retirada na Loja (Balcão)'}</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section">
+            <div class="section-title">Itens</div>
+            ${items.map((item: any) => `
+              <div class="item-row">
+                <div class="item-qty">${item.quantity || item.qty || 1}x</div>
+                <div class="item-details">
+                  <span class="font-bold">${item.product_name || item.name || 'Produto Geral'}</span>
+                  ${item.options ? `<div class="item-options">+ ${item.options}</div>` : ''}
+                </div>
+                <div class="item-price">${formatCurrency((item.price || item.unit_price || 0) * (item.quantity || item.qty || 1))}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section">
+            <table class="totals-table">
+              <tr>
+                <td>Subtotal</td>
+                <td class="text-right">${formatCurrency((order.total_price || 0) - (order.delivery_fee || 0) + (order.discount || 0))}</td>
+              </tr>
+              ${order.delivery_fee > 0 ? `
+                <tr>
+                  <td>Taxa de Entrega</td>
+                  <td class="text-right">${formatCurrency(order.delivery_fee || 0)}</td>
+                </tr>
+              ` : ''}
+              ${order.discount > 0 ? `
+                <tr>
+                  <td>Desconto</td>
+                  <td class="text-right">-${formatCurrency(order.discount || 0)}</td>
+                </tr>
+              ` : ''}
+              <tr class="total-row">
+                <td>TOTAL</td>
+                <td class="text-right">${formatCurrency(order.total_price || 0)}</td>
+              </tr>
+            </table>
+          </div>
+
+          ${order.notes ? `
+            <div class="divider"></div>
+            <div class="section">
+              <div class="section-title">Observação</div>
+              <div style="font-style: italic;">"${order.notes}"</div>
+            </div>
+          ` : ''}
+
+          <div class="divider"></div>
+          <div class="footer text-center">
+            <div>Obrigado pela preferência!</div>
+            <div class="font-bold">zeentregas.com.br</div>
+          </div>
+        </div>
+        <script>
+          window.onload = function() {
+            window.print();
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    // Criar iframe oculto
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(ticketHtml);
+      doc.close();
+    }
+
+    // Remover o iframe depois do disparo
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 5000);
+  };
+
   // Métricas dinâmicas
   const [metrics, setMetrics] = useState({
     pausedItems: 0,
@@ -156,7 +480,8 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
         await Promise.all([
           loadOrders(p.id),
           loadMetrics(p.id),
-          checkAnnouncements(p.id)
+          checkAnnouncements(p.id),
+          loadPrinterSettings(p.id)
         ]);
       }
     } catch (e) {
@@ -166,28 +491,71 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
     }
   };
 
-  // Carregar pedidos reais do banco de dados (restrito estritamente ao dia de hoje: 00:00 às 23:59)
-  const loadOrders = async (storeId: string) => {
+  // Carregar pedidos reais do banco de dados aplicando os filtros de data no Supabase
+  const loadOrders = async (
+    storeId: string,
+    dateType: 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'ALL' | 'CUSTOM' = 'TODAY',
+    startDate: string | null = null,
+    endDate: string | null = null
+  ) => {
     setLoadingOrders(true);
     try {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const endOfDay = new Date();
-      endOfDay.setHours(23, 59, 59, 999);
-
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
         .select('*')
-        .eq('store_id', storeId)
-        .gte('created_at', startOfDay.toISOString())
-        .lte('created_at', endOfDay.toISOString())
-        .order('created_at', { ascending: false });
+        .eq('store_id', storeId);
+
+      // Aplicar filtros de data
+      if (dateType === 'TODAY') {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        query = query.gte('created_at', startOfToday.toISOString());
+      } else if (dateType === 'YESTERDAY') {
+        const startOfYesterday = new Date();
+        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        startOfYesterday.setHours(0, 0, 0, 0);
+        
+        const endOfYesterday = new Date();
+        endOfYesterday.setDate(endOfYesterday.getDate() - 1);
+        endOfYesterday.setHours(23, 59, 59, 999);
+        
+        query = query
+          .gte('created_at', startOfYesterday.toISOString())
+          .lte('created_at', endOfYesterday.toISOString());
+      } else if (dateType === 'LAST_7_DAYS') {
+        const startOf7DaysAgo = new Date();
+        startOf7DaysAgo.setDate(startOf7DaysAgo.getDate() - 7);
+        startOf7DaysAgo.setHours(0, 0, 0, 0);
+        query = query.gte('created_at', startOf7DaysAgo.toISOString());
+      } else if (dateType === 'CUSTOM') {
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          query = query.gte('created_at', start.toISOString());
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          query = query.lte('created_at', end.toISOString());
+        }
+      }
+
+      // Ordenar por created_at
+      query = query.order('created_at', { ascending: false });
+
+      // Se for dataType === 'ALL', limitamos a 150. Se for filtrado por período, trazemos até 1000 para não limitar
+      if (dateType === 'ALL') {
+        query = query.limit(150);
+      } else {
+        query = query.limit(1000);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setOrders(data || []);
     } catch (e) {
-      console.error('[StoreGestor] Erro ao buscar pedidos do dia atual:', e);
+      console.error('[StoreGestor] Erro ao buscar histórico de pedidos da loja:', e);
     } finally {
       setLoadingOrders(false);
     }
@@ -247,7 +615,8 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
             await Promise.all([
               loadOrders(p.id),
               loadMetrics(p.id),
-              checkAnnouncements(p.id)
+              checkAnnouncements(p.id),
+              loadPrinterSettings(p.id)
             ]);
           }
         } catch (e) {
@@ -284,15 +653,9 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
     // Timer para atualizar o relógio interno
     const timer = setInterval(() => setNow(new Date()), 60000);
 
-    // Preparar áudio de notificação operacional (campainha retro de restaurante)
-    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-120.wav');
-    audio.loop = true;
-    setAudioAlert(audio);
-
     return () => {
       subscription.unsubscribe();
       clearInterval(timer);
-      audio.pause();
     };
   }, [propUserId]);
 
@@ -311,15 +674,47 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
           filter: `store_id=eq.${profile.id}`
         },
         async (payload) => {
-          // Atualiza lista de pedidos
-          setOrders(prev => [payload.new, ...prev]);
+          // Tratar inserção reativa baseada no filtro de data selecionado
+          const matchesFilterDate = () => {
+            const orderDate = new Date(payload.new.created_at);
+            if (filterDateType === 'TODAY') {
+              return isToday(payload.new.created_at);
+            }
+            if (filterDateType === 'YESTERDAY') {
+              const yesterday = new Date();
+              yesterday.setDate(yesterday.getDate() - 1);
+              return orderDate.getDate() === yesterday.getDate() &&
+                     orderDate.getMonth() === yesterday.getMonth() &&
+                     orderDate.getFullYear() === yesterday.getFullYear();
+            }
+            if (filterDateType === 'LAST_7_DAYS') {
+              const sevenDaysAgo = new Date();
+              sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+              return orderDate >= sevenDaysAgo;
+            }
+            if (filterDateType === 'CUSTOM') {
+              if (filterStartDate) {
+                const start = new Date(filterStartDate);
+                start.setHours(0,0,0,0);
+                if (orderDate < start) return false;
+              }
+              if (filterEndDate) {
+                const end = new Date(filterEndDate);
+                end.setHours(23,59,59,999);
+                if (orderDate > end) return false;
+              }
+              return true;
+            }
+            return true; // ALL
+          };
+
+          if (matchesFilterDate()) {
+            setOrders(prev => [payload.new, ...prev]);
+          }
           
           // Trata o som de novo pedido se habilitado
           if (soundEnabled) {
             setIsAlerting(true);
-            if (audioAlert) {
-              audioAlert.play().catch(err => console.log('Bloqueio de reprodução do navegador:', err));
-            }
           }
 
           // Trata auto-aceite se configurado
@@ -332,6 +727,11 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
               
               // Atualiza localmente
               setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, status: 'PREPARING' } : o));
+
+              // Impressão automática se a impressora estiver habilitada
+              if (printerSettings?.use_printer) {
+                handlePrintOrder(payload.new);
+              }
             } catch (err) {
               console.error('Erro no auto-aceite:', err);
             }
@@ -343,16 +743,27 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id, soundEnabled, autoAccept, audioAlert]);
+  }, [profile?.id, soundEnabled, autoAccept, filterDateType, filterStartDate, filterEndDate, printerSettings]);
 
   // Parar alerta de som
   const handleSilenceAlert = () => {
     setIsAlerting(false);
-    if (audioAlert) {
-      audioAlert.pause();
-      audioAlert.currentTime = 0;
-    }
   };
+
+  // Efeito para tocar o som de alerta em loop de forma nativa e offline
+  useEffect(() => {
+    if (!isAlerting || !soundEnabled) return;
+
+    // Toca imediatamente
+    playNotificationSound('alert');
+
+    // Toca repetidamente a cada 1.5 segundos
+    const interval = setInterval(() => {
+      playNotificationSound('alert');
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [isAlerting, soundEnabled]);
 
   // Salvar auto-aceite
   const handleToggleAutoAccept = () => {
@@ -436,6 +847,11 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
       setSelectedOrder((prev: any) => prev && prev.id === orderId ? { ...prev, status: 'PREPARING' } : prev);
       handleSilenceAlert();
       showSuccess('Pedido aceito com sucesso! Enviado para a cozinha.');
+
+      // Imprimir cupom se habilitado nas configurações
+      if (data && printerSettings?.use_printer) {
+        handlePrintOrder(data);
+      }
     } catch (e: any) {
       console.error('[StoreGestor] Erro crítico ao aceitar pedido:', e);
       showError('Erro ao aceitar pedido: ' + (e?.message || e?.details || e?.hint || JSON.stringify(e)));
@@ -585,6 +1001,19 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
     }
   };
 
+  // Função para verificar se a data do pedido é de hoje
+  const isToday = (dateString: string) => {
+    try {
+      const d = new Date(dateString);
+      const today = new Date();
+      return d.getDate() === today.getDate() &&
+        d.getMonth() === today.getMonth() &&
+        d.getFullYear() === today.getFullYear();
+    } catch {
+      return false;
+    }
+  };
+
   // Formatação de Moeda
   const formatBRL = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -644,28 +1073,36 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
     }
   };
 
-  // Filtros de busca de pedidos com suporte a filtros avançados e ordenação
-  const filteredOrders = useMemo(() => {
-    const filtered = orders.filter(o => {
+  // Pedidos que atendem aos filtros ativos (busca, status, entrega), sem filtrar pela aba atual
+  const filteredOrdersBase = useMemo(() => {
+    return orders.filter(o => {
+      // 1. Busca por texto
       const matchesSearch = searchQuery.trim() === '' || 
         String(o.id).toLowerCase().includes(searchQuery.toLowerCase()) ||
         String(o.customer_name || '').toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesTab = filterStatus !== 'ALL'
-        ? true // Se escolheu um status específico no filtro, mostra ele independentemente da aba ativa
-        : activeSubTab === 'agora' 
-        ? o.status !== 'DELIVERED' && o.status !== 'CANCELLED' && o.status !== 'COMPLETED'
-        : o.status === 'DELIVERED' || o.status === 'CANCELLED' || o.status === 'COMPLETED';
-
+      // 2. Filtro de Status
       const matchesStatus = filterStatus === 'ALL' || o.status === filterStatus;
       
+      // 3. Filtro de Entrega
       const matchesDelivery = filterDeliveryType === 'ALL' 
         ? true 
         : filterDeliveryType === 'DELIVERY' 
         ? o.delivery_address && o.delivery_address !== 'Retirada na Loja (Balcão)'
         : !o.delivery_address || o.delivery_address === 'Retirada na Loja (Balcão)';
 
-      return matchesSearch && matchesTab && matchesStatus && matchesDelivery;
+      return matchesSearch && matchesStatus && matchesDelivery;
+    });
+  }, [orders, searchQuery, filterStatus, filterDeliveryType]);
+
+  // Filtros de busca de pedidos com suporte a filtros avançados e ordenação
+  const filteredOrders = useMemo(() => {
+    const filtered = filteredOrdersBase.filter(o => {
+      return filterStatus !== 'ALL'
+        ? true
+        : activeSubTab === 'agora'
+        ? o.status !== 'DELIVERED' && o.status !== 'CANCELLED' && o.status !== 'COMPLETED'
+        : o.status === 'DELIVERED' || o.status === 'CANCELLED' || o.status === 'COMPLETED';
     });
 
     const sorted = [...filtered];
@@ -675,7 +1112,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
       sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     }
     return sorted;
-  }, [orders, searchQuery, activeSubTab, filterStatus, filterDeliveryType, orderBy]);
+  }, [filteredOrdersBase, activeSubTab, filterStatus, orderBy]);
 
   // Estado de abertura da loja
   const openState = useMemo(() => {
@@ -824,138 +1261,193 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
 
           {/* Abas e Atalhos */}
           <div className="flex flex-col gap-5 w-full px-2">
-            <button
-              onClick={() => setActiveMenu('pedidos')}
-              title="Painel de Pedidos"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'pedidos'
-                  ? 'bg-red-500/10 text-red-500 dark:text-red-400 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <ClipboardList className="w-6 h-6" />
-            </button>
-
-            <button
-              onClick={() => setActiveMenu('nova_comanda')}
-              title="Nova Comanda"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'nova_comanda'
-                  ? 'bg-red-500/10 text-red-500 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <span className="relative flex items-center justify-center">
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('pedidos')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'pedidos'
+                    ? 'bg-red-500/10 text-red-500 dark:text-red-400 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
                 <ClipboardList className="w-6 h-6" />
-                <span className="absolute -bottom-1 -right-1 bg-red-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[10px] font-bold border-2 border-[#1A1E29]">+</span>
-              </span>
-            </button>
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>Painel de Pedidos</span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setActiveMenu('cardapio')}
-              title="Cardápio / Produtos"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'cardapio'
-                  ? 'bg-red-500/10 text-red-500 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <ShoppingBag className="w-6 h-6" />
-            </button>
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('nova_comanda')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'nova_comanda'
+                    ? 'bg-red-500/10 text-red-500 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                <span className="relative flex items-center justify-center">
+                  <ClipboardList className="w-6 h-6" />
+                  <span className="absolute -bottom-1 -right-1 bg-red-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[10px] font-bold border-2 border-[#1A1E29]">+</span>
+                </span>
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>Nova Comanda</span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setActiveMenu('historico')}
-              title="Histórico de Vendas"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'historico'
-                  ? 'bg-red-500/10 text-red-500 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <History className="w-6 h-6" />
-            </button>
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('cardapio')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'cardapio'
+                    ? 'bg-red-500/10 text-red-500 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                <ShoppingBag className="w-6 h-6" />
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>Cardápio / Produtos</span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setActiveMenu('chat')}
-              title="Conversas e Chamados"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'chat'
-                  ? 'bg-red-500/10 text-red-500 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <MessageSquare className="w-6 h-6" />
-            </button>
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('historico')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'historico'
+                    ? 'bg-red-500/10 text-red-500 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                <History className="w-6 h-6" />
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>Histórico de Vendas</span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setActiveMenu('whatsbot')}
-              title="WhatsBot (Automação de WhatsApp)"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'whatsbot'
-                  ? 'bg-green-500/10 text-green-500 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <MessageCircle className="w-6 h-6" />
-            </button>
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('chat')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'chat'
+                    ? 'bg-red-500/10 text-red-500 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                <MessageSquare className="w-6 h-6" />
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>Conversas e Chamados</span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setActiveMenu('config')}
-              title="Configurações da Loja"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'config'
-                  ? 'bg-red-500/10 text-red-500 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <Settings className="w-6 h-6" />
-            </button>
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('whatsbot')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'whatsbot'
+                    ? 'bg-green-500/10 text-green-500 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                <MessageCircle className="w-6 h-6" />
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>WhatsBot (WhatsApp)</span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setActiveMenu('suporte')}
-              title="Central de Suporte"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'suporte'
-                  ? 'bg-red-500/10 text-red-500 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <Headphones className="w-6 h-6" />
-            </button>
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('config')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'config'
+                    ? 'bg-red-500/10 text-red-500 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                <Settings className="w-6 h-6" />
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>Configurações da Loja</span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setActiveMenu('promocoes')}
-              title="Promoções & Cupons"
-              className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
-                activeMenu === 'promocoes'
-                  ? 'bg-orange-500/10 text-orange-500 font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-            >
-              <Tag className="w-6 h-6" />
-            </button>
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('suporte')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'suporte'
+                    ? 'bg-red-500/10 text-red-500 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                <Headphones className="w-6 h-6" />
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>Central de Suporte</span>
+              </div>
+            </div>
+
+            <div className="relative group w-full flex justify-center">
+              <button
+                onClick={() => setActiveMenu('promocoes')}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-center transition-all ${
+                  activeMenu === 'promocoes'
+                    ? 'bg-orange-500/10 text-orange-500 font-bold'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                <Tag className="w-6 h-6" />
+              </button>
+              <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+                <span>Promoções & Cupons</span>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Rodapé do Menu Lateral */}
-        <div className="flex flex-col gap-4 items-center">
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            title={soundEnabled ? 'Silenciar Campainha' : 'Ativar Campainha'}
-            className={`p-3 rounded-2xl transition-all ${
-              soundEnabled ? 'text-emerald-500 hover:bg-emerald-500/10' : 'text-gray-500 hover:bg-gray-800'
-            }`}
-          >
-            {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-          </button>
+        <div className="flex flex-col gap-4 items-center w-full px-2">
+          <div className="relative group w-full flex justify-center">
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`p-3 rounded-2xl transition-all ${
+                soundEnabled ? 'text-emerald-500 hover:bg-emerald-500/10' : 'text-gray-500 hover:bg-gray-800'
+              }`}
+            >
+              {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            </button>
+            <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+              <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+              <span>{soundEnabled ? 'Silenciar Campainha' : 'Ativar Campainha'}</span>
+            </div>
+          </div>
 
-          <button
-            onClick={handleLocalLogout}
-            title="Sair do Gestor (Logout)"
-            className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-2xl transition-all"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+          <div className="relative group w-full flex justify-center">
+            <button
+              onClick={handleLocalLogout}
+              className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-2xl transition-all"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+            <div className="absolute left-full ml-3 px-3 py-2 bg-gray-950 text-white text-xs font-bold rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 transform translate-x-2 group-hover:translate-x-0 flex items-center">
+              <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-950 rotate-45"></div>
+              <span>Sair do Gestor (Logout)</span>
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -974,7 +1466,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
                   : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
               }`}
             >
-              Agora ({orders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED' && o.status !== 'COMPLETED').length})
+              Agora ({filteredOrdersBase.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED' && o.status !== 'COMPLETED').length})
             </button>
             <button
               onClick={() => setActiveSubTab('agendados')}
@@ -984,7 +1476,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
                   : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
               }`}
             >
-              Finalizados ({orders.filter(o => o.status === 'DELIVERED' || o.status === 'CANCELLED' || o.status === 'COMPLETED').length})
+              Finalizados ({filteredOrdersBase.filter(o => o.status === 'DELIVERED' || o.status === 'CANCELLED' || o.status === 'COMPLETED').length})
             </button>
           </div>
 
@@ -1020,10 +1512,10 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
               />
             </div>
             <button
-              onClick={() => setShowFilterModal(true)}
+              onClick={handleOpenFilterModal}
               title="Filtros avançados"
               className={`p-2.5 rounded-xl border flex items-center justify-center flex-shrink-0 active:scale-95 transition-all ${
-                filterStatus !== 'ALL' || filterDeliveryType !== 'ALL' || orderBy !== 'NEWEST'
+                filterStatus !== 'ALL' || filterDeliveryType !== 'ALL' || orderBy !== 'NEWEST' || filterDateType !== 'TODAY'
                   ? 'bg-red-500/10 border-red-500 text-red-500 font-bold'
                   : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
@@ -1126,9 +1618,9 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
           </div>
           {showSalesSummary && (
             <div className="mt-3 flex items-center justify-between text-xs font-black text-gray-805 dark:text-white animate-in slide-in-from-bottom-2 duration-250">
-              <span>{orders.filter(o => o.status === 'DELIVERED' || o.status === 'COMPLETED').length} pedidos concluídos</span>
+              <span>{orders.filter(o => (o.status === 'DELIVERED' || o.status === 'COMPLETED') && isToday(o.created_at)).length} pedidos concluídos hoje</span>
               <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatBRL(orders.filter(o => o.status === 'DELIVERED' || o.status === 'COMPLETED').reduce((sum, o) => sum + (o.total_price || 0), 0))}
+                {formatBRL(orders.filter(o => (o.status === 'DELIVERED' || o.status === 'COMPLETED') && isToday(o.created_at)).reduce((sum, o) => sum + (o.total_price || 0), 0))}
               </span>
             </div>
           )}
@@ -1180,6 +1672,13 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
 
                 {/* Ações de Cozinha Baseadas no Status do Pedido Selecionado */}
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePrintOrder(selectedOrder)}
+                    className="p-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-white transition-all flex items-center justify-center flex-shrink-0 active:scale-95"
+                    title="Imprimir Cupom"
+                  >
+                    <Printer className="w-5 h-5" />
+                  </button>
                   {selectedOrder.status === 'PENDING' && (
                     <>
                       <button
@@ -1656,7 +2155,7 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
           />
 
           {/* Card do Modal */}
-          <div className="w-full max-w-md bg-[#161B26] border border-gray-800/85 rounded-[28px] shadow-2xl relative z-10 p-6 flex flex-col gap-6 animate-in zoom-in-95 duration-200">
+          <div className="w-full md:w-[60vw] max-w-3xl bg-[#161B26] border border-gray-800/85 rounded-[28px] shadow-2xl relative z-10 p-6 flex flex-col gap-6 animate-in zoom-in-95 duration-200">
             
             {/* Topo do Modal */}
             <div className="flex items-center justify-between border-b border-gray-800/40 pb-4">
@@ -1676,88 +2175,150 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
             </div>
 
             {/* Conteúdo dos Filtros */}
-            <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto md:overflow-visible max-h-[60vh] md:max-h-none pr-1 no-scrollbar">
               
-              {/* 1. Status do Pedido */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                  Status do Pedido
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { val: 'ALL', label: 'Todos os Status' },
-                    { val: 'PENDING', label: 'Novos (Pendente)' },
-                    { val: 'PREPARING', label: 'Cozinha (Preparo)' },
-                    { val: 'READY', label: 'Pronto (Expedição)' },
-                    { val: 'DISPATCHED', label: 'Trânsito (Entrega)' },
-                    { val: 'DELIVERED', label: 'Entregues' },
-                    { val: 'CANCELLED', label: 'Cancelados' }
-                  ].map(opt => (
-                    <button
-                      key={opt.val}
-                      onClick={() => setFilterStatus(opt.val as any)}
-                      className={`px-3 py-2.5 rounded-xl font-bold text-xs text-center border active:scale-95 transition-all ${
-                        opt.val === 'ALL' ? 'col-span-2' : ''
-                      } ${
-                        filterStatus === opt.val
-                          ? 'bg-red-500/10 border-red-500 text-red-500'
-                          : 'bg-[#0B0F19] border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+              {/* Coluna Esquerda: Filtros de Data */}
+              <div className="space-y-5 md:overflow-visible">
+                {/* Filtro por Período de Data */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                    Filtrar por Período de Data
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { val: 'TODAY', label: 'Hoje (Recentes)' },
+                      { val: 'YESTERDAY', label: 'Ontem' },
+                      { val: 'LAST_7_DAYS', label: 'Últimos 7 dias' },
+                      { val: 'ALL', label: 'Todos (Últimos 150)' },
+                      { val: 'CUSTOM', label: 'Personalizado' }
+                    ].map(opt => (
+                      <button
+                        key={opt.val}
+                        onClick={() => {
+                          setTempDateType(opt.val as any);
+                          if (opt.val !== 'CUSTOM') {
+                            setTempStartDate(null);
+                            setTempEndDate(null);
+                          }
+                        }}
+                        className={`px-3 py-2.5 rounded-xl font-bold text-xs text-center border active:scale-95 transition-all ${
+                          opt.val === 'CUSTOM' ? 'col-span-2' : ''
+                        } ${
+                          tempDateType === opt.val
+                            ? 'bg-red-500/10 border-red-500 text-red-500 font-black'
+                            : 'bg-[#0B0F19] border-gray-800 text-gray-400 hover:text-white hover:border-gray-700 font-semibold'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Se o período selecionado for CUSTOM, exibe os inputs de data com CustomDateInput */}
+                {tempDateType === 'CUSTOM' && (
+                  <div className="grid grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-200 py-1 md:overflow-visible">
+                    <CustomDateInput
+                      id="filter-start-date"
+                      label="Data Inicial"
+                      value={tempStartDate}
+                      onChange={(date) => setTempStartDate(date)}
+                      allowClear={true}
+                    />
+                    <CustomDateInput
+                      id="filter-end-date"
+                      label="Data Final"
+                      value={tempEndDate}
+                      onChange={(date) => setTempEndDate(date)}
+                      allowClear={true}
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* 2. Forma de Entrega */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                  Forma de Entrega
-                </span>
-                <div className="flex bg-[#0B0F19] p-1 rounded-xl border border-gray-800/60">
-                  {[
-                    { val: 'ALL', label: 'Todos' },
-                    { val: 'DELIVERY', label: 'Apenas Entrega' },
-                    { val: 'PICKUP', label: 'Apenas Retirada' }
-                  ].map(opt => (
-                    <button
-                      key={opt.val}
-                      onClick={() => setFilterDeliveryType(opt.val as any)}
-                      className={`flex-1 py-2 rounded-lg font-bold text-[11px] text-center active:scale-95 transition-all ${
-                        filterDeliveryType === opt.val
-                          ? 'bg-red-600 text-white shadow-md'
-                          : 'text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+              {/* Coluna Direita: Status, Entrega e Ordenação */}
+              <div className="space-y-5">
+                {/* 1. Status do Pedido */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                    Status do Pedido
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { val: 'ALL', label: 'Todos os Status' },
+                      { val: 'PENDING', label: 'Novos (Pendente)' },
+                      { val: 'PREPARING', label: 'Cozinha (Preparo)' },
+                      { val: 'READY', label: 'Pronto (Expedição)' },
+                      { val: 'DISPATCHED', label: 'Trânsito (Entrega)' },
+                      { val: 'DELIVERED', label: 'Entregues' },
+                      { val: 'CANCELLED', label: 'Cancelados' }
+                    ].map(opt => (
+                      <button
+                        key={opt.val}
+                        onClick={() => setFilterStatus(opt.val as any)}
+                        className={`px-3 py-2.5 rounded-xl font-bold text-xs text-center border active:scale-95 transition-all ${
+                          opt.val === 'ALL' ? 'col-span-2' : ''
+                        } ${
+                          filterStatus === opt.val
+                            ? 'bg-red-500/10 border-red-500 text-red-500'
+                            : 'bg-[#0B0F19] border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* 3. Ordenação de Pedidos */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                  Ordenar por
-                </span>
-                <div className="flex bg-[#0B0F19] p-1 rounded-xl border border-gray-800/60">
-                  {[
-                    { val: 'NEWEST', label: 'Mais Recentes Primeiro' },
-                    { val: 'OLDEST', label: 'Mais Antigos Primeiro' }
-                  ].map(opt => (
-                    <button
-                      key={opt.val}
-                      onClick={() => setOrderBy(opt.val as any)}
-                      className={`flex-1 py-2 rounded-lg font-bold text-[11px] text-center active:scale-95 transition-all ${
-                        orderBy === opt.val
-                          ? 'bg-red-600 text-white shadow-md'
-                          : 'text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                {/* 2. Forma de Entrega */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                    Forma de Entrega
+                  </span>
+                  <div className="flex bg-[#0B0F19] p-1 rounded-xl border border-gray-800/60">
+                    {[
+                      { val: 'ALL', label: 'Todos' },
+                      { val: 'DELIVERY', label: 'Apenas Entrega' },
+                      { val: 'PICKUP', label: 'Apenas Retirada' }
+                    ].map(opt => (
+                      <button
+                        key={opt.val}
+                        onClick={() => setFilterDeliveryType(opt.val as any)}
+                        className={`flex-1 py-2 rounded-lg font-bold text-[11px] text-center active:scale-95 transition-all ${
+                          filterDeliveryType === opt.val
+                            ? 'bg-red-600 text-white shadow-md'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Ordenação de Pedidos */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                    Ordenar por
+                  </span>
+                  <div className="flex bg-[#0B0F19] p-1 rounded-xl border border-gray-800/60">
+                    {[
+                      { val: 'NEWEST', label: 'Mais Recentes Primeiro' },
+                      { val: 'OLDEST', label: 'Mais Antigos Primeiro' }
+                    ].map(opt => (
+                      <button
+                        key={opt.val}
+                        onClick={() => setOrderBy(opt.val as any)}
+                        className={`flex-1 py-2 rounded-lg font-bold text-[11px] text-center active:scale-95 transition-all ${
+                          orderBy === opt.val
+                            ? 'bg-red-600 text-white shadow-md'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1766,22 +2327,13 @@ export const StoreGestor: React.FC<StoreGestorProps> = ({ onNavigate, userId: pr
             {/* Ações do Modal */}
             <div className="flex gap-3 border-t border-gray-800/40 pt-4 mt-2">
               <button
-                onClick={() => {
-                  setFilterStatus('ALL');
-                  setFilterDeliveryType('ALL');
-                  setOrderBy('NEWEST');
-                  setShowFilterModal(false);
-                  showSuccess('Todos os filtros foram limpos.');
-                }}
+                onClick={handleClearFilters}
                 className="flex-1 py-3 rounded-xl border border-gray-800 text-gray-400 font-extrabold text-xs uppercase tracking-wider hover:text-white hover:bg-gray-800/40 active:scale-95 transition-all text-center"
               >
                 Limpar Filtros
               </button>
               <button
-                onClick={() => {
-                  setShowFilterModal(false);
-                  showSuccess('Filtros aplicados com sucesso!');
-                }}
+                onClick={handleApplyFilters}
                 className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs uppercase tracking-wider shadow shadow-red-600/10 active:scale-95 transition-all text-center"
               >
                 Aplicar Filtros

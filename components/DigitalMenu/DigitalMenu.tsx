@@ -237,47 +237,29 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             }
             setStore(storeData);
 
-            const [prods, settingsData, feesData, rulesData] = await Promise.all([
-                cloud.getPublicStoreProducts(storeData.id),
-                cloud.getPublicDeliverySettings(storeData.id),
-                cloud.getPublicNeighborhoodFees(storeData.id),
-                cloud.getPublicShippingRules(storeData.id)
-            ]);
+            const menuData = await cloud.getPublicStoreMenuData(storeData.id);
 
-            setProducts(prods);
-            setDeliverySettings(settingsData);
-            setFees(feesData);
-            setShippingRules(rulesData);
+            setProducts(menuData.products);
+            setDeliverySettings(menuData.deliverySettings);
+            setFees(menuData.neighborhoodFees);
+            setShippingRules(menuData.shippingRules);
+            setLoyaltySettings(menuData.loyaltySettings);
+            const gateways = menuData.paymentGateways || [];
+            setPaymentGateways(gateways);
 
-            // Fetch Loyalty Settings
-            try {
-                const lSettings = await cloud.getLoyaltySettings(storeData.id);
-                setLoyaltySettings(lSettings);
-            } catch (lErr) {
-                console.error("Error loading loyalty settings:", lErr);
-            }
-
-            // Fetch Payment Gateways (Admin Configuration)
-            try {
-                const gateways = await cloud.getPaymentGateways();
-                setPaymentGateways(gateways || []);
-
-                // Set default payment method based on primary gateway
-                if (gateways && gateways.length > 0) {
-                    const primary = gateways.find(g => g.is_primary && g.is_active);
-                    if (primary) {
-                        if (primary.gateway_name === 'mercadopago' || primary.gateway_name === 'infinitepay') {
-                            // Se o modo plataforma estiver ativo e houver gateway on-line, sugerimos cartão/on-line
-                            if (storeData.receive_orders_via_platform) {
-                                setPaymentMethod('CREDIT_CARD');
-                            }
-                        } else {
-                            setPaymentMethod('PIX');
+            // Set default payment method based on primary gateway
+            if (gateways.length > 0) {
+                const primary = gateways.find(g => g.is_primary && g.is_active);
+                if (primary) {
+                    if (primary.gateway_name === 'mercadopago' || primary.gateway_name === 'infinitepay') {
+                        // Se o modo plataforma estiver ativo e houver gateway on-line, sugerimos cartão/on-line
+                        if (storeData.receive_orders_via_platform) {
+                            setPaymentMethod('CREDIT_CARD');
                         }
+                    } else {
+                        setPaymentMethod('PIX');
                     }
                 }
-            } catch (gErr) {
-                console.error("Error loading payment gateways:", gErr);
             }
 
             // Initialize selectedCity with store city
@@ -290,6 +272,7 @@ export const DigitalMenu: React.FC<DigitalMenuProps> = ({ citySlug, storeSlug })
             }
 
             // Set default delivery type based on settings - ENHANCED LOGIC
+            const settingsData = menuData.deliverySettings;
             if (settingsData) {
                 const canDeliver = settingsData.is_own_delivery_enabled || settingsData.is_partner_delivery_enabled;
                 const canPickup = settingsData.is_pickup_enabled;

@@ -46,6 +46,7 @@ import { AdminMediation } from './AdminMediation';
 import { AdminStoreRatings } from './AdminStoreRatings';
 import { AdminBonusCampaigns } from './AdminBonusCampaigns';
 import { AdminDeliveryBreaks } from './AdminDeliveryBreaks';
+import { AdminFixedDrivers } from './AdminFixedDrivers';
 
 // Imports com caminhos específicos corrigidos
 import { MapaLocalizacao } from '../pages/admin/MapaLocalizacao';
@@ -416,6 +417,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab }) => {
             case 'store_ratings': return <AdminStoreRatings />;
             case 'bonuses': return <AdminBonusCampaigns />;
             case 'delivery_breaks': return <AdminDeliveryBreaks />;
+            case 'fixed_drivers': return <AdminFixedDrivers />;
 
             default: return <div className="p-10 text-center text-gray-500">{t('admin.selectOptionMenu')}</div>;
         }

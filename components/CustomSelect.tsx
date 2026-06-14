@@ -41,7 +41,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const selectedOption = options.find(opt => String(opt.value) === String(value));
 
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
+    <div className={`relative ${isOpen ? 'z-20' : 'z-0'} ${className}`} ref={containerRef}>
       {label && <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">{label}</label>}
 
       <button

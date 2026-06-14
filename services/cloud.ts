@@ -7040,27 +7040,38 @@ export const getPublicStoreProducts = async (storeId: string) => {
     if (!sb) return [];
 
     try {
-        const { data: products, error } = await sb
-            .from('products')
-            .select('*, categories(name)')
-            .eq('store_id', storeId)
-            .eq('is_active', true)
-            .order('name');
+        // Dispara as consultas em paralelo para máxima performance de RLS e rede
+        const [productsRes, categoriesRes, promosRes] = await Promise.all([
+            sb.from('products')
+              .select('*')
+              .eq('store_id', storeId)
+              .eq('is_active', true)
+              .order('name'),
+            sb.from('categories')
+              .select('id, name')
+              .eq('store_id', storeId),
+            sb.from('store_promotions')
+              .select('*')
+              .eq('store_id', storeId)
+              .eq('is_active', true)
+        ]);
 
-        if (error) {
-            console.error('Error fetching public store products:', error);
+        const products = productsRes.data || [];
+        const categories = categoriesRes.data || [];
+        const promos = promosRes.data || [];
+
+        if (productsRes.error) {
+            console.error('Error fetching public store products:', productsRes.error);
             return [];
         }
 
-        if (!products || products.length === 0) return [];
+        if (products.length === 0) return [];
 
-        const { data: promos } = await sb
-            .from('store_promotions')
-            .select('*')
-            .eq('store_id', storeId)
-            .eq('is_active', true);
+        // Mapeia categorias em memória para evitar cross joins lentos com RLS
+        const categoriesMap = new Map();
+        categories.forEach((c: any) => categoriesMap.set(c.id, c.name));
 
-        const activePromos = (promos || []).filter(promo => {
+        const activePromos = promos.filter(promo => {
             const start = new Date(promo.start_date);
             const end = promo.end_date ? new Date(promo.end_date) : null;
             const now = new Date();
@@ -7132,7 +7143,7 @@ export const getPublicStoreProducts = async (storeId: string) => {
 
             return {
                 ...p,
-                category: p.categories?.name || p.category || 'Outros',
+                category: categoriesMap.get(p.category_id) || p.category || 'Outros',
                 preco_promocional: precoPromocional,
                 ativo: ativo,
                 data_inicio: dataInicio,
@@ -7145,6 +7156,138 @@ export const getPublicStoreProducts = async (storeId: string) => {
     } catch (e) {
         console.error('Exception loading public store products:', e);
         return [];
+    }
+};
+
+export const getPublicStoreMenuData = async (storeId: string) => {
+    const sb = getClient();
+    if (!sb) {
+        return {
+            products: [],
+            deliverySettings: null,
+            neighborhoodFees: [],
+            shippingRules: [],
+            loyaltySettings: null,
+            paymentGateways: []
+        };
+    }
+
+    try {
+        const { data, error } = await sb.rpc('get_public_store_menu_data', {
+            p_store_id: storeId
+        });
+
+        if (error) {
+            console.error('Error in getPublicStoreMenuData RPC:', error);
+            throw error;
+        }
+
+        const rawProducts = data.products || [];
+        const categories = data.categories || [];
+        const promos = data.promotions || [];
+        const promoRelations = data.promotion_products || [];
+        const deliverySettings = data.delivery_settings || null;
+        const neighborhoodFees = data.neighborhood_fees || [];
+        const shippingRules = data.shipping_rules || [];
+        const loyaltySettings = data.loyalty_settings || null;
+        const paymentGateways = data.payment_gateways || [];
+
+        // Mapeia categorias em memória para evitar cross joins lentos com RLS
+        const categoriesMap = new Map();
+        categories.forEach((c: any) => categoriesMap.set(c.id, c.name));
+
+        const activePromos = promos.filter((promo: any) => {
+            const start = new Date(promo.start_date);
+            const end = promo.end_date ? new Date(promo.end_date) : null;
+            const now = new Date();
+            return start <= now && (end === null || end >= now);
+        });
+
+        const products = rawProducts.map((p: any) => {
+            const elegivelPromos = activePromos.filter((promo: any) => {
+                if (promo.applies_to_all_products) return true;
+                return promoRelations.some((r: any) => r.promotion_id === promo.id && r.product_id === p.id);
+            });
+
+            let melhorPromo: any = null;
+            let melhorDesconto = -1;
+
+            elegivelPromos.forEach((promo: any) => {
+                let desconto = 0;
+                if (promo.discount_type === 'PERCENTAGE') {
+                    desconto = p.price * (promo.discount_value / 100);
+                } else if (promo.discount_type === 'FIXED') {
+                    desconto = Math.min(p.price, promo.discount_value);
+                } else if (promo.discount_type === 'FREE_SHIPPING') {
+                    desconto = 0;
+                }
+
+                if (desconto > melhorDesconto) {
+                    melhorDesconto = desconto;
+                    melhorPromo = promo;
+                } else if (desconto === melhorDesconto) {
+                    if (!melhorPromo || new Date(promo.created_at || 0) > new Date(melhorPromo.created_at || 0)) {
+                        melhorPromo = promo;
+                    }
+                }
+            });
+
+            let precoPromocional = null;
+            let ativo = false;
+            let dataInicio = null;
+            let dataFim = null;
+            let promoName = null;
+            let promoDiscountType = null;
+            let promoDiscountValue = null;
+
+            if (melhorPromo) {
+                ativo = true;
+                dataInicio = melhorPromo.start_date;
+                dataFim = melhorPromo.end_date || null;
+                promoName = melhorPromo.name;
+                promoDiscountType = melhorPromo.discount_type;
+                promoDiscountValue = melhorPromo.discount_value;
+
+                if (melhorPromo.discount_type === 'PERCENTAGE') {
+                    precoPromocional = p.price * (1 - melhorPromo.discount_value / 100);
+                } else if (melhorPromo.discount_type === 'FIXED') {
+                    precoPromocional = Math.max(0, p.price - melhorPromo.discount_value);
+                } else {
+                    precoPromocional = p.price;
+                }
+            }
+
+            return {
+                ...p,
+                category: categoriesMap.get(p.category_id) || p.category || 'Outros',
+                preco_promocional: precoPromocional,
+                ativo: ativo,
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+                promo_name: promoName,
+                promo_discount_type: promoDiscountType,
+                promo_discount_value: promoDiscountValue
+            };
+        });
+
+        return {
+            products,
+            deliverySettings,
+            neighborhoodFees,
+            shippingRules,
+            loyaltySettings,
+            paymentGateways
+        };
+    } catch (e) {
+        console.error('Exception loading public store menu data:', e);
+        return {
+            products: [],
+            deliverySettings: null,
+            neighborhoodFees: [],
+            shippingRules: [],
+            loyaltySettings: null,
+            paymentGateways: []
+        };
     }
 };
 

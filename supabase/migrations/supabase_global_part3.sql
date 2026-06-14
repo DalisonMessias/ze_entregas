@@ -2376,4 +2376,702 @@ DROP POLICY IF EXISTS "Admins can insert delivery_fixed_history" ON public.deliv
 CREATE POLICY "Admins can insert delivery_fixed_history" ON public.delivery_fixed_history FOR INSERT WITH CHECK (true);
 
 
+-- ==================================================================
+-- ADIÇÕES ADITIVAS: ENTREGADOR FIXO (RPCs, TRIGGERS E TABELAS DE SOLICITAÇÃO)
+-- ==================================================================
+
+-- 1. Nova Tabela: delivery_fixed_requests
+CREATE TABLE IF NOT EXISTS public.delivery_fixed_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    driver_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    request_type TEXT NOT NULL CHECK (request_type IN ('VINCULO', 'SUBSTITUICAO')),
+    assignment_type TEXT CHECK (assignment_type IN ('EXCLUSIVE', 'PRIORITY', 'SHARED')),
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Trigger para updated_at em delivery_fixed_requests
+DROP TRIGGER IF EXISTS trigger_delivery_fixed_requests_updated_at ON public.delivery_fixed_requests;
+CREATE TRIGGER trigger_delivery_fixed_requests_updated_at
+BEFORE UPDATE ON public.delivery_fixed_requests
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Habilitar RLS e criar políticas
+ALTER TABLE public.delivery_fixed_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lojistas gerenciam suas proprias solicitacoes" ON public.delivery_fixed_requests;
+CREATE POLICY "Lojistas gerenciam suas proprias solicitacoes" ON public.delivery_fixed_requests
+    FOR ALL USING (auth.uid()::text = store_id::text OR public.is_admin());
+
+DROP POLICY IF EXISTS "Entregadores visualizam solicitacoes de vinculo" ON public.delivery_fixed_requests;
+CREATE POLICY "Entregadores visualizam solicitacoes de vinculo" ON public.delivery_fixed_requests
+    FOR SELECT USING (auth.uid()::text = driver_id::text OR public.is_admin());
+
+GRANT ALL ON public.delivery_fixed_requests TO anon, authenticated, service_role;
+
+-- 2. Coluna rejected_partner_ids em partner_requests
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partner_requests' AND column_name = 'rejected_partner_ids') THEN
+        ALTER TABLE public.partner_requests ADD COLUMN rejected_partner_ids UUID[] NOT NULL DEFAULT ARRAY[]::UUID[];
+    END IF;
+END $$;
+
+-- 3. Correções RLS nas tabelas existentes de delivery_fixed
+-- delivery_fixed_assignments
+ALTER TABLE public.delivery_fixed_assignments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_assignments" ON public.delivery_fixed_assignments;
+CREATE POLICY "Public can view delivery_fixed_assignments" ON public.delivery_fixed_assignments 
+    FOR SELECT USING (auth.uid()::text = store_id::text OR auth.uid()::text = driver_id::text OR public.is_admin());
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_assignments" ON public.delivery_fixed_assignments;
+CREATE POLICY "Admins can manage delivery_fixed_assignments" ON public.delivery_fixed_assignments 
+    FOR ALL USING (public.is_admin());
+
+-- delivery_fixed_schedules
+ALTER TABLE public.delivery_fixed_schedules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_schedules" ON public.delivery_fixed_schedules;
+CREATE POLICY "Public can view delivery_fixed_schedules" ON public.delivery_fixed_schedules 
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.delivery_fixed_assignments 
+            WHERE id = assignment_id 
+              AND (store_id::text = auth.uid()::text OR driver_id::text = auth.uid()::text)
+        ) 
+        OR public.is_admin()
+    );
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_schedules" ON public.delivery_fixed_schedules;
+CREATE POLICY "Admins can manage delivery_fixed_schedules" ON public.delivery_fixed_schedules 
+    FOR ALL USING (public.is_admin());
+
+-- delivery_fixed_bonuses
+ALTER TABLE public.delivery_fixed_bonuses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_bonuses" ON public.delivery_fixed_bonuses;
+CREATE POLICY "Public can view delivery_fixed_bonuses" ON public.delivery_fixed_bonuses 
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.delivery_fixed_assignments 
+            WHERE id = assignment_id 
+              AND (store_id::text = auth.uid()::text OR driver_id::text = auth.uid()::text)
+        ) 
+        OR public.is_admin()
+    );
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_bonuses" ON public.delivery_fixed_bonuses;
+CREATE POLICY "Admins can manage delivery_fixed_bonuses" ON public.delivery_fixed_bonuses 
+    FOR ALL USING (public.is_admin());
+
+-- delivery_fixed_statistics
+ALTER TABLE public.delivery_fixed_statistics ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view delivery_fixed_statistics" ON public.delivery_fixed_statistics;
+CREATE POLICY "Public can view delivery_fixed_statistics" ON public.delivery_fixed_statistics 
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.delivery_fixed_assignments 
+            WHERE id = assignment_id 
+              AND (store_id::text = auth.uid()::text OR driver_id::text = auth.uid()::text)
+        ) 
+        OR public.is_admin()
+    );
+DROP POLICY IF EXISTS "Admins can manage delivery_fixed_statistics" ON public.delivery_fixed_statistics;
+CREATE POLICY "Admins can manage delivery_fixed_statistics" ON public.delivery_fixed_statistics 
+    FOR ALL USING (public.is_admin());
+
+-- Grants adicionais
+GRANT ALL ON TABLE public.delivery_fixed_assignments TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.delivery_fixed_schedules TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.delivery_fixed_logs TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.delivery_fixed_priorities TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.delivery_fixed_bonuses TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.delivery_fixed_statistics TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.delivery_fixed_history TO anon, authenticated, service_role;
+
+-- 4. Função: find_available_fixed_partner
+DROP FUNCTION IF EXISTS public.find_available_fixed_partner(UUID, DOUBLE PRECISION, DOUBLE PRECISION, NUMERIC);
+CREATE OR REPLACE FUNCTION public.find_available_fixed_partner(
+    p_store_id UUID,
+    p_delivery_lat DOUBLE PRECISION DEFAULT NULL,
+    p_delivery_lng DOUBLE PRECISION DEFAULT NULL,
+    p_max_distance_km NUMERIC DEFAULT NULL
+)
+RETURNS TABLE (
+    partner_id UUID,
+    distance_km NUMERIC,
+    priority_level INTEGER,
+    assignment_type TEXT,
+    custom_delivery_fee NUMERIC
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_day_of_week INTEGER := extract(dow from now())::INTEGER; -- 0 a 6
+    v_current_time TIME := current_time::TIME;
+BEGIN
+    RETURN QUERY
+    SELECT
+        dfa.driver_id AS partner_id,
+        CASE
+            WHEN p_delivery_lat IS NULL OR p_delivery_lng IS NULL OR ul.lat IS NULL OR ul.lng IS NULL THEN NULL::NUMERIC
+            ELSE public.distance_km(p_delivery_lat, p_delivery_lng, ul.lat, ul.lng)
+        END AS distance_km,
+        dfa.priority_level,
+        dfa.assignment_type,
+        dfa.custom_delivery_fee
+    FROM public.delivery_fixed_assignments dfa
+    JOIN public.user_profiles up ON up.id = dfa.driver_id
+    LEFT JOIN public.user_locations ul
+        ON ul.user_id = dfa.driver_id
+       AND ul.updated_at > now() - interval '30 minutes'
+    WHERE dfa.store_id = p_store_id
+      AND dfa.status = 'ACTIVE'
+      AND (dfa.start_date IS NULL OR dfa.start_date <= now())
+      AND (dfa.end_date IS NULL OR dfa.end_date >= now())
+      -- Verificação se o entregador está online e disponível
+      AND COALESCE(up.is_available, FALSE) = TRUE
+      AND up.delivery_status = 'available'
+      AND COALESCE(up.status::TEXT, 'active') = 'active'
+      -- Verificação se o turno está ativo
+      AND EXISTS (
+          SELECT 1 FROM public.work_shifts ws
+          WHERE ws.partner_id = dfa.driver_id
+            AND ws.status = 'ACTIVE'
+      )
+      -- Verificação de escala de horário
+      AND (
+          NOT EXISTS (SELECT 1 FROM public.delivery_fixed_schedules dfs WHERE dfs.assignment_id = dfa.id)
+          OR EXISTS (
+              SELECT 1 FROM public.delivery_fixed_schedules dfs
+              WHERE dfs.assignment_id = dfa.id
+                AND dfs.day_of_week = v_day_of_week
+                AND dfs.start_time <= v_current_time
+                AND dfs.end_time >= v_current_time
+          )
+      )
+      -- Limite de entregas simultâneas
+      AND (
+          SELECT COUNT(*) FROM public.partner_requests pr
+          WHERE pr.partner_id = dfa.driver_id
+            AND pr.status IN ('ACCEPTED', 'PICKUP', 'IN_TRANSIT')
+      ) < COALESCE(dfa.max_simultaneous_deliveries, 3)
+      -- Distância máxima permitida
+      AND (
+          p_max_distance_km IS NULL
+          OR p_delivery_lat IS NULL
+          OR p_delivery_lng IS NULL
+          OR (
+              ul.lat IS NOT NULL
+              AND ul.lng IS NOT NULL
+              AND public.distance_km(p_delivery_lat, p_delivery_lng, ul.lat, ul.lng) <= p_max_distance_km
+          )
+      )
+    ORDER BY
+        -- Tipo EXCLUSIVE primeiro, depois PRIORITY, depois SHARED
+        CASE 
+            WHEN dfa.assignment_type = 'EXCLUSIVE' THEN 0 
+            WHEN dfa.assignment_type = 'PRIORITY' THEN 1 
+            ELSE 2 
+        END ASC,
+        dfa.priority_level DESC,
+        distance_km ASC NULLS LAST,
+        dfa.created_at ASC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.find_available_fixed_partner(UUID, DOUBLE PRECISION, DOUBLE PRECISION, NUMERIC) TO authenticated, service_role;
+
+-- 5. Atualização da RPC: create_partner_request
+CREATE OR REPLACE FUNCTION public.create_partner_request(
+    p_pickup_address TEXT,
+    p_delivery_address TEXT,
+    p_distance_km NUMERIC,
+    p_total_charged_store NUMERIC,
+    p_net_value_partner NUMERIC,
+    p_fees JSONB,
+    p_request_type TEXT,
+    p_target_partner_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_store_id UUID := auth.uid()::uuid;
+    v_delivery_code TEXT;
+    v_new_request_id UUID;
+    v_expires_at TIMESTAMPTZ;
+    v_preferred_until TIMESTAMPTZ;
+    v_is_super_store BOOLEAN := FALSE;
+    v_final_total_charged NUMERIC;
+    v_final_fee_fixed NUMERIC;
+    v_final_fee_percent NUMERIC;
+    v_target_partner_id UUID := p_target_partner_id;
+    v_preferred_partner_ids UUID[] := ARRAY[]::UUID[];
+    v_assignment_strategy TEXT := 'REGIONAL';
+    v_fixed_priority_applied BOOLEAN := FALSE;
+    v_available_partners INTEGER := 0;
+    v_custom_fee NUMERIC;
+BEGIN
+    v_delivery_code := '#' || LPAD(FLOOR(random() * 10000)::int::text, 4, '0');
+
+    SELECT COALESCE(is_super_store, FALSE)
+    INTO v_is_super_store
+    FROM public.user_profiles
+    WHERE id = v_store_id;
+
+    IF upper(COALESCE(p_request_type, 'PLATFORM')) = 'PLATFORM' THEN
+        v_expires_at := now() + interval '5 minutes';
+
+        -- Se não especificou entregador, busca o melhor entregador fixo disponível
+        IF v_target_partner_id IS NULL THEN
+            SELECT fp.partner_id, fp.custom_delivery_fee
+            INTO v_target_partner_id, v_custom_fee
+            FROM public.find_available_fixed_partner(v_store_id, NULL, NULL, NULL) fp
+            LIMIT 1;
+
+            IF v_target_partner_id IS NOT NULL THEN
+                v_assignment_strategy := 'FIXED_FIRST';
+                v_fixed_priority_applied := TRUE;
+                v_preferred_until := now() + interval '90 seconds';
+                v_preferred_partner_ids := ARRAY[v_target_partner_id];
+                
+                -- Se houver taxa personalizada, aplicar
+                IF v_custom_fee IS NOT NULL THEN
+                    p_net_value_partner := v_custom_fee;
+                END IF;
+            END IF;
+        ELSE
+            v_assignment_strategy := 'DIRECT_FIXED';
+            v_fixed_priority_applied := TRUE;
+            v_preferred_partner_ids := ARRAY[v_target_partner_id];
+            
+            -- Busca se tem taxa personalizada
+            SELECT custom_delivery_fee INTO v_custom_fee
+            FROM public.delivery_fixed_assignments
+            WHERE store_id = v_store_id AND driver_id = v_target_partner_id AND status = 'ACTIVE'
+            LIMIT 1;
+            
+            IF v_custom_fee IS NOT NULL THEN
+                p_net_value_partner := v_custom_fee;
+            END IF;
+        END IF;
+    ELSE
+        v_assignment_strategy := 'DIRECT_FIXED';
+        v_fixed_priority_applied := v_target_partner_id IS NOT NULL;
+        IF v_target_partner_id IS NOT NULL THEN
+            v_preferred_partner_ids := ARRAY[v_target_partner_id];
+            
+            SELECT custom_delivery_fee INTO v_custom_fee
+            FROM public.delivery_fixed_assignments
+            WHERE store_id = v_store_id AND driver_id = v_target_partner_id AND status = 'ACTIVE'
+            LIMIT 1;
+            
+            IF v_custom_fee IS NOT NULL THEN
+                p_net_value_partner := v_custom_fee;
+            END IF;
+        END IF;
+        v_expires_at := NULL;
+    END IF;
+
+    IF upper(COALESCE(p_request_type, 'PLATFORM')) = 'ASSOCIATE' THEN
+        v_final_total_charged := p_total_charged_store;
+        v_final_fee_fixed := 0;
+        v_final_fee_percent := 0;
+    ELSIF upper(COALESCE(p_request_type, 'PLATFORM')) = 'PLATFORM' AND v_is_super_store = TRUE THEN
+        v_final_total_charged := p_net_value_partner;
+        v_final_fee_fixed := 0;
+        v_final_fee_percent := 0;
+    ELSE
+        v_final_total_charged := p_total_charged_store;
+        v_final_fee_fixed := COALESCE((p_fees->>'global_tax_fixed')::NUMERIC, 0);
+        v_final_fee_percent := COALESCE((p_fees->>'global_tax_percent')::NUMERIC, 0) * p_net_value_partner;
+    END IF;
+
+    INSERT INTO public.partner_requests (
+        store_id,
+        pickup_address,
+        delivery_address,
+        distance_km,
+        total_charged_store,
+        net_value_partner,
+        fee_fixed,
+        fee_percent_value,
+        partner_id,
+        status,
+        delivery_code,
+        expires_at,
+        request_type,
+        assignment_strategy,
+        preferred_partner_ids,
+        preferred_until,
+        fixed_partner_priority_applied,
+        assignment_note
+    )
+    VALUES (
+        v_store_id,
+        p_pickup_address,
+        p_delivery_address,
+        p_distance_km,
+        v_final_total_charged,
+        p_net_value_partner,
+        v_final_fee_fixed,
+        v_final_fee_percent,
+        v_target_partner_id,
+        'PENDING'::public.partner_request_status,
+        v_delivery_code,
+        v_expires_at,
+        upper(COALESCE(p_request_type, 'PLATFORM')),
+        v_assignment_strategy,
+        v_preferred_partner_ids,
+        v_preferred_until,
+        v_fixed_priority_applied,
+        CASE
+            WHEN v_assignment_strategy = 'FIXED_FIRST' THEN 'Prioridade para entregador fixo; fallback regional automatico apos 90 segundos.'
+            WHEN v_assignment_strategy = 'DIRECT_FIXED' THEN 'Entrega direcionada para entregador fixo.'
+            ELSE 'Sem entregador fixo disponivel; distribuicao regional.'
+        END
+    )
+    RETURNING id INTO v_new_request_id;
+
+    SELECT COUNT(*)
+    INTO v_available_partners
+    FROM public.user_profiles up
+    WHERE up.role IN ('delivery_partner', 'delivery_person')
+      AND COALESCE(up.is_available, FALSE) = TRUE
+      AND COALESCE(up.status::TEXT, 'active') = 'active';
+
+    RETURN jsonb_build_object(
+        'requestId', v_new_request_id,
+        'deliveryCode', v_delivery_code,
+        'expiresAt', v_expires_at,
+        'preferredUntil', v_preferred_until,
+        'targetPartnerId', v_target_partner_id,
+        'assignmentStrategy', v_assignment_strategy,
+        'fixedPartnerPriorityApplied', v_fixed_priority_applied,
+        'availablePartners', v_available_partners
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.create_partner_request(TEXT, TEXT, NUMERIC, NUMERIC, NUMERIC, JSONB, TEXT, UUID) TO authenticated;
+
+-- 6. RPC: reject_fixed_partner_offer
+CREATE OR REPLACE FUNCTION public.reject_fixed_partner_offer(p_request_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_partner_id UUID := auth.uid()::uuid;
+    v_request RECORD;
+    v_next_partner_id UUID;
+    v_custom_fee NUMERIC;
+BEGIN
+    -- Buscar a corrida
+    SELECT * INTO v_request FROM public.partner_requests WHERE id = p_request_id;
+    
+    IF v_request.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Corrida não encontrada.');
+    END IF;
+    
+    IF v_request.status != 'PENDING' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Esta corrida já foi aceita ou cancelada.');
+    END IF;
+    
+    -- Adicionar o entregador atual à lista de rejeitados
+    UPDATE public.partner_requests
+    SET rejected_partner_ids = array_append(rejected_partner_ids, v_partner_id)
+    WHERE id = p_request_id;
+    
+    -- Recarregar a lista atualizada de rejeitados
+    SELECT * INTO v_request FROM public.partner_requests WHERE id = p_request_id;
+    
+    -- Buscar o próximo entregador fixo que não tenha rejeitado a corrida ainda
+    SELECT fp.partner_id, fp.custom_delivery_fee
+    INTO v_next_partner_id, v_custom_fee
+    FROM public.find_available_fixed_partner(v_request.store_id, NULL, NULL, NULL) fp
+    WHERE NOT (fp.partner_id = ANY(v_request.rejected_partner_ids))
+    LIMIT 1;
+    
+    IF v_next_partner_id IS NOT NULL THEN
+        -- Avança para o próximo entregador fixo
+        UPDATE public.partner_requests
+        SET partner_id = v_next_partner_id,
+            preferred_partner_ids = ARRAY[v_next_partner_id],
+            preferred_until = now() + interval '90 seconds',
+            net_value_partner = COALESCE(v_custom_fee, net_value_partner),
+            assignment_note = 'Oferta recusada pelo entregador anterior. Repassado para o proximo entregador fixo.'
+        WHERE id = p_request_id;
+        
+        RETURN jsonb_build_object(
+            'success', true, 
+            'strategy', 'NEXT_FIXED',
+            'partner_id', v_next_partner_id,
+            'preferred_until', now() + interval '90 seconds'
+        );
+    ELSE
+        -- Se nenhum outro fixo estiver disponível, libera para regional
+        UPDATE public.partner_requests
+        SET partner_id = NULL,
+            preferred_partner_ids = ARRAY[]::UUID[],
+            preferred_until = NULL,
+            assignment_strategy = 'REGIONAL',
+            assignment_note = 'Todos os entregadores fixos recusaram ou estao indisponiveis. Liberado para distribuicao geral.'
+        WHERE id = p_request_id;
+        
+        RETURN jsonb_build_object(
+            'success', true, 
+            'strategy', 'REGIONAL',
+            'partner_id', NULL
+        );
+    END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.reject_fixed_partner_offer(UUID) TO authenticated;
+
+-- 7. RPC: check_fixed_offers_timeouts
+CREATE OR REPLACE FUNCTION public.check_fixed_offers_timeouts()
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_count INTEGER := 0;
+    v_req RECORD;
+    v_next_partner_id UUID;
+    v_custom_fee NUMERIC;
+BEGIN
+    -- Seleciona corridas na estratégia FIXED_FIRST cujo tempo de prioridade expirou
+    FOR v_req IN
+        SELECT id, store_id, partner_id, rejected_partner_ids, net_value_partner
+        FROM public.partner_requests
+        WHERE status = 'PENDING'
+          AND assignment_strategy = 'FIXED_FIRST'
+          AND preferred_until IS NOT NULL
+          AND preferred_until <= now()
+    LOOP
+        -- Consideramos o entregador anterior como rejeitado por timeout
+        UPDATE public.partner_requests
+        SET rejected_partner_ids = array_append(rejected_partner_ids, v_req.partner_id)
+        WHERE id = v_req.id;
+        
+        -- Buscar o próximo entregador fixo disponível que não rejeitou
+        SELECT fp.partner_id, fp.custom_delivery_fee
+        INTO v_next_partner_id, v_custom_fee
+        FROM public.find_available_fixed_partner(v_req.store_id, NULL, NULL, NULL) fp
+        WHERE NOT (fp.partner_id = ANY(array_append(v_req.rejected_partner_ids, v_req.partner_id)))
+        LIMIT 1;
+        
+        IF v_next_partner_id IS NOT NULL THEN
+            UPDATE public.partner_requests
+            SET partner_id = v_next_partner_id,
+                preferred_partner_ids = ARRAY[v_next_partner_id],
+                preferred_until = now() + interval '90 seconds',
+                net_value_partner = COALESCE(v_custom_fee, v_req.net_value_partner),
+                assignment_note = 'Tempo esgotado para o entregador anterior. Repassado para o proximo entregador fixo.'
+            WHERE id = v_req.id;
+        ELSE
+            -- Libera para regional
+            UPDATE public.partner_requests
+            SET partner_id = NULL,
+                preferred_partner_ids = ARRAY[]::UUID[],
+                preferred_until = NULL,
+                assignment_strategy = 'REGIONAL',
+                assignment_note = 'Tempo esgotado para os entregadores fixos. Liberado para distribuicao geral.'
+            WHERE id = v_req.id;
+        END IF;
+        
+        v_count := v_count + 1;
+    END LOOP;
+    
+    RETURN v_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.check_fixed_offers_timeouts() TO authenticated, service_role;
+
+-- 8. Trigger e Função de Estatísticas e Bônus Customizados
+CREATE OR REPLACE FUNCTION public.update_delivery_fixed_statistics()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_assignment_id UUID;
+    v_bonus_amount NUMERIC := 0;
+BEGIN
+    IF NEW.status = 'COMPLETED' AND OLD.status != 'COMPLETED' AND NEW.partner_id IS NOT NULL THEN
+        -- Buscar o vínculo correspondente
+        SELECT id INTO v_assignment_id
+        FROM public.delivery_fixed_assignments
+        WHERE store_id = NEW.store_id AND driver_id = NEW.partner_id AND status = 'ACTIVE'
+        LIMIT 1;
+        
+        IF v_assignment_id IS NOT NULL THEN
+            -- Garantir que exista estatística
+            INSERT INTO public.delivery_fixed_statistics (assignment_id)
+            VALUES (v_assignment_id)
+            ON CONFLICT (assignment_id) DO NOTHING;
+            
+            -- Verificar se o entregador fixo tem bônus ativos
+            SELECT COALESCE(SUM(amount), 0) INTO v_bonus_amount
+            FROM public.delivery_fixed_bonuses
+            WHERE assignment_id = v_assignment_id AND status = 'ACTIVE';
+            
+            -- Atualizar estatísticas
+            UPDATE public.delivery_fixed_statistics
+            SET total_deliveries = total_deliveries + 1,
+                total_earnings = total_earnings + NEW.net_value_partner + v_bonus_amount,
+                last_activity = now(),
+                updated_at = now()
+            WHERE assignment_id = v_assignment_id;
+            
+            -- Se houver bônus ativo, creditamos o bônus na carteira do entregador no ZeBank (driver_wallets)
+            IF v_bonus_amount > 0 THEN
+                -- Garantir que a carteira do motorista exista
+                INSERT INTO public.driver_wallets (driver_id, balance_decimal, savings_balance_decimal, updated_at)
+                VALUES (NEW.partner_id, 0, 0, now())
+                ON CONFLICT (driver_id) DO NOTHING;
+                
+                UPDATE public.driver_wallets
+                SET balance_decimal = balance_decimal + v_bonus_amount,
+                    updated_at = now()
+                WHERE driver_id = NEW.partner_id;
+                
+                INSERT INTO public.driver_wallet_transactions (driver_id, amount, description, type, status)
+                VALUES (NEW.partner_id, v_bonus_amount, 'Bônus de Entregador Fixo: Corrida #' || SUBSTRING(NEW.id::text, 1, 8), 'CREDIT', 'COMPLETED');
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS tr_update_delivery_fixed_statistics ON public.partner_requests;
+CREATE TRIGGER tr_update_delivery_fixed_statistics
+AFTER UPDATE ON public.partner_requests
+FOR EACH ROW EXECUTE FUNCTION public.update_delivery_fixed_statistics();
+
+-- Adicionando chaves estrangeiras que faltavam em delivery_fixed_assignments para user_profiles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.table_constraints 
+        WHERE constraint_name = 'fk_delivery_fixed_assignments_driver'
+    ) THEN
+        ALTER TABLE public.delivery_fixed_assignments 
+            ADD CONSTRAINT fk_delivery_fixed_assignments_driver 
+            FOREIGN KEY (driver_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.table_constraints 
+        WHERE constraint_name = 'fk_delivery_fixed_assignments_store'
+    ) THEN
+        ALTER TABLE public.delivery_fixed_assignments 
+            ADD CONSTRAINT fk_delivery_fixed_assignments_store 
+            FOREIGN KEY (store_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+
+-- ==================================================================
+-- RPC PARA CONSOLIDAR CONSULTAS DO CARDÁPIO DIGITAL (14/06/2026)
+-- ==================================================================
+CREATE OR REPLACE FUNCTION public.get_public_store_menu_data(p_store_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_products JSONB;
+    v_categories JSONB;
+    v_promotions JSONB;
+    v_promotion_products JSONB;
+    v_delivery_settings JSONB;
+    v_neighborhood_fees JSONB;
+    v_shipping_rules JSONB;
+    v_loyalty_settings JSONB;
+    v_payment_gateways JSONB;
+BEGIN
+    -- 1. Buscar produtos ativos
+    SELECT COALESCE(jsonb_agg(p), '[]'::jsonb) INTO v_products
+    FROM (
+        SELECT * FROM public.products 
+        WHERE store_id = p_store_id AND is_active = true 
+        ORDER BY name
+    ) p;
+
+    -- 2. Buscar categorias da loja
+    SELECT COALESCE(jsonb_agg(c), '[]'::jsonb) INTO v_categories
+    FROM (
+        SELECT id, name FROM public.categories 
+        WHERE store_id = p_store_id
+    ) c;
+
+    -- 3. Buscar promoções ativas da loja
+    SELECT COALESCE(jsonb_agg(pr), '[]'::jsonb) INTO v_promotions
+    FROM (
+        SELECT * FROM public.store_promotions 
+        WHERE store_id = p_store_id AND is_active = true
+    ) pr;
+
+    -- 4. Buscar mapeamento de produtos em promoção
+    SELECT COALESCE(jsonb_agg(pp), '[]'::jsonb) INTO v_promotion_products
+    FROM (
+        SELECT * FROM public.promotion_products 
+        WHERE promotion_id IN (
+            SELECT id FROM public.store_promotions 
+            WHERE store_id = p_store_id AND is_active = true
+        )
+    ) pp;
+
+    -- 5. Buscar configurações de entrega
+    SELECT to_jsonb(ds) INTO v_delivery_settings
+    FROM public.store_delivery_settings ds
+    WHERE store_id = p_store_id;
+
+    -- 6. Buscar taxas por bairro
+    SELECT COALESCE(jsonb_agg(nf), '[]'::jsonb) INTO v_neighborhood_fees
+    FROM (
+        SELECT * FROM public.store_neighborhood_fees 
+        WHERE store_id = p_store_id
+    ) nf;
+
+    -- 7. Buscar regras de frete
+    SELECT COALESCE(jsonb_agg(sr), '[]'::jsonb) INTO v_shipping_rules
+    FROM (
+        SELECT * FROM public.store_shipping_rules 
+        WHERE store_id = p_store_id
+    ) sr;
+
+    -- 8. Buscar programa de fidelidade
+    SELECT to_jsonb(ls) INTO v_loyalty_settings
+    FROM public.loyalty_settings ls
+    WHERE store_id = p_store_id;
+
+    -- 9. Buscar gateways ativos
+    SELECT COALESCE(jsonb_agg(pg), '[]'::jsonb) INTO v_payment_gateways
+    FROM (
+        SELECT * FROM public.payment_gateway_settings
+        ORDER BY created_at ASC
+    ) pg;
+
+    -- Retornar tudo em um único objeto JSONB consolidado
+    RETURN jsonb_build_object(
+        'products', v_products,
+        'categories', v_categories,
+        'promotions', v_promotions,
+        'promotion_products', v_promotion_products,
+        'delivery_settings', v_delivery_settings,
+        'neighborhood_fees', v_neighborhood_fees,
+        'shipping_rules', v_shipping_rules,
+        'loyalty_settings', v_loyalty_settings,
+        'payment_gateways', v_payment_gateways
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_public_store_menu_data(UUID) TO anon, authenticated, service_role;
 

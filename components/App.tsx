@@ -373,6 +373,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     const [isRestrictedMode, setIsRestrictedMode] = useState(['blocked', 'suspended', 'pending'].includes(initialUserStatus || ''));
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Default collapsed on desktop per user request
+    const [activeTooltip, setActiveTooltip] = useState<{ label: string; rect: DOMRect } | null>(null);
     const [isStoreMoreOpen, setIsStoreMoreOpen] = useState(false);
     const [isDriverMoreOpen, setIsDriverMoreOpen] = useState(false);
     const [isMobileViewport, setIsMobileViewport] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
@@ -1109,6 +1110,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         </DesktopOnlyGate>
                     );
                 case 'store_promotions': return <StorePromotions storeId={userId} />;
+                case 'store_fixed_drivers': return <StoreFixedDrivers storeId={userId} />;
                 case 'store_ratings': return <AdminStoreRatings />;
                 case 'store_api_docs':
                     return (
@@ -1165,6 +1167,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 case 'referral_info': return <ReferralProgram userRole={effectiveRole} onClose={() => navigate(defaultTabByRole[effectiveRole] || 'home')} />;
                 case 'referral_public': return <ReferralPublicPage />;
                 case 'driver_bonuses': return <DriverBonusDashboard />;
+                case 'driver_fixed_stores': return <DriverFixedStores driverId={userId} />;
 
                 case 'about': return <AboutApp />;
                 case 'faq': return <FaqPage />;
@@ -1203,24 +1206,43 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
     };
 
     // Helper to render sidebar button
-    const MenuButton = ({ icon: Icon, label, tab, onClick, id, badge }: { icon: any, label: string, tab?: ActiveTab, onClick?: () => void, id?: string, badge?: number }) => (
-        <button
-            id={id}
-            title={!isSidebarExpanded ? label : undefined}
-            onClick={() => onClick ? onClick() : navigate(tab!)}
-            className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-all duration-200 relative group ${activeTab === tab ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300 font-bold shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'} ${!isSidebarExpanded ? 'md:justify-center md:px-2' : ''}`}
-        >
-            <div className="relative">
-                <Icon className={`w-5 h-5 ${activeTab === tab ? 'text-brand-600' : 'text-gray-500'} flex-shrink-0 group-hover:scale-110 transition-transform`} />
-                {badge !== undefined && badge > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900 px-1 animate-pulse">
-                        {badge > 9 ? '9+' : badge}
-                    </span>
-                )}
-            </div>
-            <span className={`text-sm whitespace-nowrap overflow-hidden transition-all duration-300 ${!isSidebarExpanded ? 'md:hidden md:w-0 md:opacity-0 w-auto opacity-100' : 'w-auto opacity-100'}`}>{label}</span>
-        </button>
-    );
+    const MenuButton = ({ icon: Icon, label, tab, onClick, id, badge }: { icon: any, label: string, tab?: ActiveTab, onClick?: () => void, id?: string, badge?: number }) => {
+        const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+            if (!isSidebarExpanded && !isMobileViewport) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setActiveTooltip({ label, rect });
+            }
+        };
+
+        const handleMouseLeave = () => {
+            setActiveTooltip(null);
+        };
+
+        return (
+            <button
+                id={id}
+                onClick={() => {
+                    setActiveTooltip(null);
+                    setIsSidebarExpanded(false);
+                    if (onClick) onClick();
+                    else navigate(tab!);
+                }}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-all duration-200 relative group ${activeTab === tab ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-300 font-bold shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'} ${!isSidebarExpanded ? 'md:justify-center md:px-2' : ''}`}
+            >
+                <div className="relative">
+                    <Icon className={`w-5 h-5 ${activeTab === tab ? 'text-brand-600' : 'text-gray-500'} flex-shrink-0 group-hover:scale-110 transition-transform`} />
+                    {badge !== undefined && badge > 0 && (
+                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900 px-1 animate-pulse">
+                            {badge > 9 ? '9+' : badge}
+                        </span>
+                    )}
+                </div>
+                <span className={`text-sm whitespace-nowrap overflow-hidden transition-all duration-300 ${!isSidebarExpanded ? 'md:hidden md:w-0 md:opacity-0 w-auto opacity-100' : 'w-auto opacity-100'}`}>{label}</span>
+            </button>
+        );
+    };
 
     const MenuSection = ({ title }: { title: string }) => (
         <p className={`text-[10px] font-bold text-gray-400 uppercase ml-3 mt-4 mb-2 tracking-wider transition-opacity duration-300 ${!isSidebarExpanded ? 'md:hidden' : ''}`}>{title}</p>
@@ -1250,6 +1272,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             title: 'Gestão',
             items: [
                 { label: 'Equipe', tab: 'store_team', icon: Users },
+                { label: 'Entregadores Fixos', tab: 'store_fixed_drivers', icon: Users },
                 { label: 'Relatórios', tab: 'store_reports', icon: BarChart3 },
                 { label: 'Desempenho', tab: 'store_performance', icon: TrendingUp },
                 { label: 'Avaliações', tab: 'store_ratings', icon: Star },
@@ -1466,6 +1489,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
             title: 'Crescimento',
             items: [
                 { label: 'Lojas Vinculadas', tab: 'associate_driver', icon: Store },
+                { label: 'Entregadores Fixos', tab: 'driver_fixed_stores', icon: Store },
                 { label: 'Divulgação', tab: 'driver_marketing', icon: Megaphone },
                 { label: 'Indique e Ganhe', tab: 'referral_info', icon: Gift },
                 { label: 'Bônus e Metas', tab: 'driver_bonuses', icon: Award },
@@ -1656,7 +1680,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                 {/* Header */}
                 <SectionErrorBoundary componentName="Header">
-                    <header className="fixed top-0 left-0 right-0 h-16 bg-brand-600 shadow-sm z-40 flex items-center justify-between px-4 border-b border-brand-700/60 text-white">
+                    <header className={`fixed top-0 right-0 h-16 bg-brand-600 shadow-sm z-40 flex items-center justify-between px-4 border-b border-brand-700/60 text-white transition-all duration-300 ${isSidebarExpanded ? 'md:left-80' : 'md:left-20'} left-0`}>
                         <div className="flex items-center gap-3">
                             {isMobileViewport && !hideMobileMenuButton && (
                                 <button
@@ -1683,7 +1707,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
 
                             <button
                                 onClick={() => window.location.href = '/'}
-                                className="flex items-center gap-2"
+                                className="flex items-center gap-2 md:hidden"
                                 aria-label="Ir para a home"
                             >
                                 <Logo
@@ -1739,15 +1763,13 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                 {/* Sidebar Container */}
                 <SectionErrorBoundary componentName="Menu Lateral">
                     <div
-                        onMouseEnter={() => !isMobileViewport && setIsSidebarExpanded(true)}
-                        onMouseLeave={() => !isMobileViewport && setIsSidebarExpanded(false)}
                         className={`
                     fixed z-50 
                     /* Mobile Styles: Inset-0 (Drawer), driven by isMenuOpen */
                     ${isMenuOpen ? 'inset-y-0 left-0 translate-x-0' : '-translate-x-full'} 
                     
                     /* Desktop Styles: Persistent Rail, driven by isSidebarExpanded */
-                    md:translate-x-0 md:top-16 md:left-0 md:bottom-0 shadow-sm
+                    md:translate-x-0 md:top-0 md:left-0 md:bottom-0 shadow-sm
                     ${isSidebarExpanded ? 'md:w-80' : 'md:w-20'}
                     
                     bg-white dark:bg-gray-900 shadow-2xl transition-all duration-300 flex flex-col
@@ -1756,6 +1778,21 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         <div className="md:hidden flex items-center justify-end p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
                             <button onClick={() => setIsMenuOpen(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
                                 <X className="w-6 h-6 text-gray-400 hover:text-gray-600" />
+                            </button>
+                        </div>
+
+                        {/* Desktop Sidebar Header (Logo & Toggle) */}
+                        <div className="hidden md:flex items-center justify-between p-4 h-16 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20">
+                            <button
+                                onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                                className={`flex items-center gap-2 hover:opacity-80 transition-all duration-300 focus:outline-none w-full ${!isSidebarExpanded ? 'justify-center' : 'px-2'}`}
+                                aria-label={isSidebarExpanded ? "Recolher menu" : "Expandir menu"}
+                            >
+                                <Logo
+                                    className="h-7 w-auto"
+                                    variant="default"
+                                    mode={isSidebarExpanded ? 'full' : 'icon'}
+                                />
                             </button>
                         </div>
 
@@ -1779,6 +1816,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={ShieldAlert} label="Segurança & Fraude" tab="admin_security" />
                                     <MenuButton icon={UserX} label="Lista Negra" tab="admin_blacklist" />
                                     <MenuButton icon={Coffee} label="Descanso de Entregadores" tab="admin_delivery_breaks" />
+                                    <MenuButton icon={Users} label="Entregadores Fixos" tab="admin_fixed_drivers" />
 
                                     <MenuSection title="Operacional" />
                                     <MenuButton icon={Store} label="Gestão da Loja" tab="admin_shop" />
@@ -1822,6 +1860,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={ShoppingBag} label="Catálogo / Produtos" tab="store_catalog" />
                                     <MenuButton icon={FileText} label="Comanda (Novo)" tab="internal_orders_new" />
                                     <MenuButton icon={Package} label="Entregadores" tab="associate_orders" />
+                                    <MenuButton icon={Users} label="Entregadores Fixos" tab="store_fixed_drivers" />
 
                                     <MenuSection title="Gestão & Equipe" />
                                     <MenuButton icon={Users} label="Minha Equipe" tab="store_team" />
@@ -1860,6 +1899,7 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                                     <MenuButton icon={LayoutDashboard} label="Painel do Parceiro" tab="partner" />
                                     <MenuButton icon={Award} label="Bônus e Metas" tab="driver_bonuses" />
                                     <MenuButton icon={Package} label="Meus Pedidos" tab="associate_orders" />
+                                    <MenuButton icon={Store} label="Lojas Vinculadas" tab="driver_fixed_stores" />
 
                                     <MenuSection title="Finanças" />
                                     <MenuButton icon={Landmark} label="ZéBank" tab="zebank" />
@@ -1889,17 +1929,56 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                         {/* Footer / Theme / Logout */}
                         <div className={`border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-4 ${isSidebarExpanded ? 'md:space-y-3' : 'md:space-y-2 md:p-2'}`}>
                             <div className={`flex items-center justify-between md:justify-center w-full ${isSidebarExpanded ? 'md:justify-between md:px-2 md:flex-row' : 'md:flex-col md:gap-2'}`}>
-                                <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                <button
+                                    onClick={() => {
+                                        toggleTheme();
+                                        setIsSidebarExpanded(false);
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isSidebarExpanded && !isMobileViewport) {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setActiveTooltip({ label: theme === 'light' ? 'Modo Escuro' : 'Modo Claro', rect });
+                                        }
+                                    }}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                >
                                     {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
                                 </button>
                                 <button
-                                    onClick={() => navigate('settings')}
+                                    onClick={() => {
+                                        setActiveTooltip(null);
+                                        setIsSidebarExpanded(false);
+                                        navigate('settings');
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isSidebarExpanded && !isMobileViewport) {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setActiveTooltip({ label: 'Configurações', rect });
+                                        }
+                                    }}
+                                    onMouseLeave={() => setActiveTooltip(null)}
                                     aria-label="Configurações"
                                     className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
                                 >
                                     <Settings className="w-5 h-5" />
                                 </button>
-                                <button onClick={handleLogout} disabled={isLoggingOut} className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 disabled:opacity-50">
+                                <button
+                                    onClick={() => {
+                                        setActiveTooltip(null);
+                                        setIsSidebarExpanded(false);
+                                        handleLogout();
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isSidebarExpanded && !isMobileViewport) {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setActiveTooltip({ label: 'Sair da Conta', rect });
+                                        }
+                                    }}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    disabled={isLoggingOut}
+                                    className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 disabled:opacity-50"
+                                >
                                     {isLoggingOut ? <Loading variant="inline" size="sm" /> : <LogOut className="w-5 h-5" />}
                                 </button>
                             </div>
@@ -1956,6 +2035,22 @@ export const App: React.FC<AppProps> = ({ userId, userRole, initialUserStatus = 
                     >
                         <ChevronUp className="w-6 h-6" />
                     </button>
+                )}
+
+                {/* Tooltip Elegante para Itens do Menu Recolhidos */}
+                {activeTooltip && (
+                    <div
+                        className="fixed z-[9999] px-3 py-1.5 bg-slate-900 dark:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xl pointer-events-none transition-all duration-200 whitespace-nowrap animate-in fade-in slide-in-from-left-1 duration-150 flex items-center border border-slate-700/30"
+                        style={{
+                            top: activeTooltip.rect.top + activeTooltip.rect.height / 2,
+                            left: activeTooltip.rect.right + 12,
+                            transform: 'translateY(-50%)',
+                        }}
+                    >
+                        {activeTooltip.label}
+                        {/* Seta do tooltip */}
+                        <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900 dark:border-r-slate-800"></div>
+                    </div>
                 )}
             </div>
         </div>

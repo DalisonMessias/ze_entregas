@@ -5,6 +5,7 @@ import path from 'path';
 import compression from 'compression';
 import { fileURLToPath } from 'url';
 import http from 'http';
+import fs from 'fs';
 
 import streetsNeighborhoodsRoutes from './routes/streetsNeighborhoods.js';
 import integrationRoutes from './routes/integration.js';
@@ -26,16 +27,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3001;
+const PORT = Number(process.env.PORT) || 4000;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// Origens permitidas: localhost (dev) + domínio do Vercel (produção)
+// ─────────────────────────────────────────────────────────────────────────────
+// CORS — em produção com servidor unificado (mesmo origin) não é necessário.
+// Em desenvolvimento (Vite na 3000 + backend na 4000) precisa permitir localhost.
+// ─────────────────────────────────────────────────────────────────────────────
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:4000',
   'http://127.0.0.1:3000',
+  'http://127.0.0.1:4000',
   ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
-  // Permite todos os previews do Vercel (ex: ze-entregas-git-main-xxx.vercel.app)
-  /^https:\/\/.*\.vercel\.app$/,
 ];
 
 app.use(compression({
@@ -49,9 +53,11 @@ app.use(compression({
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Permite requisições sem origem (ex: chamadas server-to-server, curl, Postman)
+    // Em modo unificado (produção), o frontend e backend são o mesmo servidor:
+    // as requisições não têm "origin" (same-origin) — permitir tudo sem origin.
     if (!origin) return callback(null, true);
 
+    // Em desenvolvimento, verificar origens locais
     const isAllowed = allowedOrigins.some((allowed) => {
       if (allowed instanceof RegExp) return allowed.test(origin);
       return allowed === origin;
@@ -60,8 +66,15 @@ app.use(cors({
     if (isAllowed) {
       callback(null, true);
     } else {
-      console.warn(`[CORS] Origem bloqueada: ${origin}`);
-      callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
+      // Em produção unificada, o frontend é servido pelo próprio Express,
+      // então o CORS não bloqueia nada (same-origin). Se chegar aqui,
+      // é uma chamada legítima de outro contexto — permitir com aviso.
+      if (IS_PRODUCTION) {
+        callback(null, true);
+      } else {
+        console.warn(`[CORS] Origem bloqueada em dev: ${origin}`);
+        callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
+      }
     }
   },
   credentials: true,
@@ -69,13 +82,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-impersonation-store-id', 'X-Impersonation-Store-Id'],
 }));
 
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
-// Middleware de autenticação real é aplicado via rotas específicas ou herança de token
-
+// ─────────────────────────────────────────────────────────────────────────────
+// ROTAS DA API
+// ─────────────────────────────────────────────────────────────────────────────
 app.use('/api/streets-neighborhoods', streetsNeighborhoodsRoutes);
 app.use('/api/v1', integrationRoutes);
 app.use('/api/chat', chatRoutes);
@@ -86,44 +98,93 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/mediation', mediationRoutes);
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-app.get('/', (req, res) => {
   res.json({
-    message: 'Ze Entregas - API Backend',
-    version: '1.0.0',
-    endpoints: {
-      health: '/health',
-      streetsNeighborhoods: '/api/streets-neighborhoods',
-      chat: '/api/chat/status',
-      whatsbot: '/api/whatsbot/status'
-    }
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    mode: IS_PRODUCTION ? 'producao-unificada' : 'desenvolvimento'
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MODO PRODUÇÃO: serve o frontend (dist/) diretamente pelo Express.
+// Tudo em um único servidor, uma única porta — sem URL externa necessária.
+// ─────────────────────────────────────────────────────────────────────────────
+if (IS_PRODUCTION) {
+  // Caminho para o build do Vite (gerado por `npm run build`)
+  const distPath = path.resolve(__dirname, '..', 'dist');
+
+  if (fs.existsSync(distPath)) {
+    // Servir arquivos estáticos (JS, CSS, imagens, etc.)
+    app.use(express.static(distPath, {
+      maxAge: '1d',
+      etag: true,
+    }));
+
+    // SPA fallback: qualquer rota não-API retorna o index.html
+    // Isso permite que o React Router funcione corretamente
+    app.get('*', (req, res) => {
+      // Não interceptar rotas de API
+      if (req.path.startsWith('/api/') || req.path.startsWith('/pwa/') || req.path === '/health') {
+        res.status(404).json({ error: 'Rota não encontrada' });
+        return;
+      }
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+
+    console.log(`\n🌐 Modo Produção Unificado: frontend servido de ${distPath}`);
+  } else {
+    console.warn(`\n⚠️  Pasta dist/ não encontrada. Execute "npm run build" antes de iniciar em produção.`);
+    // Fallback: resposta simples para a raiz
+    app.get('/', (req, res) => {
+      res.json({
+        message: 'Zé Entregas - API Backend (execute npm run build para servir o frontend)',
+        endpoints: { health: '/health', api: '/api/*' }
+      });
+    });
+  }
+} else {
+  // MODO DESENVOLVIMENTO: apenas a API roda aqui (porta 4000).
+  // O frontend roda no Vite (porta 3000) com proxy apontando para cá.
+  app.get('/', (req, res) => {
+    res.json({
+      message: 'Zé Entregas - API Backend (Desenvolvimento)',
+      modo: 'desenvolvimento',
+      frontend: 'http://localhost:3000 (Vite)',
+      endpoints: {
+        health: '/health',
+        chat: '/api/chat/status',
+        whatsbot: '/api/whatsbot/status'
+      }
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRATAMENTO GLOBAL DE ERROS
+// ─────────────────────────────────────────────────────────────────────────────
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Erro nao tratado:', err);
+  console.error('[Erro não tratado]', err);
   res.status(500).json({
     error: 'Erro interno do servidor',
     message: err.message || 'Ocorreu um erro inesperado'
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// INICIALIZAÇÃO DO SERVIDOR
+// ─────────────────────────────────────────────────────────────────────────────
 const server = http.createServer(app);
 initializeWebSocket(server);
 
 server.listen(PORT, '0.0.0.0', async () => {
-  console.log(`\nServidor backend ligado`);
-  console.log(`Porta: ${PORT}`);
+  console.log(`\nServidor ligado — Porta: ${PORT}`);
 
   try {
     const { error } = await supabaseAdmin.from('chat_sessions').select('store_id').limit(1);
     if (error) {
       console.error('\nErro de configuracao do banco de dados:');
       if (error.message.includes('column "store_id" does not exist')) {
-        console.error('A coluna "store_id" esta faltando nas tabelas do WhatsApp.');
-        console.error('Execute as migracoes mais recentes do Supabase antes de iniciar o backend.');
+        console.error('A coluna "store_id" esta faltando. Execute as migracoes do Supabase.');
       } else {
         console.error(`Erro: ${error.message}`);
       }

@@ -6,13 +6,14 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
 
-  // URL do backend — usa variável de ambiente ou fallback para localhost em dev
-  const backendUrl = env.VITE_API_BASE_URL || 'http://localhost:4000';
+  // Porta local do backend Express (sempre localhost em dev)
+  const localBackendPort = env.PORT || '4000';
+  const localBackendUrl = `http://localhost:${localBackendPort}`;
+  const localBackendWsUrl = `ws://localhost:${localBackendPort}`;
 
-  // URL do WebSocket derivada da URL do backend
-  const backendWsUrl = backendUrl
-    .replace(/^https:\/\//, 'wss://')
-    .replace(/^http:\/\//, 'ws://');
+  // URL do backend para o código do browser (pode ser remoto em produção)
+  // Usada apenas para definições do Vite, não para o proxy do servidor
+  const backendUrl = env.VITE_API_BASE_URL || localBackendUrl;
 
   return {
     server: {
@@ -24,22 +25,22 @@ export default defineConfig(({ mode }) => {
 
       proxy: {
         '/api': {
-          target: backendUrl,
+          target: localBackendUrl,
           changeOrigin: true,
           secure: false,
         },
         '/socket.io': {
-          target: backendUrl,
+          target: localBackendUrl,
           ws: true,
         },
         // WebSocket do Chat Interno
         '/ws-chat': {
-          target: backendWsUrl,
+          target: localBackendWsUrl,
           ws: true,
           rewrite: (path) => path.replace(/^\/ws-chat/, '')
         },
         '/pwa': {
-          target: backendUrl,
+          target: localBackendUrl,
           changeOrigin: true
         }
       }

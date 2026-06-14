@@ -230,7 +230,7 @@ const InternalOrders: React.FC<{ mode?: InternalOrdersMode }> = ({ mode = 'full'
 
     const loadPrinterSettings = async (storeId: string) => {
         try {
-            const { data } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', storeId).single() || {};
+            const { data } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', storeId).maybeSingle() || {};
             if (data) {
                 setPrinterSettings({
                     printer_width: data.printer_width || 80,

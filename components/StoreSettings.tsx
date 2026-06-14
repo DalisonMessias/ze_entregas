@@ -177,7 +177,7 @@ export const StoreSettings: React.FC = () => {
     const loadPrinterSettings = async (storeId: string) => {
         setLoadingPrinter(true);
         try {
-            const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', storeId).single() || {};
+            const { data: printerData } = await cloud.getClient()?.from('printer_settings').select('*').eq('store_id', storeId).maybeSingle() || {};
             if (printerData) {
                 setPrinterSettings({
                     printer_width: String(printerData.printer_width || 80),

@@ -1,0 +1,27 @@
+# render.yaml — Configuração do backend no Render
+# https://render.com/docs/render-yaml
+
+services:
+  - type: web
+    name: ze-entregas-api
+    runtime: node
+    region: oregon  # Região mais próxima do Brasil com plano gratuito
+    plan: free      # Mude para "starter" ($7/mês) para não dormir após inatividade
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000  # Render usa 10000 por padrão no plano free
+      - key: SUPABASE_URL
+        sync: false   # Você vai preencher no painel do Render
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false   # URL do Vercel — preencher após o deploy do frontend
+      - key: PUBLIC_APP_URL
+        sync: false   # Mesma URL do frontend

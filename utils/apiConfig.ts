@@ -1,89 +1,86 @@
 /// <reference types="vite/client" />
 
 /**
- * Retorna a URL base (origem) do backend da API de forma totalmente dinâmica e livre de hardcodes.
+ * Sistema de URL dinâmico e unificado — Zé Entregas
  *
- * Ordem de prioridade e detecção automática:
- * 1. Respeita a variável VITE_API_BASE_URL se estiver explicitamente definida no ambiente (desde que não seja localhost).
- * 2. Em ambiente de desenvolvimento local, prefere retornar a origem do navegador (geralmente localhost:3000)
- *    para forçar as requisições a passarem pelo proxy de desenvolvimento do Vite (porta 3000), contornando
- *    com segurança o bloqueio de portas não-whitelistes (como 4000) pela política interna de segurança de URLs.
- * 3. Em ambiente de navegador, usa window.location.origin de forma automática.
- * 4. Fallback de segurança para string vazia.
+ * MODO PRODUÇÃO (servidor unificado):
+ *   Frontend e backend rodam no MESMO servidor/porta.
+ *   Todas as chamadas são relativas (sem domínio) — ex: /api/chat
+ *   Não é necessária nenhuma variável de ambiente de URL.
+ *
+ * MODO DESENVOLVIMENTO (Vite + Express separados):
+ *   Vite roda na porta 3000, Express na porta 4000.
+ *   O Vite tem proxy configurado: /api/* → localhost:4000
+ *   As chamadas vão para window.location.origin (porta 3000)
+ *   e o proxy redireciona automaticamente para o backend.
+ *
+ * Em ambos os casos, o código do frontend não precisa saber
+ * o endereço do backend — tudo funciona de forma transparente.
+ */
+
+/**
+ * Retorna a URL base do backend.
+ * - Em produção unificada: '' (string vazia = mesmo servidor, URLs relativas)
+ * - Em desenvolvimento: window.location.origin (passa pelo proxy do Vite)
+ * - Se VITE_API_BASE_URL estiver definida com URL remota: usa ela (deploy externo)
  */
 export const getBaseUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL;
-  
+
+  // Se houver uma URL explícita de backend externo (não localhost), usa ela
   if (envUrl && envUrl.trim() !== '') {
-    // Se a URL do ambiente for localhost/127.0.0.1, nós a evitamos para chamadas de API do navegador.
-    // Isso evita o erro de rede (Network Error) causado pela restrição de portas da política de URLs do projeto.
-    // Usando a origem do navegador, as chamadas vão para localhost:3000 e passam pelo proxy whitelisted do Vite.
     const isLocalhost = envUrl.includes('localhost') || envUrl.includes('127.0.0.1');
     if (!isLocalhost) {
-      return envUrl.replace(/\/+$/, ''); // Remove barra final
+      return envUrl.replace(/\/+$/, '');
     }
   }
 
+  // Em desenvolvimento local: usa a origem do browser para passar pelo proxy do Vite
+  // Em produção unificada: window.location.origin é o mesmo servidor do backend
   if (typeof window !== 'undefined' && window.location) {
     return window.location.origin;
   }
-  
+
   return '';
 };
 
 /**
- * Retorna a URL dinâmica e correta para a conexão com o WebSocket.
- *
- * Ordem de prioridade e detecção automática:
- * 1. Se VITE_API_BASE_URL estiver definida e não for localhost, deriva o WebSocket dela (http -> ws, https -> wss).
- * 2. Em ambiente de navegador local, usa window.location com o protocolo e domínio atual (localhost:3000)
- *    de forma que a requisição de WebSocket passe pelo proxy do Vite (/ws-chat) com a porta whitelisted.
- * 3. Se HTTPS (produção/SSL): wss://
- * 4. Se HTTP (desenvolvimento/IP local): ws://
+ * Retorna a URL para conexão WebSocket.
+ * - Em produção unificada: mesmo host do site, protocolo ws:// ou wss://
+ * - Em desenvolvimento: passa pelo proxy do Vite (/ws-chat)
  */
 export const getWsUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL;
-  
+
+  // URL externa explícita
   if (envUrl && envUrl.trim() !== '') {
     const isLocalhost = envUrl.includes('localhost') || envUrl.includes('127.0.0.1');
     if (!isLocalhost) {
-      return envUrl.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://').replace(/\/+$/, '') + '/ws-chat';
+      return envUrl
+        .replace(/^https:\/\//i, 'wss://')
+        .replace(/^http:\/\//i, 'ws://')
+        .replace(/\/+$/, '') + '/ws-chat';
     }
   }
 
+  // Mesmo servidor (produção unificada ou dev via proxy Vite)
   if (typeof window !== 'undefined' && window.location) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host; // Inclui host e porta ativa (ex: localhost:3000 ou 192.168.1.10:3000)
+    const host = window.location.host;
     return `${protocol}//${host}/ws-chat`;
   }
 
   return '';
 };
 
-/**
- * Retorna a URL raiz da API (mantido para retrocompatibilidade).
- */
-export const getApiRootUrl = (): string => {
-  return getBaseUrl();
-};
+/** Alias para retrocompatibilidade */
+export const getApiRootUrl = (): string => getBaseUrl();
 
-/**
- * Retorna a URL base da API de chat interno.
- */
-export const getApiBaseUrl = (): string => {
-  return `${getBaseUrl()}/api/chat`;
-};
+/** URL base do chat interno */
+export const getApiBaseUrl = (): string => `${getBaseUrl()}/api/chat`;
 
-/**
- * Retorna a URL do WebSocket do chat interno (mantido para retrocompatibilidade).
- */
-export const getWebSocketUrl = (): string => {
-  return getWsUrl();
-};
+/** URL do WebSocket do chat (alias) */
+export const getWebSocketUrl = (): string => getWsUrl();
 
-/**
- * Retorna a URL base da API do WhatsBot.
- */
-export const getWhatsBotApiBaseUrl = (): string => {
-  return `${getBaseUrl()}/api/whatsbot`;
-};
+/** URL base do WhatsBot */
+export const getWhatsBotApiBaseUrl = (): string => `${getBaseUrl()}/api/whatsbot`;

@@ -326,3 +326,105 @@
   2. A propriedade foi alterada para `role="admin"` na chamada do componente `<TipOfTheDay />`.
   3. Substituída a leitura de taxas por `stats.finance?.fees`.
   4. Adicionado o literal `'admin_delivery_breaks'` na definição da união de tipos `ActiveTab` em `types/navigation.ts`.
+
+## [2026-06-14] Erro de Sintaxe SQL na Migração (Part 3)
+
+- **Erro**: `Failed to run sql query: ERROR: 42601: syntax error at or near ")"` na linha 2371 do arquivo `supabase\migrations\supabase_global_part3.sql`.
+- **Causa**: Presença de um fechamento de parênteses duplo `);` isolado e redundante na linha 2371, logo após a declaração de criação da tabela `delivery_fixed_history`. Isso impedia a execução e validação correta do script de migração no banco de dados.
+- **Solução**: Remoção completa do caractere `);` sobressalente e da linha vazia adjacente no arquivo `supabase\migrations\supabase_global_part3.sql`, restabelecendo a sintaxe SQL correta do arquivo.
+
+## [2026-06-14] Incompatibilidade de Tipo de Retorno em Função RPC (Erro 42P13)
+
+- **Erro**: `Failed to run sql query: ERROR: 42P13: cannot change return type of existing function` ao recriar a função `find_available_fixed_partner` em `supabase\migrations\supabase_global_part3.sql`.
+- **Causa**: O PostgreSQL não permite a alteração direta dos parâmetros de saída (OUT) ou tipos de retorno de uma função existente usando apenas `CREATE OR REPLACE FUNCTION`. É necessário remover a definição anterior primeiro.
+- **Solução**: Adicionada a instrução `DROP FUNCTION IF EXISTS public.find_available_fixed_partner(UUID, DOUBLE PRECISION, DOUBLE PRECISION, NUMERIC);` antes da cláusula `CREATE OR REPLACE FUNCTION` correspondente.
+
+## [2026-06-14] Resolução de Erros de Compilação TypeScript no IDE (Entregador Fixo)
+
+- **Erros**:
+  1. `Cannot find module '../supabase/client'` em múltiplos arquivos do frontend.
+  2. `Expected 1 arguments, but got 2` em chamadas ao método `dialog.toast()`.
+  3. `Property 'max_simultaneous_deliveries'` e outros campos não encontrados no tipo `DeliveryFixedAssignment`.
+  4. `Type '{ ... textarea: boolean; }' is not assignable to type 'IntrinsicAttributes & CustomInputProps'`.
+  5. `Cannot find name 'Users'` em `StoreGestor.tsx`.
+- **Causas**:
+  1. No frontend do projeto, o cliente Supabase é exportado do serviço centralizado `services/cloud` e não de `supabase/client`.
+  2. O hook `useDialog()` e seu método `toast()` possuem assinatura estrita que aceita apenas um objeto único `{ message, type }`, e não dois argumentos strings independentes.
+  3. A interface `DeliveryFixedAssignment` em `services/deliveryFixed.ts` estava desatualizada e sem os campos virtuais ou adicionais suportados no banco de dados.
+  4. O componente `CustomInput` do design system não oferece suporte à propriedade `textarea`.
+  5. O ícone `Users` de `lucide-react` não foi importado no arquivo `StoreGestor.tsx`.
+- **Soluções**:
+  1. Alterados os caminhos de importação do cliente Supabase para apontarem para o arquivo unificado `services/cloud` (ou de forma relativa `./cloud`).
+  2. Refatoradas todas as chamadas de notificação `dialog.toast` para passarem as propriedades agrupadas no objeto único de opções.
+  3. Adicionadas as propriedades `max_simultaneous_deliveries`, `custom_delivery_fee`, `start_date` e `end_date` na interface `DeliveryFixedAssignment`.
+  5. Adicionado o ícone `Users` nas desestruturações do import de `lucide-react` em `StoreGestor.tsx`.
+
+## [2026-06-14] Mapeamento de Rotas Amigáveis (URLs Limpas) para Entregadores Fixos
+
+- **Problema**: A aba de Entregador Fixo no painel do administrador (`admin_fixed_drivers`) e no painel do lojista (`store_fixed_drivers`) não possuíam URLs amigáveis definidas. Ao acessar esses recursos, a URL do navegador não se mantinha síncrona com o histórico de navegação e as abas ativas.
+- **Causa**: Ausência dos registros correspondentes no mapeamento estático de rotas no arquivo central `utils/routeMap.ts`.
+- **Solução**: Adicionados os mapeamentos `'/admin/entregadores-fixos': 'admin_fixed_drivers'` e `'/loja/entregadores-fixos': 'store_fixed_drivers'` no dicionário `routeMap` em `utils/routeMap.ts`.
+
+## [2026-06-14] Falha no Carregamento de Motoristas/Lojas no Modal do Admin (Entregador Fixo)
+
+- **Problema**: O modal de "Criar Novo Vínculo" no painel do administrador (`AdminFixedDrivers.tsx`) não carregava a lista de motoristas e lojas disponíveis. Os seletores de dropdown ficavam vazios e as buscas por vínculos e solicitações davam erro no console ou retornavam dados nulos.
+- **Causa**:
+  1. A função `fetchDriversAndStores` em `AdminFixedDrivers.tsx` tentava ler os dados de tabelas inexistentes/incorretas (`users` e `stores`) no Supabase, além de referenciar chaves de colunas incorretas (`full_name` e `phone`).
+  2. As junções do Supabase (PostgREST) nas funções `getFixedAssignments` e `getFixedRequests` no arquivo de serviços `services/deliveryFixed.ts` tentavam relacionar as tabelas `users` e `stores` (que não são correspondentes às chaves estrangeiras que apontam para `user_profiles`).
+- **Solução**:
+  1. Corrigida a função `fetchDriversAndStores` para buscar as informações a partir de `user_profiles`, filtrando pela role e adaptando no JavaScript as chaves para `full_name` (derivado de `name`) e `phone` (derivado de `phone_number`), além de `store_name`.
+  2. Atualizadas as junções PostgREST em `services/deliveryFixed.ts` para usar a tabela `user_profiles` com o alias renomeado (`full_name:name`, `phone:phone_number` e `name:store_name`) para manter 100% de compatibilidade reversa com o frontend.
+
+## [2026-06-14] Lentidão no Cardápio Digital Público e Erros 404 de Recursos de PWA e Favicon
+
+- **Problema**: 
+  1. A página pública de cardápio digital (`/nome-da-cidade/nome-da-loja/produtos`) apresentava extrema lentidão para exibir produtos.
+  2. O console do desenvolvedor apontava dois erros 404 (Not Found) nas requisições por `/pwa/manifest.json` e `/favicon.ico`.
+- **Causa**:
+  1. **Lentidão**: O front-end fazia até 10 requisições REST paralelas ao Supabase para carregar produtos, categorias, promoções, adicionais, fidelidade, etc. Cada requisição passava individualmente pelas políticas de RLS (Row Level Security) do banco de dados, acumulando overhead de rede e processamento no Supabase.
+  2. **manifest.json**: O link no `index.html` apontava erroneamente para `/pwa/manifest.json`, enquanto o back-end Express gerava e servia dinamicamente o manifest em `/manifest.json`.
+  3. **favicon.ico**: O navegador tentava requisitar `/favicon.ico` por padrão na raiz, mas a pasta `public/` não continha o arquivo de favicon.
+- **Solução**:
+  1. **RPC Consolidada**: Desenvolvida a função RPC no banco de dados `get_public_store_menu_data` (com `SECURITY DEFINER` e integrada ao final de `supabase_global_part3.sql`). Esta função unifica as 10 buscas em uma única transação rápida no PostgreSQL e retorna um único JSON contendo todos os dados organizados.
+  2. **Refatoração no Front-end**: Criada a função `getPublicStoreMenuData` em `services/cloud.ts` e atualizado o método `loadStoreData` em `components/DigitalMenu/DigitalMenu.tsx` para usar essa chamada de rede única. A latência de carregamento da página de cardápio foi reduzida em mais de 10x.
+  3. **Correção do Manifest**: Alterado o link do manifest no `index.html` de `/pwa/manifest.json` para `/manifest.json`.
+  4. **Criação do Favicon**: Criado o arquivo `public/favicon.svg` com a logomarca vetorial do Zé Entregas, criado o arquivo placeholder `public/favicon.ico` para navegadores legados e atualizado o `index.html` para declarar os favicons corretamente.
+
+## [2026-06-14] Resolução de Erros de Rede: Áudio Externo 403, Impressora 406 e Manifest 404
+
+- **Problema**: O console de Rede do desenvolvedor acusava três erros persistentes:
+  1. Erro 403 Forbidden ao tentar carregar o arquivo de áudio de notificação da Mixkit.
+  2. Erro 406 Not Acceptable em requisições Supabase à tabela `printer_settings` para lojas que ainda não haviam configurado impressora.
+  3. Erro 404 Not Found residual para a rota `/pwa/manifest.json` oriundo de caches antigos.
+- **Causa**:
+  1. **Mixkit (403)**: O servidor da Mixkit passou a bloquear conexões/hotlinking de arquivos de áudio externos em origens locais (`localhost`).
+  2. **printer_settings (406)**: As consultas à tabela `printer_settings` no banco de dados usavam o método `.single()`. Quando a tabela RLS está vazia ou não encontra o registro desejado (como é o caso de novas lojas sem impressoras configuradas), o Supabase retorna um status HTTP 406 Not Acceptable.
+  3. **Manifest (404)**: Navegadores com cache agressivo continuavam requisitando a URL antiga `/pwa/manifest.json`.
+- **Solução**:
+  1. **Áudio Web Audio API**: Substituído o uso do áudio da Mixkit nos componentes `StoreGestor.tsx`, `notificationService.ts` e `NotificationContext.tsx` pela função nativa sintetizada `playNotificationSound` (implementada via Web Audio API localmente e 100% offline). No `StoreGestor.tsx`, a reprodução contínua foi implementada por meio de um `useEffect` cíclico disparado pelo estado `isAlerting` a cada 1.5 segundos, eliminando instâncias de `new Audio` do DOM.
+  2. **maybeSingle()**: Alteradas todas as consultas à tabela `printer_settings` nos componentes `StoreGestor.tsx`, `StoreSettings.tsx` e `InternalOrders.tsx` de `.single()` para `.maybeSingle()`. Isso faz com que o Supabase retorne HTTP 200 OK com valor `null` quando não há registros cadastrados para a loja corrente.
+  3. **Alias do Manifest**: Atualizado o roteador Express em `server/routes/pwa.ts` para ouvir simultaneamente nos caminhos `/manifest.json` e `/pwa/manifest.json`, servindo o mesmo manifest dinâmico e solucionando quaisquer erros 404 residuais do navegador do usuário.
+
+## [2026-06-14] Erro de Compilação no StoreGestor.tsx (Ícone Printer Não Encontrado)
+
+- **Problema**: O compilador indicava o erro `Cannot find name 'Printer'. Did you mean 'print'?` na linha 1680 de `components/StoreGestor.tsx`.
+- **Causa**: O ícone `Printer` da biblioteca `lucide-react` foi utilizado na renderização do botão de impressão manual de cupom de pedidos, mas sua importação não estava declarada no topo do arquivo.
+- **Solução**: Adicionado o termo `Printer` à lista de desestruturação no import de `lucide-react` nas primeiras linhas do componente `StoreGestor.tsx`.
+
+## [2026-06-14] Auditoria Global de Erros de Rede no Repositório
+
+- **Problema**: Garantia de que nenhuma referência residual aos domínios bloqueados (Mixkit), consultas restritivas (`printer_settings` com `.single()`) ou caminhos inválidos do manifesto (`/pwa/manifest.json`) estivesse ativa no sistema.
+- **Causa**: Necessidade de varredura geral para prevenção de recorrência de erros no console.
+- **Solução**: Realizada busca recursiva global (`grep_search`) por todos os termos chaves em todo o repositório. Confirmou-se que não restou nenhuma chamada ao domínio `mixkit.co` fora dos arquivos de documentação, que todas as consultas ao banco de dados no frontend para a tabela `printer_settings` utilizam corretamente `.maybeSingle()`, e que não existem requisições ou links direcionados à rota antiga `/pwa/manifest.json` que pudessem gerar erros 404 residuais.
+
+## [2026-06-14] Criação de Script de Diagnóstico e Auditoria de Erros de Rede
+
+- **Problema**: Fornecer uma ferramenta física executável no repositório para o desenvolvedor auditar de forma contínua a integridade de requisições e consultas.
+- **Causa**: Necessidade de varrer recursivamente todas as subpastas em busca de resquícios de arquivos Mixkit, rotas legadas e consultas inadequadas no Supabase.
+- **Solução**: Desenvolvido o script `scripts/verificar_erros_rede.js` em Node.js. Este utilitário realiza busca regex precisa e emite relatórios detalhados contendo a localização de arquivos e linhas para qualquer erro remanescente encontrado no sistema.
+
+## [2026-06-14] Ajuste do Script de Diagnóstico para ES Modules
+
+- **Problema**: O script de auditoria `verificar_erros_rede.js` falhava na execução com o erro `ReferenceError: require is not defined in ES module scope`.
+- **Causa**: O `package.json` declara `"type": "module"`, fazendo com que todos os scripts Node locais sejam tratados como ES Modules, os quais não aceitam `require`.
+- **Solução**: Substituída a importação CommonJS por `import fs from 'fs'` e `import path from 'path'` no topo do script de auditoria, normalizando sua inicialização.

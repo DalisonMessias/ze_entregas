@@ -1,42 +1,39 @@
-# Plano de Tarefas: Implementação de Entregadores Fixos
+# Lista de Tarefas — Sistema Unificado: Backend + Frontend no mesmo servidor
 
-## Banco de Dados (Supabase)
-- [x] Criar tabela `delivery_fixed_assignments` em `supabase_global_part3.sql`.
-- [x] Criar tabela `delivery_fixed_schedules` em `supabase_global_part3.sql`.
-- [x] Criar tabela `delivery_fixed_logs` em `supabase_global_part3.sql`.
-- [x] Criar tabela `delivery_fixed_priorities` em `supabase_global_part3.sql`.
-- [x] Criar tabela `delivery_fixed_bonuses` em `supabase_global_part3.sql`.
-- [x] Criar tabela `delivery_fixed_statistics` em `supabase_global_part3.sql`.
-- [x] Criar tabela `delivery_fixed_history` em `supabase_global_part3.sql`.
+## Objetivo
+Eliminar qualquer dependência de URL externa. O backend Express serve também os
+arquivos estáticos do frontend (pasta dist/), tudo em uma única porta, uma única aplicação.
 
-## Backend / API (Funções Supabase RPC / API Server)
-- [x] Criar endpoints para gerenciar vínculos (criar, atualizar, remover, suspender, reativar).
-- [x] Criar endpoints para gerenciar escalas e horários.
-- [x] Criar lógica de Distribuição Inteligente (fallback para modo geral caso não haja fixo disponível).
-- [x] Criar rotas para estatísticas e relatórios.
+## Tarefas
 
-## Painel Administrativo
-- [x] Criar página/componente `AdminFixedDrivers` para gerenciamento completo.
-- [x] Adicionar filtros (loja, cidade, região, entregador, status, tipo).
-- [x] Adicionar funcionalidade para definição de ganhos/bônus personalizados por vínculo.
-- [x] Integrar no menu lateral do painel de administração.
+- [x] Atualizar `server/server.ts` para servir `dist/` em produção (single-server)
+- [x] Simplificar `utils/apiConfig.ts` para usar URLs relativas (sem VITE_API_BASE_URL)
+- [x] Simplificar `.env` removendo VITE_API_BASE_URL
+- [x] Simplificar `.env.production` — apenas PORT, NODE_ENV e chaves Supabase
+- [x] Adicionar script `start:prod` no `package.json` (build + server)
+- [x] Atualizar `documentation/DEPLOY.md` — guia único sem URLs externas
+- [x] Atualizar `checklist.txt` e `TASK_LIST.md`
 
-## Painel da Loja
-- [x] Criar área/componente "Meus Entregadores Fixos" (`StoreFixedDrivers`).
-- [x] Exibir listagem e status atual de cada entregador (online/offline/entregando).
-- [x] Permitir solicitação de novo entregador ou substituição.
+## Como funciona agora
 
-## Aplicativo do Entregador
-- [x] Criar área/componente "Minhas Lojas Vinculadas" (`DriverFixedStores`).
-- [x] Exibir aviso visual de "Entregador Fixo" para os pedidos elegíveis.
-- [x] Adicionar visualização de ganhos, escalas e histórico de entregas por loja.
+### Desenvolvimento (npm run dev)
+```
+┌─────────────────────────────────────────────────────┐
+│  Vite :3000 ──proxy──▶ Express :4000                │
+│  (frontend com HMR)     (API + WhatsBot + IA)       │
+└─────────────────────────────────────────────────────┘
+```
 
-## Notificações e Regras de Negócio
-- [x] Implementar Modo Escala com alertas de faltas/atrasos.
-- [x] Implementar Modo Descanso (pausa no vínculo).
-- [x] Configurar notificações em tempo real (push / database) para admin, lojas e entregadores.
+### Produção (npm run start:prod)
+```
+┌─────────────────────────────────────────────────────┐
+│  Express :4000                                      │
+│  ├── /              → dist/index.html (React)       │
+│  ├── /api/*         → rotas da API                  │
+│  ├── /pwa/*         → manifest dinâmico             │
+│  └── /ws-chat       → WebSocket                     │
+└─────────────────────────────────────────────────────┘
+```
 
-## Validação e Testes
-- [x] Testar distribuição inteligente de pedidos com diferentes tipos de vínculo (exclusivo, prioritário, compartilhado).
-- [x] Validar compatibilidade com a distribuição geral (fallback).
-- [x] Confirmar registros de auditoria e logs.
+Sem URLs externas. Sem Railway. Sem Vercel obrigatório.
+Apenas: `npm install` → `npm run dev` (dev) ou `npm run start:prod` (produção).

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Button } from './Button';
 import { useDialog } from '../utils/dialogService';
 import { Loader2, Upload, FileSpreadsheet, Check, AlertTriangle, Download, ArrowRight, Settings } from 'lucide-react';
@@ -78,19 +78,37 @@ export const ProductImportExport: React.FC<ProductImportExportProps> = ({ target
 
         try {
             const data = await selected.arrayBuffer();
-            const workbook = XLSX.read(data);
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(data);
 
-            if (jsonData.length === 0) throw new Error("Arquivo vazio");
+            const firstSheet = workbook.worksheets[0];
+            if (!firstSheet || firstSheet.rowCount === 0) throw new Error('Arquivo vazio');
 
-            const headers = jsonData[0] as string[];
-            const rows = jsonData.slice(1);
+            // Extrair cabeçalhos da primeira linha
+            const headerRow = firstSheet.getRow(1);
+            const headers: string[] = [];
+            headerRow.eachCell({ includeEmpty: false }, (cell) => {
+                headers.push(String(cell.value ?? ''));
+            });
+
+            // Extrair linhas de dados
+            const rows: any[][] = [];
+            firstSheet.eachRow({ includeEmpty: false }, (row, rowIndex) => {
+                if (rowIndex === 1) return; // Pular cabeçalho
+                const rowData: any[] = [];
+                headers.forEach((_, colIndex) => {
+                    const cell = row.getCell(colIndex + 1);
+                    rowData.push(cell.value ?? '');
+                });
+                rows.push(rowData);
+            });
+
+            if (rows.length === 0) throw new Error('Arquivo sem dados');
 
             setHeaders(headers);
-            setDataPreview(rows); // Store raw rows for preview
+            setDataPreview(rows);
 
-            // Auto-map strategy
+            // Auto-mapeamento por similaridade de nome
             const newMapping: Record<string, string> = {};
             headers.forEach(header => {
                 const lower = header.toLowerCase();
@@ -232,23 +250,60 @@ export const ProductImportExport: React.FC<ProductImportExportProps> = ({ target
         setProcessing(true);
         try {
             const products = await cloud.getStoreProducts(targetStoreId);
-            const exportData = products.map(p => ({
-                Nome: p.name,
-                Preço: p.price,
-                Descrição: p.description,
-                Categoria: p.category,
-                'Código Interno': (p as any).internal_code || '',
-                'Estoque': (p as any).stock_quantity || 0,
-                'Ativo': p.is_active ? 'Sim' : 'Não'
-            }));
 
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            XLSX.utils.book_append_sheet(wb, ws, "Produtos");
-            XLSX.writeFile(wb, "produtos_exportacao.xlsx");
+            // Criar workbook com ExcelJS
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = 'Zé Entregas';
+            workbook.created = new Date();
+
+            const worksheet = workbook.addWorksheet('Produtos');
+
+            // Definir colunas com cabeçalhos formatados
+            worksheet.columns = [
+                { header: 'Nome', key: 'nome', width: 30 },
+                { header: 'Preço', key: 'preco', width: 15 },
+                { header: 'Descrição', key: 'descricao', width: 40 },
+                { header: 'Categoria', key: 'categoria', width: 20 },
+                { header: 'Código Interno', key: 'codigo', width: 18 },
+                { header: 'Estoque', key: 'estoque', width: 12 },
+                { header: 'Ativo', key: 'ativo', width: 10 },
+            ];
+
+            // Estilizar cabeçalho
+            worksheet.getRow(1).font = { bold: true };
+            worksheet.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFED2B05' },
+            };
+            worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+            // Adicionar dados
+            products.forEach(p => {
+                worksheet.addRow({
+                    nome: p.name,
+                    preco: p.price,
+                    descricao: p.description || '',
+                    categoria: p.category || '',
+                    codigo: (p as any).internal_code || '',
+                    estoque: (p as any).stock_quantity || 0,
+                    ativo: p.is_active ? 'Sim' : 'Não',
+                });
+            });
+
+            // Gerar buffer e fazer download
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'produtos_exportacao.xlsx';
+            link.click();
+            URL.revokeObjectURL(url);
 
         } catch (error) {
-            // console.error(error);
             await alert({ title: 'Erro', message: 'Falha ao exportar produtos.' });
         } finally {
             setProcessing(false);

@@ -4,13 +4,14 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "npx tsx server/server.ts",
     "dev": "node scripts/dev-runner.js",
+    "dev:api": "tsx watch server/server.ts",
     "build": "vite build",
+    "build:prod": "vite build",
+    "start": "node --loader tsx/esm server/server.ts",
+    "start:prod": "npm run build && node --loader tsx/esm server/server.ts",
     "preview": "vite preview",
     "test": "vitest run --environment jsdom",
-    "dev:api": "tsx watch server/server.ts",
-    "build:api": "tsc -p api/tsconfig.json",
     "lint": "eslint -c eslint.config.cjs . --ext .ts,.tsx,.js",
     "lint:urls": "node scripts/lint-local-urls.cjs",
     "supabase:push": "npx supabase db push"
@@ -26,7 +27,6 @@
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
     "@types/multer": "2.0.0",
-    "@types/xlsx": "0.0.35",
     "@whiskeysockets/baileys": "^6.7.23",
     "autoprefixer": "10.4.22",
     "axios": "^1.17.0",
@@ -46,6 +46,7 @@
     "postcss": "^8.5.15",
     "qrcode": "1.5.3",
     "qrcode.react": "4.2.0",
+    "exceljs": "^4.4.0",
     "qrious": "4.0.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -53,8 +54,7 @@
     "tailwindcss": "4.1.17",
     "tsx": "4.21.0",
     "typescript": "5.8.2",
-    "ws": "^8.21.0",
-    "xlsx": "0.18.5"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

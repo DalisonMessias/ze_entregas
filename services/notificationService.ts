@@ -3,20 +3,15 @@ import * as cloud from './cloud';
 import * as storage from './storage';
 import { UserRole, PartnerRequest, NotificationPreferences, ChatMessageData, BlitzAlert, AppNotification } from '../types';
 
+import { playNotificationSound as playLocalNotificationSound } from '../utils/audio';
+
 let subscription: any = null;
 let chatSubscription: any = null;
 let blitzSubscription: any = null;
 let appNotifSubscription: any = null;
 
 const playNotificationSound = () => {
-    try {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.volume = 0.5;
-        // audio.play().catch(e => console.log('Audio play failed', e));
-        audio.play().catch(() => { }); // Falha silenciosa
-    } catch (e) {
-        // console.error(e);
-    }
+    playLocalNotificationSound('default');
 };
 
 const sendLocalNotification = (title: string, body: string, soundEnabled: boolean) => {

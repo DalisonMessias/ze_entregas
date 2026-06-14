@@ -1,216 +1,203 @@
-# Guia de Deploy — Zé Entregas em Produção
+# Guia de Deploy — Vercel (Frontend) + Render (Backend)
 
-## Visão Geral da Arquitetura
+## Visão Geral
 
 ```
-┌─────────────────────────────────────────┐
-│          USUÁRIO (Navegador)            │
-└──────────────────┬──────────────────────┘
-                   │
-         ┌─────────▼─────────┐
-         │  VERCEL (Frontend) │
-         │  React + Vite      │
-         │  zeentregas.vercel.│
-         │  app               │
-         └─────────┬─────────┘
-                   │ HTTP/HTTPS (REST)
-                   │ WebSocket (WSS)
-         ┌─────────▼──────────────────┐
-         │   RAILWAY / RENDER         │
-         │   Backend Node.js          │
-         │   Express + WebSocket      │
-         │   Baileys (WhatsApp)       │
-         └─────────┬──────────────────┘
-                   │
-         ┌─────────▼──────────────────┐
-         │   SUPABASE                 │
-         │   Banco de Dados           │
-         │   (Postgres + Auth)        │
-         └────────────────────────────┘
+┌──────────────────────┐     VITE_API_BASE_URL     ┌──────────────────────┐
+│       VERCEL         │ ─────────────────────────▶ │       RENDER         │
+│  React/Vite (dist/)  │                            │  Express + WebSocket │
+│  Grátis              │ ◀───────────────────────── │  WhatsBot + IA       │
+└──────────────────────┘     FRONTEND_URL           └──────────────────────┘
+           │                                                   │
+           └──────────────────────┬────────────────────────────┘
+                                  ▼
+                        ┌──────────────────┐
+                        │    SUPABASE      │
+                        │ (Banco de Dados) │
+                        └──────────────────┘
 ```
-
-> **Por que separado?**
-> O Vercel é *serverless* — não suporta processos Node.js persistentes.
-> O backend usa `ws` (WebSocket) e `@whiskeysockets/baileys` (WhatsApp),
-> que precisam de um processo **sempre ativo**. Por isso, o backend
-> fica no Railway ou Render.
 
 ---
 
-## Passo 1 — Deploy do Backend no Railway
+## PASSO 1 — Deploy do Backend no Render
 
-### 1.1 Criar conta e projeto
+### 1.1 Criar conta no Render
 
-1. Acesse [railway.app](https://railway.app) e crie uma conta
-2. Clique em **New Project** → **Deploy from GitHub repo**
+1. Acesse [render.com](https://render.com)
+2. Clique em **Get Started for Free**
+3. Faça login com sua conta do **GitHub** (mais fácil)
+
+### 1.2 Criar o serviço Web
+
+1. No painel do Render, clique em **New +** → **Web Service**
+2. Conecte seu repositório GitHub do projeto
 3. Selecione o repositório `ze_entregas`
+4. Configure:
 
-### 1.2 Configurar o serviço
+| Campo | Valor |
+|---|---|
+| **Name** | `ze-entregas-api` |
+| **Region** | `Oregon (US West)` |
+| **Branch** | `main` (ou sua branch) |
+| **Runtime** | `Node` |
+| **Build Command** | `npm install` |
+| **Start Command** | `npm start` |
+| **Plan** | `Free` (ou `Starter` $7/mês para não dormir) |
 
-No painel do Railway, vá em **Settings** do serviço e configure:
+### 1.3 Variáveis de Ambiente no Render
 
-- **Build Command:**
-  ```
-  npm install && npx tsc -p server/tsconfig.json
-  ```
-  > Se não tiver `server/tsconfig.json`, use:
-  ```
-  npm install
-  ```
+No painel do serviço, vá em **Environment** e adicione:
 
-- **Start Command:**
-  ```
-  node --loader ts-node/esm server/server.ts
-  ```
-  > Ou se preferir compilar antes:
-  ```
-  npx tsx server/server.ts
-  ```
+| Variável | Valor |
+|---|---|
+| `NODE_ENV` | `production` |
+| `PORT` | `10000` |
+| `SUPABASE_URL` | `https://pjnxrqemjozlpnvoxpmn.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(sua service role key)* |
+| `SUPABASE_ANON_KEY` | *(sua anon key)* |
+| `FRONTEND_URL` | *(preencher após o deploy do Vercel)* |
+| `PUBLIC_APP_URL` | *(mesma URL do Vercel)* |
 
-- **Root Directory:** deixar em branco (raiz do projeto)
+### 1.4 Fazer o Deploy
 
-### 1.3 Variáveis de ambiente no Railway
+1. Clique em **Create Web Service**
+2. Aguarde o build (aproximadamente 2-5 minutos)
+3. Ao finalizar, você receberá uma URL como:
+   ```
+   https://ze-entregas-api.onrender.com
+   ```
+4. **Copie essa URL** — você vai precisar dela no próximo passo
 
-Vá em **Variables** e adicione:
+### 1.5 Verificar
 
 ```
-NODE_ENV=production
-PORT=4000
-SUPABASE_URL=https://pjnxrqemjozlpnvoxpmn.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGci...
-SUPABASE_ANON_KEY=eyJhbGci...
-FRONTEND_URL=https://zeentregas.vercel.app
-PUBLIC_APP_URL=https://zeentregas.vercel.app
+https://ze-entregas-api.onrender.com/health
 ```
-
-> ⚠️ Substitua `zeentregas.vercel.app` pelo seu domínio real do Vercel.
-
-### 1.4 Anotar a URL do backend
-
-Após o deploy, o Railway fornece uma URL como:
-```
-https://ze-entregas-backend-production.up.railway.app
-```
-**Guarde essa URL** — ela será usada no Vercel.
+Esperado: `{"status":"ok","mode":"producao-unificada",...}`
 
 ---
 
-## Passo 2 — Deploy do Frontend no Vercel
+## PASSO 2 — Deploy do Frontend no Vercel
 
-### 2.1 Conectar o repositório
+### 2.1 Criar conta no Vercel
 
-1. Acesse [vercel.com](https://vercel.com) e faça login
-2. Clique em **Add New → Project**
-3. Importe o repositório `ze_entregas`
+1. Acesse [vercel.com](https://vercel.com)
+2. Faça login com sua conta do **GitHub**
 
-### 2.2 Configurações do projeto Vercel
+### 2.2 Importar o Projeto
 
-- **Framework Preset:** Vite
-- **Build Command:** `npm run build`
-- **Output Directory:** `dist`
-- **Install Command:** `npm install`
+1. Clique em **Add New** → **Project**
+2. Selecione o repositório `ze_entregas`
+3. Configure:
 
-### 2.3 Variáveis de ambiente no Vercel
+| Campo | Valor |
+|---|---|
+| **Framework Preset** | `Vite` |
+| **Build Command** | `npm run build` |
+| **Output Directory** | `dist` |
+| **Install Command** | `npm install` |
 
-Vá em **Settings → Environment Variables** e adicione:
+### 2.3 Variáveis de Ambiente no Vercel
 
-| Nome | Valor | Ambiente |
-|------|-------|----------|
-| `VITE_API_BASE_URL` | `https://ze-entregas-backend-production.up.railway.app` | Production |
-| `VITE_API_BASE_URL` | `http://localhost:4000` | Development |
+Em **Environment Variables**, adicione:
 
-> **IMPORTANTE:** Substitua a URL pelo endereço real do seu backend no Railway.
-> Não inclua barra `/` no final da URL.
+| Variável | Valor |
+|---|---|
+| `VITE_API_BASE_URL` | `https://ze-entregas-api.onrender.com` *(URL do Render)* |
+| `VITE_SUPABASE_URL` | `https://pjnxrqemjozlpnvoxpmn.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | *(sua anon key)* |
 
-### 2.4 Fazer o deploy
+### 2.4 Fazer o Deploy
 
-Clique em **Deploy**. O Vercel vai:
-1. Instalar dependências
-2. Rodar `npm run build` (Vite com as variáveis de ambiente corretas)
-3. Servir o `dist/` como site estático
-
----
-
-## Verificação do Deploy
-
-### Testar o backend
-
-```
-https://SEU-BACKEND.railway.app/health
-```
-Deve retornar:
-```json
-{ "status": "ok", "timestamp": "..." }
-```
-
-### Testar o WebSocket
-
-No console do navegador (em produção):
-```javascript
-const ws = new WebSocket('wss://SEU-BACKEND.railway.app/ws-chat?storeId=TEST');
-ws.onopen = () => console.log('✅ WebSocket conectado!');
-ws.onerror = (e) => console.error('❌ Erro:', e);
-```
-
-### Testar o WhatsBot
-
-Acesse `/loja/whatsbot` em produção e verifique se o QR Code aparece.
+1. Clique em **Deploy**
+2. Aguarde o build (aproximadamente 1-2 minutos)
+3. Você receberá uma URL como:
+   ```
+   https://zeentregas.vercel.app
+   ```
 
 ---
 
-## Configuração Local (Desenvolvimento)
+## PASSO 3 — Conectar Vercel ↔ Render
 
-Nada muda para desenvolvimento local. O arquivo `.env` já tem:
+Agora que você tem as duas URLs, precisa atualizar o Render com a URL do Vercel:
 
-```
-PORT=4000
-VITE_API_BASE_URL=http://localhost:4000
-FRONTEND_URL=http://localhost:3000
-```
-
-Rode normalmente:
-```bash
-npm run dev
-```
-
-O Vite faz proxy automaticamente para `http://localhost:4000`.
+1. No painel do Render, vá em **Environment** do serviço
+2. Atualize as variáveis:
+   - `FRONTEND_URL` = `https://zeentregas.vercel.app`
+   - `PUBLIC_APP_URL` = `https://zeentregas.vercel.app`
+3. Clique em **Save Changes** → o Render vai reiniciar automaticamente
 
 ---
 
-## Resumo das Variáveis por Plataforma
+## PASSO 4 — Verificação Final
+
+### Backend (Render)
+```
+https://ze-entregas-api.onrender.com/health
+# Esperado: {"status":"ok"}
+
+https://ze-entregas-api.onrender.com/api/whatsbot/status
+# Esperado: status do WhatsBot
+```
+
+### Frontend (Vercel)
+- Acesse a URL do Vercel no navegador
+- Faça login no sistema
+- Vá em configurações do WhatsApp e verifique o QR Code
+
+---
+
+## Variáveis Completas de Referência
 
 ### Vercel (Frontend)
-| Variável | Descrição |
-|----------|-----------|
-| `VITE_API_BASE_URL` | URL do backend no Railway (sem barra final) |
 
-### Railway (Backend)
 | Variável | Descrição |
-|----------|-----------|
+|---|---|
+| `VITE_API_BASE_URL` | URL do backend no Render |
+| `VITE_SUPABASE_URL` | URL do projeto Supabase |
+| `VITE_SUPABASE_ANON_KEY` | Chave pública (anon) do Supabase |
+
+### Render (Backend)
+
+| Variável | Descrição |
+|---|---|
 | `NODE_ENV` | `production` |
-| `PORT` | `4000` (Railway define automaticamente) |
+| `PORT` | `10000` |
 | `SUPABASE_URL` | URL do projeto Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Chave de serviço do Supabase (secreta!) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave secreta do Supabase (nunca expor) |
+| `SUPABASE_ANON_KEY` | Chave pública do Supabase |
 | `FRONTEND_URL` | URL do frontend no Vercel (para CORS) |
-| `PUBLIC_APP_URL` | URL pública do app (para links no WhatsBot) |
+| `PUBLIC_APP_URL` | URL pública do app (para links do WhatsBot) |
 
 ---
 
 ## Solução de Problemas
 
-### WebSocket não conecta em produção
-- Verifique se `VITE_API_BASE_URL` começa com `https://` (não `http://`)
-- O hook converte automaticamente `https://` → `wss://`
-- Verifique se o backend está rodando: acesse `/health`
+### QR Code do WhatsApp não aparece
+- Verifique se `FRONTEND_URL` no Render aponta para a URL correta do Vercel
+- O QR Code é gerado via WebSocket — verifique se o Render está rodando (pode estar dormindo no plano free)
 
-### Erro de CORS
-- Confirme que `FRONTEND_URL` no Railway aponta para o domínio correto do Vercel
-- O CORS aceita automaticamente qualquer subdomínio `*.vercel.app`
+### CORS bloqueado
+- Confirme que `FRONTEND_URL` no Render está exatamente igual à URL do Vercel (sem barra final)
 
-### QR Code não aparece
-- O QR Code é gerado pelo backend (Railway) via WebSocket
-- Verifique os logs do serviço no Railway
+### Plano Free do Render "dorme"
+- No plano free, o Render "dorme" após 15 minutos de inatividade
+- Primeira requisição após o sono demora ~30 segundos para acordar
+- Para evitar: upgrade para o plano **Starter** ($7/mês)
 
-### Build falha no Vercel
-- Confirme que `VITE_API_BASE_URL` está definida nas variáveis do Vercel
-- O Vite usa essa variável em build-time para gerar o bundle correto
+### Rebuild necessário
+- Após alterar variáveis de ambiente no Vercel, faça um novo deploy
+- No Render, as variáveis são aplicadas automaticamente com restart
+
+---
+
+## Desenvolvimento Local
+
+```bash
+npm run dev
+```
+
+Roda tudo localmente:
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:4000`

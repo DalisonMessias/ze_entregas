@@ -51,6 +51,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/admin/cupons': 'admin_global_coupons',
     '/admin/bonus': 'admin_bonuses',
     '/admin/descanso-entregadores': 'admin_delivery_breaks',
+    '/admin/entregadores-fixos': 'admin_fixed_drivers',
 
     // Shared / Core Routes
     '/perfil': 'profile',
@@ -130,6 +131,7 @@ const routeMap: Record<string, ActiveTab> = {
     '/loja/planos': 'store_plans',
     '/loja/gestor': 'store_gestor',
     '/loja/download-gestor': 'download_gestor',
+    '/loja/entregadores-fixos': 'store_fixed_drivers',
 
     // Delivery Partner/Person Routes
     '/entregador/inicio': 'daily_panel',

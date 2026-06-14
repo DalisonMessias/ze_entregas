@@ -4,7 +4,7 @@ import { supabaseAdmin } from '../services/supabaseClient.js';
 
 const router = express.Router();
 
-router.get('/manifest.json', async (req, res) => {
+router.get(['/manifest.json', '/pwa/manifest.json'], async (req, res) => {
     try {
         const { data: config, error } = await supabaseAdmin
             .from('pwa_settings')
