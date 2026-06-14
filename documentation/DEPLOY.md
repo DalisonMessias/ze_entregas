@@ -64,14 +64,14 @@ No painel do serviço, vá em **Environment** e adicione:
 2. Aguarde o build (aproximadamente 2-5 minutos)
 3. Ao finalizar, você receberá uma URL como:
    ```
-   https://ze-entregas-api.onrender.com
+   https://ze-entregas.onrender.com
    ```
 4. **Copie essa URL** — você vai precisar dela no próximo passo
 
 ### 1.5 Verificar
 
 ```
-https://ze-entregas-api.onrender.com/health
+https://ze-entregas.onrender.com/health
 ```
 Esperado: `{"status":"ok","mode":"producao-unificada",...}`
 
@@ -134,10 +134,10 @@ Agora que você tem as duas URLs, precisa atualizar o Render com a URL do Vercel
 
 ### Backend (Render)
 ```
-https://ze-entregas-api.onrender.com/health
+https://ze-entregas.onrender.com/health
 # Esperado: {"status":"ok"}
 
-https://ze-entregas-api.onrender.com/api/whatsbot/status
+https://ze-entregas.onrender.com/api/whatsbot/status
 # Esperado: status do WhatsBot
 ```
 
