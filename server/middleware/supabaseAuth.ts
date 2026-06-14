@@ -18,6 +18,8 @@ export interface AuthenticatedRequest extends Request {
 const getBearerToken = (req: Request): string | null => {
     // 1. Tenta obter o cabeçalho Authorization padrão
     const authHeader = req.header('authorization') || req.header('Authorization');
+    console.log(`[SupabaseAuth] Tentando obter token. Header 'authorization': ${!!req.header('authorization')}, 'Authorization': ${!!req.header('Authorization')}`);
+    
     if (authHeader) {
         const [scheme, token] = authHeader.split(' ');
         if (scheme?.toLowerCase() === 'bearer' && token) {
@@ -67,6 +69,7 @@ export const authenticateSupabaseRequest = async (req: AuthenticatedRequest, res
     try {
         const token = getBearerToken(req);
         if (!token) {
+            console.warn(`[SupabaseAuth] Token ausente na requisicao para: ${req.method} ${req.originalUrl}`);
             return res.status(401).json({ success: false, message: 'Token de autenticacao ausente.' });
         }
 

@@ -63,18 +63,11 @@ app.use(cors({
       return allowed === origin;
     });
 
-    if (isAllowed) {
+    if (isAllowed || IS_PRODUCTION) {
       callback(null, true);
     } else {
-      // Em produção unificada, o frontend é servido pelo próprio Express,
-      // então o CORS não bloqueia nada (same-origin). Se chegar aqui,
-      // é uma chamada legítima de outro contexto — permitir com aviso.
-      if (IS_PRODUCTION) {
-        callback(null, true);
-      } else {
-        console.warn(`[CORS] Origem bloqueada em dev: ${origin}`);
-        callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
-      }
+      console.warn(`[CORS] Origem bloqueada em dev: ${origin}`);
+      callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
     }
   },
   credentials: true,
