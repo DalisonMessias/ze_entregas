@@ -7396,7 +7396,36 @@ export const getStreetsByCity = async (state: string, city: string, streetName: 
         console.error('Error fetching streets:', e);
         return [];
     }
-};
+}
+
+// --- PUBLIC ORDER ---
+export const validateCoupon = async (
+    storeId: string,
+    couponCode: string,
+    cartTotal: number,
+    customerPhone: string
+): Promise<{ success: boolean; discount_value?: number; message?: string }> => {
+    const sb = getClient();
+    if (!sb) return { success: false, message: 'Client not initialized' };
+
+    const { data, error } = await sb.rpc('validate_coupon', {
+        p_store_id: storeId,
+        p_coupon_code: couponCode,
+        p_cart_total: cartTotal,
+        p_customer_phone: customerPhone
+    });
+
+    if (error) {
+        console.error('Error validating coupon:', error);
+        return { success: false, message: error.message || 'Erro ao validar cupom' };
+    }
+
+    return {
+        success: data.success,
+        discount_value: data.discount_value,
+        message: data.message
+    };
+};;
 
 // --- PUBLIC ORDER ---
 export const createPublicOrder = async (
@@ -7411,7 +7440,9 @@ export const createPublicOrder = async (
     pixActive: boolean = false,
     observation: string = '',
     pointsRedeemed: number = 0,
-    loyaltyDiscountValue: number = 0
+    loyaltyDiscountValue: number = 0,
+    couponCode: string = '',
+    couponDiscountValue: number = 0
 ): Promise<{ success: boolean; orderId?: string; error?: any }> => {
     const sb = getClient();
     if (!sb) return { success: false, error: 'Client not initialized' };
@@ -7430,7 +7461,9 @@ export const createPublicOrder = async (
         p_is_location_delivery: shippingAddress?.is_location_delivery || false,
         p_shipping_cost: shippingAddress?.fee || 0,
         p_points_redeemed: pointsRedeemed,
-        p_loyalty_discount_value: loyaltyDiscountValue
+        p_loyalty_discount_value: loyaltyDiscountValue,
+        p_coupon_code: couponCode,
+        p_coupon_discount_value: couponDiscountValue
     });
 
 
@@ -9685,6 +9718,19 @@ export const getDeliveryBreakStats = async (): Promise<{
         console.error('Erro ao buscar estatísticas de descanso:', e);
         return null;
     }
+};
+
+export const adminUpdateShopSettings = async (settings: Partial<any>) => {
+    const sb = getClient();
+    if (!sb) return;
+    // Tenta atualizar onde o store_id corresponde, ou falha silenciosamente
+    await sb.from('shop_settings').update(settings).eq('store_id', settings.store_id || settings.id || 1);
+};
+
+export const deleteStoreShippingRule = async (id: string) => {
+    const sb = getClient();
+    if (!sb) return;
+    await sb.from('store_shipping_rules').delete().eq('id', id);
 };
 
 
